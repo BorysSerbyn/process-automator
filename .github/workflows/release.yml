@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: core/go.mod
       # Releases are signed with a Developer ID and notarized when its
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: core/go.mod
       - run: make package-linux LINUX_ARCH=${{ matrix.arch }} SOURCE_DIR=
