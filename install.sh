@@ -120,7 +120,7 @@ die() { echo "install.sh: $*" >&2; exit 1; }
 # no_release: there's no published download for this machine (releases aren't
 # published yet, or not for this platform): building from a checkout is the way.
 no_release() {
-  die "$1. Build it from a checkout of the repository instead: \`make install\` (see README.md, Development, for what it needs)"
+  die "$1. Build it from a checkout of the repository instead: \`make install\` (docs/Guides/Getting started.md, 'Building it from the checkout', says what it needs)"
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
