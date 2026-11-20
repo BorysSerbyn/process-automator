@@ -158,5 +158,5 @@ clean: ## Remove build output
 	rm -rf "$(BUILD)" automator-ui/.build
 
 check-identity:
-	@[ "$(SIGN_IDENTITY)" = "-" ] || security find-identity -v -p codesigning | grep -q "\"$(SIGN_IDENTITY)\"" || { \
+	@[ "$(SIGN_IDENTITY)" = "-" ] || security find-identity -p codesigning | grep -qF -e "\"$(SIGN_IDENTITY)\"" -e ") $(SIGN_IDENTITY) " || { \
 	  echo "Signing identity '$(SIGN_IDENTITY)' not found. Create it (see docs/Guides/Getting started.md) or set SIGN_IDENTITY=..."; exit 1; }

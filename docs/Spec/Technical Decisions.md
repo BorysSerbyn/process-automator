@@ -187,6 +187,13 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 - **GitHub artifact attestations**: need `gh` on every machine, and GitHub Enterprise Cloud for a private repository
 - **Checksum only on macOS too**: the Developer ID is already required for Gatekeeper, and checking it is free
 
+## Decision: releases can be self-signed
+Without an Apple Developer account, releases are signed with a self-signed certificate kept in CI, the same for every release. Downloaded by `install.sh` or `update`, the app carries no quarantine, so Gatekeeper doesn't check it; and since macOS ties grants to the certificate, they survive updates. With `TEAM_ID` empty, installs accept any valid signature, so the checksum is the only check and a release swapped by someone who can write to the repository isn't refused. Setting up a Developer ID later is adding its secrets and `TEAM_ID`.
+
+### Rejected
+- **Ad-hoc signing**: a new identity every release, so every grant and Keychain item would be asked for again after each update
+- **Waiting for a Developer ID**: no release anyone else can install until then
+
 ## Decision: releases are read with the GitHub CLI's sign-in
 The repository is private, so reading releases needs a GitHub token. `update` and `install.sh` use `GH_TOKEN`/`GITHUB_TOKEN` when set, else the GitHub CLI's sign-in, and no token otherwise. Anyone invited already signs in to GitHub to get the code or the tap, so there's no new credential, and the app never stores one.
 

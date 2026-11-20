@@ -1,6 +1,6 @@
 name: Release
 # A pushed release tag (scripts/release.sh) builds every platform's artifact,
-# signs and notarizes the macOS app, publishes them as the tag's GitHub
+# signs the macOS app (and notarizes it, with a Developer ID), publishes them as the tag's GitHub
 # release with SHA256SUMS, and updates the Homebrew tap. Run by hand, it only
 # builds the artifacts (ad-hoc signed, nothing published): a dry run.
 on:
@@ -24,37 +24,57 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: core/go.mod
-      # The Developer ID Application certificate (with its key, as .p12) goes
-      # into a throwaway keychain; its team must be install.sh's TEAM_ID, which
-      # installs and updates check.
+      # Releases are signed with a Developer ID and notarized when its
+      # certificate is set (APPLE_DEVELOPER_ID_P12_*; its team must be
+      # install.sh's TEAM_ID, which installs and updates check). Otherwise with a
+      # self-signed certificate (SIGNING_CERT_P12_*): the same one every
+      # release, so macOS keeps its grants across updates; installs accept it
+      # while TEAM_ID is empty. Either goes into a throwaway keychain.
       - name: Signing identity
         if: env.PUBLISH == 'true'
         env:
           CERT_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
           CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          SELF_P12_BASE64: ${{ secrets.SIGNING_CERT_P12_BASE64 }}
+          SELF_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
         run: |
-          [ -n "$CERT_P12_BASE64" ] || { echo "::error::APPLE_DEVELOPER_ID_P12_BASE64 isn't set: releases are signed with a Developer ID"; exit 1; }
+          pinned=$(sed -n 's/^TEAM_ID=//p' install.sh)
+          if [ -n "$CERT_P12_BASE64" ]; then
+            p12=$CERT_P12_BASE64 password=$CERT_PASSWORD
+          elif [ -n "$SELF_P12_BASE64" ]; then
+            [ -z "$pinned" ] || { echo "::error::install.sh's TEAM_ID ($pinned) requires a Developer ID: set APPLE_DEVELOPER_ID_P12_BASE64, or empty TEAM_ID"; exit 1; }
+            p12=$SELF_P12_BASE64 password=$SELF_PASSWORD
+          else
+            echo "::error::no signing certificate: set APPLE_DEVELOPER_ID_P12_BASE64 (Developer ID) or SIGNING_CERT_P12_BASE64 (self-signed)"; exit 1
+          fi
           keychain="$RUNNER_TEMP/release.keychain-db" pw=$(uuidgen)
           security create-keychain -p "$pw" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$pw" "$keychain"
-          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          echo "$p12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$password" -T /usr/bin/codesign
           rm "$RUNNER_TEMP/cert.p12"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$keychain" >/dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -n 1)
-          [ -n "$identity" ] || { echo "::error::no Developer ID Application identity in the certificate"; exit 1; }
-          team=$(sed -n 's/.*(\([A-Z0-9]*\))$/\1/p' <<<"$identity")
-          pinned=$(sed -n 's/^TEAM_ID=//p' install.sh)
-          [ -n "$pinned" ] || { echo "::error::install.sh's TEAM_ID isn't set: put the signing team ($team) there first"; exit 1; }
-          [ "$team" = "$pinned" ] || { echo "::error::install.sh's TEAM_ID ($pinned) must be the signing team ($team)"; exit 1; }
-          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
-          echo "SIGN_FLAGS=--options runtime --timestamp" >> "$GITHUB_ENV"
+          if [ -n "$CERT_P12_BASE64" ]; then
+            identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -n 1)
+            [ -n "$identity" ] || { echo "::error::no Developer ID Application identity in the certificate"; exit 1; }
+            team=$(sed -n 's/.*(\([A-Z0-9]*\))$/\1/p' <<<"$identity")
+            [ -n "$pinned" ] || { echo "::error::install.sh's TEAM_ID isn't set: put the signing team ($team) there first"; exit 1; }
+            [ "$team" = "$pinned" ] || { echo "::error::install.sh's TEAM_ID ($pinned) must be the signing team ($team)"; exit 1; }
+            echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+            echo "SIGN_FLAGS=--options runtime --timestamp" >> "$GITHUB_ENV"
+            echo "NOTARIZE=true" >> "$GITHUB_ENV"
+          else
+            # Self-signed isn't trusted on the runner: sign by its hash.
+            identity=$(security find-identity -p codesigning "$keychain" | sed -n 's/^ *1) \([0-9A-F]\{40\}\) .*/\1/p')
+            [ -n "$identity" ] || { echo "::error::no code-signing identity in SIGNING_CERT_P12_BASE64"; exit 1; }
+            echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          fi
       - name: Build and sign the app (universal)
         run: make bundle UNIVERSAL=1 SOURCE_DIR= SIGN_IDENTITY="${SIGN_IDENTITY:--}" SIGN_FLAGS="${SIGN_FLAGS:-}"
       - name: Notarize
-        if: env.PUBLISH == 'true'
+        if: env.NOTARIZE == 'true'
         env:
           API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -64,7 +84,7 @@ jobs:
           echo "$API_KEY_P8_BASE64" | base64 --decode > "$APPLE_API_KEY_PATH"
           scripts/notarize.sh "build/Process Automator.app"
       - run: scripts/package.sh macos "build/Process Automator.app" build/dist
-      # A release is checked as install.sh checks it: Developer ID and notarization.
+      # A release is checked as install.sh checks it.
       - name: Install test
         run: PROCAUTO_INSTALL_UNSIGNED=$([ "$PUBLISH" = true ] || echo 1) scripts/test-install.sh build/dist/process-automator-*-macos.zip
       - uses: actions/upload-artifact@v4

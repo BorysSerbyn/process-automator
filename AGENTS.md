@@ -36,7 +36,7 @@ From a checkout of the repository (clone it first if you haven't):
 ./install.sh --yes
 ```
 
-It downloads the latest release for this machine, checks its checksum (and on macOS its notarized Developer ID signature), installs it (macOS: `~/Applications/Process Automator.app`; Linux: `~/.local/lib/process-automator`), links `procauto` into `~/.local/bin`, and starts the scheduler (and on macOS the menu bar app) now and at login. If a check fails, show them the error; don't work around it.
+It downloads the latest release for this machine, checks its checksum (and on macOS its signature), installs it (macOS: `~/Applications/Process Automator.app`; Linux: `~/.local/lib/process-automator`), links `procauto` into `~/.local/bin`, and starts the scheduler (and on macOS the menu bar app) now and at login. If a check fails, show them the error; don't work around it.
 
 **No published release for this machine** (install.sh says so): build it from the checkout instead. On macOS:
 1. Prerequisites, each with their go-ahead: the Xcode command line tools (`xcode-select --install`: *they* confirm the dialog), Homebrew, then `make deps` (Go and the other build tools).
