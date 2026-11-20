@@ -12,6 +12,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/update"
 )
 
@@ -35,7 +36,7 @@ func installedApp() (root, installer string, err error) {
 	}
 	if err == nil && strings.Contains(exe, string(filepath.Separator)+"Cellar"+string(filepath.Separator)) {
 		return "", "", errors.New("this app was installed by Homebrew: update or remove it with brew " +
-			"(`brew upgrade process-automator`, `brew uninstall process-automator`)")
+			"(`brew upgrade " + product.Folder + "`, `brew uninstall " + product.Folder + "`)")
 	}
 	return filepath.Dir(filepath.Dir(resources)), installer, nil
 }
@@ -45,7 +46,7 @@ func newUninstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove the app, its CLI link and its login items; --purge also your config, routines, history, logs and secrets",
-		Long: "Stops the scheduler and automator-ui, removes their login items, the procauto link and the app. " +
+		Long: "Stops the scheduler and automator-ui, removes their login items, the " + product.Command + " link and the app. " +
 			"Your config, routines, run history, logs and secrets stay unless you add --purge. Asks first; " +
 			"without a terminal it needs --yes. An app installed with Homebrew is removed with brew.",
 		Annotations: map[string]string{annNotForRoutines: "removing the app is mine"},
@@ -59,7 +60,7 @@ func newUninstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			what := "the app (" + root + "), its procauto link and its login items"
+			what := "the app (" + root + "), its " + product.Command + " link and its login items"
 			if purge {
 				what += ", and your config, routines, history, logs and secrets (" + a.Layout.Data() + ")"
 			}

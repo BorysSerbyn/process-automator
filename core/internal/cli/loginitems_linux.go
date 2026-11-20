@@ -8,10 +8,18 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // On Linux, login items are systemd user units installed by install-app.sh;
 // starting at login is whether the unit is enabled.
+
+// loginItemLabels are the app's systemd user units: the scheduler only
+// (Linux has no automator-ui), as the Makefile's LINUX_SCHED_LABEL names it.
+func loginItemLabels() map[string]string {
+	return map[string]string{"scheduler": product.Command + "-scheduler.service"}
+}
 
 func userUnitDir() (string, error) {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {

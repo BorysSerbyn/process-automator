@@ -57,8 +57,7 @@ final class Indicator: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         guard menu === statusItem.menu else { return }  // the Routines submenu is built with it
         menu.removeAllItems()
-        let version = Bundle.main.object(forInfoDictionaryKey: "ProcAutoVersion") as? String ?? "dev"
-        menu.addItem(textItem(MenuTextView(text: "Process Automator \(version)", lines: 1, dimmed: true)))
+        menu.addItem(textItem(MenuTextView(text: "\(AppInfo.name) \(AppInfo.version)", lines: 1, dimmed: true)))
         for item in statusItems() { menu.addItem(item) }
         // Finish Setup… while run status names setup steps still to do (the
         // Routines window always has Setup).
@@ -156,7 +155,7 @@ final class Indicator: NSObject, NSMenuDelegate {
         glyph?.isTemplate = true
         button.image = glyph
         button.imageScaling = .scaleNone
-        button.setAccessibilityLabel("Process Automator status")
+        button.setAccessibilityLabel("\(AppInfo.name) status")
 
         dotView.image = Self.loadSVG("dot") ?? Self.fallbackDot()
         dotView.imageScaling = .scaleNone

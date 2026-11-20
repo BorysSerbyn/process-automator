@@ -7,6 +7,9 @@ import (
 	"runtime"
 )
 
+// loginItemLabels: there are no login items here.
+func loginItemLabels() map[string]string { return nil }
+
 func loginItems(map[string]string) ([]LoginItem, error) {
 	return nil, errors.New("starting at login isn't implemented on " + runtime.GOOS + " yet")
 }

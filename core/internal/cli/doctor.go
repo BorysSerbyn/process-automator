@@ -9,6 +9,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 )
@@ -88,7 +89,7 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		add("scheduler", "run status", err.Error(), "")
 	case status.ValidUntil == nil || now.After(*status.ValidUntil):
 		add("scheduler", "scheduler", "isn't running, or stopped responding (run status isn't being refreshed)",
-			"start Process Automator, which starts the scheduler at login; `procauto daemon` in a terminal shows why it stops")
+			"start "+product.Name+", which starts the scheduler at login; `"+product.Command+" daemon` in a terminal shows why it stops")
 	case status.Problem != "":
 		add("scheduler", "scheduler", status.Problem, "")
 	}
@@ -110,7 +111,7 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 	}
 	signIns := signedIn(a)
 	for _, e := range set.Errors {
-		add("routine", e.Path, e.Err.Error(), "fix the file, or `procauto routines delete` it")
+		add("routine", e.Path, e.Err.Error(), "fix the file, or `"+product.Command+" routines delete` it")
 	}
 	for _, r := range set.Routines {
 		rd := a.Assess(r)
@@ -125,7 +126,7 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		case rd.TrustErr != nil:
 			add("routine", r.Name, rd.TrustErr.Error(), "")
 		case rd.Untrusted != "":
-			add("routine", r.Name, rd.Untrusted, "procauto routines trust "+r.Name)
+			add("routine", r.Name, rd.Untrusted, product.Command+" routines trust "+r.Name)
 		}
 		rd.CheckTools(cmd.Context(), a, r, signIns)
 		for _, p := range rd.Problems {
@@ -142,9 +143,9 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 			id := history.RunID(r.Name, run.StartedAt)
 			switch run.Outcome {
 			case runstatus.OutcomeFailed, runstatus.OutcomeMissed:
-				add("run", r.Name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason), "see it: procauto runs show "+id)
+				add("run", r.Name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason), "see it: "+product.Command+" runs show "+id)
 			case runstatus.OutcomeNeedsReauth:
-				add("run", r.Name, "its last run needed a sign-in: "+run.Reason, "procauto auth status shows which one")
+				add("run", r.Name, "its last run needed a sign-in: "+run.Reason, product.Command+" auth status shows which one")
 			}
 		}
 	}

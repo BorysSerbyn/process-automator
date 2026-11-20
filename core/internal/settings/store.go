@@ -9,6 +9,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/yamlfile"
 )
 
@@ -129,7 +130,7 @@ func (s Store) Reset(key string) (State, error) {
 }
 
 func unknownKey(key string) error {
-	return fmt.Errorf("unknown setting %q (see `procauto settings list`)", key)
+	return fmt.Errorf("unknown setting %q (see `"+product.Command+" settings list`)", key)
 }
 
 // read returns the raw values in the settings section.

@@ -127,3 +127,32 @@ func TestProjects(t *testing.T) {
 		t.Errorf("projects %v", got)
 	}
 }
+
+// Every template the repo ships passes Check (it may ship none).
+func TestShippedTemplates(t *testing.T) {
+	if err := Check("../../../templates"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Check passes a template that's right and names what's wrong with one that
+// isn't.
+func TestCheck(t *testing.T) {
+	if err := Check("testdata/templates"); err != nil {
+		t.Fatalf("the fixture: %v", err)
+	}
+	for name, body := range map[string]string{
+		"no memories":  "---\ndescription: x\n---\nHello {{today}}.",
+		"no time":      "---\ndescription: x\n---\nHello. {{> memories}}",
+		"doesn't load": "---\nautomator.schedul: daily\n---\nHello {{today}}. {{> memories}}",
+	} {
+		dir := t.TempDir()
+		write(t, filepath.Join(dir, "personal", "x.prompt"), body)
+		if err := Check(dir); err == nil {
+			t.Errorf("%s: passed", name)
+		}
+	}
+	if err := Check(filepath.Join(t.TempDir(), "missing")); err != nil {
+		t.Fatalf("a missing folder has nothing to check: %v", err)
+	}
+}

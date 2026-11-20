@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // VersionOutput is `version --json`.
@@ -22,9 +22,9 @@ func newVersionCmd() *cobra.Command {
 		Short:       "Print the version",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if asJSON {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(VersionOutput{Version: version.Version})
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(VersionOutput{Version: product.Version})
 			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), version.Version)
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), product.Version)
 			return err
 		},
 	}

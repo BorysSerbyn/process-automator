@@ -12,6 +12,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/scheduler"
@@ -36,7 +37,7 @@ const (
 func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)) error {
 	unlock, err := filelock.Lock(a.Layout.DaemonLock(), false)
 	if err != nil {
-		return errors.New("another procauto daemon is already running")
+		return errors.New("another " + product.Command + " daemon is already running")
 	}
 	defer unlock()
 
@@ -365,7 +366,7 @@ func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler, queued *qu
 			now := time.Now()
 			recordRun(a, name, occ, nil, runstatus.Run{
 				StartedAt: now, FinishedAt: &now, QueuedAt: queued.take(name),
-				Outcome: runstatus.OutcomeStopped, Reason: "stopped on request (procauto stop) while waiting for its turn",
+				Outcome: runstatus.OutcomeStopped, Reason: "stopped on request (" + product.Command + " stop) while waiting for its turn",
 			}, nil)
 		}
 	}

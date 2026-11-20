@@ -1,19 +1,12 @@
 package routines
 
 import (
-	"context"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/firebase/genkit/go/genkit"
-
-	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 )
 
 func TestLoadFixtureFolder(t *testing.T) {
@@ -87,88 +80,6 @@ func TestPreviousWorkday(t *testing.T) {
 		now, _ := time.ParseInLocation("2006-01-02", in, time.Local)
 		if got := PreviousWorkday(now.Add(9 * time.Hour)).Format("2006-01-02"); got != want {
 			t.Errorf("PreviousWorkday(%s) = %s, want %s", in, got, want)
-		}
-	}
-}
-
-// Every template the repo ships must load cleanly, include the memories
-// partial, and render with the standard inputs through Genkit.
-func TestTemplates(t *testing.T) {
-	dirs := templateDirs("../../../templates")
-	if len(dirs) == 0 {
-		t.Skip("the repo ships no templates")
-	}
-	for _, dir := range dirs {
-		t.Run(strings.TrimPrefix(dir, "../../../templates/"), func(t *testing.T) { checkTemplates(t, dir) })
-	}
-}
-
-// The template checks themselves, on a template that passes them.
-func TestTemplateChecks(t *testing.T) {
-	dirs := templateDirs("testdata/templates")
-	if len(dirs) == 0 {
-		t.Fatal("no template fixtures")
-	}
-	for _, dir := range dirs {
-		checkTemplates(t, dir)
-	}
-}
-
-// templateDirs are the folders under root holding templates. Templates are
-// grouped in tag folders (e.g. projects/acme); each folder holding .prompt
-// files is a routines folder of its own.
-func templateDirs(root string) []string {
-	var dirs []string
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && strings.HasSuffix(path, Ext) && !slices.Contains(dirs, filepath.Dir(path)) {
-			dirs = append(dirs, filepath.Dir(path))
-		}
-		return nil
-	})
-	return dirs
-}
-
-func checkTemplates(t *testing.T, dir string) {
-	set, err := Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(set.Errors) > 0 {
-		t.Fatalf("template errors: %v", set.Errors)
-	}
-	now := time.Date(2026, 11, 17, 9, 15, 0, 0, time.Local)
-	for _, r := range set.Routines {
-		if !strings.Contains(r.Source, "{{> memories}}") {
-			t.Errorf("%s lacks {{> memories}}", r.Name)
-		}
-		g := genkit.Init(context.Background())
-		for name, src := range set.PromptPartials("MEMORIES-HERE") {
-			genkit.DefinePartial(g, name, src)
-		}
-		p, err := genkit.LoadPromptFromSource(g, r.Source, r.Name, "")
-		if err != nil {
-			t.Fatalf("%s: load: %v", r.Name, err)
-		}
-		req, err := p.Render(context.Background(), Inputs(trigger.New(trigger.Schedule, now)))
-		if err != nil {
-			t.Fatalf("%s: render: %v", r.Name, err)
-		}
-		var text strings.Builder
-		for _, m := range req.Messages {
-			for _, c := range m.Content {
-				text.WriteString(c.Text)
-			}
-		}
-		got := text.String()
-		if !strings.Contains(got, "MEMORIES-HERE") {
-			t.Errorf("%s: rendered prompt lacks its memories", r.Name)
-		}
-		// It's anchored in the run's time: today or since (the previous workday).
-		if !strings.Contains(got, "Tuesday 2026-11-17") && !strings.Contains(got, "Monday 2026-11-16") {
-			t.Errorf("%s: rendered prompt uses neither today nor since", r.Name)
-		}
-		if strings.Contains(got, "{{") {
-			t.Errorf("%s: unrendered template syntax left", r.Name)
 		}
 	}
 }

@@ -8,7 +8,8 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // ToolInfo is one row of `mcp tools --json`.
@@ -69,7 +70,7 @@ func newMCPCmd() *cobra.Command {
 	call := &cobra.Command{
 		Use:     "call <server> <tool> [json-args]",
 		Short:   "Call one tool and print its result (debugging; runs writes for real)",
-		Example: `  procauto mcp call automator runs '{"since":"7d"}'`,
+		Example: "  " + product.Command + ` mcp call automator runs '{"since":"7d"}'`,
 		Args:    cobra.RangeArgs(2, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var params map[string]any

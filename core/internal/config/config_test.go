@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 var base = map[string]pluginapi.ServerSpec{

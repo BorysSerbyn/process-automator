@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/schedule"
 )
 
@@ -37,7 +38,7 @@ func newScheduleCmd() *cobra.Command {
 	describe := &cobra.Command{
 		Use:         "describe <cron>",
 		Short:       "Say what a schedule means and when it next runs",
-		Example:     "  procauto schedule describe '20 9 * * 1-5'",
+		Example:     "  " + product.Command + " schedule describe '20 9 * * 1-5'",
 		Annotations: readOnly(),
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -53,7 +54,7 @@ func newScheduleCmd() *cobra.Command {
 	build := &cobra.Command{
 		Use:         "build",
 		Short:       "Turn days of the week and a time into a schedule",
-		Example:     "  procauto schedule build --days mon,tue,wed,thu,fri --at 09:20",
+		Example:     "  " + product.Command + " schedule build --days mon,tue,wed,thu,fri --at 09:20",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

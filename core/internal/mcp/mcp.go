@@ -15,8 +15,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // ErrNeedsReauth means a server's credentials are missing, expired or revoked and
@@ -32,9 +33,9 @@ type NeedsReauthError struct {
 
 func (e *NeedsReauthError) Error() string {
 	if e.Cause != nil {
-		return fmt.Sprintf("%s: needs re-authentication (run `procauto auth login %s`): %v", e.Server, e.Server, e.Cause)
+		return fmt.Sprintf("%s: needs re-authentication (run `"+product.Command+" auth login %s`): %v", e.Server, e.Server, e.Cause)
 	}
-	return fmt.Sprintf("%s: needs re-authentication (run `procauto auth login %s`)", e.Server, e.Server)
+	return fmt.Sprintf("%s: needs re-authentication (run `"+product.Command+" auth login %s`)", e.Server, e.Server)
 }
 
 // Is makes errors.Is(err, ErrNeedsReauth) work.

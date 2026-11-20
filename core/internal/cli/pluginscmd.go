@@ -12,7 +12,8 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // PluginInfo is one row of `plugins list --json`.
@@ -100,10 +101,10 @@ func newPluginsAddCmd() *cobra.Command {
 			"sign in with `auth login <name>`, then `plugins check <name>`. Secrets are referenced as {key} in " +
 			"--header/--env values (or the manifest's env), never given here. Routines use it by listing <name> " +
 			"in automator.servers.",
-		Example: "  procauto plugins add notion --url https://mcp.notion.com/mcp\n" +
-			"  procauto plugins add weather --dir ./weather-mcp\n" +
-			"  procauto plugins add acme --url https://mcp.acme.dev --auth headers --header 'Authorization=Bearer {acme-key}'\n" +
-			"  procauto plugins add files --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ~/notes",
+		Example: "  " + product.Command + " plugins add notion --url https://mcp.notion.com/mcp\n" +
+			"  " + product.Command + " plugins add weather --dir ./weather-mcp\n" +
+			"  " + product.Command + " plugins add acme --url https://mcp.acme.dev --auth headers --header 'Authorization=Bearer {acme-key}'\n" +
+			"  " + product.Command + " plugins add files --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ~/notes",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, unlock, err := loadAppForEdit(cmd)
@@ -164,7 +165,7 @@ func newPluginsAddCmd() *cobra.Command {
 			}
 			out := PluginChange{Plugin: name, Kind: kind, Endpoint: ep, Trial: &trial}
 			if trial.NeedsSignIn {
-				out.SignIn = "procauto auth login " + name
+				out.SignIn = product.Command + " auth login " + name
 			}
 			if asJSON {
 				return writeJSON(cmd.OutOrStdout(), out)
@@ -172,7 +173,7 @@ func newPluginsAddCmd() *cobra.Command {
 			w := cmd.OutOrStdout()
 			fmt.Fprintf(w, "Added %s (%s %s).\n", name, kind, ep)
 			if trial.NeedsSignIn {
-				fmt.Fprintf(w, "It needs credentials before it can be tried fully.\nSign in: %s\nThen: procauto plugins check %s\n", out.SignIn, name)
+				fmt.Fprintf(w, "It needs credentials before it can be tried fully.\nSign in: %s\nThen: "+product.Command+" plugins check %s\n", out.SignIn, name)
 			} else {
 				fmt.Fprintf(w, "Tried it: %s\n", toolSummary(trial.Tools))
 				for _, t := range trial.Tools {

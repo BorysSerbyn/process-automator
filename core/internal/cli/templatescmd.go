@@ -14,10 +14,10 @@ import (
 	"golang.org/x/term"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/templates"
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
 )
 
 // TemplateInfo is one row of `templates list --json`.
@@ -37,10 +37,10 @@ type InstallOutput struct {
 }
 
 // templatesDir is where the app's templates are: bundled next to the binary
-// (version.TemplatesDir, relative to the executable), or the source checkout's
+// (product.TemplatesDir, relative to the executable), or the source checkout's
 // in a development build.
 func templatesDir() (string, error) {
-	if dir := version.TemplatesDir; dir != "" {
+	if dir := product.TemplatesDir; dir != "" {
 		if filepath.IsAbs(dir) {
 			return dir, nil
 		}
@@ -53,8 +53,8 @@ func templatesDir() (string, error) {
 		}
 		return filepath.Join(filepath.Dir(exe), dir), nil
 	}
-	if version.SourceDir != "" {
-		return filepath.Join(version.SourceDir, "templates"), nil
+	if product.SourceDir != "" {
+		return filepath.Join(product.SourceDir, "templates"), nil
 	}
 	return "", errors.New("this build doesn't know where its templates are")
 }
@@ -136,7 +136,7 @@ func newTemplatesListCmd() *cobra.Command {
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%v\t%s\n", r.ID, orDash(strings.Join(params, ", ")), platforms, r.Installed, oneLine(r.Description, 60))
 			}
 			_ = tw.Flush()
-			fmt.Fprintln(out, "\n* required. Install with: procauto templates install <template> [--as <name>] [--set param=value]")
+			fmt.Fprintln(out, "\n* required. Install with: "+product.Command+" templates install <template> [--as <name>] [--set param=value]")
 			return nil
 		},
 	}
@@ -156,8 +156,8 @@ func newTemplatesInstallCmd() *cobra.Command {
 			"parameter values as routines.<name>.params.<param> settings. The routine starts disabled (enable it with " +
 			"`settings set routines.<name>.enabled true`). Values come from --set, then the " +
 			"template's defaults; required ones without a value are asked for (or an error, without a terminal).",
-		Example: "  procauto templates install projects/acme/standup\n" +
-			"  procauto templates install personal/digest --set lookback=72h",
+		Example: "  " + product.Command + " templates install projects/acme/standup\n" +
+			"  " + product.Command + " templates install personal/digest --set lookback=72h",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, unlock, err := loadAppForEdit(cmd)
@@ -218,8 +218,8 @@ func newTemplatesInstallCmd() *cobra.Command {
 			if t.Description != "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", t.ID, t.Description)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Installed %s as %q (%s), disabled and not trusted.\nTry it: procauto run %s --dry-run\n"+
-				"Trust it: procauto routines trust %s\nEnable it: procauto settings set routines.%s.enabled true\n",
+			fmt.Fprintf(cmd.OutOrStdout(), "Installed %s as %q (%s), disabled and not trusted.\nTry it: "+product.Command+" run %s --dry-run\n"+
+				"Trust it: "+product.Command+" routines trust %s\nEnable it: "+product.Command+" settings set routines.%s.enabled true\n",
 				t.ID, name, path, name, name, name)
 			return nil
 		},

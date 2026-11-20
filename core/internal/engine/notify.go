@@ -11,8 +11,8 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/notify"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

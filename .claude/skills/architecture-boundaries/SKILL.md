@@ -11,4 +11,6 @@ description: Keeps process-automator's layer boundaries intact. Use when changin
 
 **3. The Go core doesn't know which OS it runs on.** OS-specific things live outside shared code: external apps are MCP servers added as plugins, launchd/systemd/bundling in `Makefile` and `scripts/`, unavoidable OS calls behind a per-OS file with a fallback for other OSes (`secrets/default_darwin.go`, `filelock`, `cli/browser_darwin.go`). `internal/osboundary`'s test enforces it, and `core/` must cross-compile (`GOOS=linux go build ./...`, `GOOS=windows go build ./...`).
 
+**4. Only `core/automator` and `core/pluginapi` are public.** Other apps import them (and build with this repo's Makefile and scripts), so keep them small and their changes deliberate; anything else goes in `internal/`. Nothing app-specific belongs in this repo: names come from the `automator.App` (`internal/product` in the core, `AppInfo` in automator-ui), never literals.
+
 When a run-status or `--json` shape changes, run `make contracts`: the Swift types are generated from `contracts/openapi.yaml` at build time, never hand-written.

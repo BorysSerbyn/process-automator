@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // cli runs the command line against a fresh root with config at cfg.

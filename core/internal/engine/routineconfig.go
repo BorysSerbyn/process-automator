@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
@@ -71,7 +72,7 @@ func (a *App) RoutineConfig(r routines.Routine) (RoutineConfig, error) {
 	for _, p := range r.Params {
 		v := vals.Value(key("params." + p.Name))
 		if v == nil {
-			return c, fmt.Errorf("parameter %q needs a value: procauto settings set routines.%s.params.%s <value>", p.Name, r.Name, p.Name)
+			return c, fmt.Errorf("parameter %q needs a value: "+product.Command+" settings set routines.%s.params.%s <value>", p.Name, r.Name, p.Name)
 		}
 		c.Params[p.Name] = v
 	}

@@ -13,6 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 )
 
@@ -234,7 +235,7 @@ func (p *pendingLogin) Secret(ctx context.Context, _, label string) (string, err
 
 // SignIn implements loginUI with the server's OAuth page.
 func (p *pendingLogin) SignIn(ctx context.Context, server, url string) error {
-	return p.present(ctx, url, "Sign in to "+server+" for procauto.")
+	return p.present(ctx, url, "Sign in to "+server+" for "+product.Command+".")
 }
 
 // present shows me a page: through the client, which then calls again, or
@@ -248,7 +249,7 @@ func (p *pendingLogin) present(ctx context.Context, url, message string) error {
 	p.mu.Unlock()
 	if !p.urlOK {
 		if err := openExternal(url); err != nil {
-			return fmt.Errorf("this client can't show the page and no browser opened (%v); run `procauto auth login` in a terminal", err)
+			return fmt.Errorf("this client can't show the page and no browser opened (%v); run `"+product.Command+" auth login` in a terminal", err)
 		}
 		p.Say("Opened a page in your browser: %s", message)
 		return nil

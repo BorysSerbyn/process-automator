@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 )
 
@@ -22,8 +23,8 @@ func newRunsCmd() *cobra.Command {
 		Use:         "runs [<routine>]",
 		Annotations: readOnly(),
 		Short:       "List past runs (which ran, how they ended and why), newest first",
-		Example: "  procauto runs\n  procauto runs standup --since 7d\n" +
-			"  procauto runs show standup/2026-11-19T092022",
+		Example: "  " + product.Command + " runs\n  " + product.Command + " runs standup --since 7d\n" +
+			"  " + product.Command + " runs show standup/2026-11-19T092022",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)

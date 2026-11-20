@@ -8,18 +8,14 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 	"github.com/spf13/cobra"
 )
 
 // secretStore is where the app keeps secrets (tests swap in a memory store).
-var secretStore = func() secrets.Store { return secrets.Default(keychainService) }
-
-// keychainService namespaces every secret the app stores. The build sets it
-// from the bundle prefix (Makefile KEYCHAIN_SERVICE), so nothing user-specific
-// lives in code and `uninstall --purge` clears the same service.
-var keychainService = config.AppName
+var secretStore = func() secrets.Store { return secrets.Default(product.KeychainService()) }
 
 type pluginsKey struct{}
 

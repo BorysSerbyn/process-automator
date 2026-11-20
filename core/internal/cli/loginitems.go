@@ -6,13 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// The app's login items (LaunchAgents on macOS, systemd user units on
-// Linux), as the build names them (the Makefile's UI_LABEL and SCHED_LABEL).
-var (
-	uiLabel        = "dev.procauto.ui"
-	schedulerLabel = "dev.procauto.scheduler"
-)
-
 // LoginItem is one thing that starts at login.
 type LoginItem struct {
 	// Name is ui (automator-ui: the menu bar indicator, settings, …) or scheduler.
@@ -34,18 +27,6 @@ type LoginItemsOutput struct {
 	// starts at login.
 	Enabled bool        `json:"enabled"`
 	Items   []LoginItem `json:"items"`
-}
-
-// loginItemLabels are the login items this build has (Linux builds have no
-// automator-ui, so no ui label).
-func loginItemLabels() map[string]string {
-	labels := map[string]string{}
-	for name, label := range map[string]string{"ui": uiLabel, "scheduler": schedulerLabel} {
-		if label != "" {
-			labels[name] = label
-		}
-	}
-	return labels
 }
 
 func newLoginItemsCmd() *cobra.Command {

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Installs or uninstalls the Process Automator this script is part of: the macOS
-# app (it sits in Contents/Resources) or the Linux tree (share/process-automator).
-# It's the one install path: `make install`, install.sh, `procauto update`,
-# `procauto uninstall` and the Homebrew cask and formula all run it.
+# Installs or uninstalls the app this script is part of: the macOS app (it
+# sits in Contents/Resources) or the Linux tree (share/<FOLDER>). Its
+# install.env names the app (NAME, COMMAND, FOLDER) and its build.
+# It's the one install path: `make install`, install.sh, `<COMMAND> update`,
+# `<COMMAND> uninstall` and the Homebrew cask and formula all run it.
 #
 # Usage:
 #   install-app.sh install [--to <path>]
@@ -20,7 +21,7 @@
 # Environment: INSTALL_DIR (macOS: ~/Applications; Linux: ~/.local/lib) and
 #   BIN_DIR (~/.local/bin).
 #
-# Starting at login keeps what I chose (`procauto login-items disable`):
+# Starting at login keeps what I chose (`<COMMAND> login-items disable`):
 # an item turned off is (re)started now and stays off at login. launchd refuses
 # to load a disabled agent, so it's enabled for the load and disabled again,
 # even when the load fails. It reads `launchctl print-disabled` as
@@ -30,7 +31,8 @@ set -euo pipefail
 main() {
   here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   root=$(cd "$here/../.." && pwd)
-  # VERSION, OS (macos|linux), BUNDLE_ID, UI_LABEL, SCHED_LABEL, KEYCHAIN_SERVICE
+  # OS (macos|linux), NAME, COMMAND, FOLDER, VERSION, BUNDLE_ID, UI_LABEL,
+  # SCHED_LABEL, KEYCHAIN_SERVICE
   # shellcheck source=/dev/null
   . "$here/install.env"
 
@@ -50,10 +52,10 @@ main() {
   BIN_DIR=${BIN_DIR:-$HOME/.local/bin}
   if [ "$OS" = macos ]; then
     INSTALL_DIR=${INSTALL_DIR:-$HOME/Applications}
-    app_name="Process Automator.app" core_rel="Contents/MacOS/procauto"
+    app_name="$NAME.app" core_rel="Contents/MacOS/$COMMAND"
   else
     INSTALL_DIR=${INSTALL_DIR:-$HOME/.local/lib}
-    app_name="process-automator" core_rel="bin/procauto"
+    app_name="$FOLDER" core_rel="bin/$COMMAND"
   fi
 
   case $action in
@@ -86,11 +88,11 @@ install_app() {
   fi
   if [ -n "$link" ]; then
     mkdir -p "$BIN_DIR"
-    ln -sfn "$dest/$core_rel" "$BIN_DIR/procauto"
+    ln -sfn "$dest/$core_rel" "$BIN_DIR/$COMMAND"
   fi
   login_items "$dest"
-  echo "Installed Process Automator $VERSION: $dest"
-  if [ -n "$link" ]; then echo "CLI: $BIN_DIR/procauto"; fi
+  echo "Installed $NAME $VERSION: $dest"
+  if [ -n "$link" ]; then echo "CLI: $BIN_DIR/$COMMAND"; fi
 }
 
 # The scheduler's PATH: launchd's and systemd's defaults lack ~/.local/bin and
@@ -102,7 +104,7 @@ sched_path() {
 login_items() {
   local app=$1
   if [ "$OS" = macos ]; then
-    local agents="$HOME/Library/LaunchAgents" logs="$HOME/Library/Logs/process-automator"
+    local agents="$HOME/Library/LaunchAgents" logs="$HOME/Library/Logs/$FOLDER"
     mkdir -p "$agents" "$logs"
     sed -e "s|__LABEL__|$UI_LABEL|" -e "s|__PROGRAM__|$app/Contents/MacOS/AutomatorUI|" \
       "$here/launchagent.plist.in" > "$agents/$UI_LABEL.plist"
@@ -122,7 +124,7 @@ login_items() {
       "$here/scheduler.service.in" > "$units/$SCHED_LABEL"
     if system; then
       if ! systemctl --user show-environment >/dev/null 2>&1; then
-        echo "No systemd user session here: start the scheduler yourself with \`procauto daemon\`." >&2
+        echo "No systemd user session here: start the scheduler yourself with \`$COMMAND daemon\`." >&2
         return 0
       fi
       systemctl --user daemon-reload
@@ -165,7 +167,7 @@ stop_items() {
 
 uninstall_app() {
   local core="$root/$core_rel"
-  [ -x "$core" ] || die "$root isn't an installed Process Automator (no $core_rel): nothing removed"
+  [ -x "$core" ] || die "$root isn't an installed $NAME (no $core_rel): nothing removed"
   stop_items
   if [ "$OS" = macos ]; then
     rm -f "$HOME/Library/LaunchAgents/$UI_LABEL.plist" "$HOME/Library/LaunchAgents/$SCHED_LABEL.plist"
@@ -180,7 +182,7 @@ uninstall_app() {
     data=$("$core" ${config:+--config "$config"} paths --json | sed -n 's/^  "data": "\(.*\)",*$/\1/p')
     if [ -n "$data" ] && [ -d "$data" ]; then echo "Removing $data"; rm -rf "$data"; fi
     if [ "$OS" = macos ]; then
-      rm -rf "$HOME/Library/Logs/process-automator"
+      rm -rf "$HOME/Library/Logs/$FOLDER"
       if system; then
         local n=0
         while security delete-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1; do n=$((n + 1)); done
@@ -192,7 +194,7 @@ uninstall_app() {
     fi
   fi
   # The CLI link, only if it's ours (compared resolved: /var is /private/var on macOS).
-  local link="$BIN_DIR/procauto" target
+  local link="$BIN_DIR/$COMMAND" target
   if [ -L "$link" ]; then
     target=$(readlink "$link")
     if [ "$(cd "$(dirname "$target")" 2>/dev/null && pwd -P)/$(basename "$target")" = "$(cd "$(dirname "$core")" && pwd -P)/$(basename "$core")" ]; then
@@ -200,7 +202,7 @@ uninstall_app() {
     fi
   fi
   rm -rf "$root"
-  echo "Uninstalled Process Automator $VERSION."
+  echo "Uninstalled $NAME $VERSION."
 }
 
 main "$@"

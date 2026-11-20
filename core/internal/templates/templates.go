@@ -7,6 +7,7 @@
 package templates
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -15,8 +16,12 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/firebase/genkit/go/genkit"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
+	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 )
 
 // Template is one template file.
@@ -66,24 +71,12 @@ func (t Template) RunsHere() bool { return t.Routine.RunsHere() }
 // exactly the rules routines do; a template that doesn't load is an error
 // (templates ship with the app and are tested, so that's a packaging bug).
 func List(dir string) ([]Template, error) {
-	folders := map[string]bool{}
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && strings.HasSuffix(path, routines.Ext) {
-			folders[filepath.Dir(path)] = true
-		}
-		return nil
-	})
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
+	folders, err := folders(dir)
 	if err != nil {
 		return nil, err
 	}
 	var out []Template
-	for folder := range folders {
+	for _, folder := range folders {
 		set, err := routines.Load(folder)
 		if err != nil {
 			return nil, err
@@ -105,6 +98,90 @@ func List(dir string) ([]Template, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
+}
+
+// folders are the folders under dir holding templates, sorted; none when dir
+// is missing.
+func folders(dir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, routines.Ext) && !slices.Contains(out, filepath.Dir(path)) {
+			out = append(out, filepath.Dir(path))
+		}
+		return nil
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	sort.Strings(out)
+	return out, err
+}
+
+// Check is what every template shipped must pass, beyond loading as a
+// routine: it includes the memories partial, and it renders through Genkit
+// with the inputs every run gets, anchored in the run's time (today or since)
+// and with no template syntax left. The builds' tests run it on their
+// templates folder.
+func Check(dir string) error {
+	folders, err := folders(dir)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	now := time.Date(2026, 11, 17, 9, 15, 0, 0, time.Local) // a Tuesday: since is Monday
+	for _, folder := range folders {
+		set, err := routines.Load(folder)
+		if err != nil {
+			return err
+		}
+		for _, e := range set.Errors {
+			errs = append(errs, e)
+		}
+		for _, r := range set.Routines {
+			if err := checkOne(set, r, now); err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", r.Path, err))
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func checkOne(set *routines.Set, r routines.Routine, now time.Time) error {
+	if !strings.Contains(r.Source, "{{> memories}}") {
+		return errors.New("it lacks {{> memories}}")
+	}
+	const memories = "MEMORIES-HERE"
+	g := genkit.Init(context.Background())
+	for name, src := range set.PromptPartials(memories) {
+		genkit.DefinePartial(g, name, src)
+	}
+	p, err := genkit.LoadPromptFromSource(g, r.Source, r.Name, "")
+	if err != nil {
+		return fmt.Errorf("load: %w", err)
+	}
+	req, err := p.Render(context.Background(), routines.Inputs(trigger.New(trigger.Schedule, now)))
+	if err != nil {
+		return fmt.Errorf("render: %w", err)
+	}
+	var text strings.Builder
+	for _, m := range req.Messages {
+		for _, c := range m.Content {
+			text.WriteString(c.Text)
+		}
+	}
+	got := text.String()
+	switch {
+	case !strings.Contains(got, memories):
+		return errors.New("the rendered prompt lacks its memories")
+	case !strings.Contains(got, "Tuesday 2026-11-17") && !strings.Contains(got, "Monday 2026-11-16"):
+		return errors.New("the rendered prompt uses neither today nor since")
+	case strings.Contains(got, "{{"):
+		return errors.New("unrendered template syntax is left in the rendered prompt")
+	}
+	return nil
 }
 
 // Find returns the template with the given ID.

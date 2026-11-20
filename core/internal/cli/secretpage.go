@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 )
 
@@ -19,7 +20,7 @@ const secretPageTimeout = 10 * time.Minute
 
 var secretPageHTML = template.Must(template.New("secret").Parse(`<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>procauto sign-in</title>
+<title>{{.App}} sign-in</title>
 <style>
 :root { color-scheme: light dark; }
 body { font: 15px/1.5 -apple-system, system-ui, sans-serif; max-width: 30rem; margin: 4rem auto; padding: 0 1rem; }
@@ -28,8 +29,8 @@ button { padding: .5rem 1rem; font: inherit; }
 .err { color: #c33; }
 .steps { white-space: pre-wrap; font: inherit; }
 </style></head><body>
-{{if .Done}}<h1>Received</h1><p>procauto has {{.Label}} and is storing it in {{.Store}}; where you started the sign-in says when it's done. You can close this tab.</p>
-{{else}}<h1>procauto</h1>
+{{if .Done}}<h1>Received</h1><p>{{.App}} has {{.Label}} and is storing it in {{.Store}}; where you started the sign-in says when it's done. You can close this tab.</p>
+{{else}}<h1>{{.App}}</h1>
 {{if .Steps}}<p><strong>First:</strong></p><pre class="steps">{{.Steps}}</pre>{{end}}
 <form method="post"><label>Enter {{.Label}}
 <input type="password" name="value" autocomplete="off" autofocus required></label>
@@ -59,9 +60,9 @@ func secretPage(ctx context.Context, label, steps string, present func(url strin
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		data := struct {
-			Label, Err, Store, Steps string
-			Done                     bool
-		}{Label: label, Store: secrets.StoreName, Steps: steps}
+			App, Label, Err, Store, Steps string
+			Done                          bool
+		}{App: product.Name, Label: label, Store: secrets.StoreName, Steps: steps}
 		if r.Method == http.MethodPost {
 			v := strings.TrimSpace(r.PostFormValue("value"))
 			if v == "" {

@@ -13,7 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // script is a fake model: it calls the job's tools in order, then stops.

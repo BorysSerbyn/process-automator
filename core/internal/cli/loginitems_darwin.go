@@ -8,10 +8,18 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // On macOS, login items are LaunchAgents installed by scripts/install-app.sh;
 // starting at login is launchd's enable/disable override for them.
+
+// loginItemLabels are the app's LaunchAgents: automator-ui and the scheduler,
+// named after the bundle ID (as the Makefile's UI_LABEL and SCHED_LABEL).
+func loginItemLabels() map[string]string {
+	return map[string]string{"ui": product.BundleID() + ".ui", "scheduler": product.BundleID() + ".scheduler"}
+}
 
 func launchdDomain() string { return fmt.Sprintf("gui/%d", os.Getuid()) }
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
 )
 
 func TestTemplatesInstall(t *testing.T) {
@@ -23,9 +23,9 @@ automator.parameters:
   - {name: channel, type: string, description: Chat channel ID}
 ---
 Look back {{lookback}} in {{channel}}.`), 0o600)
-	old := version.TemplatesDir
-	version.TemplatesDir = tdir
-	t.Cleanup(func() { version.TemplatesDir = old })
+	old := product.TemplatesDir
+	product.TemplatesDir = tdir
+	t.Cleanup(func() { product.TemplatesDir = old })
 
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	run := func(args ...string) (string, error) {
@@ -89,9 +89,9 @@ Look back {{lookback}} in {{channel}}.`), 0o600)
 func TestNoTemplates(t *testing.T) {
 	for name, tdir := range map[string]string{"empty": t.TempDir(), "missing": filepath.Join(t.TempDir(), "missing")} {
 		t.Run(name, func(t *testing.T) {
-			old := version.TemplatesDir
-			version.TemplatesDir = tdir
-			t.Cleanup(func() { version.TemplatesDir = old })
+			old := product.TemplatesDir
+			product.TemplatesDir = tdir
+			t.Cleanup(func() { product.TemplatesDir = old })
 			cfg := filepath.Join(t.TempDir(), "config.yaml")
 
 			out, err := cli(t, cfg, "templates", "list", "--json")

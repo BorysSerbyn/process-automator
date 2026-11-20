@@ -16,8 +16,8 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // The test binary doubles as the procauto CLI, so the MCP server's tools

@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // Building from the source checkout: what update does when no published
@@ -45,7 +47,7 @@ func BuildInstall(ctx context.Context, dir, tag string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "procauto-update-")
+	tmp, err := os.MkdirTemp("", product.Command+"-update-")
 	if err != nil {
 		return err
 	}

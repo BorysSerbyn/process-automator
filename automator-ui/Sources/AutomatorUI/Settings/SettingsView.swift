@@ -176,7 +176,7 @@ struct SettingsView: View {
                 Text("Start at login")
                 Text(
                     installed
-                        ? "Process Automator starts when you log in."
+                        ? "\(AppInfo.name) starts when you log in."
                         : "Available once the app is installed."
                 )
                 .font(.subheadline)
