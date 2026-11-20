@@ -55,7 +55,7 @@ expect() { # expect <what> <text> <command>...: the command's output contains te
   out=$("$@" 2>&1 </dev/null || true)
   case $out in *"$text"*) ;; *) fail "$what: $out" ;; esac
 }
-expect "templates list fails with no templates shipped" "No templates" "$cli" templates list --all
+expect "templates list doesn't say none ship" "No templates" "$cli" templates list --all
 expect "setup --json lists no backend step" '"step": "backend"' "$cli" setup --json
 expect "login-items doesn't see the installed login items" '"installed": true' "$cli" login-items status --json
 expect "uninstall without a terminal didn't ask for --yes" "--yes" "$cli" uninstall
