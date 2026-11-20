@@ -29,7 +29,7 @@ Or without a checkout (`<owner>` is the GitHub account that hosts the repository
 gh api repos/<owner>/process-automator/contents/install.sh -H 'Accept: application/vnd.github.raw' | bash
 ```
 
-It downloads the latest release for your machine, checks its checksum (and on macOS its notarized Developer ID signature), installs it, links `procauto` into `~/.local/bin`, starts the scheduler (and on macOS the menu bar app) now and at login, then offers to run setup. If `~/.local/bin` isn't on your `PATH`, add it.
+It downloads the latest release for your machine, checks its checksum (and on macOS its signature), installs it, links `procauto` into `~/.local/bin`, starts the scheduler (and on macOS the menu bar app) now and at login, then offers to run setup. If `~/.local/bin` isn't on your `PATH`, add it.
 
 | | Where the app goes |
 |---|---|
