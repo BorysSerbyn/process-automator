@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routines-list.schema.json",
+  "items": {
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "servers": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "tools": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "model": {
+        "type": "string",
+        "description": "Model is the routine's model as written in its file (empty: the backend's default)."
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "schedule": {
+        "type": "string",
+        "description": "Schedule is the cron schedule; absent for routines run only by hand."
+      },
+      "scheduleText": {
+        "type": "string",
+        "description": "ScheduleText is the schedule in plain words (\"At 09:20, Monday through Friday\")."
+      },
+      "staleness": {
+        "type": "string"
+      },
+      "timeout": {
+        "type": "string"
+      },
+      "effort": {
+        "type": "string",
+        "description": "Effort is the routine's effort setting (\"default\" leaves it to the backend)."
+      },
+      "folder": {
+        "type": "string",
+        "description": "Folder is where its runs work (absent: a temporary folder); frontends\ncan filter routines by it."
+      },
+      "session": {
+        "type": "string",
+        "description": "Session is \"save\" when runs keep their agent CLI session, else \"discard\"."
+      },
+      "builtinTools": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "description": "BuiltinTools are the agent CLI built-in tools its runs may use."
+      },
+      "trusted": {
+        "type": "boolean",
+        "description": "Trusted is whether it may run for real (what it can reach is what I\ntrusted); Untrusted says why not."
+      },
+      "untrusted": {
+        "type": "string"
+      },
+      "agentModel": {
+        "type": "string",
+        "description": "AgentModel and AgentEffort are the model and effort as the configured\nbackend's agent CLI takes them (e.g. claude --model/--effort), worked out\nby the core so frontends never translate; empty means the CLI's default."
+      },
+      "agentEffort": {
+        "type": "string"
+      },
+      "next": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Next is the next scheduled run (absent when disabled or manual-only)."
+      },
+      "lastRun": {
+        "properties": {
+          "trigger": {
+            "type": "string",
+            "description": "Trigger is what started the run: \"schedule\", \"manual\" or \"backfill\"\n(empty in records from before triggers were recorded)."
+          },
+          "for": {
+            "type": "string",
+            "format": "date-time",
+            "description": "For is the time the run is for (the schedule slot, the backfilled day)."
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the run's history ID (as `runs show` takes)."
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "SessionID is the run's saved agent CLI session (routines with\nsession: save), set when the run starts."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Deadline is when a running run is stopped (its routine's timeout)."
+          },
+          "queuedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "QueuedAt is when the run started waiting for its turn, if it had to."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed",
+              "skipped",
+              "missed",
+              "needs-reauth",
+              "running",
+              "queued",
+              "stopped"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "startedAt",
+          "outcome"
+        ],
+        "description": "LastRun is the latest outcome from run status."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "name",
+      "path",
+      "servers",
+      "tools",
+      "enabled",
+      "timeout",
+      "effort",
+      "session",
+      "builtinTools",
+      "trusted"
+    ],
+    "description": "RoutineInfo is one row of `routines list --json`: a routine with its effective settings (file values overridden by settings)."
+  },
+  "type": "array",
+  "title": "procauto routines list --json"
+}

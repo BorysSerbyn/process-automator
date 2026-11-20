@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "usage.schema.json",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "plan",
+        "budget"
+      ],
+      "description": "Kind is \"plan\" (claude-code: the Claude plan's usage against\nllm.usage-limit) or \"budget\" (api: spend against llm.budget.*)."
+    },
+    "limitPercent": {
+      "type": "number",
+      "description": "LimitPercent is llm.usage-limit (plan)."
+    },
+    "windows": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name is \"session\" or \"weekly\" (plan), \"window\" or \"week\" (budget)."
+          },
+          "length": {
+            "type": "string",
+            "description": "Length is the window's length (\"5h\", \"7d\")."
+          },
+          "usedPercent": {
+            "type": "number",
+            "description": "UsedPercent is how much of the plan's limit is used, and ResetsAt when\nit resets (plan; absent: not known)."
+          },
+          "resetsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "spentUsd": {
+            "type": "number",
+            "description": "SpentUSD is what runs spent in it, and BudgetUSD its budget (budget;\na budget of 0 is none)."
+          },
+          "budgetUsd": {
+            "type": "number"
+          },
+          "over": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "length",
+          "over"
+        ],
+        "description": "Window is usage in one window."
+      },
+      "type": "array"
+    },
+    "fetchedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "FetchedAt is when the plan's usage was last read from Claude Code\n(plan); ReadError why the last try failed, when it did (the last\nreading still stands; with none, runs go ahead)."
+    },
+    "readError": {
+      "type": "string"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RecordedAt is when Claude Code's status line last recorded the plan's\nusage (plan; the fallback while /usage can't be read)."
+    },
+    "models": {
+      "items": {
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "usedPercent": {
+            "type": "number"
+          },
+          "resetsAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "model",
+          "usedPercent",
+          "resetsAt"
+        ],
+        "description": "ModelUsage is one model's weekly limit."
+      },
+      "type": "array",
+      "description": "Models are single models' weekly limits (plan; shown, not applied)."
+    },
+    "over": {
+      "type": "boolean",
+      "description": "Over is true when either window is past its limit; Reason says which."
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "kind",
+    "windows",
+    "over"
+  ],
+  "title": "procauto usage --json",
+  "description": "Report is usage against the limit, for the backend in use."
+}

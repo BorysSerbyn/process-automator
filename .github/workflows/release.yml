@@ -1,0 +1,131 @@
+name: Release
+# A pushed release tag (scripts/release.sh) builds every platform's artifact,
+# signs and notarizes the macOS app, publishes them as the tag's GitHub
+# release with SHA256SUMS, and updates the Homebrew tap. Run by hand, it only
+# builds the artifacts (ad-hoc signed, nothing published): a dry run.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PUBLISH: ${{ github.event_name == 'push' }}
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+      # The Developer ID Application certificate (with its key, as .p12) goes
+      # into a throwaway keychain; its team must be install.sh's TEAM_ID, which
+      # installs and updates check.
+      - name: Signing identity
+        if: env.PUBLISH == 'true'
+        env:
+          CERT_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          [ -n "$CERT_P12_BASE64" ] || { echo "::error::APPLE_DEVELOPER_ID_P12_BASE64 isn't set: releases are signed with a Developer ID"; exit 1; }
+          keychain="$RUNNER_TEMP/release.keychain-db" pw=$(uuidgen)
+          security create-keychain -p "$pw" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$pw" "$keychain"
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -n 1)
+          [ -n "$identity" ] || { echo "::error::no Developer ID Application identity in the certificate"; exit 1; }
+          team=$(sed -n 's/.*(\([A-Z0-9]*\))$/\1/p' <<<"$identity")
+          pinned=$(sed -n 's/^TEAM_ID=//p' install.sh)
+          [ -n "$pinned" ] || { echo "::error::install.sh's TEAM_ID isn't set: put the signing team ($team) there first"; exit 1; }
+          [ "$team" = "$pinned" ] || { echo "::error::install.sh's TEAM_ID ($pinned) must be the signing team ($team)"; exit 1; }
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "SIGN_FLAGS=--options runtime --timestamp" >> "$GITHUB_ENV"
+      - name: Build and sign the app (universal)
+        run: make bundle UNIVERSAL=1 SOURCE_DIR= SIGN_IDENTITY="${SIGN_IDENTITY:--}" SIGN_FLAGS="${SIGN_FLAGS:-}"
+      - name: Notarize
+        if: env.PUBLISH == 'true'
+        env:
+          API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          export APPLE_API_KEY_PATH="$RUNNER_TEMP/notary.p8"
+          echo "$API_KEY_P8_BASE64" | base64 --decode > "$APPLE_API_KEY_PATH"
+          scripts/notarize.sh "build/Process Automator.app"
+      - run: scripts/package.sh macos "build/Process Automator.app" build/dist
+      # A release is checked as install.sh checks it: Developer ID and notarization.
+      - name: Install test
+        run: PROCAUTO_INSTALL_UNSIGNED=$([ "$PUBLISH" = true ] || echo 1) scripts/test-install.sh build/dist/process-automator-*-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: build/dist/*
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+      - run: make package-linux LINUX_ARCH=${{ matrix.arch }} SOURCE_DIR=
+      - name: Install test
+        if: matrix.arch == 'amd64'
+        run: scripts/test-install.sh build/dist/process-automator-*-linux-amd64.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: build/dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, linux]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+      # The tap is a private repository of its own (HOMEBREW_TAP_REPO, e.g.
+      # owner/homebrew-tap), written with a token that can push to it.
+      - name: Homebrew tap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_REPO" ] || [ -z "$TAP_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_REPO or HOMEBREW_TAP_TOKEN isn't set: the tap wasn't updated"
+            exit 0
+          fi
+          git clone "https://x-access-token:$TAP_TOKEN@github.com/$TAP_REPO.git" "$RUNNER_TEMP/tap"
+          scripts/homebrew.sh "$GITHUB_REF_NAME" dist "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          git add Casks Formula
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "process-automator $GITHUB_REF_NAME"
+          git push

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "paths.schema.json",
+  "properties": {
+    "config": {
+      "type": "string"
+    },
+    "data": {
+      "type": "string"
+    },
+    "routines": {
+      "type": "string"
+    },
+    "runStatus": {
+      "type": "string"
+    },
+    "history": {
+      "type": "string"
+    },
+    "notifications": {
+      "type": "string",
+      "description": "Notifications is the notifications file frontends deliver from."
+    },
+    "mcpChanges": {
+      "type": "string",
+      "description": "MCPChanges logs every side-effecting call made through `mcp serve`."
+    },
+    "templates": {
+      "type": "string",
+      "description": "Templates is where the app's templates are (empty if unknown)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "config",
+    "data",
+    "routines",
+    "runStatus",
+    "history",
+    "notifications",
+    "mcpChanges"
+  ],
+  "title": "procauto paths --json",
+  "description": "PathsOutput is `paths --json`: where the app keeps its files."
+}

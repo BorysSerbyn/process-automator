@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "memory-compact.schema.json",
+  "properties": {
+    "routine": {
+      "type": "string"
+    },
+    "before": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "after": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "applied": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "before",
+    "after",
+    "applied"
+  ],
+  "title": "procauto memory compact --json",
+  "description": "CompactOutput is `memory compact --json`."
+}

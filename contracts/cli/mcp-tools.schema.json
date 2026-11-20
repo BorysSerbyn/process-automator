@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mcp-tools.schema.json",
+  "items": {
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "inputSchema": true,
+      "readOnly": {
+        "type": "boolean",
+        "description": "ReadOnly is the server's readOnlyHint annotation (nil when not declared)."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "name",
+      "description"
+    ],
+    "description": "ToolInfo is one row of `mcp tools --json`."
+  },
+  "type": "array",
+  "title": "procauto mcp tools --json"
+}

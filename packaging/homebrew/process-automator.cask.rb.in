@@ -1,0 +1,43 @@
+# Rendered by scripts/homebrew.sh from process-automator's packaging/homebrew for __TAG__; edit it there, not in the tap.
+cask "process-automator" do
+  version "__VERSION__"
+  sha256 "__MACOS_SHA256__"
+
+  # The API URL serves a private repository's file to a signed-in request
+  # (HOMEBREW_GITHUB_API_TOKEN, a token that can read the repository).
+  url "__MACOS_URL__",
+      header: [
+        "Accept: application/octet-stream",
+        *(ENV["HOMEBREW_GITHUB_API_TOKEN"] ? ["Authorization: Bearer #{ENV["HOMEBREW_GITHUB_API_TOKEN"]}"] : []),
+      ]
+  name "Process Automator"
+  desc "Scheduled LLM routines, with a menu bar status indicator"
+  homepage "https://github.com/__REPO__"
+
+  # The app updates itself (`procauto update`, or Update in its menu).
+  auto_updates true
+  depends_on macos: ">= :sonoma"
+
+  app "Process Automator.app"
+  binary "#{appdir}/Process Automator.app/Contents/MacOS/procauto"
+
+  # Starts the app and its scheduler now and at login (LaunchAgents).
+  postflight do
+    system_command "#{appdir}/Process Automator.app/Contents/Resources/install-app.sh",
+                   args: ["login-items"]
+  end
+
+  uninstall launchctl: ["__UI_LABEL__", "__SCHED_LABEL__"],
+            delete:    [
+              "~/Library/LaunchAgents/__UI_LABEL__.plist",
+              "~/Library/LaunchAgents/__SCHED_LABEL__.plist",
+            ]
+
+  # Secrets stay in the Keychain (service __KEYCHAIN_SERVICE__); `procauto uninstall --purge` removes them.
+  zap trash: [
+    "~/Library/Application Support/process-automator",
+    "~/Library/Logs/process-automator",
+  ]
+
+  caveats "Set it up with `procauto setup` (templates, the model backend, sign-ins)."
+end

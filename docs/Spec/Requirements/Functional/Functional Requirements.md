@@ -1,0 +1,86 @@
+Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Requirements|Agentic Functional Requirements]], [[Spec/Requirements/Functional/Distribution|Distribution]], [[Spec/Requirements/Technical/Technical Requirements|Technical Requirements]].
+
+## Platforms
+- **macOS and Linux**: the same CLI, scheduler and routines on both
+- **automator-ui on macOS only**: on Linux I use the CLI, or Claude through the MCP server
+
+## Routines
+- **Routines are files on my device**: the app ships with none; a routine is added or changed by adding or editing its file in the routines folder, with no app update
+- **What a routine says**: what the model should do (the prompt), the servers it uses and the tools it may call, its schedule, and optional settings (below)
+- **Schedule per routine**: a cron schedule in local time, changeable without editing the file; a routine without one runs only by hand
+- **Pause and resume**: any routine can be stopped from running on its schedule and started again without removing it
+- **Run now**: any routine can be run on demand, in the terminal or in the background, as a dry run or for real
+- **Backfill**: any routine can be run as of a past day (e.g. Monday's date, for a routine covering the previous workday, covers Friday)
+- **Stop**: a run in progress or waiting its turn can be stopped; it's recorded as stopped, not failed
+- **Missed runs**: if the computer is asleep or off at a scheduled time, the routine runs when the scheduler is next available, unless that's later than the routine's staleness window; then it's recorded as missed
+- **Create, update and delete**: from a file, validated first; deleting a routine removes its settings, trust and memories and keeps its run history
+- **Optional per-routine settings**: each one left out keeps the default behaviour
+  - **Timeout**: how long a run may take before it's stopped and fails
+  - **Effort**: how hard the model thinks
+  - **Folder**: the folder the run works in instead of an empty temporary one (e.g. a repository it checks), with its `CLAUDE.md` as instructions
+  - **Built-in tools**: which of the agent CLI's own tools the routine gets (e.g. Read, Bash, Edit); none by default
+  - **Save session**: keep the run's agent session and record its ID with the run, so I can resume it
+  - **Concurrency**: wait its turn (default: one run at a time, manual runs included) or run alongside other runs. A routine never overlaps itself; a run waiting its turn shows as queued
+  - **Notification click**: what clicking this routine's notifications does
+  - **Parameters**: values that make a shared routine mine (a channel, a team), asked for at install and changeable later
+  - **Platforms**: the operating systems it runs on
+
+## Templates
+- **Templates are shareable routines**: files in the repository's `templates/` folder, shipped with the app as files; the app ships none of its own and works with none
+- **Tags**: templates are grouped in tag folders, general to specific; those under `projects/<project>/` are for that project's members
+- **Installing**: a template is copied into the routines folder, where it's mine to edit; its parameters are asked for and become per-routine settings
+- **Per OS**: only templates for this OS are offered unless I ask for all
+
+## Plugins
+- **A plugin is an MCP server**, written in any language: remote (OAuth, an API key in headers, or public) or a local command, or a folder of my own with a `plugin.yaml`
+- **Adding one** needs no code; it's tried first and nothing is added if it doesn't work. Removing one forgets its credentials
+- **Built-in servers**: `automator` (this app's own read-only tools: routines, runs, settings, templates, plugins) and `notify` (desktop notifications from routines)
+- **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
+
+## Model backend
+- **Two backends**: Claude Code on my Claude plan (`claude-code`), or an Anthropic API key (`api`), chosen by a setting
+- **Usage limit, by backend**: on my Claude plan, scheduled runs don't start while the plan's 5-hour or weekly usage is above a share I set; with an API key, they don't start once API spend in a short rolling window or the last 7 days passes the budgets I set. A run that doesn't start is recorded as skipped with the reason (red indicator, failure notification); runs I start by hand still run, with a warning. `usage` shows where I stand
+- **No cost for plan runs**: on a Claude plan the app never works out a dollar cost
+
+## Runs
+- **Inspecting runs**: which ran, how each ended and why, with its inputs, tool calls, writes and final text, from the CLI and the UI; also as a readable report
+- **Run history and logs** are kept for a retention period I set
+- **Outcomes**: success, failed, needs a sign-in, missed, skipped (over the usage limit) and stopped
+- **Structured results**: a routine can declare the shape of its result, so history and the UI show clean results instead of prose
+- **Health check** (`doctor`): explains a red indicator, with a fix for each problem
+- **Routine check**: whether a routine would run (its file, settings, servers connecting and every allowed tool existing), without calling the model
+
+## Notifications
+- **From routines**: a routine can send me a short desktop notification: a title, a message, and optionally a file or folder to open when I click it. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade
+- **Failures**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why; can be turned off
+- **Clicking** shows the run it's about by default; a routine or I can change it to open a file, folder or URL, run a shell command, or do nothing
+- **On Linux** notifications are recorded and listed by the CLI; nothing shows them on screen
+
+## Status indicator
+- **Icon** in the macOS menu bar with a status dot:
+  - **Green**: every enabled routine is fine. A routine with no runs yet is fine while its next run is ahead
+  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled, didn't start at its time or is stuck; setup isn't finished; or the scheduler isn't responding
+  - **Grey**: no routines are enabled
+  - **Pulsing**: a routine is running (whatever the colour)
+- Updates within seconds of anything changing
+
+## UI
+Managing the app is possible entirely from automator-ui, without a terminal. The CLI does all of it too; the UI is another way in, not a replacement.
+- **Menu**: the version; the status in words (each reason the dot is red, opening the run it's about); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); updates; Settings; Quit
+- **Routines window**: every routine with its health, schedule in words, last run and status
+- **A routine's window**:
+  - status: last run (when, outcome, reason), next run, why it can't be scheduled
+  - its schedule in plain words (e.g. "At 09:20, Monday through Friday"), edited with a days-and-time picker or a custom cron
+  - what it can reach, and trusting it
+  - its runs: what each did, its tool calls and writes, and its output
+  - controls: run now or dry run, stop, pause/resume, delete
+  - its memories (see, add, remove) and its own settings
+- **Setup window**: every setup step with a button for each
+- **Settings window**: start at login, LLM usage, and every app-wide setting with a control for its type
+- **Updates**: see whether a newer release exists, and install it
+- **Start at login**: on or off
+
+## CLI
+- **Everything is a command**: every feature, including what the UI does, with `--help` on each
+- **Settings**: one generic `settings list/get/set/reset` surface reads and writes any setting, app-wide or per routine; values are checked before they're saved and apply without a restart
+- **Paths**: `paths` shows where the app keeps its config, routines, run status, history, notifications and templates

@@ -1,0 +1,12 @@
+---
+description: Drafts the team's daily stand-up from yesterday's work
+automator.schedule: "15 9 * * 1-5"
+automator.servers: [notify]
+automator.parameters:
+  - {name: team, type: string, default: Acme, description: The team the stand-up is for}
+tools: [notify_me]
+---
+Draft {{team}}'s stand-up for {{today}}: what was done since {{since}}, and what's next.
+Notify me with the draft.
+
+{{> memories}}

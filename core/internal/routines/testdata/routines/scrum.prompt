@@ -1,0 +1,7 @@
+---
+automator.schedule: "15 9 * * 1-5"
+automator.staleness: 15m
+automator.servers: [tracker, chat, notes]
+tools: [list_issues, send_message]
+---
+Post for {{today}}. {{> about-me}}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plugins-remove.schema.json",
+  "properties": {
+    "plugin": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "description": "Kind and Endpoint describe the server after the change (absent when removed)."
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "signIn": {
+      "type": "string",
+      "description": "SignIn is the command that signs in to it, when it needs credentials."
+    },
+    "trial": {
+      "properties": {
+        "tools": {
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "readOnly": {
+                "type": "boolean",
+                "description": "ReadOnly tools run in dry runs; the others are writes (intercepted)."
+              },
+              "annotated": {
+                "type": "boolean",
+                "description": "Annotated is whether the tool declares annotations (readOnlyHint) at all."
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "readOnly",
+              "annotated"
+            ],
+            "description": "PluginTool is one of a plugin's tools, as a routine would see it."
+          },
+          "type": "array"
+        },
+        "needsSignIn": {
+          "type": "boolean",
+          "description": "NeedsSignIn means it couldn't be tried further without credentials\n(`auth login \u003cname\u003e`, then `plugins check \u003cname\u003e`)."
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Trial is what trying it found (adds only)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "plugin"
+  ],
+  "title": "procauto plugins remove --json",
+  "description": "PluginChange is the output of `plugins add/remove --json`."
+}

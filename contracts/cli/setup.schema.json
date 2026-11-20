@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "setup.schema.json",
+  "properties": {
+    "steps": {
+      "items": {
+        "properties": {
+          "step": {
+            "type": "string",
+            "enum": [
+              "templates",
+              "backend",
+              "routine",
+              "sign-in",
+              "trust",
+              "enable",
+              "usage"
+            ],
+            "description": "Step is what it sets up."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject is the server or routine it's about (routine, sign-in, trust, enable)."
+          },
+          "title": {
+            "type": "string",
+            "description": "Title names the step (\"Model backend\", \"Sign in to tracker\")."
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Optional steps don't keep setup from being done: installing templates,\nand running a routine on its schedule once another routine already does\n(a paused one may be paused on purpose)."
+          },
+          "status": {
+            "type": "string",
+            "description": "Status says where it stands, and Ask what to ask me before doing it, in\nwords for me."
+          },
+          "ask": {
+            "type": "string"
+          },
+          "prepare": {
+            "type": "string",
+            "description": "Prepare is what to do outside the app before signing in (a sign-in\nstep whose plugin needs it, e.g. creating a Slack app): numbered steps\nto show, and have done, first. `auth login` shows them too."
+          },
+          "signIn": {
+            "type": "string",
+            "description": "SignIn is what the step still needs signed in (`auth login \u003csignIn\u003e\n--browser`): a server, or the API key the api backend needs."
+          },
+          "commands": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Commands do the step once I've answered: placeholders in \u003cangle\nbrackets\u003e are my answers, and a trailing # comment says when a command\napplies or what to do with its output."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "step",
+          "title",
+          "done",
+          "status"
+        ],
+        "description": "SetupStep is one thing first-run setup covers."
+      },
+      "type": "array"
+    },
+    "done": {
+      "type": "boolean",
+      "description": "Done is true when every step that isn't optional is; Remaining counts\nthose that aren't."
+    },
+    "remaining": {
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "steps",
+    "done",
+    "remaining"
+  ],
+  "title": "procauto setup --json",
+  "description": "SetupOutput is `setup --json`: every step, in order of kind (templates, backend, routines to fix, sign-ins, trust, schedules)."
+}

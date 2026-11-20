@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "update.schema.json",
+  "properties": {
+    "current": {
+      "type": "string"
+    },
+    "latest": {
+      "type": "string",
+      "description": "Latest is the newest release tag, empty when there are none."
+    },
+    "updateAvailable": {
+      "type": "boolean"
+    },
+    "updated": {
+      "type": "boolean"
+    },
+    "started": {
+      "type": "boolean",
+      "description": "Started is true when --detach started the update in the background."
+    },
+    "inProgress": {
+      "type": "boolean",
+      "description": "InProgress is true while an update is installing (this one, or one\nstarted before)."
+    },
+    "note": {
+      "type": "string",
+      "description": "Note says what installing involves, for frontends to show before they\nstart one (set when an update is available)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "current",
+    "latest",
+    "updateAvailable",
+    "updated",
+    "inProgress"
+  ],
+  "title": "procauto update --json",
+  "description": "UpdateOutput is `update --json`."
+}

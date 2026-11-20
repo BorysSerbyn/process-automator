@@ -1,0 +1,5 @@
+# Types for everything the core gives frontends, generated from contracts/openapi.yaml
+# (itself generated from the Go code by `make contracts`).
+generate:
+  - types
+accessModifier: public

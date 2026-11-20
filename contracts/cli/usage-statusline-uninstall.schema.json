@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "usage-statusline-uninstall.schema.json",
+  "properties": {
+    "installed": {
+      "type": "boolean",
+      "description": "Installed is whether Claude Code's status line runs the app's command."
+    },
+    "wraps": {
+      "type": "string",
+      "description": "Wraps is the status line command of mine the app runs (empty: none)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "installed"
+  ],
+  "title": "procauto usage statusline uninstall --json",
+  "description": "StatusLineOutput is `usage statusline install|uninstall --json`."
+}

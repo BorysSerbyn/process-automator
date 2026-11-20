@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schedule-build.schema.json",
+  "properties": {
+    "cron": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string",
+      "description": "Text is the schedule in plain words (\"At 09:20, Monday through Friday\")."
+    },
+    "picker": {
+      "properties": {
+        "days": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "sun",
+              "mon",
+              "tue",
+              "wed",
+              "thu",
+              "fri",
+              "sat"
+            ]
+          },
+          "type": "array",
+          "description": "Days the routine runs, from Days (all seven: every day)."
+        },
+        "at": {
+          "type": "string",
+          "description": "At is the time, HH:MM (24-hour)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "days",
+        "at"
+      ],
+      "description": "Picker is the schedule as days and a time, when it is one (nil: only\ncron can express it)."
+    },
+    "next": {
+      "items": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "type": "array",
+      "description": "Next are the next few times it runs."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "cron",
+    "text",
+    "next"
+  ],
+  "title": "procauto schedule build --json",
+  "description": "Info is a schedule as frontends show it."
+}

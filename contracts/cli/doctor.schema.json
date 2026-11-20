@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "doctor.schema.json",
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "findings": {
+      "items": {
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "scheduler",
+              "usage",
+              "routine",
+              "run"
+            ],
+            "description": "Area is what it's about: scheduler, usage, routine or run."
+          },
+          "subject": {
+            "type": "string"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "area",
+          "subject",
+          "problem"
+        ],
+        "description": "Finding is one problem doctor found, with what fixes it."
+      },
+      "type": "array"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "ok",
+    "findings"
+  ],
+  "title": "procauto doctor --json",
+  "description": "DoctorOutput is `doctor --json`."
+}

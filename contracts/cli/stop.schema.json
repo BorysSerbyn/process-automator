@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stop.schema.json",
+  "properties": {
+    "routine": {
+      "type": "string"
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "routine",
+    "outcome"
+  ],
+  "title": "procauto stop --json",
+  "description": "StopOutput is `stop --json`: how the stopped run ended."
+}

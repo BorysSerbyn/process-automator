@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runs.schema.json",
+  "items": {
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "routine": {
+        "type": "string"
+      },
+      "trigger": {
+        "type": "string"
+      },
+      "for": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "sessionId": {
+        "type": "string"
+      },
+      "startedAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "finishedAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "outcome": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      },
+      "toolCalls": {
+        "type": "integer"
+      },
+      "backend": {
+        "type": "string",
+        "description": "Backend is what ran it (claude-code, api), when it got as far as the model."
+      },
+      "costUsd": {
+        "type": "number",
+        "description": "CostUSD is the run's cost at API list prices: api runs only (a Claude\nplan's runs have no cost)."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "id",
+      "routine",
+      "trigger",
+      "startedAt",
+      "outcome"
+    ],
+    "description": "Summary is an entry without the agent result, for listings."
+  },
+  "type": "array",
+  "title": "procauto runs --json"
+}

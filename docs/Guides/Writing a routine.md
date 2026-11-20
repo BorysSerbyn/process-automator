@@ -1,0 +1,113 @@
+Back to [[Home]]. See also [[Guides/Routines|Routines]] (adding, trying, trusting and running one), [[Guides/Plugins and sign-ins|Plugins and sign-ins]].
+
+A routine is a [Dotprompt](https://google.github.io/dotprompt/) file: YAML frontmatter that says what the routine may use and when it runs, then the prompt. The file name is the routine's name (`digest.prompt` is `digest`: lowercase letters, digits and dashes).
+
+## An example
+This one uses a GitHub MCP server you've added as `github` ([[Guides/Adding a plugin|Adding a plugin]]) and the built-in `notify`:
+
+```yaml
+---
+description: Tells me each weekday morning which of my GitHub issues changed
+automator.schedule: "0 9 * * 1-5"   # cron, local time; leave it out for a routine you run by hand
+automator.staleness: 2h              # how late it may still run (e.g. after sleep)
+automator.servers: [github, notify]  # the servers its tools come from
+automator.parameters:
+  - name: repo
+    type: string
+    default: my-org/my-repo
+    description: The repository to look at
+model: anthropic/claude-sonnet-5-5
+tools:                               # the only tools the model may call
+  - list_issues
+  - get_issue
+  - notify_me
+---
+{{role "system"}}
+Look at the issues assigned to me in {{repo}} that changed since {{since}}.
+If any did, notify me once with notify_me: a short title, one line per issue in the body.
+{{> memories}}
+
+Finish by replying with what changed, or that nothing did.
+```
+
+## Servers and tools
+- `automator.servers` lists the servers the routine uses; `tools` lists, by name, every tool the model may call. Nothing else is reachable
+- `procauto plugins list` shows the servers and `procauto mcp tools <server>` each one's tools (`--json` marks the read-only ones). `procauto routines trust <name> --check` shows a routine's tools split into writes and reads
+- Tools that don't only read are **writes**: dry runs intercept them, and trusting the routine lists them separately
+- The built-in `automator` server gives a routine the app's own read-only tools (other routines, their runs and settings)
+
+## Frontmatter
+Plain Dotprompt keys:
+
+| Key | |
+|---|---|
+| `description` | What it does |
+| `model` | e.g. `anthropic/claude-sonnet-5-5`; left out, the backend's default. The `claude-code` backend runs only Claude models |
+| `config` | Model settings, e.g. `max_tokens: 4000` (the `api` backend only) |
+| `tools` | The tool allowlist |
+| `output` | The shape of its result (see [[#Structured output]]) |
+
+The app's own keys, written dotted (`automator.servers:`, not a nested `automator:` block). A misspelled key is an error, not ignored:
+
+| Key | Default | |
+|---|---|---|
+| `automator.servers` | | Servers it uses |
+| `automator.schedule` | none | Cron, local time. Without one it runs only by hand |
+| `automator.staleness` | `1h` | How late a missed scheduled run may still start; later, it's recorded as missed |
+| `automator.timeout` | `20m` | How long a run may take before it's stopped and fails |
+| `automator.effort` | `default` | How hard the model thinks: `default`, `low`, `medium`, `high`, `xhigh`, `max` (the `api` backend takes only `default`) |
+| `automator.folder` | an empty temporary folder | The folder it works in; its `CLAUDE.md` is added to the instructions |
+| `automator.builtinTools` | `[]` | Claude Code's own tools it may use, e.g. `[Read, Grep, Bash, Edit]` (`claude-code` backend only; file tools stay inside its folder; dry runs get only the read-only ones) |
+| `automator.session` | `discard` | `save` keeps the Claude Code session in its folder and records its ID with the run, so you can resume it |
+| `automator.concurrency` | `queue` | `queue` waits for other runs (one at a time); `parallel` runs alongside them. A routine never overlaps itself |
+| `automator.onNotificationClick` | | What clicking its notifications does |
+| `automator.parameters` | | Values set at install (see below) |
+| `automator.platforms` | all | `[macos]`, `[linux]` or both |
+| `automator.plugins.<name>` | | A section for an in-process plugin that takes one (none ship with the app) |
+
+From `automator.schedule` to `automator.onNotificationClick`, each key is also a per-routine setting, and so is each parameter: the file gives the default, and `procauto settings set` overrides it without editing the file, e.g. `settings set routines.digest.timeout 45m` or `settings set routines.digest.params.repo my-org/other-repo` (see [[Guides/Settings|Settings]]).
+
+## The prompt
+Handlebars text. `{{role "system"}}` starts the instructions. Write it for an agent working alone: no one answers questions during a run.
+
+Every routine gets these inputs:
+
+| Input | Example |
+|---|---|
+| `{{today}}` | `Friday 2026-11-20` |
+| `{{since}}` | `Thursday 2026-11-19`: the start of the previous workday (on Monday, Friday) |
+| `{{now}}` | `2026-11-20T09:20:00+01:00`: the scheduled time, or when you started it |
+| `{{trigger.kind}}` | `schedule`, `manual` or `backfill` |
+
+A backfill (`run --date`) computes them for that day.
+
+**Parameters** are values the routine needs that differ per person or project (a repository, a channel, a team), declared with a `name` (lowercase letters, digits and underscores), `type` (`string`, `int`, `bool`, `duration`, `enum` with `enum: [...]`, …), `description` and an optional `default`; one without a default is required. Use them as `{{name}}`. Installing a template asks for them; afterwards they're settings (`routines.<name>.params.<param>`).
+
+**Partials**: a file `_<name>.prompt` in the routines folder is shared text any routine can include with `{{> name}}`. `{{> memories}}` is the app's: it brings in your [[Guides/Routines#Memories|memories]].
+
+## How a run ends
+The app gives every routine a `report_outcome` tool (you don't list it) and tells the model to call it at the end: `done`, `nothing_to_do` or `failed`, with a reason. A run fails if the routine reports `failed`, never reports, or a write's last attempt failed (e.g. a server refused the post). End your prompt with what the final reply should hold (e.g. "the message you posted, or why you didn't"): it's what run history shows.
+
+## Structured output
+For a result in a fixed shape instead of prose, declare it with Dotprompt's `output` (Picoschema):
+
+```yaml
+output:
+  schema:
+    posted: boolean, whether it posted
+    message?: string, the message it posted
+    reason?: string, why it didn't
+```
+
+The run fails if the result doesn't match; a valid one is stored with the run and counts as done.
+
+## Notifying you
+Add `notify` to `automator.servers` and `notify_me` to `tools`. The model can then send you a desktop notification: a `title`, a `body`, a file or folder to `open` when you click it (relative paths are in the routine's folder; never an app or script), and `urgent` for something you must see now. It's a write, so dry runs intercept it.
+
+## Working in a folder
+With `automator.folder` set, the run works in that folder instead of an empty one, and its `CLAUDE.md` is added to the routine's instructions (the folder's own Claude Code settings and hooks are never loaded). Combine it with `automator.builtinTools` to let the model read or change files there, e.g. a routine that checks a repository:
+
+```yaml
+automator.folder: ~/code/my-repo
+automator.builtinTools: [Read, Grep, Glob]
+```

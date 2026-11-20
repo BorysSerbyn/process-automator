@@ -1,0 +1,311 @@
+package agent
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/firebase/genkit/go/ai"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// ClaudeCode is the Claude Code CLI (`claude -p`) as an CLI tool, so
+// routines run on the user's Claude subscription.
+//
+// It's isolated from the user's own setup: no settings, hooks, plugins or
+// skills, a replaced system prompt, no memory features, and restricted mode
+// (file tools confined to the working folder). The routine's MCP server is its
+// only tool source, plus the built-in tools the routine allows explicitly. The
+// session is saved only under the ID the core picks (otherwise nothing is
+// saved, so runs stay out of my own Claude Code sessions). A routine's folder
+// contributes its CLAUDE.md, which the core reads and adds to the system
+// prompt: Claude Code's own loading would bring the folder's settings and
+// hooks too. From the frontmatter only `model` applies; `config` (max_tokens,
+// ...) doesn't.
+type ClaudeCode struct {
+	// Path is the claude binary.
+	Path string
+	// OAuthToken, if set, is passed as CLAUDE_CODE_OAUTH_TOKEN (from
+	// `claude setup-token`); otherwise Claude Code uses its own login.
+	OAuthToken string
+}
+
+// Name implements CLITool.
+func (*ClaudeCode) Name() string { return "claude-code" }
+
+// FindClaude locates the claude binary on PATH (which includes the user's
+// login-shell PATH, whoever started the command: see sysenv).
+func FindClaude() (string, error) {
+	p, err := exec.LookPath("claude")
+	if err != nil {
+		return "", errors.New("claude-code backend: the `claude` CLI isn't on PATH (https://claude.com/claude-code)")
+	}
+	return p, nil
+}
+
+// Command implements CLITool.
+func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
+	model, err := ClaudeModel(r.Model)
+	if err != nil {
+		return nil, err
+	}
+	mcpConfig, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{
+		r.MCP.Name: map[string]any{
+			"type": "http", "url": r.MCP.URL,
+			"headers": map[string]string{"Authorization": "Bearer " + r.MCP.Token},
+		},
+	}})
+	builtins, err := claudeBuiltins(r.BuiltinTools, r.DryRun)
+	if err != nil {
+		return nil, err
+	}
+	system, err := withProjectInstructions(r.System, r.Folder)
+	if err != nil {
+		return nil, err
+	}
+	args := []string{
+		"-p", "--output-format", "json",
+		"--system-prompt", system,
+		"--tools", strings.Join(builtins, ","), // "" is none
+		"--strict-mcp-config", "--mcp-config", string(mcpConfig),
+		"--allowedTools", strings.Join(append([]string{"mcp__" + r.MCP.Name}, builtins...), ","),
+		"--permission-mode", "dontAsk", // anything not allowed is denied, never prompted
+		"--setting-sources", "", // ignore settings, hooks and plugins (user's and the folder's)
+		"--restricted", // file tools stay in the working folder
+		"--disable-slash-commands",
+		"--no-chrome",
+		"--max-turns", fmt.Sprint(r.MaxTurns),
+	}
+	if r.OutputSchema != nil {
+		schema, err := json.Marshal(r.OutputSchema)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "--json-schema", string(schema))
+	}
+	if r.SessionID != "" {
+		args = append(args, "--session-id", r.SessionID)
+	} else {
+		args = append(args, "--no-session-persistence")
+	}
+	if model != "" {
+		args = append(args, "--model", model)
+	}
+	if r.Effort != "" {
+		args = append(args, "--effort", r.Effort)
+	}
+	cmd := exec.CommandContext(ctx, b.Path, args...)
+	cmd.Env = b.env()
+	return cmd, nil
+}
+
+// claudeReadOnlyBuiltins are Claude Code's built-in tools that can't change
+// anything: the only ones a dry run gets.
+var claudeReadOnlyBuiltins = map[string]bool{"Read": true, "Glob": true, "Grep": true, "WebSearch": true, "WebFetch": true}
+
+var builtinNameRE = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+
+// claudeBuiltins validates the routine's built-in tool names and, in a dry
+// run, keeps only the read-only ones: built-ins run inside Claude Code, where
+// the gateway can't intercept them.
+func claudeBuiltins(names []string, dryRun bool) ([]string, error) {
+	var out []string
+	for _, n := range names {
+		if !builtinNameRE.MatchString(n) {
+			return nil, fmt.Errorf("builtinTools: %q isn't a Claude Code tool name (e.g. Read, Grep, Bash)", n)
+		}
+		if dryRun && !claudeReadOnlyBuiltins[n] {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
+// withProjectInstructions adds the folder's CLAUDE.md, if any, to the system prompt.
+func withProjectInstructions(system, folder string) (string, error) {
+	if folder == "" {
+		return system, nil
+	}
+	path := filepath.Join(folder, "CLAUDE.md")
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return system, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return system + "\n\n# Project instructions (" + path + ")\n\n" + strings.TrimSpace(string(b)), nil
+}
+
+// Result implements CLITool: Claude Code's `--output-format json` result.
+func (b *ClaudeCode) Result(stdout, stderr []byte, runErr error) (*Output, error) {
+	var res struct {
+		Result     string `json:"result"`
+		Structured any    `json:"structured_output"`
+		IsError    bool   `json:"is_error"`
+		Subtype    string `json:"subtype"`
+		// total_cost_usd is left out on purpose: on a Claude plan it's an
+		// estimate at API prices, not a charge, so nothing records it.
+		Usage struct {
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(stdout, &res); err != nil {
+		msg := strings.TrimSpace(string(stderr) + "\n" + string(stdout))
+		if limit := planLimitError(msg, time.Now()); limit != nil {
+			return nil, limit
+		}
+		if runErr != nil {
+			return nil, fmt.Errorf("claude: %w: %s", runErr, msg)
+		}
+		return nil, fmt.Errorf("claude: unreadable output: %s", msg)
+	}
+	u := res.Usage
+	out := &Output{
+		Text:         res.Result,
+		InputTokens:  u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+		OutputTokens: u.OutputTokens,
+		CachedTokens: u.CacheReadInputTokens,
+		Structured:   res.Structured,
+	}
+	if res.IsError || runErr != nil {
+		msg := res.Result
+		if msg == "" {
+			msg = res.Subtype
+		}
+		if limit := planLimitError(msg, time.Now()); limit != nil {
+			return out, limit
+		}
+		if strings.Contains(strings.ToLower(msg), "log in") || strings.Contains(strings.ToLower(msg), "login") {
+			msg += " (sign in by running `claude` once, or store a `claude setup-token` token with `procauto auth login claude-code`)"
+		}
+		return out, fmt.Errorf("claude: %s", msg)
+	}
+	return out, nil
+}
+
+// env is the caller's environment minus anything that would make Claude Code
+// bill an API key instead of the subscription.
+func (b *ClaudeCode) env() []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		switch k {
+		case "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
+			"CLAUDE_CODE_DISABLE_AUTO_MEMORY", "CLAUDE_CODE_DISABLE_ORG_MEMORY":
+			continue
+		}
+		env = append(env, kv)
+	}
+	// Memories are user-driven only (`procauto memory`): Claude Code must not
+	// write its own, nor read org-level ones into the routine.
+	env = append(env, "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1", "CLAUDE_CODE_DISABLE_ORG_MEMORY=1")
+	if b.OAuthToken != "" {
+		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+b.OAuthToken)
+	}
+	return env
+}
+
+// startMessage is the user turn for prompts written entirely as system text.
+const startMessage = "Run the routine now."
+
+// splitMessages turns a rendered prompt into Claude Code's system prompt and the
+// user prompt. Claude Code takes one user turn, so other roles aren't supported.
+// A system-only prompt gets a short user turn that starts it.
+func splitMessages(msgs []*ai.Message) (system, user string, err error) {
+	var sys, usr []string
+	for _, m := range msgs {
+		switch m.Role {
+		case ai.RoleSystem:
+			sys = append(sys, m.Text())
+		case ai.RoleUser:
+			usr = append(usr, m.Text())
+		default:
+			return "", "", fmt.Errorf("the claude-code backend supports only system and user messages, not %q", m.Role)
+		}
+	}
+	if len(usr) == 0 {
+		if len(sys) == 0 {
+			return "", "", errors.New("prompt renders nothing")
+		}
+		usr = []string{startMessage}
+	}
+	return strings.Join(sys, "\n\n"), strings.Join(usr, "\n\n"), nil
+}
+
+// ClaudeModel maps a Genkit model name ("anthropic/claude-sonnet-5-5") to a
+// Claude Code model ID. Empty means Claude Code's default.
+func ClaudeModel(name string) (string, error) {
+	if name == "" {
+		return "", nil
+	}
+	provider, id, ok := strings.Cut(name, "/")
+	if !ok {
+		return name, nil
+	}
+	if provider != "anthropic" {
+		return "", fmt.Errorf("the claude-code backend runs only Claude models, not %q", name)
+	}
+	return id, nil
+}
+
+// serveTools exposes the gateway tools as an MCP server on a loopback port,
+// guarded by a random bearer token. stop shuts it down.
+func serveTools(tools []Tool) (url, token string, stop func(), err error) {
+	srv := sdk.NewServer(&sdk.Implementation{Name: "procauto", Version: "routine"}, nil)
+	for _, t := range tools {
+		call := t.Call
+		srv.AddTool(&sdk.Tool{
+			Name: t.Name, Description: t.Description, InputSchema: t.InputSchema, Annotations: t.Annotations,
+		}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+			args := map[string]any{}
+			if len(req.Params.Arguments) > 0 {
+				if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+					return textResult("invalid arguments: "+err.Error(), true), nil
+				}
+			}
+			out, err := call(ctx, args)
+			if err != nil {
+				return textResult(err.Error(), true), nil
+			}
+			return out, nil
+		})
+	}
+
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", nil, err
+	}
+	token = hex.EncodeToString(b)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", "", nil, err
+	}
+	mcpHandler := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, nil)
+	hs := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		mcpHandler.ServeHTTP(w, r)
+	})}
+	go func() { _ = hs.Serve(ln) }()
+	return "http://" + ln.Addr().String() + "/mcp", token, func() { _ = hs.Close() }, nil
+}

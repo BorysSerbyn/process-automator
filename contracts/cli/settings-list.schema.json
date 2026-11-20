@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "settings-list.schema.json",
+  "items": {
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "bool",
+          "int",
+          "number",
+          "percent",
+          "duration",
+          "cron",
+          "enum",
+          "string",
+          "path",
+          "list"
+        ]
+      },
+      "default": true,
+      "description": {
+        "type": "string"
+      },
+      "unit": {
+        "type": "string"
+      },
+      "enum": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "min": {
+        "type": "number"
+      },
+      "max": {
+        "type": "number"
+      },
+      "notImplemented": {
+        "type": "boolean",
+        "description": "NotImplemented marks a setting declared ahead of the feature that uses it:\nit can be set, but has no effect yet."
+      },
+      "backend": {
+        "type": "string",
+        "description": "Backend is the llm.backend it applies to; empty: every backend."
+      },
+      "value": true,
+      "isDefault": {
+        "type": "boolean"
+      },
+      "valueText": {
+        "type": "string",
+        "description": "ValueText and DefaultText are the values written the way `settings set`\ntakes them (\"\" when unset), for frontends to show and send back as is."
+      },
+      "defaultText": {
+        "type": "string"
+      },
+      "inactive": {
+        "type": "string",
+        "description": "Inactive says why the setting has no effect now: it's for another\nllm.backend than the one in use."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "key",
+      "type",
+      "default",
+      "description",
+      "value",
+      "isDefault",
+      "valueText",
+      "defaultText"
+    ],
+    "description": "State is a setting with its effective value."
+  },
+  "type": "array",
+  "title": "procauto settings list --json"
+}

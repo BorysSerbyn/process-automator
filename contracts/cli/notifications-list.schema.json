@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "notifications-list.schema.json",
+  "items": {
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "routine",
+          "failure",
+          "app"
+        ],
+        "description": "Kind is \"routine\" (a routine's notify_me), \"failure\" (a run that failed,\nneeds a sign-in, or was missed) or \"app\" (about the app, e.g. an update)."
+      },
+      "title": {
+        "type": "string"
+      },
+      "body": {
+        "type": "string"
+      },
+      "urgent": {
+        "type": "boolean",
+        "description": "Urgent asks frontends to break through focus modes where the OS allows\n(macOS time-sensitive, Linux critical urgency)."
+      },
+      "routine": {
+        "type": "string",
+        "description": "Routine and Run (a run ID, as in `runs show`) are what it's about, if any."
+      },
+      "run": {
+        "type": "string"
+      },
+      "open": {
+        "type": "string",
+        "description": "Open is a file the routine asked to open on click (instead of the\nconfigured click action)."
+      },
+      "deliveredAt": {
+        "type": "string",
+        "format": "date-time",
+        "description": "DeliveredAt is when a frontend showed it; absent until then."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "id",
+      "at",
+      "kind",
+      "title"
+    ],
+    "description": "Notification is one thing to tell me."
+  },
+  "type": "array",
+  "title": "procauto notifications list --json"
+}
