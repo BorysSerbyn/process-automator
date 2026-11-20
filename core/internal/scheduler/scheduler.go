@@ -284,7 +284,9 @@ type state struct {
 	Routines map[string]map[string]string `json:"routines"`
 }
 
-const stateVersion = 1
+// stateVersion is the state file's format: 2 keeps a marker per trigger
+// (version 1, one cron slot per routine, isn't read).
+const stateVersion = 2
 
 func (st *state) time(name, kind string) (time.Time, bool) {
 	v, ok := st.Routines[name][kind]

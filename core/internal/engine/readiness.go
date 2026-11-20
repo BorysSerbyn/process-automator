@@ -9,6 +9,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 )
 
@@ -50,7 +51,7 @@ func (a *App) Assess(r routines.Routine) Readiness {
 		if info, err := os.Stat(folder); err != nil || !info.IsDir() {
 			rd.Problems = append(rd.Problems, Problem{
 				Text: fmt.Sprintf("its folder %s doesn't exist", folder),
-				Fix:  fmt.Sprintf("create it, or `procauto settings set routines.%s.folder <folder>`", r.Name),
+				Fix:  fmt.Sprintf("create it, or `"+product.Command+" settings set routines.%s.folder <folder>`", r.Name),
 			})
 		}
 	}
@@ -77,7 +78,7 @@ func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine,
 		fix := ""
 		var nr *mcp.NeedsReauthError
 		if errors.As(err, &nr) {
-			fix = "procauto auth login " + nr.Server
+			fix = product.Command + " auth login " + nr.Server
 		}
 		rd.Problems = append(rd.Problems, Problem{Text: err.Error(), Fix: fix})
 	}
@@ -85,7 +86,7 @@ func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine,
 	// needs them: check they're signed in.
 	for _, s := range a.Servers(r) {
 		if in, signs := signedIn[s]; signs && !in && !slices.Contains(r.Servers, s) {
-			rd.Problems = append(rd.Problems, Problem{Text: s + " (which it uses through a plugin) isn't signed in", Fix: "procauto auth login " + s})
+			rd.Problems = append(rd.Problems, Problem{Text: s + " (which it uses through a plugin) isn't signed in", Fix: product.Command + " auth login " + s})
 		}
 	}
 }

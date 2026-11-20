@@ -70,7 +70,7 @@ func TestCLIGivesToolsWhatTheyNeed(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := fake.run
-	if strings.TrimSpace(r.System) != "Be brief." || strings.TrimSpace(r.User) != "Today is Wednesday." || r.Model != "anthropic/claude-haiku-5-5" || r.MaxTurns != 7 || r.MCP.Name != CLIServer {
+	if strings.TrimSpace(r.System) != "Be brief." || strings.TrimSpace(r.User) != "Today is Wednesday." || r.Model != "anthropic/claude-haiku-5-5" || r.MaxTurns != 7 || r.MCP.Name != CLIServer() {
 		t.Fatalf("run = %+v", r)
 	}
 	if strings.Join(fake.tools, ",") != "secret_word" || !fake.tokenOK {

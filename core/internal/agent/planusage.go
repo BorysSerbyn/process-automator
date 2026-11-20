@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
 
@@ -22,7 +23,7 @@ import (
 func (b *ClaudeCode) PlanUsage(ctx context.Context) ([]usage.Limit, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	dir, err := os.MkdirTemp("", "procauto-usage-")
+	dir, err := os.MkdirTemp("", product.Command+"-usage-")
 	if err != nil {
 		return nil, err
 	}

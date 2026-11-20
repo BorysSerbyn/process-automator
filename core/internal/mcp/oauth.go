@@ -18,8 +18,9 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // storedAuth is what's persisted per remote server: the dynamically registered
@@ -280,7 +281,7 @@ func loopbackFetcher(ln net.Listener, openURL func(string) error) auth.Authoriza
 			if e := q.Get("error"); e != "" {
 				_, _ = io.WriteString(w, "Sign-in failed: "+e+". You can close this tab.")
 			} else {
-				_, _ = io.WriteString(w, "Signed in to procauto. You can close this tab.")
+				_, _ = io.WriteString(w, "Signed in to "+product.Name+". You can close this tab.")
 			}
 			select {
 			case results <- &auth.AuthorizationResult{Code: q.Get("code"), State: q.Get("state"), Iss: q.Get("iss")}:

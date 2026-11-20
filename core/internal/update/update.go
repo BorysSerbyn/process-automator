@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // SumsName is the checksums file every release carries (sha256sum format).
@@ -247,7 +249,7 @@ func (s Source) Install(ctx context.Context, r Release, appRoot, teamID string, 
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "procauto-update-")
+	tmp, err := os.MkdirTemp("", product.Command+"-update-")
 	if err != nil {
 		return err
 	}

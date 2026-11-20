@@ -9,7 +9,7 @@ import (
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/anthropic"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // Genkit runs the model loop in-process with Genkit, against the Anthropic API

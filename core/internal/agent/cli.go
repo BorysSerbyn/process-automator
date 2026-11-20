@@ -10,6 +10,8 @@ import (
 
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // CLI runs the model loop with a headless coding-agent CLI on the user's
@@ -75,8 +77,9 @@ type MCPEndpoint struct {
 	Token string // send as "Authorization: Bearer <Token>"
 }
 
-// CLIServer is the MCP server name agent CLIs see the routine's tools under.
-const CLIServer = "procauto"
+// CLIServer is the MCP server name agent CLIs see the routine's tools under:
+// the app's command name.
+func CLIServer() string { return product.Command }
 
 // defaultSystemPrompt replaces the CLI's own (coding-agent) system prompt when
 // the routine doesn't set one.
@@ -116,7 +119,7 @@ func (b *CLI) Run(ctx context.Context, j Job) (*Output, error) {
 
 	cmd, err := b.Tool.Command(ctx, CLIRun{
 		System: system, User: user, Model: rendered.Model, Effort: j.Effort, MaxTurns: j.MaxTurns,
-		MCP:    MCPEndpoint{Name: CLIServer, URL: url, Token: token},
+		MCP:    MCPEndpoint{Name: CLIServer(), URL: url, Token: token},
 		Folder: j.Folder, SessionID: j.SessionID, BuiltinTools: j.BuiltinTools, DryRun: j.DryRun,
 		OutputSchema: outputSchema(rendered),
 	})
@@ -129,7 +132,7 @@ func (b *CLI) Run(ctx context.Context, j Job) (*Output, error) {
 		}
 		cmd.Dir = j.Folder
 	} else {
-		dir, err := os.MkdirTemp("", "procauto-run-")
+		dir, err := os.MkdirTemp("", product.Command+"-run-")
 		if err != nil {
 			return nil, err
 		}

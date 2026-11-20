@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // AssetName is the release artifact for this platform: the macOS app,
 // universal (Apple silicon and Intel), zipped with ditto.
 func AssetName(version string) (string, error) {
-	return "process-automator-" + version + "-macos.zip", nil
+	return product.Folder + "-" + version + "-macos.zip", nil
 }
 
 // unpack uses ditto, which keeps the app's signature and attributes intact.

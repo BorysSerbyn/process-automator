@@ -15,8 +15,8 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/update"
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
 )
 
 // UpdateOutput is `update --json`.
@@ -96,7 +96,7 @@ func newUpdateCmd() *cobra.Command {
 				return err
 			}
 			latest := plan.tag
-			res := UpdateOutput{Current: version.Version, Latest: latest, UpdateAvailable: update.Newer(version.Version, latest)}
+			res := UpdateOutput{Current: product.Version, Latest: latest, UpdateAvailable: update.Newer(product.Version, latest)}
 			if res.UpdateAvailable {
 				res.Note = installNote
 			}
@@ -131,7 +131,7 @@ func newUpdateCmd() *cobra.Command {
 				}
 				res.Updated = true
 				if detached {
-					recordApp(a, "Process Automator updated to "+strings.TrimPrefix(latest, "v"), "")
+					recordApp(a, product.Name+" updated to "+strings.TrimPrefix(latest, "v"), "")
 				}
 			}
 			if asJSON {
@@ -154,7 +154,7 @@ func describeUpdate(r UpdateOutput) string {
 	case r.Updated:
 		return fmt.Sprintf("Updated %s → %s.", r.Current, strings.TrimPrefix(r.Latest, "v"))
 	case r.UpdateAvailable:
-		return fmt.Sprintf("%s is available (this is %s). Run `procauto update` to install it.", r.Latest, r.Current)
+		return fmt.Sprintf("%s is available (this is %s). Run `"+product.Command+" update` to install it.", r.Latest, r.Current)
 	default:
 		return fmt.Sprintf("Up to date (this is %s; latest release %s).", r.Current, r.Latest)
 	}
@@ -197,7 +197,7 @@ func planUpdate(ctx context.Context, a *engine.App) (updatePlan, error) {
 func (p updatePlan) install(ctx context.Context, appRoot string, out io.Writer) error {
 	if p.release != nil {
 		fmt.Fprintf(out, "Installing %s into %s…\n", p.tag, appRoot)
-		return p.src.Install(ctx, *p.release, appRoot, version.TeamID, out)
+		return p.src.Install(ctx, *p.release, appRoot, product.TeamID, out)
 	}
 	fmt.Fprintf(out, "Building %s from %s…\n", p.tag, p.dir)
 	return update.BuildInstall(ctx, p.dir, p.tag, out)
@@ -211,16 +211,16 @@ func sourceDir(a *engine.App) (string, error) {
 			return dir, nil
 		}
 	}
-	if version.SourceDir == "" {
-		return "", errors.New("no source checkout is known to build from: set one with `procauto settings set update.source-dir <path>`")
+	if product.SourceDir == "" {
+		return "", errors.New("no source checkout is known to build from: set one with `" + product.Command + " settings set update.source-dir <path>`")
 	}
-	return version.SourceDir, nil
+	return product.SourceDir, nil
 }
 
 // releaseSource is where this build's releases are, signed in to GitHub
 // when possible (a private repository needs it).
 func releaseSource(ctx context.Context) update.Source {
-	return update.Source{API: version.ReleaseAPI, Repo: version.ReleaseRepo, Token: update.Token(ctx)}
+	return update.Source{API: product.ReleaseAPI, Repo: product.ReleaseRepo, Token: update.Token(ctx)}
 }
 
 // startDetachedUpdate runs this update again in the background, detached, so

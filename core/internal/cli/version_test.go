@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
 )
 
 func TestVersionJSON(t *testing.T) {
@@ -28,8 +28,8 @@ func TestVersionJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("invalid JSON %q: %v", out.String(), err)
 	}
-	if got["version"] != version.Version {
-		t.Fatalf("version = %q, want %q", got["version"], version.Version)
+	if got["version"] != product.Version {
+		t.Fatalf("version = %q, want %q", got["version"], product.Version)
 	}
 }
 
@@ -81,9 +81,9 @@ func TestUpdateFallsBackToSource(t *testing.T) {
 	}
 	releases := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("[]")) }))
 	defer releases.Close()
-	origAPI, origRepo := version.ReleaseAPI, version.ReleaseRepo
-	version.ReleaseAPI, version.ReleaseRepo = releases.URL, "pt/none"
-	t.Cleanup(func() { version.ReleaseAPI, version.ReleaseRepo = origAPI, origRepo })
+	origAPI, origRepo := product.ReleaseAPI, product.ReleaseRepo
+	product.ReleaseAPI, product.ReleaseRepo = releases.URL, "pt/none"
+	t.Cleanup(func() { product.ReleaseAPI, product.ReleaseRepo = origAPI, origRepo })
 	t.Setenv("GH_TOKEN", "pt-token")
 
 	git := func(dir string, args ...string) {

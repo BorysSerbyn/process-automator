@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 var testServers = map[string]pluginapi.ServerSpec{

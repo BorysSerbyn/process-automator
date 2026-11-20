@@ -15,18 +15,18 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/sysenv"
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // NewRoot builds the root command with the installed plugins.
 func NewRoot(plugins []pluginapi.Plugin) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "procauto",
+		Use:           product.Command,
 		Short:         "Scheduled LLM routines with tools from MCP servers",
-		Version:       version.Version,
+		Version:       product.Version,
 		SilenceUsage:  true,
 		SilenceErrors: false,
 	}

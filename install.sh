@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Installs Process Automator from its latest release (macOS or Linux), then
-# offers first-run setup (templates, model backend, sign-ins).
+# Installs the app (NAME below) from its latest release (macOS or Linux),
+# then offers first-run setup (templates, model backend, sign-ins).
 #
 #   ./install.sh                         from a checkout
-#   gh api repos/BorysSerbyn/process-automator/contents/install.sh \
+#   gh api repos/<REPO>/contents/install.sh \
 #     -H 'Accept: application/vnd.github.raw' | bash
 #
 # Options:
@@ -11,7 +11,7 @@
 #   --from <archive>     install a local artifact (verified against a
 #                        SHA256SUMS next to it when there is one)
 #   --yes                ask nothing (no terminal needed); setup is left to
-#                        `procauto setup` (or `setup --json` for an LLM)
+#                        `<COMMAND> setup` (or `setup --json` for an LLM)
 #   --files-only         only files: no login items started, no keychain (tests)
 # Environment: INSTALL_DIR, BIN_DIR (see scripts/install-app.sh); GH_TOKEN or
 # GITHUB_TOKEN when the GitHub CLI isn't signed in (a private repository needs one).
@@ -19,13 +19,18 @@
 # It downloads the artifact for this platform and its release's SHA256SUMS,
 # checks the checksum and, on macOS, the app's notarized Developer ID
 # signature by TEAM_ID, then runs the artifact's own installer
-# (install-app.sh), the one `make install` and `procauto update` run.
+# (install-app.sh), the one `make install` and `<COMMAND> update` run.
 set -euo pipefail
 
-# Where releases come from, and the Apple team that signs the macOS app. The
-# build reads both from here (Makefile), so `procauto update` checks the same.
+# The app: where its releases come from, the Apple team that signs the macOS
+# app, its name, its CLI's name and its folder name (its artifacts are
+# <FOLDER>-<version>-…). The binary says the same (automator.App) and the
+# build reads the names from here (Makefile).
 REPO=BorysSerbyn/process-automator
 TEAM_ID=
+NAME="Process Automator"
+COMMAND=procauto
+FOLDER=process-automator
 
 API=https://api.github.com
 
@@ -46,7 +51,7 @@ main() {
   case $(uname -s) in
     Darwin) os=macos ;;
     Linux) os=linux ;;
-    *) die "Process Automator runs on macOS and Linux, not $(uname -s)" ;;
+    *) die "$NAME runs on macOS and Linux, not $(uname -s)" ;;
   esac
   case $(uname -m) in
     x86_64|amd64) arch=amd64 ;;
@@ -66,8 +71,8 @@ main() {
     version=${version:-$(latest_tag)}
     [ -n "$version" ] || no_release "$REPO has no releases yet"
     local v=${version#v} name
-    if [ "$os" = macos ]; then name="process-automator-$v-macos.zip"; else name="process-automator-$v-linux-$arch.tar.gz"; fi
-    say "Downloading Process Automator $v ($name)…"
+    if [ "$os" = macos ]; then name="$FOLDER-$v-macos.zip"; else name="$FOLDER-$v-linux-$arch.tar.gz"; fi
+    say "Downloading $NAME $v ($name)…"
     download "v$v" "$name"
     download "v$v" SHA256SUMS
     archive="$tmp/$name" sums="$tmp/SHA256SUMS"
@@ -92,10 +97,10 @@ main() {
 
   bash "$installer" install ${files_only:+--files-only}
 
-  local cli="${BIN_DIR:-$HOME/.local/bin}/procauto"
+  local cli="${BIN_DIR:-$HOME/.local/bin}/$COMMAND"
   case ":$PATH:" in
     *":$(dirname "$cli"):"*) ;;
-    *) say "Note: $(dirname "$cli") isn't on your PATH; add it to use \`procauto\` by name." ;;
+    *) say "Note: $(dirname "$cli") isn't on your PATH; add it to use \`$COMMAND\` by name." ;;
   esac
   if [ -z "$yes" ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
     printf 'Set it up now (templates, model backend, sign-ins)? [Y/n] ' > /dev/tty
@@ -106,7 +111,7 @@ main() {
       *) "$cli" setup < /dev/tty > /dev/tty 2>&1 || true; return 0 ;;
     esac
   fi
-  say "Next: \`procauto setup\` picks templates, the model backend and sign-ins (\`procauto setup --json\` lists the steps)."
+  say "Next: \`$COMMAND setup\` picks templates, the model backend and sign-ins (\`$COMMAND setup --json\` lists the steps)."
 }
 
 say() { echo "$*" >&2; }

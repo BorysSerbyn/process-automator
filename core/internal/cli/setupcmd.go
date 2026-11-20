@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/schedule"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
@@ -166,12 +167,12 @@ func templatesStep(set *routines.Set, offered int) SetupStep {
 		Ask: "Which projects do you work on? Then, which templates should be installed as routines: those " +
 			"of your projects, and those for any project? None are picked by default.",
 		Commands: []string{
-			"procauto templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none",
-			"procauto templates install <template> [--set <param>=<value>]...",
+			product.Command + " templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none",
+			product.Command + " templates install <template> [--set <param>=<value>]...",
 		}}
 	if offered == 0 {
 		st.Ask = "There are no templates to install. Write a routine of your own instead, or skip this step."
-		st.Commands = []string{"procauto routines create <name> --from <file>   # a routine of their own, written with them"}
+		st.Commands = []string{product.Command + " routines create <name> --from <file>   # a routine of their own, written with them"}
 	}
 	if st.Done {
 		names := make([]string, 0, len(set.Routines))
@@ -207,9 +208,9 @@ func backendStep(a *engine.App) (SetupStep, error) {
 	def, _ := settings.Lookup("llm.backend")
 	st := SetupStep{Step: stepBackend, Title: "Model backend", Done: b.Problem == "", Status: b.Status(), SignIn: b.SignIn,
 		Ask:      "Which backend should run routines? " + def.Description,
-		Commands: []string{"procauto settings set llm.backend <" + strings.Join(def.Enum, "|") + ">"}}
+		Commands: []string{product.Command + " settings set llm.backend <" + strings.Join(def.Enum, "|") + ">"}}
 	if b.SignIn != "" {
-		st.Commands = append(st.Commands, "procauto auth login "+b.SignIn+" --browser")
+		st.Commands = append(st.Commands, product.Command+" auth login "+b.SignIn+" --browser")
 	}
 	return st, nil
 }
@@ -238,7 +239,7 @@ func usageStep(a *engine.App) (SetupStep, bool, error) {
 		Status: "Read from your Claude Code status line (Claude Code's /usage can't be read)",
 		Ask: "The app can't read your Claude plan's usage from Claude Code right now. Read it from your Claude Code " +
 			"status line instead? Your status line keeps showing what it shows now.",
-		Commands: []string{"procauto usage statusline install"}}
+		Commands: []string{product.Command + " usage statusline install"}}
 	if !installed {
 		st.Status = "Can't be read from Claude Code's /usage: " + plan.TryError
 	}
@@ -260,7 +261,7 @@ func loadRoutines(a *engine.App, set *routines.Set) ([]loadedRoutine, []SetupSte
 	fix := func(name, problem string) {
 		problems = append(problems, SetupStep{Step: stepRoutine, Subject: name, Title: "Fix " + name,
 			Status:   capitalize(problem),
-			Commands: []string{"procauto doctor   # says what's wrong and how to fix it"}})
+			Commands: []string{product.Command + " doctor   # says what's wrong and how to fix it"}})
 	}
 	for _, e := range set.Errors {
 		fix(strings.TrimSuffix(filepath.Base(e.Path), routines.Ext), e.Err.Error())
@@ -301,7 +302,7 @@ func signInSteps(a *engine.App, loaded []loadedRoutine) ([]SetupStep, error) {
 		st := SetupStep{Step: stepSignIn, Subject: row.Server, Title: "Sign in to " + row.Server, Done: row.SignedIn,
 			Status:   "Signed in; used by " + strings.Join(who, ", "),
 			Ask:      "Sign in to " + row.Server + "? It opens the browser.",
-			Commands: []string{"procauto auth login " + row.Server + " --browser"}}
+			Commands: []string{product.Command + " auth login " + row.Server + " --browser"}}
 		if !row.SignedIn {
 			st.Status, st.SignIn = "Not signed in; used by "+strings.Join(who, ", "), row.Server
 			if p, ok := a.FindPlugin(row.Server); ok {
@@ -326,8 +327,8 @@ func trustAndScheduleSteps(a *engine.App, loaded []loadedRoutine) (trusts, sched
 		st := SetupStep{Step: stepTrust, Subject: r.Name, Title: "Trust " + r.Name, Done: why == "", Status: "Trusted",
 			Ask: "Trust " + r.Name + " to run for real with what it can reach?",
 			Commands: []string{
-				"procauto routines trust " + r.Name + " --check --json   # show me what it can reach before asking",
-				"procauto routines trust " + r.Name + " --yes",
+				product.Command + " routines trust " + r.Name + " --check --json   # show me what it can reach before asking",
+				product.Command + " routines trust " + r.Name + " --yes",
 			}}
 		if why != "" {
 			st.Status = capitalize(why)
@@ -340,7 +341,7 @@ func trustAndScheduleSteps(a *engine.App, loaded []loadedRoutine) (trusts, sched
 		sched := SetupStep{Step: stepEnable, Subject: r.Name, Title: "Run " + r.Name + " on its schedule",
 			Done: r.cfg.Enabled, Optional: anyEnabled, Status: "Runs on its schedule: " + words,
 			Ask:      "Run " + r.Name + " on its schedule (" + words + ")?",
-			Commands: []string{"procauto routines resume " + r.Name}}
+			Commands: []string{product.Command + " routines resume " + r.Name}}
 		if !r.cfg.Enabled {
 			sched.Status = "Paused: it doesn't run on its schedule (" + words + ")"
 		}
@@ -386,7 +387,7 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 	// A command that fails says why itself, on the terminal.
 	self := func(args ...string) { runSelf(a, cmd.InOrStdin(), w, cmd.ErrOrStderr(), args...) }
 
-	fmt.Fprintln(w, "Setting up Process Automator. Nothing changes without your yes.")
+	fmt.Fprintln(w, "Setting up "+product.Name+". Nothing changes without your yes.")
 
 	fmt.Fprintln(w, "\n1. Templates")
 	if err := setupTemplates(a, w, ask, self); err != nil {
@@ -427,7 +428,7 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 		}
 		switch s.Step {
 		case stepRoutine:
-			fmt.Fprintf(w, "  %s: %s (`procauto doctor` says how to fix it)\n", s.Title, s.Status)
+			fmt.Fprintf(w, "  %s: %s (`"+product.Command+" doctor` says how to fix it)\n", s.Title, s.Status)
 		case stepSignIn:
 			if yes("  "+s.Status+". "+s.Ask, true) {
 				self("auth", "login", s.Subject)
@@ -457,10 +458,10 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 		return err
 	}
 	if final.Done {
-		fmt.Fprintln(w, "\nAll set. `procauto routines list` shows your routines; `procauto doctor` explains a red light.")
+		fmt.Fprintln(w, "\nAll set. `"+product.Command+" routines list` shows your routines; `"+product.Command+" doctor` explains a red light.")
 		return nil
 	}
-	fmt.Fprintln(w, "\nStill to do (run `procauto setup` again any time):")
+	fmt.Fprintln(w, "\nStill to do (run `"+product.Command+" setup` again any time):")
 	for _, s := range final.Steps {
 		if !s.Done && !s.Optional {
 			fmt.Fprintf(w, "  - %s: %s\n", s.Title, s.Status)
@@ -497,7 +498,7 @@ func setupTemplates(a *engine.App, w io.Writer, ask func(string) string, self fu
 		}
 	}
 	if len(rows) == 0 {
-		fmt.Fprintln(w, "  No templates to offer. Write a routine of your own with `procauto routines create`.")
+		fmt.Fprintln(w, "  No templates to offer. Write a routine of your own with `"+product.Command+" routines create`.")
 		return nil
 	}
 	if len(offer) == 0 {

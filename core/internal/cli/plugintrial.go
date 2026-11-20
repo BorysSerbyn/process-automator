@@ -20,7 +20,8 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // A plugin's trial starts its server, does the MCP handshake and checks its
@@ -370,7 +371,7 @@ func newPluginsCheckCmd() *cobra.Command {
 					case err != nil:
 						row.Problem = err.Error()
 					case row.NeedsSignIn:
-						row.Problem = "not signed in: procauto auth login " + name
+						row.Problem = "not signed in: " + product.Command + " auth login " + name
 					}
 				}
 				row.OK = row.Problem == ""

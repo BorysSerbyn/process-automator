@@ -20,6 +20,8 @@ import (
 
 	"github.com/firebase/genkit/go/ai"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // ClaudeCode is the Claude Code CLI (`claude -p`) as an CLI tool, so
@@ -194,7 +196,7 @@ func (b *ClaudeCode) Result(stdout, stderr []byte, runErr error) (*Output, error
 			return out, limit
 		}
 		if strings.Contains(strings.ToLower(msg), "log in") || strings.Contains(strings.ToLower(msg), "login") {
-			msg += " (sign in by running `claude` once, or store a `claude setup-token` token with `procauto auth login claude-code`)"
+			msg += " (sign in by running `claude` once, or store a `claude setup-token` token with `" + product.Command + " auth login claude-code`)"
 		}
 		return out, fmt.Errorf("claude: %s", msg)
 	}
@@ -269,7 +271,7 @@ func ClaudeModel(name string) (string, error) {
 // serveTools exposes the gateway tools as an MCP server on a loopback port,
 // guarded by a random bearer token. stop shuts it down.
 func serveTools(tools []Tool) (url, token string, stop func(), err error) {
-	srv := sdk.NewServer(&sdk.Implementation{Name: "procauto", Version: "routine"}, nil)
+	srv := sdk.NewServer(&sdk.Implementation{Name: product.Command, Version: "routine"}, nil)
 	for _, t := range tools {
 		call := t.Call
 		srv.AddTool(&sdk.Tool{

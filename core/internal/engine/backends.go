@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/sysenv"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
@@ -36,8 +37,8 @@ var Backends = map[string]BackendDef{
 		New: func(a *App) (agent.Backend, error) {
 			key, err := a.Connector.Secrets.Get(AnthropicKey)
 			if err != nil {
-				return nil, errors.New("no Anthropic API key: run `procauto auth login anthropic`, " +
-					"or use your Claude subscription with `procauto settings set llm.backend claude-code`")
+				return nil, errors.New("no Anthropic API key: run `" + product.Command + " auth login anthropic`, " +
+					"or use your Claude subscription with `" + product.Command + " settings set llm.backend claude-code`")
 			}
 			return &agent.Genkit{APIKey: key}, nil
 		},

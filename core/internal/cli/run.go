@@ -9,6 +9,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 )
@@ -27,9 +28,9 @@ func newRunCmd() *cobra.Command {
 			"inputs are computed for the date, at the routine's first scheduled time that day (or the current " +
 			"time of day if it has none). A routine covering the previous workday (timesheets) is backfilled " +
 			"with the day after the one to cover: Friday's timesheet is --date of the following Monday.",
-		Example: "  procauto run scrum --dry-run   # everything except posting\n" +
-			"  procauto run scrum\n" +
-			"  procauto run timesheets --date 2026-11-16   # as of Mon Nov 16: fills Fri Nov 13",
+		Example: "  " + product.Command + " run scrum --dry-run   # everything except posting\n" +
+			"  " + product.Command + " run scrum\n" +
+			"  " + product.Command + " run timesheets --date 2026-11-16   # as of Mon Nov 16: fills Fri Nov 13",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)

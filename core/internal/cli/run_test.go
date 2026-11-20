@@ -20,10 +20,10 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // setup --json lists every step and the commands for each, changing nothing.

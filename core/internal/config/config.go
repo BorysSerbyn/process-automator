@@ -14,12 +14,10 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/yamlfile"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
-
-// AppName names the app: its config directory, and its MCP client name.
-const AppName = "process-automator"
 
 // Config is the whole config file.
 type Config struct {
@@ -39,7 +37,7 @@ func DefaultPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, AppName, "config.yaml"), nil
+	return filepath.Join(dir, product.Folder, "config.yaml"), nil
 }
 
 // Load reads the config file at path over base (server definitions from plugins).

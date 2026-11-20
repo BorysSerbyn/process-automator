@@ -18,11 +18,11 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/memory"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // App is the engine on one data folder: the config, the plugins and the
@@ -71,8 +71,8 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 	conn := &mcp.Connector{
 		Servers:  cfg.MCPServers,
 		Secrets:  secrets,
-		Name:     config.AppName,
-		Version:  version.Version,
+		Name:     product.Command,
+		Version:  product.Version,
 		Builtins: map[string]func(pluginapi.Run) (*sdk.Server, error){},
 		LockDir:  files.Locks(),
 	}

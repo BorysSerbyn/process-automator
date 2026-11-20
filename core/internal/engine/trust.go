@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/trust"
 )
@@ -47,9 +48,9 @@ func (a *App) Untrusted(r routines.Routine, c RoutineConfig) (string, error) {
 	case err != nil || why == "":
 		return why, err
 	case changed:
-		return fmt.Sprintf("%s: review it with `procauto routines trust %s`", why, r.Name), nil
+		return fmt.Sprintf("%s: review it with `"+product.Command+" routines trust %s`", why, r.Name), nil
 	default:
-		return fmt.Sprintf("%s: review what it can reach with `procauto routines trust %s`", why, r.Name), nil
+		return fmt.Sprintf("%s: review what it can reach with `"+product.Command+" routines trust %s`", why, r.Name), nil
 	}
 }
 

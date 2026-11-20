@@ -1,10 +1,23 @@
 Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirements|Functional Requirements]], [[Spec/Requirements/Technical/Distribution|Technical: Distribution]]. Why it's built this way: [[Spec/Technical Decisions|Technical Decisions]].
 
 ## Core
-- **Go core, one binary**: `procauto` (the Go module in `core/`); `core/internal/engine` is the engine (loading, readiness, runs, the scheduler; Genkit for the model), `core/internal/cli` the CLI over it
+- **Go core, one binary**: `procauto` (the Go module in `core/`, main package `core/cmd/procauto`); `core/internal/engine` is the engine (loading, readiness, runs, the scheduler; Genkit for the model), `core/internal/cli` the CLI over it
+- **A small public surface; the rest is internal**: `core/automator` (`App`, `Main`, `CheckTemplates`) and `core/pluginapi` (the plugin contract). An app is an `automator.App` handed to `automator.Main` by its main package:
+
+| Field | What it sets | Process Automator |
+|---|---|---|
+| `Name` | What people see: the app, its windows, its messages | `Process Automator` |
+| `Command` | The CLI's name, and the commands messages suggest | `procauto` |
+| `Folder` | The config and data folder's name, the logs folder, the release artifacts and the Linux install | `process-automator` |
+| `BundlePrefix` | The prefix of the bundle ID (`<prefix>.<Command>`), which names the login items and the secrets service | `dev` |
+| `ReleaseRepo`, `TeamID` | Where `update` gets releases, and the team that must sign them | `REPO`, `TEAM_ID` in `install.sh` |
+| `Plugins` | In-process plugins compiled in | none |
+
+- **Build values are set at link time** in `core/automator` by the Makefile: the version, the source checkout (`SOURCE_DIR`), where the templates are packaged, the release API, and `BUNDLE_PREFIX` over the app's prefix
+- **Another app** is a Go module that requires this one and has its own main package, plugins and templates; it builds with this repository's Makefile and scripts at the same version (see [[Spec/Requirements/Technical/Distribution|Technical: Distribution]])
 - **Blank-slate engine**: the engine knows no specific service and the app compiles in no plugins; routines use the core's built-in servers (`automator`, `notify`) and the MCP servers added in config
 - **OS-neutral core**: OS calls live in per-OS files (`name_darwin.go`, `name_unix.go`, `name_other.go`, or a `//go:build` line), OS-bound integrations are plugins, and delivering to the OS (notifications, the menu bar) is the frontends' job. `internal/osboundary`'s test (no `runtime.GOOS`, `syscall`, OS tools or OS paths in shared files) and CI's Linux and Windows cross-compiles enforce it
-- **Config**: one YAML file, `config.yaml` in the per-user config folder (`os.UserConfigDir()/process-automator/`), decoded strictly: unknown or retired fields are errors. It holds `mcpServers` (external servers), `plugins` (in-process plugins' own sections) and `settings`. `--config` points the CLI at another file
+- **Config**: one YAML file, `config.yaml` in the per-user config folder (`os.UserConfigDir()/<Folder>/`: `process-automator/`), decoded strictly: unknown or retired fields are errors. It holds `mcpServers` (external servers), `plugins` (in-process plugins' own sections) and `settings`. `--config` points the CLI at another file
 - **Data folder** is the config file's folder; everything the app keeps is in it:
 
 | Path | What |
@@ -94,7 +107,8 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Schedules in words** come from the core: `schedule describe <cron>` gives the words, the next few times, and the schedule as days of the week and a time when it is one (`picker`); `schedule build --days … --at HH:MM` turns those back into cron
 
 ## Templates
-- **Files shipped with the app**, never compiled in: `Contents/Resources/templates` in the `.app`, `share/process-automator/templates` in the Linux tree, the checkout's `templates/` in development builds; `paths` shows the folder. An empty or missing folder lists none; the repository's `templates/` holds only a README
+- **Files shipped with the app**, never compiled in: `Contents/Resources/templates` in the `.app`, `share/<Folder>/templates` in the Linux tree, the checkout's `templates/` in development builds; `paths` shows the folder. An empty or missing folder lists none; the repository's `templates/` holds only a README
+- **Checked like the app's own**: every template loads as a routine, includes `{{> memories}}`, and renders with the standard inputs, anchored in `today` or `since`, with no template syntax left (`automator.CheckTemplates`, run by the tests on the shipped folder)
 - **Tags are folders**, general to specific; `projects/<project>/…` makes a template that project's (`project` in `templates list`). Installing copies a template flat into the routines folder
 - `templates list [--all]` shows the ones for this OS (tags, project, parameters, platforms, installed or not); `templates install <tags>/<name> [--as <name>] [--set param=value]` validates every value first, never overwrites a routine, stores values as `routines.<name>.params.<param>`, prints the template's description, and leaves the routine disabled and untrusted
 
@@ -150,7 +164,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **`plugins add <name>`** (`--url` or `--command` with `--arg`/`--env`, `--auth`, `--transport`, `--header`, `--scope`, `--description`, or `--dir`; `--replace`) writes the server to `mcpServers`, validated like config loading. Plugin names are lowercase letters, digits and dashes; local commands are absolute paths or names on PATH. `plugins remove` deletes it from config, then its installed folder and its credentials, keeping secrets another server still references
 - **Trial**: `plugins add` starts the server, does the handshake and lists its tools before writing anything. Rejected if it doesn't answer within 90s, offers no tools, lists a tool twice, or has a non-object input schema; plugin folders also need annotations on every tool (a warning for other servers). It reports each tool as read-only or write. A server needing credentials is tried as far as possible (a remote one must at least answer HTTP); `plugins check [<name>]` runs the full trial after sign-in. The trial runs the server unsandboxed, under the approval `plugins add` already needs
 - **Plugin folders**: `plugins add <name> --dir <folder>` copies a folder with a `plugin.yaml` (`command`, `args`, `env`, `description`) to `<data>/plugins/<name>/`, trying the staged copy before moving it into place; relative commands resolve inside it, and neither the command nor any symlink in the folder may point outside it. `--replace` keeps the old copy if the new one fails
-- **In-process plugins** (`core/internal/pluginapi`, a leaf package with no engine dependencies): a `Plugin` is a name, a description and either an `External` server spec or `Serve`; it may declare a `RoutineSection`, the servers it `Uses`, and `Prepare` (steps done outside the app before its first sign-in). Its `Host` gives `Connect` (another server), `Config` (its `plugins.<name>` section, strict), `Secret` (only those it declares), `DataDir()` (`<data>/plugin-data/<name>/`), `RoutineConfig(v)` (the running routine's section, strict) and `Run()` (the routine, its run's history ID and folder). A host is made per session; outside a run, the routine parts are empty. A config `mcpServers.<name>` that clashes with an in-process plugin's name is an error
+- **In-process plugins** (`core/pluginapi`, public, a leaf package with no engine dependencies): a `Plugin` is a name, a description and either an `External` server spec or `Serve`; it may declare a `RoutineSection`, the servers it `Uses`, and `Prepare` (steps done outside the app before its first sign-in). Its `Host` gives `Connect` (another server), `Config` (its `plugins.<name>` section, strict), `Secret` (only those it declares), `DataDir()` (`<data>/plugin-data/<name>/`), `RoutineConfig(v)` (the running routine's section, strict) and `Run()` (the routine, its run's history ID and folder). A host is made per session; outside a run, the routine parts are empty. A config `mcpServers.<name>` that clashes with an in-process plugin's name is an error
 - **`plugins list`** shows every server routines can use; `mcp tools <server> [--json]` its tools, marking read-only ones
 
 ## Built-in servers

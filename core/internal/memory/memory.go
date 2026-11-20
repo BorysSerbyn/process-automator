@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // Global is the scope every routine gets.
@@ -191,7 +192,7 @@ func (s Store) change(id string, fn func(ms []Memory, i int) []Memory) (Memory, 
 			return found, nil
 		}
 	}
-	return Memory{}, fmt.Errorf("no memory %q (see `procauto memory list`)", id)
+	return Memory{}, fmt.Errorf("no memory %q (see `"+product.Command+" memory list`)", id)
 }
 
 // edit rewrites a scope's file under a lock. Lines that aren't memories
@@ -233,7 +234,7 @@ func header(path, scope string) (string, error) {
 		if scope != Global {
 			who = "the " + scope + " routine"
 		}
-		return "# Memories for " + who + "\n\nOne per line starting with \"- \". Edit here or with `procauto memory`.\n\n", nil
+		return "# Memories for " + who + "\n\nOne per line starting with \"- \". Edit here or with `" + product.Command + " memory`.\n\n", nil
 	}
 	if err != nil {
 		return "", err

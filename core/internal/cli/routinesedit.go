@@ -12,6 +12,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
@@ -128,7 +129,7 @@ func newRoutinesCreateCmd() *cobra.Command {
 		Long: "Writes <routine>.prompt to the routines folder after validating it like any routine (never over an " +
 			"existing one). The routine starts disabled: try it with `run <routine> --dry-run`, then enable it with " +
 			"`settings set routines.<routine>.enabled true`.",
-		Example: "  procauto routines create standup --from ./standup.prompt",
+		Example: "  " + product.Command + " routines create standup --from ./standup.prompt",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, unlock, err := loadAppForEdit(cmd)
@@ -157,8 +158,8 @@ func newRoutinesCreateCmd() *cobra.Command {
 			}
 			off := false
 			return emit(cmd, RoutineChange{Routine: r.Name, Path: r.Path, Enabled: &off},
-				fmt.Sprintf("Created %s (%s), disabled and not trusted.\nTry it: procauto run %s --dry-run\n"+
-					"Trust it: procauto routines trust %s\nEnable it: procauto settings set routines.%s.enabled true",
+				fmt.Sprintf("Created %s (%s), disabled and not trusted.\nTry it: "+product.Command+" run %s --dry-run\n"+
+					"Trust it: "+product.Command+" routines trust %s\nEnable it: "+product.Command+" settings set routines.%s.enabled true",
 					r.Name, r.Path, r.Name, r.Name, r.Name))
 		},
 	}

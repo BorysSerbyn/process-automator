@@ -14,6 +14,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/memory"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 )
 
@@ -94,7 +95,7 @@ func newMemoryListCmd() *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), all)
 			}
 			if len(all) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No memories. Add one: procauto memory add \"...\" [--routine <name>]")
+				fmt.Fprintln(cmd.OutOrStdout(), "No memories. Add one: "+product.Command+" memory add \"...\" [--routine <name>]")
 				return nil
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
@@ -116,7 +117,7 @@ func newMemoryAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "add <text>",
 		Short:   "Remember something (for every routine, or one with --routine)",
-		Example: "  procauto memory add \"The team's thread is in #team-daily\" --routine scrum",
+		Example: "  " + product.Command + " memory add \"The team's thread is in #team-daily\" --routine scrum",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)
@@ -137,7 +138,7 @@ func newMemoryAddCmd() *cobra.Command {
 			}
 			if size := memory.Size(ms) + len(args[0]); size > limit {
 				return fmt.Errorf("that would make %d characters of memories for %s, past memories.max-chars (%d): "+
-					"compact them (`procauto memory compact%s`) or remove some first",
+					"compact them (`"+product.Command+" memory compact%s`) or remove some first",
 					size, scopeName(scope), limit, routineArg(scope))
 			}
 			m, err := a.Memories().Add(scope, args[0])

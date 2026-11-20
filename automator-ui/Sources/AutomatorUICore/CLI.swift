@@ -7,10 +7,10 @@ public struct CLI: Sendable {
 
     public init(executable: URL) { self.executable = executable }
 
-    /// The `procauto` binary bundled next to automator-ui in the .app.
+    /// The core's binary (`AppInfo.command`) bundled next to automator-ui in the .app.
     public static var bundled: CLI? {
         guard let dir = Bundle.main.executableURL?.deletingLastPathComponent() else { return nil }
-        let url = dir.appending(path: "procauto")
+        let url = dir.appending(path: AppInfo.command)
         return FileManager.default.isExecutableFile(atPath: url.path) ? CLI(executable: url) : nil
     }
 
@@ -43,7 +43,7 @@ public struct CLI: Sendable {
             }
             let text = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             let message = text.hasPrefix("Error: ") ? String(text.dropFirst(7)) : text
-            return Failure(message: message.isEmpty ? "procauto failed" : message)
+            return Failure(message: message.isEmpty ? "\(AppInfo.command) failed" : message)
         }
     }
 
@@ -57,7 +57,7 @@ public struct CLI: Sendable {
         process.standardOutput = out
         process.standardError = err
         guard (try? process.run()) != nil else {
-            return Output(stdout: Data(), stderr: "couldn't start procauto", ok: false)
+            return Output(stdout: Data(), stderr: "couldn't start \(AppInfo.command)", ok: false)
         }
         // Read stderr alongside stdout, so neither pipe fills up and blocks.
         let errData = LockedData()
@@ -81,7 +81,7 @@ public struct CLI: Sendable {
         do {
             return .success(try CoreJSON.decoder().decode(T.self, from: output.stdout))
         } catch {
-            return .failure(Failure(message: "procauto answered something unexpected: \(error)"))
+            return .failure(Failure(message: "\(AppInfo.command) answered something unexpected: \(error)"))
         }
     }
 

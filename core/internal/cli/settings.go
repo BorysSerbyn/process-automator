@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
@@ -125,7 +126,7 @@ func newSettingsCmd() *cobra.Command {
 	set := &cobra.Command{
 		Use:     "set <key> <value>",
 		Short:   "Change a setting (validated against its type and limits)",
-		Example: "  procauto settings set llm.backend claude-code\n  procauto settings set routines.scrum.enabled false",
+		Example: "  " + product.Command + " settings set llm.backend claude-code\n  " + product.Command + " settings set routines.scrum.enabled false",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			st, err := settingsStore(cmd)

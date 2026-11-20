@@ -41,6 +41,17 @@ The engine knows no specific service, and the app ships with no integrations: a 
 - **Go's `plugin` package**: Linux and macOS only, needs exact toolchain and dependency matches with the host binary
 - **HashiCorp go-plugin**: a custom RPC ABI heavier than MCP, and plugins would only work with this app
 
+## Decision: other apps import the engine as a Go module, through a small public surface
+An app with its own plugins, templates and names is a separate repository whose `go.mod` requires `core/` at a pinned commit and whose main package calls `automator.Main` with an `automator.App`. Only `core/automator` and `core/pluginapi` are public, so the engine stays free to change everything else. It compiles into one binary with nothing downloaded at run time, and the app's repository can stay private on its own. The build is shared too: the app runs this repository's Makefile and scripts from a checkout at the pinned version, with its own values, and the one automator-ui reads the app's name and CLI from its bundle.
+
+The identity is said three times (the `App`, `install.sh` and the Makefile) because each is read where the others can't be: the binary at run time, the installer before anything is installed, the build before the binary exists. A test keeps them in step. What changes from build to build (the version, the checkout, the packaging layout, a bundle prefix of its own for CI) is set at link time in `core/automator`, so the link-time names stay inside this repository.
+
+### Rejected
+- **A fork per app**: every engine fix merged twice, and the copies drift
+- **Plugins and templates fetched at run time**: a second distribution channel to secure, and the app would no longer be one verified artifact
+- **Link-time values set by the app in internal packages** (`-X …/internal/…`): a renamed variable is silently ignored by the linker, across two repositories
+- **Templates compiled into the binary**: `paths`, `uninstall` and frontends use the templates folder, and a shipped folder keeps templates readable and editable in a checkout
+
 ## Decision: MCP connections use the official Go SDK directly
 MCP sessions are opened with `modelcontextprotocol/go-sdk`; Genkit gets thin tool wrappers over them, limited to each routine's allowlist. This gives full control over the unattended path (a run never opens a browser; an expired or revoked credential is a distinct `needs-reauth`), and the allowlist and dry-run interception happen in my code.
 

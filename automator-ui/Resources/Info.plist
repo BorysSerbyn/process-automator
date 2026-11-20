@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Process Automator</string>
+	<string>__NAME__</string>
 	<key>CFBundleDisplayName</key>
-	<string>Process Automator</string>
+	<string>__NAME__</string>
 	<key>CFBundleIdentifier</key>
 	<string>__BUNDLE_ID__</string>
 	<key>CFBundleIconFile</key>
@@ -20,6 +20,8 @@
 	<string>__SHORT_VERSION__</string>
 	<key>ProcAutoVersion</key>
 	<string>__VERSION__</string>
+	<key>ProcAutoCommand</key>
+	<string>__COMMAND__</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>

@@ -3,12 +3,14 @@ package update
 import (
 	"context"
 	"runtime"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // AssetName is the release artifact for this platform: the core and its
 // files as a tarball, per CPU architecture.
 func AssetName(version string) (string, error) {
-	return "process-automator-" + version + "-linux-" + runtime.GOARCH + ".tar.gz", nil
+	return product.Folder + "-" + version + "-linux-" + runtime.GOARCH + ".tar.gz", nil
 }
 
 func unpack(archive, dir string) error { return untarGz(archive, dir) }

@@ -20,7 +20,8 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // MaxTurns bounds the model/tool loop of one run.
@@ -290,7 +291,7 @@ func discover(ctx context.Context, conn *mcp.Connector, run pluginapi.Run, serve
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
-		return nil, sessions, fmt.Errorf("prompt lists tools no connected server offers: %s (missing sign-in or scopes? see `procauto mcp tools <server>`)", strings.Join(missing, ", "))
+		return nil, sessions, fmt.Errorf("prompt lists tools no connected server offers: %s (missing sign-in or scopes? see `"+product.Command+" mcp tools <server>`)", strings.Join(missing, ", "))
 	}
 	return byName, sessions, nil
 }

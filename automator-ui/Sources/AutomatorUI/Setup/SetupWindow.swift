@@ -23,7 +23,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         if window == nil {
             let model = SetupViewModel(cli: cli, openRoutine: openRoutine, changed: changed)
             let window = NSWindow(contentViewController: NSHostingController(rootView: SetupView(model: model)))
-            window.title = "Process Automator Setup"
+            window.title = "\(AppInfo.name) Setup"
             window.isReleasedWhenClosed = false
             window.setContentSize(NSSize(width: 640, height: 680))
             window.center()

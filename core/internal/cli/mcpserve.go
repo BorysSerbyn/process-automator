@@ -19,8 +19,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
-	"github.com/BorysSerbyn/process-automator/core/internal/version"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // The automator's own MCP server makes the CLI available to MCP clients
@@ -61,7 +61,7 @@ func mcpOverrides() map[string]mcpOverride {
 		"uninstall":        {exclude: "removing the app (and this server with it) is mine, from a terminal"},
 		"usage statusline": {exclude: "it's Claude Code's status line; it reads Claude Code's input on stdin"},
 		"update": {after: "Later calls run the new version, but this server's tool list is from before " +
-			"the update: reconnect the procauto MCP server to pick up new or changed tools."},
+			"the update: reconnect the " + product.Command + " MCP server to pick up new or changed tools."},
 	}
 }
 
@@ -70,11 +70,11 @@ func newMCPServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the CLI as MCP tools over stdio, for Claude and other MCP clients",
-		Long: "Every procauto command is a tool. Read-only commands are marked read-only; the rest are " +
+		Long: "Every " + product.Command + " command is a tool. Read-only commands are marked read-only; the rest are " +
 			"marked destructive, so clients ask before calling them. Sign-ins and keys are entered by you in the " +
 			"browser (MCP URL elicitation), never passed through the model. --read-only serves only read-only " +
 			"tools (what routines get as the automator server).",
-		Example: "  claude mcp add procauto -- procauto mcp serve",
+		Example: "  claude mcp add " + product.Command + " -- " + product.Command + " mcp serve",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := loadApp(cmd)
@@ -108,7 +108,7 @@ func newMCPServeCmd() *cobra.Command {
 // automatorServer serves a command tree as MCP tools.
 type automatorServer struct {
 	root       *cobra.Command
-	exe        string   // the procauto binary commands run as
+	exe        string   // the binary commands run as
 	env        []string // extra environment for commands (tests)
 	configPath string
 	plugins    []pluginapi.Plugin
@@ -373,8 +373,8 @@ func (t cliTool) argv(configPath string, args map[string]any) (argv []string, st
 
 // build makes the MCP server.
 func (s *automatorServer) build() (*sdk.Server, error) {
-	srv := sdk.NewServer(&sdk.Implementation{Name: "procauto", Version: version.Version}, &sdk.ServerOptions{
-		Instructions: "procauto runs scheduled LLM routines (Dotprompt .prompt files) with tools from MCP servers " +
+	srv := sdk.NewServer(&sdk.Implementation{Name: product.Command, Version: product.Version}, &sdk.ServerOptions{
+		Instructions: product.Command + " runs scheduled LLM routines (Dotprompt .prompt files) with tools from MCP servers " +
 			"(plugins). These tools are its CLI: read routines, runs, settings and plugins; create or change " +
 			"routines (they start disabled: dry-run them, then enable with settings_set routines.<name>.enabled true); " +
 			"add plugins; sign in (auth_login asks the user in their browser; never ask the user to paste a secret " +
@@ -551,7 +551,7 @@ func automatorPlugin(l engine.Layout, plugins []pluginapi.Plugin) pluginapi.Plug
 	return pluginapi.Plugin{
 		Name: automatorServerName,
 		Description: "This automator: its routines, runs, settings, templates and plugins (read-only; " +
-			"MCP clients get everything with `procauto mcp serve`)",
+			"MCP clients get everything with `" + product.Command + " mcp serve`)",
 		Serve: func(pluginapi.Host) (*sdk.Server, error) {
 			exe, err := os.Executable()
 			if err != nil {

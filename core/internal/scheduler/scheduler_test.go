@@ -165,7 +165,7 @@ func TestStateVersion(t *testing.T) {
 		t.Fatalf("first tick: %q", got)
 	}
 	b, _ := os.ReadFile(h.s.StatePath)
-	if !strings.Contains(string(b), `"version": 1`) || !strings.Contains(string(b), `"schedule"`) {
+	if !strings.Contains(string(b), `"version": 2`) || !strings.Contains(string(b), `"schedule"`) {
 		t.Fatalf("state: %s", b)
 	}
 	if err := os.WriteFile(h.s.StatePath, []byte(`{"version": 9, "routines": {}}`), 0o600); err != nil {

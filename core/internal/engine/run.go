@@ -12,6 +12,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/scheduler"
@@ -124,7 +125,7 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 		switch {
 		case errors.Is(context.Cause(ctx), ErrStopped):
 			err = ErrStopped
-			run.Outcome, run.Reason = runstatus.OutcomeStopped, "stopped on request (procauto stop)"
+			run.Outcome, run.Reason = runstatus.OutcomeStopped, "stopped on request ("+product.Command+" stop)"
 		case errors.Is(err, context.Canceled):
 			run.Reason = "interrupted before it finished (the scheduler stopped, or the run was cancelled)"
 		}

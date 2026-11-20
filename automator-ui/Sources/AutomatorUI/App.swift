@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let model = SettingsModel(cli: cli, openGroups: settingsOpenGroups)
             settingsModel = model
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
-            window.title = "Process Automator Settings"
+            window.title = "\(AppInfo.name) Settings"
             window.isReleasedWhenClosed = false
             window.setContentSize(NSSize(width: 640, height: 680))
             window.center()

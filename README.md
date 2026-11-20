@@ -73,6 +73,10 @@ Versions come from git tags (`vX.Y.Z`); untagged builds are `X.Y.Z-dev+<sha>` (`
 
 Build identifiers derive from `BUNDLE_PREFIX` (default `dev`): the bundle ID `dev.procauto`, the login items `dev.procauto.ui` and `dev.procauto.scheduler`, and the Keychain service `dev.procauto`. Set your own reverse-DNS prefix with `make install BUNDLE_PREFIX=com.example`.
 
+### Building another app on it
+
+Another app (its own name, CLI, plugins and templates) imports `core/` as a Go module: its main package calls `automator.Main` with an `automator.App`, its plugins implement `pluginapi`, and its tests run `automator.CheckTemplates` on its templates. It builds with this repository's Makefile and scripts from a checkout at the commit its `go.mod` pins: `make -C <checkout> bundle INSTALL_SH=… GO_DIR=… MAIN=… TEMPLATES=… LOGO=… BUNDLE_PREFIX=… SOURCE_DIR=… BUILD=… VERSION=…`. See [Technical: Distribution](docs/Spec/Requirements/Technical/Distribution.md).
+
 ### One-time: releases
 
 1. **Developer ID**: in an Apple Developer account, create a *Developer ID Application* certificate and export it with its key as a `.p12`. Put its team ID in `install.sh` (`TEAM_ID=`): installs and updates check releases against it, and the Release workflow refuses to sign without it or with another team.

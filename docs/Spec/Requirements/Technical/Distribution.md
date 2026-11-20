@@ -11,19 +11,26 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 ## Build identifiers
 | What | Value |
 |---|---|
-| CLI | `procauto` |
+| CLI | `procauto` (`Command`) |
 | Bundle ID | `<BUNDLE_PREFIX>.procauto` (`BUNDLE_PREFIX` defaults to `dev`) |
 | macOS login items | `<prefix>.procauto.ui`, `<prefix>.procauto.scheduler` |
 | Linux login item | `procauto-scheduler.service` (systemd user unit) |
-| Secrets service | `<prefix>.procauto` (`process-automator` for a plain `go build`) |
-| Development signing identity | `Process Automator Dev` (`SIGN_IDENTITY`) |
+| Secrets service | `<prefix>.procauto`, the bundle ID |
+| Development signing identity | `Process Automator Dev` (`SIGN_IDENTITY`, `<Name> Dev`) |
+
+- **Said three times, kept in step**: the binary's `automator.App`, `install.sh` (`NAME`, `COMMAND`, `FOLDER`, `REPO`, `TEAM_ID`) and the Makefile (`BUNDLE_PREFIX`); `cmd/procauto`'s test fails when they differ. The Makefile reads the names from `install.sh`, and the build writes them into `install.env` (for the installer) and the app's `Info.plist` (`CFBundleName`, `ProcAutoCommand`), which automator-ui reads its name and its CLI from
+
+## Building another app
+- **The build is parameterised**: another app runs this repository's Makefile targets (`build`, `bundle`, `package`, `package-linux`, `install`, `uninstall`) from a checkout at the version its `go.mod` pins, passing its own `INSTALL_SH` (its names), `GO_DIR` and `MAIN` (its module and main package), `TEMPLATES`, `LOGO` (a folder with `AppIcon.icns`, `glyph.svg`, `dot.svg`), `BUNDLE_PREFIX`, `SOURCE_DIR`, `BUILD` and `VERSION`
+- **One automator-ui** serves every app: it has no names of its own, and the bundle gives it the app's
+- **Its scripts are this repository's**: `scripts/bundle.sh`, `package.sh`, `install-app.sh`, `test-install.sh` (`INSTALL_SH` for the app's installer) and `version.sh` take the app's names from `install.env` or its `install.sh`; its `install.sh` is this one with its own names in the header
 
 ## Releases
 - **Built by CI from git tags**: `.github/workflows/release.yml` on a pushed `vX.Y.Z` tag builds every artifact and publishes them as the tag's GitHub release with a `SHA256SUMS` file; run by hand, it only builds them (ad-hoc signed, nothing published)
-- **macOS**: `process-automator-<version>-macos.zip`, the `.app` with the Go core inside, universal (Apple silicon and Intel), signed with a Developer ID (hardened runtime) and notarized with the ticket stapled; zipped with `ditto`
-- **Linux**: `process-automator-<version>-linux-<amd64|arm64>.tar.gz`: `bin/procauto` and `share/process-automator/` (templates, the installer, the systemd unit template)
-- **Every artifact carries its installer** (`install-app.sh`) and what the build named things (`install.env`: version, bundle ID, login item labels, secrets service), next to its templates: `Contents/Resources/` in the `.app`, `share/process-automator/` in the Linux tree
-- **Pinned once**: the repository releases come from (`REPO`) and the Apple team that signs them (`TEAM_ID`) are set in `install.sh`; the build reads both from there into the binary, and the release workflow refuses to sign with another team
+- **macOS**: `<Folder>-<version>-macos.zip` (`process-automator-…`), the `.app` with the Go core inside, universal (Apple silicon and Intel), signed with a Developer ID (hardened runtime) and notarized with the ticket stapled; zipped with `ditto`
+- **Linux**: `<Folder>-<version>-linux-<amd64|arm64>.tar.gz`: `bin/<Command>` and `share/<Folder>/` (templates, the installer, the systemd unit template)
+- **Every artifact carries its installer** (`install-app.sh`) and what the build named things (`install.env`: the app's name, command and folder, version, bundle ID, login item labels, secrets service), next to its templates: `Contents/Resources/` in the `.app`, `share/<Folder>/` in the Linux tree
+- **Pinned once**: the repository releases come from (`REPO`) and the Apple team that signs them (`TEAM_ID`) are set in `install.sh`, as in the binary's `automator.App`; the release workflow refuses to sign with another team
 - **Locally**: `make package` and `make package-linux LINUX_ARCH=amd64|arm64` build the artifacts; `scripts/test-install.sh <artifact>` installs one into a throwaway home with `install.sh`, uses it and uninstalls it, files only
 - **Homebrew tap** in a private repository, shared with invited people; the release workflow renders the cask and formula (`scripts/homebrew.sh`, from `packaging/homebrew/`) and pushes them to the tap (`HOMEBREW_TAP_REPO`, `HOMEBREW_TAP_TOKEN`). They download through the GitHub API with `HOMEBREW_GITHUB_API_TOKEN`
   - **Cask** (`process-automator`): installs the app and links `procauto`; its postflight sets up the login items (`install-app.sh login-items`); `auto_updates`, since the app updates itself; uninstalling removes the login items, zap the data and logs

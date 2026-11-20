@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // Keychain stores secrets as generic passwords in the login Keychain, one item per key,
@@ -40,7 +42,7 @@ func (k Keychain) Set(key, value string) error {
 	enc := encodedPrefix + base64.StdEncoding.EncodeToString([]byte(value))
 	cmd := exec.Command("/usr/bin/security", "-i")
 	cmd.Stdin = strings.NewReader(fmt.Sprintf("add-generic-password -U -s %s -a %s -l %s -w %s\n",
-		quote(k.Service), quote(key), quote("procauto: "+key), quote(enc)))
+		quote(k.Service), quote(key), quote(product.Command+": "+key), quote(enc)))
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil || stderr.Len() > 0 {

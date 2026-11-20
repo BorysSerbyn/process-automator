@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // SecretService stores secrets in the Secret Service keyring, one item per
@@ -69,7 +71,7 @@ func (s SecretService) Get(key string) (string, error) {
 // Set implements Store. The value goes on stdin, never argv.
 func (s SecretService) Set(key, value string) error {
 	enc := encodedPrefix + base64.StdEncoding.EncodeToString([]byte(value))
-	args := append([]string{"store", "--label", "procauto: " + key}, s.attrs(key)...)
+	args := append([]string{"store", "--label", product.Command + ": " + key}, s.attrs(key)...)
 	if _, err := secretTool(enc, args...); err != nil {
 		return fmt.Errorf("secret service set %q: %w", key, err)
 	}

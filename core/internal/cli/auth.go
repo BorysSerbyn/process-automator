@@ -12,8 +12,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 func newAuthCmd() *cobra.Command {
@@ -160,7 +161,7 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 		return err
 	}
 	if srv.Pairing != "" {
-		ui.Say("Connecting to %s so it can ask you to approve procauto…\n%s", name, srv.Pairing)
+		ui.Say("Connecting to %s so it can ask you to approve "+product.Command+"…\n%s", name, srv.Pairing)
 		if err := a.Connector.Pair(ctx, name); err != nil {
 			ui.Say("(connection ended: %v)\nIf you already copied the credential, enter it next.", err)
 		}
@@ -324,7 +325,7 @@ func newAuthStatusCmd() *cobra.Command {
 			for _, r := range rows {
 				state := "signed in"
 				if !r.SignedIn {
-					state = "NOT signed in (procauto auth login " + r.Server + ")"
+					state = "NOT signed in (" + product.Command + " auth login " + r.Server + ")"
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "%-10s %-7s %s\n", r.Server, r.Kind, state)
 			}
