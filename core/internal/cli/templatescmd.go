@@ -153,8 +153,8 @@ func newTemplatesInstallCmd() *cobra.Command {
 		Use:   "install <template>",
 		Short: "Install a template as a routine; its parameter values become the routine's settings",
 		Long: "Copies the template into the routines folder (never over an existing routine) and stores its " +
-			"parameter values as routines.<name>.params.<param> settings. The routine starts disabled (enable it with " +
-			"`settings set routines.<name>.enabled true`). Values come from --set, then the " +
+			"parameter values as routines.<name>.params.<param> settings. The routine starts paused and untrusted (turn " +
+			"it on with `routines trust <name> --resume`). Values come from --set, then the " +
 			"template's defaults; required ones without a value are asked for (or an error, without a terminal).",
 		Example: "  " + product.Command + " templates install projects/acme/standup\n" +
 			"  " + product.Command + " templates install personal/digest --set lookback=72h",
@@ -218,9 +218,9 @@ func newTemplatesInstallCmd() *cobra.Command {
 			if t.Description != "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", t.ID, t.Description)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Installed %s as %q (%s), disabled and not trusted.\nTry it: "+product.Command+" run %s --dry-run\n"+
-				"Trust it: "+product.Command+" routines trust %s\nEnable it: "+product.Command+" settings set routines.%s.enabled true\n",
-				t.ID, name, path, name, name, name)
+			fmt.Fprintf(cmd.OutOrStdout(), "Installed %s as %q (%s), paused and not trusted.\nTry it: "+product.Command+" run %s --dry-run\n"+
+				"Turn it on (trust it and run it on its schedule): "+product.Command+" routines trust %s --resume\n",
+				t.ID, name, path, name, name)
 			return nil
 		},
 	}

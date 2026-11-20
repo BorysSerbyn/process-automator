@@ -2,9 +2,8 @@ import AutomatorUICore
 import SwiftUI
 
 /// The Setup window: setup's steps grouped by kind, in the core's order
-/// (templates, model backend, plan usage, routines to fix, sign-ins, trust,
-/// schedules),
-/// like the settings' groups. A group is open while any of its steps isn't
+/// (templates, model backend, plan usage, Claude Code, routines to fix,
+/// sign-ins, routines to turn on), like the settings' groups. A group is open while any of its steps isn't
 /// done; each step shows where it stands and what does it.
 struct SetupView: View {
     @ObservedObject var model: SetupViewModel
@@ -83,9 +82,9 @@ struct SetupGroup {
     var id: String { "group:" + kind.rawValue }
     var allDone: Bool { steps.allSatisfy(\.done) }
 
-    /// Templates, the model backend and plan usage are one step each: a row
-    /// of their own, not a group of one.
-    var single: Bool { steps.count == 1 && [.templates, .backend, .usage].contains(kind) }
+    /// Templates, the model backend, plan usage and Claude Code are one step
+    /// each: a row of their own, not a group of one.
+    var single: Bool { steps.count == 1 && [.templates, .backend, .usage, .mcp].contains(kind) }
 
     /// The UI's names for the core's kinds of step.
     var title: String {
@@ -93,10 +92,10 @@ struct SetupGroup {
         case .templates: "Templates"
         case .backend: "Model backend"
         case .usage: "Plan usage"
+        case .mcp: "Claude Code"
         case .routine: "Routines to fix"
         case .sign_hyphen_in: "Sign-ins"
-        case .trust: "Trust"
-        case .enable: "Schedules"
+        case .turn_hyphen_on: "Turn on routines"
         }
     }
 
@@ -109,9 +108,8 @@ struct SetupGroup {
             let left = steps.count - done
             return left == 0 ? "All fixed" : left == 1 ? "1 to fix" : "\(left) to fix"
         case .sign_hyphen_in: return "\(of) signed in"
-        case .trust: return "\(of) trusted"
-        case .enable: return "\(of) on their schedule"
-        case .templates, .backend, .usage: return "\(of) done"
+        case .turn_hyphen_on: return "\(of) on"
+        case .templates, .backend, .usage, .mcp: return "\(of) done"
         }
     }
 }
@@ -140,7 +138,7 @@ struct SetupGroupView: View {
         if open {
             ForEach(group.steps, id: \.subject) { step in
                 Divider().padding(.leading, SettingsMetrics.rowInset)
-                if step.step == .trust {
+                if step.step == .turn_hyphen_on {
                     SetupStepView(model: model, step: step, prominent: false)
                 } else {
                     SetupStepRow(model: model, step: step)
@@ -151,7 +149,7 @@ struct SetupGroupView: View {
 }
 
 /// A step that opens to what it needs: the templates to pick, the backend's
-/// choice, a routine's trust review. Steps not done start open.
+/// choice, a routine's review before turning it on. Steps not done start open.
 struct SetupStepView: View {
     @ObservedObject var model: SetupViewModel
     let step: SetupStep
@@ -191,12 +189,14 @@ struct SetupStepView: View {
             TemplatePicker(model: model, step: step)
         case .backend:
             BackendPicker(model: model, step: step)
-        case .trust:
+        case .turn_hyphen_on:
+            // What it can reach, then one button: trusting it and running it
+            // on its schedule (the question above says which it needs).
             if let routine = step.subject, let review = model.reviews[routine] {
                 SettingsCard(nested: true) {
                     TrustReviewView(
-                        review: review, error: nil, trust: step.done ? nil : { model.trust(step) },
-                        working: model.working.contains(id))
+                        review: review, error: nil, trust: step.done ? nil : { model.turnOn(step) },
+                        working: model.working.contains(id), actionTitle: "Turn On", note: nil)
                 }
             } else if model.errors[id] == nil {
                 ProgressView().controlSize(.small)
@@ -206,14 +206,20 @@ struct SetupStepView: View {
             if !step.done {
                 Button("Set Up") { model.setUpUsage(step) }.disabled(model.working.contains(id))
             }
-        case .routine, .sign_hyphen_in, .enable:
+        case .mcp:
+            // Done without asking when the window shows it; the button is for
+            // trying again after a failure.
+            if !step.done {
+                Button("Connect") { model.connectClaudeCode(step) }.disabled(model.working.contains(id))
+            }
+        case .routine, .sign_hyphen_in:
             EmptyView()  // rows of their own (SetupStepRow)
         }
     }
 }
 
-/// A step done with one button, right on its row: a sign-in, a schedule to
-/// resume, a routine to fix (its window shows what's wrong).
+/// A step done with one button, right on its row: a sign-in, a routine to
+/// fix (its window shows what's wrong).
 struct SetupStepRow: View {
     @ObservedObject var model: SetupViewModel
     let step: SetupStep
@@ -252,13 +258,11 @@ struct SetupStepRow: View {
         switch step.step {
         case .sign_hyphen_in:
             if step.signIn != nil { SignInButton(model: model, step: step) }
-        case .enable:
-            Button("Resume") { model.resume(step) }.disabled(model.working.contains(id))
         case .routine:
             if let routine = step.subject {
                 Button("Open \(routine)…") { model.openRoutine(routine) }
             }
-        case .templates, .backend, .trust, .usage:
+        case .templates, .backend, .turn_hyphen_on, .usage, .mcp:
             EmptyView()
         }
     }

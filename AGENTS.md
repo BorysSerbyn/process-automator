@@ -10,11 +10,7 @@ Process Automator runs **routines**: prompt files that a model (Claude, through 
 - **memories** routines read, **notifications** routines send, **templates** to start from, an **LLM budget** that keeps scheduled runs from overspending, and **guardrails**: a routine runs for real only once trusted with what it can reach;
 - a menu bar app on macOS (status, routines, settings, setup), and `doctor` to explain anything red.
 
-**All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. Connect it once the app is installed:
-
-```sh
-claude mcp add procauto -- procauto mcp serve
-```
+**All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. On the `claude-code` backend, setup connects Claude Code to it (the `mcp` step below); for another MCP client, its stdio command is `procauto mcp serve`.
 
 Tools that change things are marked so the client asks first, and sign-ins happen in the person's browser, never through you. A few things stay with the person, by design: trusting a routine to run for real, uninstalling the app, and the scheduler itself.
 
@@ -52,22 +48,22 @@ If `~/.local/bin` isn't on their PATH, use `~/.local/bin/procauto` below and tel
 procauto setup --json
 ```
 
-lists every step in order (`templates`, `backend`, `usage` when needed, a `routine` to fix, `sign-in`, `trust`, `enable`), each with `done`, `optional`, `status`, `ask` and `commands`. It changes nothing. For each step that isn't `done`, in order:
+lists every step in order (`templates`, `backend`, `usage` when needed, `mcp` on the `claude-code` backend, a `routine` to fix, `sign-in`, `turn-on`), each with `done`, `optional`, `auto`, `status`, `ask` and `commands`. It changes nothing. For each step that isn't `done`, in order:
 
-1. Tell them its `status`, and ask its `ask`.
+1. If it's `auto`, run its `commands` without asking and tell them what you did. Otherwise tell them its `status`, and ask its `ask`.
 2. Run its `commands` with their answers in place of the `<placeholders>` (a trailing `# comment` says when a command applies).
-3. Run `procauto setup --json` again: answers can add steps (installing a template adds its sign-ins, trust and schedule).
+3. Run `procauto setup --json` again: answers can add steps (installing a template adds its sign-ins and its turn-on step; choosing `claude-code` adds `mcp`).
 
 What each kind needs:
 - **`templates`** (optional): run `procauto templates list --json` (there may be none: then offer to write their first routine with them instead, or skip).
   1. **Projects**, if any template has a `project`: ask, on its own, which of those projects they work on, naming every one, even when there's only one, plus "none of these". Show no templates yet, and don't assume the answer.
   2. **Templates**: list each template as its own choice, with its id, description and parameters: those of their projects, then those with no project. Never bundle templates into one choice. Templates with the same name install as the same routine, so they're alternatives: offer the one of their project. **None are picked by default**: install only the ones they name, asking for each parameter's value (or keeping its default if they say so): `procauto templates install <tags>/<name> [--set <param>=<value>]...`.
 - **`backend`**: ask which backend runs routines (the `ask` explains both: `claude-code` uses their Claude subscription through the Claude Code CLI; `api` uses an Anthropic API key), then `procauto settings set llm.backend <choice>`. If it then needs a key, `procauto auth login anthropic --browser` opens a page in their browser where *they* enter it.
+- **`mcp`** (`auto`, only on the `claude-code` backend): run `procauto mcp connect`, without asking. It registers the app's MCP server with Claude Code at user scope, so `/mcp` lists `procauto` in every folder. It's required: don't skip it. Tell them a Claude Code session that's already running (yours too) needs a restart to see it.
 - **`usage`** (only on the `claude-code` backend, when Claude Code's `/usage` can't be read): ask whether to read the plan's usage from their Claude Code status line instead; if yes, `procauto usage statusline install` (their status line keeps showing what it shows now).
 - **`routine`**: a routine that won't run; `procauto doctor --json` says why and how to fix it. Explain it; fix it only with their go-ahead.
 - **`sign-in`**: `procauto auth login <server> --browser` opens their browser to sign in (or to a local page for a key). They do it there; secrets never pass through you. Wait for the command to finish.
-- **`trust`**: run `procauto routines trust <name> --check --json` and show them what the routine can reach (its servers, and its tools split into writes and reads). Only if they agree: `procauto routines trust <name> --yes`.
-- **`enable`**: ask whether the routine should run on its schedule (the `ask` gives it in words); if yes, `procauto routines resume <name>`. Optional once another routine runs on its schedule.
+- **`turn-on`**: one step per routine: trusting it with what it can reach and running it on its schedule. If its commands include `--check`, run `procauto routines trust <name> --check --json` and show them what the routine can reach (its servers, and its tools split into writes and reads), then ask its `ask` (it gives the schedule in words). Only if they agree: `procauto routines trust <name> --yes --resume`, which trusts it and resumes it together. A trusted routine that's only paused asks just about its schedule; that step is optional once another routine runs on its schedule.
 
 Setup is finished when `procauto setup --json` says `"done": true`. Steps they skip stay listed, and `procauto setup` can be run again any time.
 
@@ -75,4 +71,4 @@ Setup is finished when `procauto setup --json` says `"done": true`. Steps they s
 Tell them:
 - what's installed and running (`procauto routines list`, and on macOS the hourglass in the menu bar);
 - `procauto doctor` explains a red light; `procauto update` installs new releases (the menu offers them too); `procauto uninstall` removes the app (`--purge` also removes their config, routines, history, logs and secrets);
-- you (or any MCP client) can do basically anything with the app from now on through its MCP server: offer to connect it (`claude mcp add procauto -- procauto mcp serve`) and help them write their first routine.
+- you (or any MCP client) can do basically anything with the app from now on through its MCP server (on `claude-code`, setup connected it to Claude Code; after a restart `/mcp` lists `procauto`): offer to help them write their first routine.

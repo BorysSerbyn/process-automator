@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mcp-connect.schema.json",
+  "properties": {
+    "server": {
+      "type": "string",
+      "description": "Server is its name in Claude Code (the app's command)."
+    },
+    "command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Command is what Claude Code runs to start it."
+    },
+    "already": {
+      "type": "boolean",
+      "description": "Already is true when it was registered already, and nothing changed."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "server",
+    "command"
+  ],
+  "title": "procauto mcp connect --json",
+  "description": "MCPConnectOutput is `mcp connect --json`: Claude Code has the app's MCP server at user scope (in every folder, listed by /mcp)."
+}

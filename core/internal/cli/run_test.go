@@ -28,6 +28,7 @@ import (
 
 // setup --json lists every step and the commands for each, changing nothing.
 func TestSetupSteps(t *testing.T) {
+	connectClaude(t)
 	a, _ := enginetest.Fixture(t, map[string]string{"old": "queue"}, nil)
 	cfg := a.Layout.Config()
 	steps := func() (SetupOutput, map[string]SetupStep) {
@@ -51,41 +52,64 @@ func TestSetupSteps(t *testing.T) {
 	if _, err := os.Stat(trustFile); err == nil {
 		t.Error("setup --json wrote trust.json")
 	}
-	if s := m["trust old"]; !s.Done {
+	if s := m["turn-on old"]; !s.Done {
 		t.Errorf("before trust is first used, an installed routine counts as trusted: %+v", s)
 	}
 	if s := m["templates "]; !s.Done || !s.Optional {
 		t.Errorf("templates with routines installed: %+v", s)
 	}
 
+	// Untrusted and paused: one step trusts it and turns its schedule on.
 	src := "---\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"
 	if _, err := cli(t, cfg, "routines", "create", "fresh", "--source", src); err != nil {
 		t.Fatal(err)
 	}
 	got, m := steps()
-	if s := m["trust fresh"]; s.Done || !slices.Contains(s.Commands, "procauto routines trust fresh --yes") {
-		t.Errorf("trust step: %+v", s)
+	if s := m["turn-on fresh"]; s.Done || s.Optional || !slices.Contains(s.Commands, "procauto routines trust fresh --yes --resume") ||
+		!strings.Contains(s.Ask, "and run it on its schedule (At 09:20, Monday through Friday)") {
+		t.Errorf("turn-on step: %+v", s)
 	}
-	if _, ok := m["enable fresh"]; ok {
-		t.Error("offered to run an untrusted routine on its schedule")
+	for _, s := range got.Steps {
+		if s.Step == "trust" || s.Step == "enable" {
+			t.Errorf("a separate %s step: %+v", s.Step, s)
+		}
 	}
 	if got.Done || got.Remaining != 1 {
-		t.Errorf("done %v with %d remaining, want 1 (trust fresh)", got.Done, got.Remaining)
+		t.Errorf("done %v with %d remaining, want 1 (turn on fresh)", got.Done, got.Remaining)
+	}
+	if out, _ := cli(t, cfg, "settings", "get", "routines.fresh.enabled"); !strings.Contains(out, "false") {
+		t.Errorf("setup --json changed a setting: %s", out)
 	}
 
-	// Trusted but paused, and no routine runs on its schedule: running it is required.
+	// Trusted but still paused, and no routine runs on its schedule: resuming it is required.
 	if _, err := cli(t, cfg, "routines", "trust", "fresh", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	got, m = steps()
-	if s := m["enable fresh"]; s.Done || s.Optional || !strings.Contains(s.Ask, "At 09:20, Monday through Friday") {
-		t.Errorf("schedule step with nothing scheduled: %+v", s)
+	if s := m["turn-on fresh"]; s.Done || s.Optional || !strings.HasPrefix(s.Status, "Trusted, but paused") ||
+		!strings.HasPrefix(s.Ask, "Run fresh on its schedule") {
+		t.Errorf("trusted but paused, nothing scheduled: %+v", s)
 	}
 	if got.Done {
 		t.Error("done while no routine runs on its schedule")
 	}
-	if out, _ := cli(t, cfg, "settings", "get", "routines.fresh.enabled"); !strings.Contains(out, "false") {
-		t.Errorf("setup --json changed a setting: %s", out)
+	// The same command finishes it: trusted already, it only resumes.
+	if out, err := cli(t, cfg, "routines", "trust", "fresh", "--yes", "--resume"); err != nil || !strings.Contains(out, "Resumed fresh") {
+		t.Fatalf("trust --resume: %s %v", out, err)
+	}
+	if got, m = steps(); !m["turn-on fresh"].Done || !got.Done {
+		t.Errorf("after turning it on: %+v", m["turn-on fresh"])
+	}
+
+	// Another one, trusted but paused while fresh runs on its schedule: optional (paused on purpose, maybe).
+	if _, err := cli(t, cfg, "routines", "create", "later", "--source", src); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cli(t, cfg, "routines", "trust", "later", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if got, m = steps(); !m["turn-on later"].Optional || m["turn-on later"].Done || !got.Done {
+		t.Errorf("a trusted paused routine next to a scheduled one: %+v", m["turn-on later"])
 	}
 
 	// A routine whose settings don't resolve is a step to fix; setup still answers.
@@ -113,6 +137,7 @@ func TestDevNullIsNoTerminal(t *testing.T) {
 
 // With no routines installed, setup is done once the backend is ready.
 func TestSetupDoneWithoutRoutines(t *testing.T) {
+	connectClaude(t)
 	a, _ := enginetest.Fixture(t, nil, nil)
 	out, err := cli(t, a.Layout.Config(), "setup", "--json")
 	if err != nil {
@@ -244,6 +269,7 @@ func TestUsageLimitBudget(t *testing.T) {
 // Code's status line; installed, the status line records it and still shows
 // mine. Not a health problem: doctor says nothing about it.
 func TestPlanUsageFallback(t *testing.T) {
+	connectClaude(t)
 	a, _ := enginetest.Fixture(t, nil, nil) // its /usage can't be read
 	cfg := a.Layout.Config()
 	if _, err := a.Usage(context.Background(), time.Now()); err != nil {
@@ -340,13 +366,13 @@ func TestSetupStatusRefreshes(t *testing.T) {
 		}
 		return s.SetupLeft
 	}
-	if !slices.Contains(left(), "Trust fresh") {
+	if !slices.Contains(left(), "Turn on fresh") {
 		t.Fatalf("after create: %v", left())
 	}
-	if _, err := cli(t, cfg, "routines", "trust", "fresh", "--yes"); err != nil {
+	if _, err := cli(t, cfg, "routines", "trust", "fresh", "--yes", "--resume"); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(left(), "Trust fresh") {
-		t.Errorf("still left after trusting: %v", left())
+	if slices.Contains(left(), "Turn on fresh") {
+		t.Errorf("still left after turning it on: %v", left())
 	}
 }

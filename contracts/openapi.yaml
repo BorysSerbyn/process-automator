@@ -283,6 +283,25 @@ components:
         - enabled
         - items
       type: object
+    MCPConnectOutput:
+      additionalProperties: false
+      description: 'MCPConnectOutput is `mcp connect --json`: Claude Code has the app''s MCP server at user scope (in every folder, listed by /mcp).'
+      properties:
+        already:
+          description: Already is true when it was registered already, and nothing changed.
+          type: boolean
+        command:
+          description: Command is what Claude Code runs to start it.
+          items:
+            type: string
+          type: array
+        server:
+          description: Server is its name in Claude Code (the app's command).
+          type: string
+      required:
+        - server
+        - command
+      type: object
     Memory:
       additionalProperties: false
       description: Memory is one thing to remember.
@@ -1042,7 +1061,7 @@ components:
       type: object
     SetupOutput:
       additionalProperties: false
-      description: 'SetupOutput is `setup --json`: every step, in order of kind (templates, backend, routines to fix, sign-ins, trust, schedules).'
+      description: 'SetupOutput is `setup --json`: every step, in order of kind (templates, backend, plan usage, Claude Code''s MCP connection, routines to fix, sign-ins, routines to turn on).'
       properties:
         done:
           description: |-
@@ -1066,6 +1085,12 @@ components:
       properties:
         ask:
           type: string
+        auto:
+          description: |-
+            Auto steps are done without asking: the interactive setup and
+            frontends run its commands as soon as they come to it (connecting
+            Claude Code to the app's MCP server). Ask is empty.
+          type: boolean
         commands:
           description: |-
             Commands do the step once I've answered: placeholders in <angle
@@ -1079,8 +1104,8 @@ components:
         optional:
           description: |-
             Optional steps don't keep setup from being done: installing templates,
-            and running a routine on its schedule once another routine already does
-            (a paused one may be paused on purpose).
+            and resuming a trusted routine once another routine already runs on its
+            schedule (a paused one may be paused on purpose).
           type: boolean
         prepare:
           description: |-
@@ -1105,12 +1130,12 @@ components:
             - backend
             - routine
             - sign-in
-            - trust
-            - enable
+            - turn-on
             - usage
+            - mcp
           type: string
         subject:
-          description: Subject is the server or routine it's about (routine, sign-in, trust, enable).
+          description: Subject is the server or routine it's about (routine, sign-in, turn-on).
           type: string
         title:
           description: Title names the step ("Model backend", "Sign in to tracker").
@@ -1363,6 +1388,9 @@ components:
           items:
             type: string
           type: array
+        resumed:
+          description: Resumed is true when --resume turned its schedule on (it was paused).
+          type: boolean
         routine:
           type: string
         surface:

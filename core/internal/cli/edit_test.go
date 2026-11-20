@@ -76,7 +76,7 @@ func TestRoutineDeleteClearsSettings(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	src := filepath.Join(t.TempDir(), "x.prompt")
 	_ = os.WriteFile(src, []byte("---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\n---\nhi {{> memories}}\n"), 0o600)
-	if out, err := cli(t, cfg, "routines", "create", "x", "--from", src); err != nil || !strings.Contains(out, "disabled") {
+	if out, err := cli(t, cfg, "routines", "create", "x", "--from", src); err != nil || !strings.Contains(out, "paused") {
 		t.Fatalf("create: %s %v", out, err)
 	}
 	if out, _ := cli(t, cfg, "settings", "get", "routines.x.enabled"); !strings.Contains(out, "false") {

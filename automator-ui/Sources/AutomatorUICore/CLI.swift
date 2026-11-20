@@ -196,6 +196,12 @@ public struct CLI: Sendable {
         call(Components.Schemas.TrustOutput.self, ["routines", "trust", routine, "--yes"])
     }
 
+    /// Turns a routine on in one step, after the user reviewed `trustCheck`:
+    /// trusts it and lets it run on its schedule (`routines trust --resume`).
+    public func turnOn(_ routine: String) -> Result<Components.Schemas.TrustOutput, Failure> {
+        call(Components.Schemas.TrustOutput.self, ["routines", "trust", routine, "--yes", "--resume"])
+    }
+
     // MARK: Setup and usage
 
     /// Where first-run setup stands: every step, in order, changing nothing (`setup`).
@@ -228,6 +234,12 @@ public struct CLI: Sendable {
     /// theirs (`usage statusline install`).
     public func installStatusLine() -> Result<Components.Schemas.StatusLineOutput, Failure> {
         call(Components.Schemas.StatusLineOutput.self, ["usage", "statusline", "install"])
+    }
+
+    /// Registers the core's MCP server with Claude Code, at user scope
+    /// (`mcp connect`).
+    public func connectClaudeCode() -> Result<Components.Schemas.MCPConnectOutput, Failure> {
+        call(Components.Schemas.MCPConnectOutput.self, ["mcp", "connect"])
     }
 
     /// Spend against each LLM budget (`usage`).

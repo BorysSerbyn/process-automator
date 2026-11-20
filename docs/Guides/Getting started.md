@@ -59,10 +59,10 @@ Setup takes you through what the app needs, in order:
 1. **Templates** (optional): if any templates are made for particular projects, which projects you work on; then which templates to install. None are picked by default, and with no templates available the step has nothing to offer
 2. **Model backend**: `claude-code` or `api`, and its sign-in ([[Guides/Plugins and sign-ins#Model backend|Model backend]])
 3. **Plan usage** (only if the app can't read your Claude plan's usage from Claude Code): reading it from your Claude Code status line instead ([[Guides/Settings#Usage limit|Usage limit]])
-4. **Routines to fix**: any routine that can't run, and why
-5. **Sign-ins**: each server your routines use. One that needs something set up first walks you through it before asking for anything ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
-6. **Trust**: what each routine can reach, for you to approve ([[Guides/Routines#Trust it|Trust]])
-7. **Schedules**: whether each routine runs on its schedule
+4. **Claude Code** (on the `claude-code` backend): setup connects Claude Code to the app's MCP server, without asking, so `/mcp` lists it in every folder ([[Guides/Using it from Claude|Using it from Claude]])
+5. **Routines to fix**: any routine that can't run, and why
+6. **Sign-ins**: each server your routines use. One that needs something set up first walks you through it before asking for anything ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
+7. **Turn on routines**: what each routine can reach, for you to approve; one yes trusts it and runs it on its schedule ([[Guides/Routines#Turn it on|Turn it on]])
 
 Run it in a terminal with `procauto setup`, which asks before each step and skips what's done, or on macOS open **Finish Setup…** from the menu bar (or **Setup** in the Routines window), which shows every step with a button for each. Run it again any time, e.g. after adding a routine. Until the required steps are done, the menu bar dot is red with "Setup isn't finished".
 

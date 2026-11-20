@@ -3,10 +3,10 @@ Back to [[Home]]. See also [[Guides/Routines|Routines]], [[Spec/Requirements/Fun
 The app is also an MCP server: every `procauto` command is a tool. Connected to Claude Code, Claude Desktop or any MCP client, Claude can do almost anything you can with the app, by asking it in plain words.
 
 ## Connect it
-For Claude Code:
+On the `claude-code` backend, setup connects Claude Code for you: `/mcp` lists `procauto` in every folder. To do it yourself:
 
 ```sh
-claude mcp add procauto -- procauto mcp serve
+procauto mcp connect     # claude mcp add --scope user procauto -- ~/.local/bin/procauto mcp serve
 ```
 
 For another MCP client, add a stdio server whose command is `procauto mcp serve` (use the full path, `~/.local/bin/procauto`, if the client doesn't find it). `mcp serve --read-only` serves only the tools that change nothing.

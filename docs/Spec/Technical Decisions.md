@@ -113,6 +113,22 @@ People make routines by talking to Claude, so Claude is another frontend: `proca
 - **Claude uses the CLI through a shell**: works in Claude Code, but not in clients without a shell, not inside routines, and the model would parse help text instead of typed tools
 - **Withholding real runs and enabling from MCP**: safer by default, but breaks parity; per-call approval gives the same control
 
+## Decision: setup connects Claude Code to the app's MCP server, without asking
+On the `claude-code` backend I already live in Claude Code, so its `/mcp` should list the app from the start: an install that only offers it gets skipped. So it's a required setup step, done without asking (`auto`): it only adds a server to Claude Code, whose own approval still guards every call that changes anything. It's registered at user scope, so it's there in every folder, and by the `~/.local/bin` link rather than the binary inside the app, so an update doesn't break it. Whether it's connected is read from Claude Code's config file: the scheduler checks setup on every pass, and that must stay quick and can't depend on Claude Code starting.
+
+### Rejected
+- **Offering it at the end of the install**: optional steps after everything works get skipped, and then Claude doesn't know the app
+- **`claude mcp get` to check it**: starts Claude Code on every scheduler pass, slow and flaky when it updates itself or isn't signed in
+- **Asking first**: a question with only one sensible answer; the change is to Claude Code's list of servers, and undone with `claude mcp remove`
+
+## Decision: turning a routine on is one step: trust and resume
+New routines start paused and untrusted, and a routine is only useful once both are undone, so setup asks once per routine: what it can reach, then one yes that trusts it and resumes it (`routines trust --resume`). Trust and pause stay separate states, and separate commands: trusting doesn't resume, so a routine paused on purpose stays paused when its trust is renewed after a change, and pausing keeps its trust.
+
+### Rejected
+- **A trust step, then a schedule step**: two questions about the same routine, the second asked only after the first was done, for one decision
+- **Trusting always resumes**: re-trusting a paused routine after a change would turn it back on behind my back
+- **A new command for both**: one more name for a review that's the trust command's; a flag on it keeps one review and one prompt
+
 ## Decision: plugins reach the app's own data through the `automator` server
 The core serves its routines and runs (including saved session IDs) to plugins and routines as the in-process `automator` server. Plugins keep a single way in (`Host.Connect`) and never read the core's files.
 

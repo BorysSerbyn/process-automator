@@ -77,6 +77,10 @@
     },
     "trusted": {
       "type": "boolean"
+    },
+    "resumed": {
+      "type": "boolean",
+      "description": "Resumed is true when --resume turned its schedule on (it was paused)."
     }
   },
   "additionalProperties": false,

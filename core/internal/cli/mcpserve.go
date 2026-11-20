@@ -48,10 +48,11 @@ type mcpOverride struct {
 // mcpOverrides is the one place a tool differs from its command, by command path.
 func mcpOverrides() map[string]mcpOverride {
 	return map[string]mcpOverride{
-		"daemon":     {exclude: "runs forever; it's started at login, not called"},
-		"mcp serve":  {exclude: "this server itself"},
-		"help":       {exclude: "tool descriptions carry the help"},
-		"completion": {exclude: "shell completion scripts"},
+		"daemon":      {exclude: "runs forever; it's started at login, not called"},
+		"mcp serve":   {exclude: "this server itself"},
+		"mcp connect": {exclude: "connecting Claude Code to this server is setup's; a client calling it is connected already"},
+		"help":        {exclude: "tool descriptions carry the help"},
+		"completion":  {exclude: "shell completion scripts"},
 		// Secrets and sign-ins go to me through the client (elicitation), never
 		// through tool arguments or the model.
 		"auth login": {handle: mcpLogin},

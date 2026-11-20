@@ -217,6 +217,10 @@ struct TrustReviewView: View {
     let error: String?
     let trust: (() -> Void)?
     var working = false
+    /// The button that does it, and the words beside it (none: the question
+    /// is asked elsewhere, as setup does).
+    var actionTitle = "Trust"
+    var note: String? = "Trusting it lets it run for real with what's listed above. Dry runs never need it."
 
     init(
         servers: [String], tools: [String], builtinTools: [String]?, folder: String?, review: TrustReview?,
@@ -233,10 +237,15 @@ struct TrustReviewView: View {
     }
 
     /// The review's surface, for a routine known only by name (setup).
-    init(review: TrustReview, error: String?, trust: (() -> Void)?, working: Bool = false) {
+    init(
+        review: TrustReview, error: String?, trust: (() -> Void)?, working: Bool = false, actionTitle: String,
+        note: String?
+    ) {
         self.init(
             servers: review.surface.servers, tools: review.surface.tools, builtinTools: review.surface.builtinTools,
             folder: review.surface.folder, review: review, error: error, trust: trust, working: working)
+        self.actionTitle = actionTitle
+        self.note = note
     }
 
     var body: some View {
@@ -274,12 +283,14 @@ struct TrustReviewView: View {
         if let trust {
             Divider().padding(.leading, SettingsMetrics.rowInset)
             HStack(spacing: 12) {
-                Text("Trusting it lets it run for real with what's listed above. Dry runs never need it.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let note {
+                    Text(note)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer(minLength: 8)
-                Button("Trust", action: trust)
+                Button(actionTitle, action: trust)
                     .keyboardShortcut(.defaultAction)
                     .disabled(working || review == nil)
             }

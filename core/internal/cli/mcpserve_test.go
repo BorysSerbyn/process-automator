@@ -36,12 +36,14 @@ func loadTest(cfg string, plugins []pluginapi.Plugin) (*engine.App, error) {
 func TestMain(m *testing.M) {
 	secretStore = func() secrets.Store { return testSecrets }
 	useLoginPath = false // tests never run the login shell
-	// Tests never touch Claude Code's real settings (the status line).
+	// Tests never touch Claude Code's real settings (the status line, its MCP servers).
 	claudeDir, err := os.MkdirTemp("", "pt-claude-")
 	if err != nil {
 		panic(err)
 	}
 	_ = os.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
+	// Nor run the real claude (mcp connect).
+	runClaudeMCP = fakeClaudeMCP
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
 	if mode := os.Getenv(pluginEnv); mode != "" {
