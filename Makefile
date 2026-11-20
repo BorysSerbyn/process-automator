@@ -51,11 +51,13 @@ LINUX_SCHED_LABEL := $(CLI)-scheduler.service
 CORE_BIN  := $(BUILD)/$(CLI)
 APP_BUILD := $(BUILD)/$(APP_NAME).app
 DIST      := $(BUILD)/dist
+# Where swift build puts automator-ui (asked when bundling: it depends on the toolchain). A universal
+# build makes each arch on its own (one build of both can't run the OpenAPI generator plugin) and joins them.
 ifdef UNIVERSAL
-SWIFT_ARCHS := --arch arm64 --arch x86_64
+UI_BIN     := $(BUILD)/AutomatorUI
+else
+UI_BIN     = $(shell cd automator-ui && swift build -c release --show-bin-path)/AutomatorUI
 endif
-# Where swift build puts automator-ui (asked when bundling: it depends on the toolchain and the archs)
-UI_BIN     = $(shell cd automator-ui && swift build -c release $(SWIFT_ARCHS) --show-bin-path)/AutomatorUI
 # The build's values, set in the automator package (the binary's names are its automator.App)
 AUTOMATOR := github.com/BorysSerbyn/process-automator/core/automator
 COMMON_LDFLAGS := -s -w -X "$(AUTOMATOR).version=$(VERSION)" -X "$(AUTOMATOR).sourceDir=$(SOURCE_DIR)" \
@@ -112,7 +114,15 @@ else
 endif
 
 build-ui:
-	cd automator-ui && swift build -c release $(SWIFT_ARCHS)
+ifdef UNIVERSAL
+	@mkdir -p "$(BUILD)"
+	for arch in arm64 x86_64; do (cd automator-ui && swift build -c release --arch $$arch --scratch-path .build/$$arch) || exit 1; done
+	lipo -create -output "$(UI_BIN)" \
+	  "$$(cd automator-ui && swift build -c release --arch arm64 --scratch-path .build/arm64 --show-bin-path)/AutomatorUI" \
+	  "$$(cd automator-ui && swift build -c release --arch x86_64 --scratch-path .build/x86_64 --show-bin-path)/AutomatorUI"
+else
+	cd automator-ui && swift build -c release
+endif
 
 bundle: build check-identity ## Assemble and sign the .app
 	@printf '%s\n' "$$MACOS_INSTALL_ENV" > "$(BUILD)/install.env"
