@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "notifications-open.schema.json",
+  "properties": {
+    "notification": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "description": "Action is the click action carried out: show-run, open, run or none."
+    },
+    "target": {
+      "type": "string",
+      "description": "Target is what was opened, or the command run."
+    },
+    "routine": {
+      "type": "string",
+      "description": "Routine and Run, for show-run: with --frontend-shows-runs the frontend\nshows them itself; otherwise a report of the run was opened (Target)."
+    },
+    "run": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "notification",
+    "action"
+  ],
+  "title": "procauto notifications open --json",
+  "description": "ClickOutput is `notifications open --json`: what clicking did."
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "memory-edit.schema.json",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "routine": {
+      "type": "string",
+      "description": "Routine is the routine it's for; empty for every routine."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "id",
+    "text"
+  ],
+  "title": "procauto memory edit --json",
+  "description": "Memory is one thing to remember."
+}

@@ -1,0 +1,76 @@
+# Installing Process Automator (for an AI agent)
+
+Follow this when someone asks you to install process-automator for them. (Working on the code instead? See the Development section of `README.md`.)
+
+## What the app does
+Process Automator runs **routines**: prompt files that a model (Claude, through Claude Code or the API) runs on a schedule in the background, with tools from **plugins** (MCP servers: the app's own `automator` (read-only) and `notify`, plus any MCP server they add). Out of the box it does nothing: anything a prompt plus tools can do, a routine can do. Around that it has:
+- **routines:** create, edit, run now or as a dry run (nothing posted), pause, stop, delete; schedules in plain words; run history with every tool call, output and cost;
+- **plugins:** add any MCP server (remote, local, or a folder they wrote), try it before it's installed, sign in;
+- **settings:** app-wide and per routine (schedule, model, effort, timeout, working folder, which tools it may use, ...);
+- **memories** routines read, **notifications** routines send, **templates** to start from, an **LLM budget** that keeps scheduled runs from overspending, and **guardrails**: a routine runs for real only once trusted with what it can reach;
+- a menu bar app on macOS (status, routines, settings, setup), and `doctor` to explain anything red.
+
+**All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. Connect it once the app is installed:
+
+```sh
+claude mcp add procauto -- procauto mcp serve
+```
+
+Tools that change things are marked so the client asks first, and sign-ins happen in the person's browser, never through you. A few things stay with the person, by design: trusting a routine to run for real, uninstalling the app, and the scheduler itself.
+
+## Installing it
+Your job is to run the commands and to ask the person, never to choose for them. Everything below runs without an interactive terminal: read `--json` output, and pass `--yes` only after they've answered. Ask one question at a time, in plain words, quoting what the app says (each setup step's `ask` and `status`).
+
+## 1. Check the prerequisites
+- **OS**: macOS 14 or later, or Linux (x86-64 or ARM64). Nothing else is supported; stop and say so.
+- **GitHub access**: the repository is private. `gh auth status` must show a GitHub account that can read it; otherwise ask them to run `gh auth login` (or set `GH_TOKEN`). Check with `gh repo view BorysSerbyn/process-automator`.
+- **Linux only**: `secret-tool` (package `libsecret-tools`) for keeping sign-ins, and a systemd user session for starting the scheduler at login. Install the package only if they agree.
+- **Already installed?** If `procauto version --json` works, the app is there: offer `procauto update` instead, and go on to step 3.
+
+Don't install the model backend's tools or the apps behind MCP servers (Claude Code, local servers) yourself; setup says when one is needed, and you ask.
+
+## 2. Install
+From a checkout of the repository (clone it first if you haven't):
+
+```sh
+./install.sh --yes
+```
+
+It downloads the latest release for this machine, checks its checksum (and on macOS its notarized Developer ID signature), installs it (macOS: `~/Applications/Process Automator.app`; Linux: `~/.local/lib/process-automator`), links `procauto` into `~/.local/bin`, and starts the scheduler (and on macOS the menu bar app) now and at login. If a check fails, show them the error; don't work around it.
+
+**No published release for this machine** (install.sh says so): build it from the checkout instead. On macOS:
+1. Prerequisites, each with their go-ahead: the Xcode command line tools (`xcode-select --install`: *they* confirm the dialog), Homebrew, then `make deps` (Go and the other build tools).
+2. A code-signing identity named `Process Automator Dev`, which keeps macOS permission grants across rebuilds. *They* create it in Keychain Access, following README.md → Development → "One-time: signing certificate"; check with `security find-identity -v -p codesigning`.
+3. `make install`. It builds the core and the app, installs them as above, and remembers this checkout: `procauto update` builds newer tagged releases from it until releases are published.
+
+On Linux: Go (from their package manager, with their go-ahead), then `make package-linux LINUX_ARCH=<amd64|arm64>` and `./install.sh --yes --from build/dist/<the .tar.gz it made>`.
+
+If `~/.local/bin` isn't on their PATH, use `~/.local/bin/procauto` below and tell them how to add it.
+
+## 3. Walk them through setup
+```sh
+procauto setup --json
+```
+
+lists every step in order (`templates`, `backend`, `usage` when needed, a `routine` to fix, `sign-in`, `trust`, `enable`), each with `done`, `optional`, `status`, `ask` and `commands`. It changes nothing. For each step that isn't `done`, in order:
+
+1. Tell them its `status`, and ask its `ask`.
+2. Run its `commands` with their answers in place of the `<placeholders>` (a trailing `# comment` says when a command applies).
+3. Run `procauto setup --json` again: answers can add steps (installing a template adds its sign-ins, trust and schedule).
+
+What each kind needs:
+- **`templates`** (optional): run `procauto templates list --json` and show them every template with its description, tags and parameters (there may be none: then offer to write their first routine with them instead, or skip). **None are picked by default**: install only the ones they name, asking for each parameter's value (or keeping its default if they say so): `procauto templates install <tags>/<name> [--set <param>=<value>]...`. Templates under `projects/<project>/` are for that project's members only.
+- **`backend`**: ask which backend runs routines (the `ask` explains both: `claude-code` uses their Claude subscription through the Claude Code CLI; `api` uses an Anthropic API key), then `procauto settings set llm.backend <choice>`. If it then needs a key, `procauto auth login anthropic --browser` opens a page in their browser where *they* enter it.
+- **`usage`** (only on the `claude-code` backend, when Claude Code's `/usage` can't be read): ask whether to read the plan's usage from their Claude Code status line instead; if yes, `procauto usage statusline install` (their status line keeps showing what it shows now).
+- **`routine`**: a routine that won't run; `procauto doctor --json` says why and how to fix it. Explain it; fix it only with their go-ahead.
+- **`sign-in`**: `procauto auth login <server> --browser` opens their browser to sign in (or to a local page for a key). They do it there; secrets never pass through you. Wait for the command to finish.
+- **`trust`**: run `procauto routines trust <name> --check --json` and show them what the routine can reach (its servers, and its tools split into writes and reads). Only if they agree: `procauto routines trust <name> --yes`.
+- **`enable`**: ask whether the routine should run on its schedule (the `ask` gives it in words); if yes, `procauto routines resume <name>`. Optional once another routine runs on its schedule.
+
+Setup is finished when `procauto setup --json` says `"done": true`. Steps they skip stay listed, and `procauto setup` can be run again any time.
+
+## 4. Finish
+Tell them:
+- what's installed and running (`procauto routines list`, and on macOS the hourglass in the menu bar);
+- `procauto doctor` explains a red light; `procauto update` installs new releases (the menu offers them too); `procauto uninstall` removes the app (`--purge` also removes their config, routines, history, logs and secrets);
+- you (or any MCP client) can do basically anything with the app from now on through its MCP server: offer to connect it (`claude mcp add procauto -- procauto mcp serve`) and help them write their first routine.

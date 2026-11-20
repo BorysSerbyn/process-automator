@@ -1,0 +1,46 @@
+# Rendered by scripts/homebrew.sh from process-automator's packaging/homebrew for __TAG__; edit it there, not in the tap.
+class ProcessAutomator < Formula
+  desc "Scheduled LLM routines (CLI and scheduler)"
+  homepage "https://github.com/__REPO__"
+  version "__VERSION__"
+
+  depends_on :linux
+
+  # The API URLs serve a private repository's files to a signed-in request
+  # (HOMEBREW_GITHUB_API_TOKEN, a token that can read the repository).
+  HEADERS = [
+    "Accept: application/octet-stream",
+    *(ENV["HOMEBREW_GITHUB_API_TOKEN"] ? ["Authorization: Bearer #{ENV["HOMEBREW_GITHUB_API_TOKEN"]}"] : []),
+  ].freeze
+
+  on_intel do
+    url "__AMD64_URL__", headers: HEADERS
+    sha256 "__AMD64_SHA256__"
+  end
+  on_arm do
+    url "__ARM64_URL__", headers: HEADERS
+    sha256 "__ARM64_SHA256__"
+  end
+
+  def install
+    # The release's layout as is: bin/procauto finds share/process-automator/ next to it.
+    libexec.install Dir["*"]
+    bin.install_symlink libexec/"bin/procauto"
+  end
+
+  def caveats
+    <<~EOS
+      Start the scheduler now and at login (a systemd user unit, __SCHED_LABEL__):
+        #{opt_libexec}/share/process-automator/install-app.sh login-items
+      Then set it up (templates, the model backend, sign-ins):
+        procauto setup
+      Secrets go to the Secret Service keyring through secret-tool (libsecret-tools).
+      Update with `brew upgrade process-automator`. Before `brew uninstall`:
+        systemctl --user disable --now __SCHED_LABEL__
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/procauto version")
+  end
+end

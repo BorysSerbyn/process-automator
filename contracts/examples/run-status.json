@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-11-17T08:05:00Z",
+  "validUntil": "2026-11-17T08:06:00Z",
+  "health": "error",
+  "busy": false,
+  "routines": [
+    {
+      "name": "weekly-report",
+      "enabled": true,
+      "nextRunAt": "2026-11-18T14:20:00Z",
+      "lastRun": {
+        "startedAt": "2026-11-17T08:00:00Z",
+        "finishedAt": "2026-11-17T08:01:12Z",
+        "outcome": "success"
+      }
+    },
+    {
+      "name": "standup",
+      "enabled": true,
+      "lastRun": {
+        "startedAt": "2026-11-17T08:04:00Z",
+        "outcome": "needs-reauth",
+        "reason": "tracker: token expired"
+      }
+    }
+  ],
+  "reasons": [
+    {
+      "routine": "standup",
+      "text": "standup needs a sign-in",
+      "detail": "tracker: token expired"
+    }
+  ]
+}

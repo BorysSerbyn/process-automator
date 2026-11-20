@@ -1,0 +1,352 @@
+package cli
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
+	"github.com/BorysSerbyn/process-automator/core/internal/history"
+	"github.com/BorysSerbyn/process-automator/core/internal/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
+	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
+	"github.com/BorysSerbyn/process-automator/core/internal/usage"
+)
+
+// setup --json lists every step and the commands for each, changing nothing.
+func TestSetupSteps(t *testing.T) {
+	a, _ := enginetest.Fixture(t, map[string]string{"old": "queue"}, nil)
+	cfg := a.Layout.Config()
+	steps := func() (SetupOutput, map[string]SetupStep) {
+		t.Helper()
+		out, err := cli(t, cfg, "setup", "--json")
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		var got SetupOutput
+		if err := json.Unmarshal([]byte(out), &got); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		m := map[string]SetupStep{}
+		for _, s := range got.Steps {
+			m[s.Step+" "+s.Subject] = s
+		}
+		return got, m
+	}
+	trustFile := filepath.Join(filepath.Dir(cfg), "trust.json")
+	_, m := steps()
+	if _, err := os.Stat(trustFile); err == nil {
+		t.Error("setup --json wrote trust.json")
+	}
+	if s := m["trust old"]; !s.Done {
+		t.Errorf("before trust is first used, an installed routine counts as trusted: %+v", s)
+	}
+	if s := m["templates "]; !s.Done || !s.Optional {
+		t.Errorf("templates with routines installed: %+v", s)
+	}
+
+	src := "---\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"
+	if _, err := cli(t, cfg, "routines", "create", "fresh", "--source", src); err != nil {
+		t.Fatal(err)
+	}
+	got, m := steps()
+	if s := m["trust fresh"]; s.Done || !slices.Contains(s.Commands, "procauto routines trust fresh --yes") {
+		t.Errorf("trust step: %+v", s)
+	}
+	if _, ok := m["enable fresh"]; ok {
+		t.Error("offered to run an untrusted routine on its schedule")
+	}
+	if got.Done || got.Remaining != 1 {
+		t.Errorf("done %v with %d remaining, want 1 (trust fresh)", got.Done, got.Remaining)
+	}
+
+	// Trusted but paused, and no routine runs on its schedule: running it is required.
+	if _, err := cli(t, cfg, "routines", "trust", "fresh", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	got, m = steps()
+	if s := m["enable fresh"]; s.Done || s.Optional || !strings.Contains(s.Ask, "At 09:20, Monday through Friday") {
+		t.Errorf("schedule step with nothing scheduled: %+v", s)
+	}
+	if got.Done {
+		t.Error("done while no routine runs on its schedule")
+	}
+	if out, _ := cli(t, cfg, "settings", "get", "routines.fresh.enabled"); !strings.Contains(out, "false") {
+		t.Errorf("setup --json changed a setting: %s", out)
+	}
+
+	// A routine whose settings don't resolve is a step to fix; setup still answers.
+	if _, err := cli(t, cfg, "settings", "set", "routines.old.timeout", "1h"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(cfg)
+	_ = os.WriteFile(cfg, []byte(strings.Replace(string(raw), "1h", "bogus", 1)), 0o600)
+	_, m = steps()
+	if s, ok := m["routine old"]; !ok || s.Done || !strings.Contains(s.Status, "timeout") {
+		t.Errorf("broken settings: %+v", s)
+	}
+}
+
+func TestDevNullIsNoTerminal(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if isTerminal(f) {
+		t.Error("/dev/null counts as a terminal")
+	}
+}
+
+// With no routines installed, setup is done once the backend is ready.
+func TestSetupDoneWithoutRoutines(t *testing.T) {
+	a, _ := enginetest.Fixture(t, nil, nil)
+	out, err := cli(t, a.Layout.Config(), "setup", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got SetupOutput
+	if err := json.Unmarshal([]byte(out), &got); err != nil || !got.Done || got.Remaining != 0 {
+		t.Errorf("no routines: %+v (%v)", got, err)
+	}
+}
+
+// stop ends a run, running or still waiting, as stopped (not failed).
+func TestStop(t *testing.T) {
+	gate := make(chan struct{})
+	defer close(gate)
+	a, set := enginetest.Fixture(t, map[string]string{"long": "queue", "waiting": "queue"},
+		map[string]chan struct{}{"long": gate})
+	cfg := a.Layout.Config()
+	long := enginetest.Start(t, a, set, "long")
+	enginetest.WaitOutcome(t, a, "long", runstatus.OutcomeRunning)
+	waiting := enginetest.Start(t, a, set, "waiting")
+	enginetest.WaitOutcome(t, a, "waiting", runstatus.OutcomeQueued)
+
+	for _, name := range []string{"waiting", "long"} {
+		out, err := cli(t, cfg, "stop", name)
+		if err != nil {
+			t.Fatalf("stop %s: %s %v", name, out, err)
+		}
+		if run := enginetest.LastRun(a, name); run.Outcome != runstatus.OutcomeStopped {
+			t.Fatalf("%s: %+v", name, run)
+		}
+	}
+	for _, done := range []chan error{long, waiting} {
+		if err := <-done; !errors.Is(err, engine.ErrStopped) {
+			t.Fatalf("run returned %v", err)
+		}
+	}
+	if _, err := cli(t, cfg, "stop", "long"); err == nil {
+		t.Fatal("stopping a routine that isn't running")
+	}
+}
+
+// Past the usage limit, a scheduled run is skipped with the reason; a run
+// On a Claude plan, the usage limit is the plan's own usage: past it (from
+// Claude Code's /usage, or a limit a run hit), a scheduled run is skipped; a
+// run started by hand still runs. A single model's weekly limit isn't applied.
+func TestUsageLimitPlan(t *testing.T) {
+	a, set := enginetest.Fixture(t, map[string]string{"r": "queue"}, nil)
+	cfg := a.Layout.Config()
+	r, _ := set.Find("r")
+	scheduled := engine.RunOptions{Occurrence: trigger.New(trigger.Schedule, time.Now())}
+	if _, err := a.Execute(context.Background(), set, r, scheduled); err != nil {
+		t.Fatalf("nothing known of the plan, yet the run was stopped: %v", err)
+	}
+	enginetest.UsePlanUsage(usage.Limit{Kind: "session", Percent: 62, ResetsAt: time.Now().Add(time.Hour)},
+		usage.Limit{Kind: "weekly_all", Percent: 20, ResetsAt: time.Now().Add(72 * time.Hour)},
+		usage.Limit{Kind: "weekly_scoped", Model: "Fable", Percent: 99, ResetsAt: time.Now().Add(72 * time.Hour)})
+	_ = os.Remove(a.Layout.PlanUsage()) // the reading from the first run said nothing; read again
+	if out, _ := cli(t, cfg, "usage"); !strings.Contains(out, "62%") || !strings.Contains(out, "Scheduled runs don't start") {
+		t.Fatalf("usage:\n%s", out)
+	}
+	_, err := a.Execute(context.Background(), set, r, scheduled)
+	if err == nil || !strings.Contains(err.Error(), "skipped: the Claude plan's 5-hour usage is at 62%") {
+		t.Fatalf("scheduled run past the limit: %v", err)
+	}
+	if _, err := a.Execute(context.Background(), set, r, engine.RunOptions{}); err != nil {
+		t.Fatalf("a run started by hand was stopped: %v", err)
+	}
+	if out, _ := cli(t, cfg, "doctor"); !strings.Contains(out, "scheduled runs don't start") {
+		t.Errorf("doctor doesn't say:\n%s", out)
+	}
+	if out, _ := cli(t, cfg, "settings", "list"); !strings.Contains(out, "[only used with llm.backend api]") {
+		t.Errorf("budgets aren't marked as the api backend's:\n%s", out)
+	}
+}
+
+// A run that hits the plan's limit records it until the limit resets.
+func TestPlanLimitHit(t *testing.T) {
+	a, set := enginetest.Fixture(t, map[string]string{"r": "queue"}, nil)
+	resets := time.Now().Add(2 * time.Hour).Truncate(time.Minute)
+	enginetest.UseBackend(t, limitBackend{&agent.PlanLimitError{Window: "weekly", ResetsAt: resets, Message: "You've hit your weekly limit"}})
+	r, _ := set.Find("r")
+	if _, err := a.Execute(context.Background(), set, r, engine.RunOptions{}); err == nil {
+		t.Fatal("the run hit the limit, yet succeeded")
+	}
+	rep, err := a.Usage(context.Background(), time.Now())
+	if err != nil || !rep.Over || !strings.Contains(rep.Reason, "weekly limit is reached") {
+		t.Errorf("after a limit hit: %+v %v", rep, err)
+	}
+}
+
+type limitBackend struct{ err error }
+
+func (limitBackend) Name() string { return "limit" }
+
+func (b limitBackend) Run(context.Context, agent.Job) (*agent.Output, error) { return nil, b.err }
+
+// With an API key, the limit is spend against the budgets (api runs only).
+func TestUsageLimitBudget(t *testing.T) {
+	a, set := enginetest.Fixture(t, map[string]string{"r": "queue"}, nil)
+	cfg := a.Layout.Config()
+	for _, kv := range [][2]string{{"llm.backend", "api"}, {"llm.budget.window-usd", "1"}} {
+		if _, err := cli(t, cfg, "settings", "set", kv[0], kv[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	at := time.Now().Add(-time.Hour)
+	for i, b := range []string{"api", "claude-code"} { // a plan's run never counts
+		started := at.Add(time.Duration(i) * time.Minute)
+		_ = history.Save(a.Layout.History(), history.Entry{ID: history.RunID("r", started), Routine: "r", Trigger: trigger.Manual,
+			StartedAt: started, Outcome: runstatus.OutcomeSuccess, Result: &agent.Result{Backend: b, CostUSD: 1.5}})
+	}
+	a = enginetest.Load(t, cfg)
+	if out, _ := cli(t, cfg, "usage"); !strings.Contains(out, "$1.50") || !strings.Contains(out, "past its $1.00 budget") {
+		t.Fatalf("usage:\n%s", out)
+	}
+	r, _ := set.Find("r")
+	_, err := a.Execute(context.Background(), set, r, engine.RunOptions{Occurrence: trigger.New(trigger.Schedule, time.Now())})
+	if err == nil || !strings.Contains(err.Error(), "skipped: LLM spend in the last 5h is $1.50") {
+		t.Fatalf("scheduled run over the budget: %v", err)
+	}
+	s, _ := runstatus.Load(a.Layout.RunStatus())
+	if run := s.Routines[0].LastRun; run == nil || run.Outcome != runstatus.OutcomeSkipped {
+		t.Fatalf("recorded as %+v", s.Routines[0].LastRun)
+	}
+}
+
+// While /usage can't be read, setup asks to read the plan's usage from Claude
+// Code's status line; installed, the status line records it and still shows
+// mine. Not a health problem: doctor says nothing about it.
+func TestPlanUsageFallback(t *testing.T) {
+	a, _ := enginetest.Fixture(t, nil, nil) // its /usage can't be read
+	cfg := a.Layout.Config()
+	if _, err := a.Usage(context.Background(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	step := func() (SetupStep, bool) {
+		out, _ := cli(t, cfg, "setup", "--json")
+		var got SetupOutput
+		_ = json.Unmarshal([]byte(out), &got)
+		for _, s := range got.Steps {
+			if s.Step == stepUsage {
+				return s, got.Done
+			}
+		}
+		return SetupStep{}, got.Done
+	}
+	if s, done := step(); s.Step == "" || s.Done || done {
+		t.Fatalf("no unfinished plan usage step: %+v (setup done %v)", s, done)
+	}
+	if out, _ := cli(t, cfg, "doctor"); strings.Contains(out, "usage") {
+		t.Errorf("doctor reports it:\n%s", out)
+	}
+	settings := filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "settings.json")
+	_ = os.WriteFile(settings, []byte(`{"statusLine": {"type": "command", "command": "printf mine"}}`), 0o600)
+	t.Cleanup(func() { _ = os.Remove(settings) })
+	if _, err := cli(t, cfg, "usage", "statusline", "install"); err != nil {
+		t.Fatal(err)
+	}
+	if s, done := step(); !s.Done || !done {
+		t.Errorf("installed, yet: %+v (setup done %v)", s, done)
+	}
+	// Claude Code runs it: it records the usage and shows my status line.
+	root := NewRoot(nil)
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{"--config", cfg, "usage", "statusline"})
+	root.SetIn(strings.NewReader(fmt.Sprintf(`{"rate_limits":{"five_hour":{"used_percentage":33,"resets_at":%d}}}`,
+		time.Now().Add(time.Hour).Unix())))
+	if err := root.Execute(); err != nil || out.String() != "mine" {
+		t.Errorf("status line printed %q (%v)", out.String(), err)
+	}
+	rep, _ := a.Usage(context.Background(), time.Now())
+	if w := rep.Windows[0]; w.UsedPercent == nil || *w.UsedPercent != 33 || rep.RecordedAt == nil {
+		t.Errorf("not recorded: %+v", rep)
+	}
+	if _, err := cli(t, cfg, "usage", "statusline", "uninstall"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(settings); !strings.Contains(string(b), `"command": "printf mine"`) {
+		t.Errorf("not put back:\n%s", b)
+	}
+}
+
+// A plugin's preparation is shown, and has to be done, before any credential
+// is asked for.
+func TestSignInPrepares(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	p := pluginapi.Plugin{Name: "pt-app", Serve: func(pluginapi.Host) (*sdk.Server, error) { return nil, nil },
+		Secrets: []pluginapi.SecretSpec{{Name: "token", Prompt: "the token"}}, Prepare: "1. Create the app."}
+	a := enginetest.Load(t, cfg, p)
+	var out bytes.Buffer
+	ui := &terminalUI{in: bufio.NewReader(strings.NewReader("n\n")), out: &out}
+	if err := login(context.Background(), a, "pt-app", ui); err == nil || strings.Contains(out.String(), "Paste the token") {
+		t.Fatalf("went on without the preparation done: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "1. Create the app.") {
+		t.Errorf("preparation not shown:\n%s", out.String())
+	}
+	out.Reset()
+	ui = &terminalUI{in: bufio.NewReader(strings.NewReader("y\nsecret\n")), out: &out}
+	if err := login(context.Background(), a, "pt-app", ui); err != nil {
+		t.Fatal(err)
+	}
+	// Signed in, it isn't shown again.
+	out.Reset()
+	ui = &terminalUI{in: bufio.NewReader(strings.NewReader("other\n")), out: &out}
+	_ = login(context.Background(), a, "pt-app", ui)
+	if strings.Contains(out.String(), "Create the app") {
+		t.Errorf("preparation shown once signed in:\n%s", out.String())
+	}
+}
+
+// A command that changes setup updates run status at once.
+func TestSetupStatusRefreshes(t *testing.T) {
+	a, _ := enginetest.Fixture(t, map[string]string{"old": "queue"}, nil)
+	cfg := a.Layout.Config()
+	if _, err := cli(t, cfg, "routines", "create", "fresh", "--source", "---\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"); err != nil {
+		t.Fatal(err)
+	}
+	left := func() []string {
+		s, _ := runstatus.Load(a.Layout.RunStatus())
+		if s == nil {
+			return nil
+		}
+		return s.SetupLeft
+	}
+	if !slices.Contains(left(), "Trust fresh") {
+		t.Fatalf("after create: %v", left())
+	}
+	if _, err := cli(t, cfg, "routines", "trust", "fresh", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(left(), "Trust fresh") {
+		t.Errorf("still left after trusting: %v", left())
+	}
+}

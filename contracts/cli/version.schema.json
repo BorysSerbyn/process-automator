@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "version.schema.json",
+  "properties": {
+    "version": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "version"
+  ],
+  "title": "procauto version --json",
+  "description": "VersionOutput is `version --json`."
+}

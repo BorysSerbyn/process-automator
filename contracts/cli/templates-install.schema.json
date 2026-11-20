@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "templates-install.schema.json",
+  "properties": {
+    "template": {
+      "type": "string"
+    },
+    "routine": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "template",
+    "routine",
+    "path"
+  ],
+  "title": "procauto templates install --json",
+  "description": "InstallOutput is `templates install --json`."
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "memory-list.schema.json",
+  "items": {
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      },
+      "routine": {
+        "type": "string",
+        "description": "Routine is the routine it's for; empty for every routine."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "id",
+      "text"
+    ],
+    "description": "Memory is one thing to remember."
+  },
+  "type": "array",
+  "title": "procauto memory list --json"
+}

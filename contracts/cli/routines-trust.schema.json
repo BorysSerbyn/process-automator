@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routines-trust.schema.json",
+  "properties": {
+    "routine": {
+      "type": "string"
+    },
+    "surface": {
+      "properties": {
+        "servers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "builtinTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "folder": {
+          "type": "string"
+        },
+        "plugins": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "servers",
+        "tools"
+      ]
+    },
+    "tools": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "server",
+          "readOnly"
+        ],
+        "description": "CheckedTool is an allowlisted tool as a routine would get it."
+      },
+      "type": "array",
+      "description": "Tools are its allowlisted tools with the server offering each and\nwhether it's read-only (absent when its servers couldn't be reached)."
+    },
+    "toolsError": {
+      "type": "string",
+      "description": "ToolsError says why its tools couldn't be checked (e.g. a server needs\na sign-in)."
+    },
+    "changes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Changes since it was last trusted (empty for a first trust)."
+    },
+    "trusted": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "routine",
+    "surface",
+    "changes",
+    "trusted"
+  ],
+  "title": "procauto routines trust --json",
+  "description": "TrustOutput is `routines trust --json`."
+}

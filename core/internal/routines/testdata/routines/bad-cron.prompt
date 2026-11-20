@@ -1,0 +1,4 @@
+---
+automator.schedule: "every morning"
+---
+bad cron

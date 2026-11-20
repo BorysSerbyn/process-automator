@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "login-items-enable.schema.json",
+  "properties": {
+    "installed": {
+      "type": "boolean",
+      "description": "Installed is whether any item is set up to start at login (none before\nthe app is installed)."
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Enabled is true when something is installed and every installed item\nstarts at login."
+    },
+    "items": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name is ui (automator-ui: the menu bar indicator, settings, …) or scheduler."
+          },
+          "label": {
+            "type": "string"
+          },
+          "installed": {
+            "type": "boolean",
+            "description": "Installed is whether it's set up to start at login at all (the\ninstall puts it there)."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Enabled is whether it starts at login."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "installed",
+          "enabled"
+        ],
+        "description": "LoginItem is one thing that starts at login."
+      },
+      "type": "array"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "installed",
+    "enabled",
+    "items"
+  ],
+  "title": "procauto login-items enable --json",
+  "description": "LoginItemsOutput is `login-items --json`."
+}

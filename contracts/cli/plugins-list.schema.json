@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plugins-list.schema.json",
+  "items": {
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "description": "in-process, remote, local"
+      },
+      "description": {
+        "type": "string"
+      },
+      "endpoint": {
+        "type": "string",
+        "description": "URL or command, for external plugins"
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "name",
+      "kind"
+    ],
+    "description": "PluginInfo is one row of `plugins list --json`."
+  },
+  "type": "array",
+  "title": "procauto plugins list --json"
+}

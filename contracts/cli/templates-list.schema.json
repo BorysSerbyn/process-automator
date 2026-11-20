@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "templates-list.schema.json",
+  "items": {
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "ID is its tag path and name, e.g. \"projects/acme/standup\"."
+      },
+      "name": {
+        "type": "string"
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "project": {
+        "type": "string",
+        "description": "Project is the project it's for (its folder under projects/, e.g.\n\"acme\"); empty for every project or none."
+      },
+      "description": {
+        "type": "string"
+      },
+      "platforms": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "params": {
+        "items": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "default": true,
+            "description": {
+              "type": "string"
+            },
+            "enum": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "required": {
+              "type": "boolean",
+              "description": "Required is true for a parameter without a default; DefaultText is the\ndefault written as `templates install --set` takes it. Both are worked\nout when the routine is parsed."
+            },
+            "defaultText": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "name",
+            "type",
+            "required"
+          ],
+          "description": "Param is one routine parameter."
+        },
+        "type": "array"
+      },
+      "runsHere": {
+        "type": "boolean",
+        "description": "RunsHere is false for templates for another OS (listed with --all)."
+      },
+      "installed": {
+        "type": "boolean",
+        "description": "Installed is true when a routine with the template's name exists."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "id",
+      "name",
+      "tags",
+      "runsHere",
+      "installed"
+    ],
+    "description": "TemplateInfo is one row of `templates list --json`."
+  },
+  "type": "array",
+  "title": "procauto templates list --json"
+}

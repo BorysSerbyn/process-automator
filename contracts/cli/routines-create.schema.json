@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routines-create.schema.json",
+  "properties": {
+    "routine": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Enabled is whether the routine runs on its schedule after the change\n(created routines start disabled; absent for deletes)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "routine",
+    "path"
+  ],
+  "title": "procauto routines create --json",
+  "description": "RoutineChange is the output of `routines create/update/delete --json`."
+}

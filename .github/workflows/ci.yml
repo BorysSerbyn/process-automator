@@ -1,0 +1,77 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+      - run: go test -race ./...
+      # The core runs on every OS: shared code stays OS-neutral (internal/osboundary)
+      # and per-OS files must exist for each.
+      - name: Cross-compile (Linux, Windows)
+        run: GOOS=linux go build ./... && GOOS=windows go build ./...
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          working-directory: core
+
+  core-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+      - run: go test -race ./...
+
+  automator-ui:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: automator-ui
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+      - run: swift test
+
+  # Each platform's release artifact, installed with install.sh into a throwaway
+  # home, used and uninstalled (scripts/test-install.sh). Ad-hoc signed: the
+  # Developer ID signature and notarization are the release workflow's.
+  installer:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            package: make package SIGN_IDENTITY=- BUNDLE_PREFIX=ci.test
+            artifact: build/dist/process-automator-*-macos.zip
+          - os: ubuntu-latest
+            package: make package-linux BUNDLE_PREFIX=ci.test
+            artifact: build/dist/process-automator-*-linux-amd64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+      - run: shellcheck install.sh scripts/*.sh
+        if: runner.os == 'Linux'
+      - run: ${{ matrix.package }}
+      - run: scripts/test-install.sh ${{ matrix.artifact }}

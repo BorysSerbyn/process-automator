@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "start.schema.json",
+  "properties": {
+    "routine": {
+      "type": "string"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "log": {
+      "type": "string",
+      "description": "Log is where the run's output goes; its outcome is in run status and\nthe run history, as for any run."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "routine",
+    "dryRun",
+    "log"
+  ],
+  "title": "procauto start --json",
+  "description": "StartOutput is `start --json`: a run started in the background."
+}

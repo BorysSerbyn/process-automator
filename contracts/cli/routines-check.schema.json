@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routines-check.schema.json",
+  "items": {
+    "properties": {
+      "routine": {
+        "type": "string"
+      },
+      "ok": {
+        "type": "boolean"
+      },
+      "problem": {
+        "type": "string",
+        "description": "Problem is why the routine wouldn't run (file, settings, servers or tools)."
+      },
+      "tools": {
+        "items": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "server": {
+              "type": "string"
+            },
+            "readOnly": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "name",
+            "server",
+            "readOnly"
+          ],
+          "description": "CheckedTool is an allowlisted tool as a routine would get it."
+        },
+        "type": "array",
+        "description": "Tools are its allowlisted tools and the server offering each."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "routine",
+      "ok"
+    ],
+    "description": "RoutineCheck is one row of `routines check --json`."
+  },
+  "type": "array",
+  "title": "procauto routines check --json"
+}

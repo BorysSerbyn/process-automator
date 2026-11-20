@@ -1,0 +1,41 @@
+# Build output
+/build/
+/core/procauto
+automator-ui/.build/
+automator-ui/.swiftpm/
+*.app
+*.test
+*.out
+coverage.*
+
+# Obsidian per-machine state
+**/.obsidian/workspace*.json
+**/.obsidian/cache
+
+# Claude Code: the skills are shared; settings and worktrees stay local
+.claude/*
+!.claude/skills/
+CLAUDE.local.md
+
+# Secrets and local settings
+.env
+.env.*
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+id_rsa*
+id_ed25519*
+
+# OS and editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logo build intermediates
+automator-ui/Resources/Logo/source/venv/
+automator-ui/Resources/Logo/source/iconsheet
+automator-ui/Resources/Logo/source/menubar
+automator-ui/Resources/Logo/AppIcon.iconset/

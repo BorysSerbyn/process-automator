@@ -1,0 +1,181 @@
+{
+  "$id": "settings.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generated from core/internal/settings. Values live under `settings:` in the config file; change them with `procauto settings set <key> <value>`.",
+  "patternProperties": {
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.builtinTools$": {
+      "default": [],
+      "description": "Agent CLI built-in tools the run may use (e.g. Read, Grep, Bash, Edit), allowed explicitly. Dry runs get only the read-only ones. Defaults to `automator.builtinTools` in the routine's file.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "x-type": "list"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.concurrency$": {
+      "default": "queue",
+      "description": "queue waits for other queued runs (one at a time on this device, tightest staleness first); parallel runs alongside them. A routine never overlaps itself either way. Defaults to `automator.concurrency` in the routine's file.",
+      "enum": [
+        "queue",
+        "parallel"
+      ],
+      "type": "string",
+      "x-type": "enum"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.effort$": {
+      "default": "default",
+      "description": "How hard the model thinks; default leaves it to the model backend. Defaults to `automator.effort` in the routine's file.",
+      "enum": [
+        "default",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "type": "string",
+      "x-type": "enum"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.enabled$": {
+      "default": true,
+      "description": "Whether the routine runs on its schedule. Defaults to `automator.enabled` in the routine's file.",
+      "type": "boolean",
+      "x-type": "bool"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.folder$": {
+      "description": "Folder the run works in (agent CLI backends), with its CLAUDE.md added to the instructions. Without one, runs work in an empty temporary folder. Defaults to `automator.folder` in the routine's file.",
+      "type": "string",
+      "x-type": "path"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.onNotificationClick$": {
+      "description": "What clicking this routine's notifications does (overrides notifications.on-click): show-run, open <file, folder or URL>, run <shell command> or none. Defaults to `automator.onNotificationClick` in the routine's file.",
+      "type": "string",
+      "x-type": "string"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.params\\.[a-z][a-z0-9_]*$": {
+      "description": "A routine parameter's value (declared in its file's automator.parameters, with its type and default; required ones have no default).",
+      "x-type": "parameter"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.schedule$": {
+      "description": "When the routine runs (cron, local time). A routine without one runs only by hand. Defaults to `automator.schedule` in the routine's file.",
+      "type": "string",
+      "x-scheduledOnly": true,
+      "x-type": "cron"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.session$": {
+      "default": "discard",
+      "description": "save keeps the agent CLI session (in the routine's folder) and records its ID with the run, so it can be resumed; discard leaves nothing behind. Defaults to `automator.session` in the routine's file.",
+      "enum": [
+        "discard",
+        "save"
+      ],
+      "type": "string",
+      "x-type": "enum"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.staleness$": {
+      "default": "1h",
+      "description": "How late a missed run may still run before it's recorded as missed. Defaults to `automator.staleness` in the routine's file.",
+      "type": "string",
+      "x-scheduledOnly": true,
+      "x-type": "duration"
+    },
+    "^routines\\.[a-z0-9][a-z0-9-]*\\.timeout$": {
+      "default": "20m",
+      "description": "How long a run may take before it's stopped and recorded as failed. Defaults to `automator.timeout` in the routine's file.",
+      "type": "string",
+      "x-type": "duration"
+    }
+  },
+  "properties": {
+    "history.retention-days": {
+      "default": 90,
+      "description": "How long run history and logs are kept.",
+      "minimum": 1,
+      "type": "integer",
+      "x-type": "int",
+      "x-unit": "days"
+    },
+    "llm.backend": {
+      "default": "api",
+      "description": "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription.",
+      "enum": [
+        "api",
+        "claude-code"
+      ],
+      "type": "string",
+      "x-type": "enum"
+    },
+    "llm.budget.weekly-usd": {
+      "default": 20,
+      "description": "API spend allowed in the rolling 7 days (0: no limit); past it, scheduled runs don't start.",
+      "minimum": 0,
+      "type": "number",
+      "x-type": "number",
+      "x-unit": "USD"
+    },
+    "llm.budget.window": {
+      "default": "5h",
+      "description": "Length of the rolling short budget window.",
+      "type": "string",
+      "x-type": "duration"
+    },
+    "llm.budget.window-usd": {
+      "default": 2,
+      "description": "API spend allowed in the rolling short window (0: no limit); past it, scheduled runs don't start.",
+      "minimum": 0,
+      "type": "number",
+      "x-type": "number",
+      "x-unit": "USD"
+    },
+    "llm.usage-limit": {
+      "default": 50,
+      "description": "Scheduled runs don't start while the Claude plan's 5-hour or weekly usage is above this share (they're recorded as skipped); runs started by hand still run. A run that hits the plan's limit stops scheduled runs until it resets.",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "number",
+      "x-type": "percent",
+      "x-unit": "%"
+    },
+    "memories.max-chars": {
+      "default": 4000,
+      "description": "How much each memories file may hold (every routine's, and each routine's own): what a run's prompt gets, kept small. Past it, `memory add` asks to compact first.",
+      "minimum": 200,
+      "type": "integer",
+      "x-type": "int",
+      "x-unit": "characters"
+    },
+    "notifications.failures": {
+      "default": true,
+      "description": "Notify me when a run fails, needs a sign-in, or is missed.",
+      "type": "boolean",
+      "x-type": "bool"
+    },
+    "notifications.on-click": {
+      "default": "show-run",
+      "description": "What clicking a notification does: show-run (the run it's about), open <file, folder or URL>, run <shell command> or none. Routines can override it (routines.<name>.onNotificationClick).",
+      "type": "string",
+      "x-type": "string"
+    },
+    "update.source-dir": {
+      "default": "",
+      "description": "Source checkout `update` builds from when no published release has a download for this machine. Empty: the checkout this build came from.",
+      "type": "string",
+      "x-type": "string"
+    }
+  },
+  "title": "procauto settings",
+  "type": "object",
+  "x-order": [
+    "llm.backend",
+    "llm.usage-limit",
+    "llm.budget.window",
+    "llm.budget.window-usd",
+    "llm.budget.weekly-usd",
+    "history.retention-days",
+    "notifications.on-click",
+    "update.source-dir",
+    "memories.max-chars",
+    "notifications.failures"
+  ]
+}

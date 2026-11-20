@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run.schema.json",
+  "properties": {
+    "text": {
+      "type": "string"
+    },
+    "writes": {
+      "items": {
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error is the tool's error, when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool",
+          "args"
+        ],
+        "description": "Write is a side-effecting tool call (intercepted in dry-run)."
+      },
+      "type": "array"
+    },
+    "calls": {
+      "items": {
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object"
+          },
+          "write": {
+            "type": "boolean",
+            "description": "Write is whether the tool can change things (not read-only): such\ncalls are intercepted in dry runs, and are also listed in Writes."
+          },
+          "error": {
+            "type": "string",
+            "description": "Error is the tool's error, when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool",
+          "args",
+          "write"
+        ],
+        "description": "Call is one tool call a run made."
+      },
+      "type": "array",
+      "description": "Calls are every tool call, in order (absent in records from before\nthey were kept)."
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "backend": {
+      "type": "string"
+    },
+    "toolCalls": {
+      "type": "integer"
+    },
+    "inputTokens": {
+      "type": "integer"
+    },
+    "outputTokens": {
+      "type": "integer"
+    },
+    "cachedTokens": {
+      "type": "integer"
+    },
+    "costUsd": {
+      "type": "number",
+      "description": "CostUSD is the run's cost at API list prices: api runs only (claude-code\nruns are on a Claude plan, and the app never works out a cost for them)."
+    },
+    "promptSource": {
+      "type": "string",
+      "description": "the routine file"
+    },
+    "output": {
+      "description": "Output is the result in the shape the routine declared (Dotprompt\noutput: schema), validated; absent for routines without one."
+    },
+    "outcome": {
+      "type": "string",
+      "description": "Outcome is the routine's own report when the run succeeded: done or\nnothing_to_do (a failed report fails the run). Reason says why."
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "text",
+    "writes",
+    "dryRun",
+    "backend",
+    "toolCalls",
+    "inputTokens",
+    "outputTokens",
+    "cachedTokens",
+    "promptSource"
+  ],
+  "title": "procauto run --json",
+  "description": "Result of a run."
+}
