@@ -22,7 +22,7 @@ jobs:
       # and per-OS files must exist for each.
       - name: Cross-compile (Linux, Windows)
         run: GOOS=linux go build ./... && GOOS=windows go build ./...
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: core
 
