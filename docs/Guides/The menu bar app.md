@@ -31,7 +31,7 @@ Every routine with its health, schedule in words, last run and status. Its toolb
 What each of these means is in [[Guides/Routines|Routines]].
 
 ## Setup window
-Setup's steps, grouped: **Templates** (tick templates, fill in their parameters, **Install Selected**), **Model backend** (pick one; **Enter API Key…** for `api`), **Plan usage** (**Set Up**), **Routines to fix** (**Open <routine>…**), **Sign-ins** (**Sign In…** opens your browser), **Trust** (review, then **Trust**), **Schedules** (**Resume**). **Check Again** re-reads where setup stands. See [[Guides/Getting started#Set it up|Set it up]].
+Setup's steps, grouped: **Templates** (tick templates, fill in their parameters, **Install Selected**), **Model backend** (pick one; **Enter API Key…** for `api`), **Plan usage** (**Set Up**), **Claude Code** (connected as soon as the window shows it; **Connect** tries again), **Routines to fix** (**Open <routine>…**), **Sign-ins** (**Sign In…** opens your browser), **Turn on routines** (review what each can reach, then **Turn On**: it's trusted and runs on its schedule). **Check Again** re-reads where setup stands. See [[Guides/Getting started#Set it up|Set it up]].
 
 ## Settings window
 **Start at login**, the **LLM usage** card, then every app-wide setting as a tree (`llm` › `budget` › …), each with a control for its type and **Reset** to go back to the default. Changes apply at once. See [[Guides/Settings|Settings]].

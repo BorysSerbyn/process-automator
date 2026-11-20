@@ -12,15 +12,15 @@
               "backend",
               "routine",
               "sign-in",
-              "trust",
-              "enable",
-              "usage"
+              "turn-on",
+              "usage",
+              "mcp"
             ],
             "description": "Step is what it sets up."
           },
           "subject": {
             "type": "string",
-            "description": "Subject is the server or routine it's about (routine, sign-in, trust, enable)."
+            "description": "Subject is the server or routine it's about (routine, sign-in, turn-on)."
           },
           "title": {
             "type": "string",
@@ -31,7 +31,11 @@
           },
           "optional": {
             "type": "boolean",
-            "description": "Optional steps don't keep setup from being done: installing templates,\nand running a routine on its schedule once another routine already does\n(a paused one may be paused on purpose)."
+            "description": "Optional steps don't keep setup from being done: installing templates,\nand resuming a trusted routine once another routine already runs on its\nschedule (a paused one may be paused on purpose)."
+          },
+          "auto": {
+            "type": "boolean",
+            "description": "Auto steps are done without asking: the interactive setup and\nfrontends run its commands as soon as they come to it (connecting\nClaude Code to the app's MCP server). Ask is empty."
           },
           "status": {
             "type": "string",
@@ -84,5 +88,5 @@
     "remaining"
   ],
   "title": "procauto setup --json",
-  "description": "SetupOutput is `setup --json`: every step, in order of kind (templates, backend, routines to fix, sign-ins, trust, schedules)."
+  "description": "SetupOutput is `setup --json`: every step, in order of kind (templates, backend, plan usage, Claude Code's MCP connection, routines to fix, sign-ins, routines to turn on)."
 }

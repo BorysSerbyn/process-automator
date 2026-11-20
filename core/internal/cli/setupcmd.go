@@ -27,16 +27,20 @@ import (
 // SetupStep is one thing first-run setup covers.
 type SetupStep struct {
 	// Step is what it sets up.
-	Step string `json:"step" jsonschema:"enum=templates,enum=backend,enum=routine,enum=sign-in,enum=trust,enum=enable,enum=usage"`
-	// Subject is the server or routine it's about (routine, sign-in, trust, enable).
+	Step string `json:"step" jsonschema:"enum=templates,enum=backend,enum=routine,enum=sign-in,enum=turn-on,enum=usage,enum=mcp"`
+	// Subject is the server or routine it's about (routine, sign-in, turn-on).
 	Subject string `json:"subject,omitempty"`
 	// Title names the step ("Model backend", "Sign in to tracker").
 	Title string `json:"title"`
 	Done  bool   `json:"done"`
 	// Optional steps don't keep setup from being done: installing templates,
-	// and running a routine on its schedule once another routine already does
-	// (a paused one may be paused on purpose).
+	// and resuming a trusted routine once another routine already runs on its
+	// schedule (a paused one may be paused on purpose).
 	Optional bool `json:"optional,omitempty"`
+	// Auto steps are done without asking: the interactive setup and
+	// frontends run its commands as soon as they come to it (connecting
+	// Claude Code to the app's MCP server). Ask is empty.
+	Auto bool `json:"auto,omitempty"`
 	// Status says where it stands, and Ask what to ask me before doing it, in
 	// words for me.
 	Status string `json:"status"`
@@ -55,7 +59,8 @@ type SetupStep struct {
 }
 
 // SetupOutput is `setup --json`: every step, in order of kind (templates,
-// backend, routines to fix, sign-ins, trust, schedules).
+// backend, plan usage, Claude Code's MCP connection, routines to fix,
+// sign-ins, routines to turn on).
 type SetupOutput struct {
 	Steps []SetupStep `json:"steps"`
 	// Done is true when every step that isn't optional is; Remaining counts
@@ -70,16 +75,16 @@ const (
 	stepBackend   = "backend"
 	stepRoutine   = "routine"
 	stepSignIn    = "sign-in"
-	stepTrust     = "trust"
-	stepEnable    = "enable"
+	stepTurnOn    = "turn-on"
 	stepUsage     = "usage"
+	stepMCP       = "mcp"
 )
 
 func newSetupCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "setup",
-		Short: "Guided first run: templates, the model backend, sign-ins, and trusting and enabling routines",
+		Short: "Guided first run: templates, the model backend, sign-ins, and turning routines on",
 		Long: "In a terminal, walks through each step and asks before doing anything. With --json it changes " +
 			"nothing: it lists the steps, what's done, what to ask, and the commands that do each one, for an LLM " +
 			"or a frontend guiding me. Run it again any time; done steps are skipped.",
@@ -138,6 +143,11 @@ func setupSteps(a *engine.App) (SetupOutput, error) {
 	} else if ok {
 		steps = append(steps, st)
 	}
+	if st, ok, err := mcpStep(a); err != nil {
+		return SetupOutput{}, err
+	} else if ok {
+		steps = append(steps, st)
+	}
 	loaded, problems := loadRoutines(a, set)
 	steps = append(steps, problems...)
 	signIns, err := signInSteps(a, loaded)
@@ -145,11 +155,11 @@ func setupSteps(a *engine.App) (SetupOutput, error) {
 		return SetupOutput{}, err
 	}
 	steps = append(steps, signIns...)
-	trusts, enables, err := trustAndScheduleSteps(a, loaded)
+	turnOns, err := turnOnSteps(a, loaded)
 	if err != nil {
 		return SetupOutput{}, err
 	}
-	steps = append(append(steps, trusts...), enables...)
+	steps = append(steps, turnOns...)
 
 	out := SetupOutput{Steps: steps}
 	for _, st := range steps {
@@ -248,6 +258,28 @@ func usageStep(a *engine.App) (SetupStep, bool, error) {
 	return st, true, nil
 }
 
+// mcpStep is there on the claude-code backend: Claude Code gets the app's
+// MCP server at user scope, so I can manage the app from any Claude Code
+// session. Required, and done without asking (it only adds a server to
+// Claude Code, which asks before each tool call that changes anything).
+func mcpStep(a *engine.App) (SetupStep, bool, error) {
+	def, err := a.BackendDef()
+	if err != nil || def.Name != "claude-code" {
+		return SetupStep{}, false, err
+	}
+	problem, err := claudeMCPState()
+	if err != nil {
+		return SetupStep{}, false, err
+	}
+	st := SetupStep{Step: stepMCP, Title: "Claude Code connection", Done: problem == "", Auto: true,
+		Status:   "Claude Code has " + product.Command + "'s MCP server: /mcp lists it in every folder",
+		Commands: []string{product.Command + " mcp connect"}}
+	if problem != "" {
+		st.Status = capitalize(problem)
+	}
+	return st, true, nil
+}
+
 // loadedRoutine is a routine whose settings resolve.
 type loadedRoutine struct {
 	routines.Routine
@@ -316,40 +348,55 @@ func signInSteps(a *engine.App, loaded []loadedRoutine) ([]SetupStep, error) {
 	return steps, nil
 }
 
-// trustAndScheduleSteps is a trust step per routine, and a schedule step per
-// trusted scheduled routine (running an untrusted one would only fail).
-// Schedule steps are optional once any routine runs on its schedule.
-func trustAndScheduleSteps(a *engine.App, loaded []loadedRoutine) (trusts, schedules []SetupStep, err error) {
-	anyEnabled := slices.ContainsFunc(loaded, func(r loadedRoutine) bool { return r.cfg.Enabled && r.cfg.Schedule != "" })
+// turnOnSteps is a step per routine: trusting what it can reach and, when
+// it has a schedule, running on it, in one yes (`routines trust --resume`).
+// It's done once the routine is trusted and isn't paused. Trusting is
+// required; resuming a trusted routine is optional once another routine runs
+// on its schedule (a paused one may be paused on purpose).
+func turnOnSteps(a *engine.App, loaded []loadedRoutine) ([]SetupStep, error) {
+	untrusted := map[string]string{}
 	for _, r := range loaded {
 		why, _, err := a.TrustProblem(r.Routine, r.cfg)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		st := SetupStep{Step: stepTrust, Subject: r.Name, Title: "Trust " + r.Name, Done: why == "", Status: "Trusted",
-			Ask: "Trust " + r.Name + " to run for real with what it can reach?",
-			Commands: []string{
-				product.Command + " routines trust " + r.Name + " --check --json   # show me what it can reach before asking",
-				product.Command + " routines trust " + r.Name + " --yes",
-			}}
 		if why != "" {
-			st.Status = capitalize(why)
+			untrusted[r.Name] = why
 		}
-		trusts = append(trusts, st)
-		if why != "" || r.cfg.Schedule == "" {
-			continue
-		}
-		words := schedule.Text(r.cfg.Schedule)
-		sched := SetupStep{Step: stepEnable, Subject: r.Name, Title: "Run " + r.Name + " on its schedule",
-			Done: r.cfg.Enabled, Optional: anyEnabled, Status: "Runs on its schedule: " + words,
-			Ask:      "Run " + r.Name + " on its schedule (" + words + ")?",
-			Commands: []string{product.Command + " routines resume " + r.Name}}
-		if !r.cfg.Enabled {
-			sched.Status = "Paused: it doesn't run on its schedule (" + words + ")"
-		}
-		schedules = append(schedules, sched)
 	}
-	return trusts, schedules, nil
+	runs := func(r loadedRoutine) bool { return r.cfg.Enabled && r.cfg.Schedule != "" && untrusted[r.Name] == "" }
+	anyRuns := slices.ContainsFunc(loaded, runs)
+	steps := make([]SetupStep, 0, len(loaded))
+	for _, r := range loaded {
+		why, words := untrusted[r.Name], schedule.Text(r.cfg.Schedule)
+		paused := r.cfg.Schedule != "" && !r.cfg.Enabled
+		st := SetupStep{Step: stepTurnOn, Subject: r.Name, Title: "Turn on " + r.Name, Done: why == "" && !paused,
+			Commands: []string{product.Command + " routines trust " + r.Name + " --yes --resume"}}
+		switch {
+		case why != "":
+			st.Status = capitalize(why)
+			st.Ask = "Trust " + r.Name + " to run for real with what it can reach"
+			switch {
+			case paused:
+				st.Status += "; paused (" + words + ")"
+				st.Ask += ", and run it on its schedule (" + words + ")"
+			case r.cfg.Schedule != "":
+				st.Status += ", so it can't run on its schedule (" + words + ")"
+			}
+			st.Ask += "?"
+			st.Commands = append([]string{product.Command + " routines trust " + r.Name + " --check --json   # show me what it can reach before asking"}, st.Commands...)
+		case paused:
+			st.Optional = anyRuns
+			st.Status = "Trusted, but paused: it doesn't run on its schedule (" + words + ")"
+			st.Ask = "Run " + r.Name + " on its schedule (" + words + ")?"
+		case r.cfg.Schedule != "":
+			st.Status = "Trusted; runs on its schedule: " + words
+		default:
+			st.Status = "Trusted; it has no schedule, so it runs when started"
+		}
+		steps = append(steps, st)
+	}
+	return steps, nil
 }
 
 // capitalize starts a status with a capital, as every status does.
@@ -361,7 +408,7 @@ func capitalize(s string) string {
 }
 
 // setupInteractive walks through the steps in a terminal, asking before each:
-// it installs templates and signs in, trusts and resumes through the same
+// it installs templates, signs in and turns routines on through the same
 // commands setup --json lists (run attached to the terminal, so their own
 // questions work), and sets the backend directly.
 func setupInteractive(cmd *cobra.Command, a *engine.App) error {
@@ -418,8 +465,14 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 	} else if b.Problem != "" {
 		fmt.Fprintln(w, "  Still needed: "+b.Problem)
 	}
+	if st, ok, err := mcpStep(a); err != nil {
+		return err
+	} else if ok && !st.Done {
+		fmt.Fprintln(w, "  Connecting Claude Code to "+product.Command+"'s MCP server:")
+		self("mcp", "connect")
+	}
 
-	fmt.Fprintln(w, "\n3. Routines, sign-ins and trust")
+	fmt.Fprintln(w, "\n3. Routines and sign-ins")
 	steps, err := setupSteps(a)
 	if err != nil {
 		return err
@@ -439,19 +492,9 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 			if yes("  "+s.Ask, true) {
 				self("usage", "statusline", "install")
 			}
-		case stepTrust:
+		case stepTurnOn:
 			fmt.Fprintf(w, "  %s: %s\n", s.Title, s.Status)
-			self("routines", "trust", s.Subject) // shows what it can reach, then asks
-		}
-	}
-
-	// Schedules are offered once routines are trusted, so look again.
-	if steps, err = setupSteps(a); err != nil {
-		return err
-	}
-	for _, s := range steps.Steps {
-		if s.Step == stepEnable && !s.Done && yes("  "+s.Ask, false) {
-			self("routines", "resume", s.Subject)
+			self("routines", "trust", s.Subject, "--resume") // shows what it can reach, then asks
 		}
 	}
 

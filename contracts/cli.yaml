@@ -62,6 +62,14 @@ commands:
     usage: procauto mcp call <server> <tool> [json-args]
     summary: Call one tool and print its result (debugging; runs writes for real)
     example: procauto mcp call automator runs '{"since":"7d"}'
+  - command: mcp connect
+    usage: procauto mcp connect [flags]
+    summary: Register this app's MCP server with Claude Code, at user scope (every folder)
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/mcp-connect.schema.json
   - command: mcp serve
     usage: procauto mcp serve [flags]
     summary: Serve the CLI as MCP tools over stdio, for Claude and other MCP clients
@@ -294,7 +302,10 @@ commands:
     jsonOutput: cli/routines-show.schema.json
   - command: routines trust
     usage: procauto routines trust <routine> [flags]
-    summary: Review what a routine can reach, and trust it to run for real
+    summary: 'Review what a routine can reach, and trust it to run for real (--resume: and turn it on)'
+    example: |-
+      procauto routines trust digest --check --json   # review only
+      procauto routines trust digest --yes --resume    # trust it and run it on its schedule
     flags:
       - name: --check
         type: bool
@@ -302,9 +313,12 @@ commands:
       - name: --json
         type: bool
         usage: machine-readable output
+      - name: --resume
+        type: bool
+        usage: also let it run on its schedule, if it's paused (turns it on in one step)
       - name: --yes
         type: bool
-        usage: trust without asking (after reviewing what it can reach)
+        usage: don't ask (after reviewing what it can reach)
     jsonOutput: cli/routines-trust.schema.json
   - command: routines update
     usage: procauto routines update <routine> [flags]
@@ -436,7 +450,7 @@ commands:
     jsonOutput: cli/settings-set.schema.json
   - command: setup
     usage: procauto setup [flags]
-    summary: 'Guided first run: templates, the model backend, sign-ins, and trusting and enabling routines'
+    summary: 'Guided first run: templates, the model backend, sign-ins, and turning routines on'
     flags:
       - name: --json
         type: bool

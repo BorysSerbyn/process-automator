@@ -127,8 +127,8 @@ func newRoutinesCreateCmd() *cobra.Command {
 		Use:   "create <routine>",
 		Short: "Add a routine file, validated first; it starts disabled",
 		Long: "Writes <routine>.prompt to the routines folder after validating it like any routine (never over an " +
-			"existing one). The routine starts disabled: try it with `run <routine> --dry-run`, then enable it with " +
-			"`settings set routines.<routine>.enabled true`.",
+			"existing one). The routine starts paused and untrusted: try it with `run <routine> --dry-run`, then turn " +
+			"it on with `routines trust <routine> --resume`.",
 		Example: "  " + product.Command + " routines create standup --from ./standup.prompt",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -158,9 +158,9 @@ func newRoutinesCreateCmd() *cobra.Command {
 			}
 			off := false
 			return emit(cmd, RoutineChange{Routine: r.Name, Path: r.Path, Enabled: &off},
-				fmt.Sprintf("Created %s (%s), disabled and not trusted.\nTry it: "+product.Command+" run %s --dry-run\n"+
-					"Trust it: "+product.Command+" routines trust %s\nEnable it: "+product.Command+" settings set routines.%s.enabled true",
-					r.Name, r.Path, r.Name, r.Name, r.Name))
+				fmt.Sprintf("Created %s (%s), paused and not trusted.\nTry it: "+product.Command+" run %s --dry-run\n"+
+					"Turn it on (trust it and run it on its schedule): "+product.Command+" routines trust %s --resume",
+					r.Name, r.Path, r.Name, r.Name))
 		},
 	}
 	src.add(cmd)

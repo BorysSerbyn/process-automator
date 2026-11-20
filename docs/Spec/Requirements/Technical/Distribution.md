@@ -61,22 +61,22 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 - `--check` only reports; `--detach` installs in the background (for frontends), logging to `update.log` and reporting the result as a notification; `locks/update.lock` keeps two installs from running at once
 
 ## First-run setup
-- **`setup`** in a terminal walks through the steps in order, asking before each and running the same commands as below; done steps are skipped, and it can run again any time
-- **`setup --json`** changes nothing: it lists the steps by kind, each with `done`, `optional`, `status`, `ask` and the `commands` that do it (placeholders for my answers), for an LLM or automator-ui guiding me:
+- **`setup`** in a terminal walks through the steps in order, asking before each (except `auto` ones) and running the same commands as below; done steps are skipped, and it can run again any time
+- **`setup --json`** changes nothing: it lists the steps by kind, each with `done`, `optional`, `auto`, `status`, `ask` and the `commands` that do it (placeholders for my answers), for an LLM or automator-ui guiding me. An `auto` step is done without asking: whoever guides me runs its commands as soon as it comes to it
 
 | Kind | Step |
 |---|---|
 | `templates` | Optional: which projects I work on (when templates are made for any), then which templates to install, with their parameters |
 | `backend` | `llm.backend`, and its key or token |
 | `usage` | While Claude Code's `/usage` can't be read: the status line fallback |
+| `mcp` | On `claude-code`: Claude Code has the app's MCP server at user scope (`mcp connect`); `auto` |
 | `routine` | A routine that can't run, and why |
 | `sign-in` | Each server the routines use that isn't signed in, with its `prepare` steps first |
-| `trust` | Each untrusted routine |
-| `enable` | Each paused routine; optional once another routine runs on its schedule |
+| `turn-on` | Each routine, done once it's trusted and not paused: `routines trust <name> --yes --resume` trusts it and resumes it in one step. Untrusted, it's required; trusted but paused, it's optional once another routine runs on its schedule |
 
 - **Setup is done** when every step that isn't optional is
-- **Setup left shows in run status**: the scheduler checks setup on every pass and records the steps still to do (`setupLeft`), and so does every command that can change them, as soon as it succeeds (a sign-in, trust, a template install, a setting); unfinished setup makes health `error`, with a reason saying what's left
+- **Setup left shows in run status**: the scheduler checks setup on every pass and records the steps still to do (`setupLeft`), and so does every command that can change them, as soon as it succeeds (a sign-in, trust, a template install, a setting, `mcp connect`); unfinished setup makes health `error`, with a reason saying what's left
 
 ## Installing through an LLM
-- **`AGENTS.md`** at the repository root (where coding agents look) holds the install instructions for LLMs: check prerequisites, install (`./install.sh --yes`, or build from the checkout), then follow `setup --json` step by step, asking me each step's question, and offer to connect the MCP server
+- **`AGENTS.md`** at the repository root (where coding agents look) holds the install instructions for LLMs: check prerequisites, install (`./install.sh --yes`, or build from the checkout), then follow `setup --json` step by step, asking me each step's question (and doing `auto` steps without asking)
 - **Every step runs without a terminal**: CLI commands with `--json`, and `--yes` once I've answered, the same ones the installer and `setup` use; sign-ins open my browser as they do from the CLI

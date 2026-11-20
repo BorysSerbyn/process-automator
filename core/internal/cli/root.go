@@ -111,7 +111,7 @@ var changesSetup = map[string]bool{
 	"auth login": true, "auth logout": true, "settings set": true, "settings reset": true,
 	"templates install": true, "routines create": true, "routines update": true, "routines delete": true,
 	"routines trust": true, "routines pause": true, "routines resume": true,
-	"plugins add": true, "plugins remove": true, "usage statusline install": true, "usage statusline uninstall": true,
+	"plugins add": true, "plugins remove": true, "usage statusline install": true, "usage statusline uninstall": true, "mcp connect": true,
 }
 
 // refreshSetupStatus records the setup steps left in run status after a

@@ -43,14 +43,17 @@ A routine runs for real only once you've trusted it with what it can reach: its 
 procauto routines trust digest     # shows what it can reach and what changed, then asks
 ```
 
-In the menu bar app: the routine window's **Review…** › **Trust**, or Setup › **Trust**. Only you can trust a routine: Claude can't, through the MCP server.
+In the menu bar app: the routine window's **Review…** › **Trust**, or Setup › **Turn On** (which also resumes it). Only you can trust a routine: Claude can't, through the MCP server.
 
 **Trust is taken away** when any of what it can reach changes (a new server, tool, built-in tool, plugin section or folder). Its prompt, schedule, model and other settings don't affect it. An untrusted routine isn't scheduled (the dot turns red: "can't be scheduled"), and running it for real is refused, until you trust it again.
 
 ## Turn it on
+New routines start paused and untrusted. Turning one on is one step: trusting it with what it can reach, and running it on its schedule.
+
 ```sh
-procauto routines resume digest    # runs on its schedule
-procauto routines pause digest     # doesn't; you can still run it by hand
+procauto routines trust digest --resume   # shows what it can reach, then one yes trusts it and resumes it
+procauto routines resume digest           # runs on its schedule (once trusted)
+procauto routines pause digest            # doesn't; you can still run it by hand
 ```
 
 In the menu bar app: **Pause** / **Resume** in its window. A routine without a schedule only runs by hand.

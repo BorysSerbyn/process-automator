@@ -22,7 +22,7 @@ type ToolInfo struct {
 }
 
 func newMCPCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "mcp", Short: "Inspect configured MCP servers, and serve this CLI as one"}
+	cmd := &cobra.Command{Use: "mcp", Short: "Inspect configured MCP servers, serve this CLI as one, and connect it to Claude Code"}
 	var asJSON bool
 	tools := &cobra.Command{
 		Use:         "tools <server>",
@@ -99,6 +99,6 @@ func newMCPCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(tools, call, newMCPServeCmd())
+	cmd.AddCommand(tools, call, newMCPServeCmd(), newMCPConnectCmd())
 	return cmd
 }

@@ -35,6 +35,9 @@ final class SetupViewModel: ObservableObject {
     /// The model backend setting (its choices and words come from the core).
     @Published var backend: SettingState?
     @Published var reviews: [String: TrustReview] = [:]
+    /// Steps the core does without asking (`auto`) that were started once
+    /// already: a failed one waits for its button.
+    private var autoStarted: Set<String> = []
 
     /// Opens a routine's window (a routine to fix).
     let openRoutine: (String) -> Void
@@ -83,6 +86,10 @@ final class SetupViewModel: ObservableObject {
                 // Reviews are read again: one taken before a sign-in is out of date.
                 reviews = [:]
                 for step in output.steps where isOpen(step) { prepare(step) }
+                for step in output.steps where step.auto == true && !step.done && !autoStarted.contains(Self.id(step)) {
+                    autoStarted.insert(Self.id(step))
+                    act(step)
+                }
             case .failure(let failure):
                 loadError = failure.message
             }
@@ -96,8 +103,17 @@ final class SetupViewModel: ObservableObject {
         switch step.step {
         case .templates: if templates == nil { loadTemplates(step) }
         case .backend: loadBackend(step)
-        case .trust: if let routine = step.subject, reviews[routine] == nil { review(routine, step) }
-        case .routine, .sign_hyphen_in, .enable, .usage: break
+        case .turn_hyphen_on: if let routine = step.subject, reviews[routine] == nil { review(routine, step) }
+        case .routine, .sign_hyphen_in, .usage, .mcp: break
+        }
+    }
+
+    /// Does a step that's one action with no answers to give (an `auto` one).
+    private func act(_ step: SetupStep) {
+        switch step.step {
+        case .mcp: connectClaudeCode(step)
+        case .usage: setUpUsage(step)
+        case .templates, .backend, .routine, .sign_hyphen_in, .turn_hyphen_on: break
         }
     }
 
@@ -185,7 +201,7 @@ final class SetupViewModel: ObservableObject {
         }
     }
 
-    // MARK: Sign-in, trust, enable
+    // MARK: Sign-in, Claude Code, turning routines on
 
     /// Signs in where the step says (a server, or the Anthropic API key):
     /// OAuth in the browser, keys on a local page there.
@@ -203,10 +219,20 @@ final class SetupViewModel: ObservableObject {
         }
     }
 
-    func trust(_ step: SetupStep) {
+    /// Trusts the routine with what it can reach and lets it run on its
+    /// schedule, in one step (after its review).
+    func turnOn(_ step: SetupStep) {
         guard let routine = step.subject else { return }
         run(step) { cli in
-            if case .failure(let failure) = cli.trust(routine) { return failure }
+            if case .failure(let failure) = cli.turnOn(routine) { return failure }
+            return nil
+        }
+    }
+
+    /// Registers the core's MCP server with Claude Code.
+    func connectClaudeCode(_ step: SetupStep) {
+        run(step) { cli in
+            if case .failure(let failure) = cli.connectClaudeCode() { return failure }
             return nil
         }
     }
@@ -216,14 +242,6 @@ final class SetupViewModel: ObservableObject {
     func setUpUsage(_ step: SetupStep) {
         run(step) { cli in
             if case .failure(let failure) = cli.installStatusLine() { return failure }
-            return nil
-        }
-    }
-
-    func resume(_ step: SetupStep) {
-        guard let routine = step.subject else { return }
-        run(step) { cli in
-            if case .failure(let failure) = cli.setRoutinePaused(routine, false) { return failure }
             return nil
         }
     }
