@@ -87,7 +87,7 @@ jobs:
       # A release is checked as install.sh checks it.
       - name: Install test
         run: PROCAUTO_INSTALL_UNSIGNED=$([ "$PUBLISH" = true ] || echo 1) scripts/test-install.sh build/dist/process-automator-*-macos.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: build/dist/*
@@ -109,7 +109,7 @@ jobs:
       - name: Install test
         if: matrix.arch == 'amd64'
         run: scripts/test-install.sh build/dist/process-automator-*-linux-amd64.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
           path: build/dist/*
