@@ -27,11 +27,11 @@ body { font: 15px/1.5 -apple-system, system-ui, sans-serif; max-width: 30rem; ma
 input { width: 100%; box-sizing: border-box; padding: .5rem; font: inherit; margin: .5rem 0 1rem; }
 button { padding: .5rem 1rem; font: inherit; }
 .err { color: #c33; }
-.steps { white-space: pre-wrap; font: inherit; }
+.steps { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 </style></head><body>
 {{if .Done}}<h1>Received</h1><p>{{.App}} has {{.Label}} and is storing it in {{.Store}}; where you started the sign-in says when it's done. You can close this tab.</p>
 {{else}}<h1>{{.App}}</h1>
-{{if .Steps}}<p><strong>First:</strong></p><pre class="steps">{{.Steps}}</pre>{{end}}
+{{if .Steps}}<p><strong>First:</strong></p><pre class="steps">{{range .Steps}}{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Text}}</a>{{else}}{{.Text}}{{end}}{{end}}</pre>{{end}}
 <form method="post"><label>Enter {{.Label}}
 <input type="password" name="value" autocomplete="off" autofocus required></label>
 {{if .Err}}<p class="err">{{.Err}}</p>{{end}}
@@ -60,9 +60,10 @@ func secretPage(ctx context.Context, label, steps string, present func(url strin
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		data := struct {
-			App, Label, Err, Store, Steps string
-			Done                          bool
-		}{App: product.Name, Label: label, Store: secrets.StoreName, Steps: steps}
+			App, Label, Err, Store string
+			Steps                  []stepPart
+			Done                   bool
+		}{App: product.Name, Label: label, Store: secrets.StoreName, Steps: stepParts(steps)}
 		if r.Method == http.MethodPost {
 			v := strings.TrimSpace(r.PostFormValue("value"))
 			if v == "" {

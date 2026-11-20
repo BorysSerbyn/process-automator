@@ -186,7 +186,7 @@ type terminalUI struct {
 
 func (t *terminalUI) Prepare(_ context.Context, server, steps string) error {
 	t.steps = steps
-	t.Say("Before signing in to %s:\n%s", server, steps)
+	t.Say("Before signing in to %s:\n%s", server, plainSteps(steps))
 	if t.browser {
 		return nil // the secret page shows them too
 	}

@@ -43,7 +43,10 @@ type Plugin struct {
 	RoutineSection bool
 	// Prepare is what I do outside the app before signing in to it the first
 	// time (e.g. create a Slack app), as numbered steps in plain words: shown,
-	// and confirmed, before any credential is asked for.
+	// and confirmed, before any credential is asked for. Web addresses and
+	// Markdown links, [text](https://…), show as links (in the terminal, as the
+	// text and its address), so a long prefilled address can hide behind a few
+	// words.
 	Prepare string
 	// Uses names the other plugins it connects to through Host.Connect (as its
 	// config says), so whatever a routine using it needs from those (a
