@@ -35,7 +35,4 @@ id_ed25519*
 *.swp
 
 # Logo build intermediates
-automator-ui/Resources/Logo/source/venv/
-automator-ui/Resources/Logo/source/iconsheet
-automator-ui/Resources/Logo/source/menubar
 automator-ui/Resources/Logo/AppIcon.iconset/

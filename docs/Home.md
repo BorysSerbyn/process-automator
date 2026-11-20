@@ -11,6 +11,7 @@ Everything needed to use the app, in reading order:
 - [[Guides/Settings|Settings]] (app-wide and per routine, the usage limit, start at login)
 - [[Guides/Using it from Claude|Using it from Claude]] (the MCP server)
 - [[Guides/Troubleshooting|Troubleshooting]] (a red dot, `doctor`, run history, logs)
+- [[Guides/Developing|Developing]] (building, testing, releasing, and building another app on it)
 
 ## Spec
 What the app is, and why it's built the way it is:

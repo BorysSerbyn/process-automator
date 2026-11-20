@@ -1,6 +1,6 @@
 # Installing Process Automator (for an AI agent)
 
-Follow this when someone asks you to install process-automator for them. (Working on the code instead? See the Development section of `README.md`.)
+Follow this when someone asks you to install process-automator for them. (Working on the code instead? See `docs/Guides/Developing.md`.)
 
 ## What the app does
 Process Automator runs **routines**: prompt files that a model (Claude, through Claude Code or the API) runs on a schedule in the background, with tools from **plugins** (MCP servers: the app's own `automator` (read-only) and `notify`, plus any MCP server they add). Out of the box it does nothing: anything a prompt plus tools can do, a routine can do. Around that it has:
@@ -40,7 +40,7 @@ It downloads the latest release for this machine, checks its checksum (and on ma
 
 **No published release for this machine** (install.sh says so): build it from the checkout instead. On macOS:
 1. Prerequisites, each with their go-ahead: the Xcode command line tools (`xcode-select --install`: *they* confirm the dialog), Homebrew, then `make deps` (Go and the other build tools).
-2. A code-signing identity named `Process Automator Dev`, which keeps macOS permission grants across rebuilds. *They* create it in Keychain Access, following README.md → Development → "One-time: signing certificate"; check with `security find-identity -v -p codesigning`.
+2. A code-signing identity named `Process Automator Dev`, which keeps macOS permission grants across rebuilds. *They* create it in Keychain Access, following `docs/Guides/Getting started.md` → "Building it from the checkout"; check with `security find-identity -v -p codesigning`.
 3. `make install`. It builds the core and the app, installs them as above, and remembers this checkout: `procauto update` builds newer tagged releases from it until releases are published.
 
 On Linux: Go (from their package manager, with their go-ahead), then `make package-linux LINUX_ARCH=<amd64|arm64>` and `./install.sh --yes --from build/dist/<the .tar.gz it made>`.

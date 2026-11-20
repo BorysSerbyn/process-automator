@@ -159,4 +159,4 @@ clean: ## Remove build output
 
 check-identity:
 	@[ "$(SIGN_IDENTITY)" = "-" ] || security find-identity -v -p codesigning | grep -q "\"$(SIGN_IDENTITY)\"" || { \
-	  echo "Signing identity '$(SIGN_IDENTITY)' not found. Create it (see README) or set SIGN_IDENTITY=..."; exit 1; }
+	  echo "Signing identity '$(SIGN_IDENTITY)' not found. Create it (see docs/Guides/Getting started.md) or set SIGN_IDENTITY=..."; exit 1; }
