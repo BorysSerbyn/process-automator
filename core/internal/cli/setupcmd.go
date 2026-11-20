@@ -164,8 +164,10 @@ func setupSteps(a *engine.App) (SetupOutput, error) {
 func templatesStep(set *routines.Set, offered int) SetupStep {
 	// Optional: the app is set up without any routines.
 	st := SetupStep{Step: stepTemplates, Title: "Templates", Done: len(set.Routines) > 0, Optional: true, Status: "No routines installed yet",
-		Ask: "Which projects do you work on? Then, which templates should be installed as routines: those " +
-			"of your projects, and those for any project? None are picked by default.",
+		Ask: "First, on its own: which of the templates' projects do you work on (name each one, even if there's " +
+			"only one)? Then, each template as its own choice: which should be installed as routines, of those of " +
+			"your projects and those for any project? Templates with the same name are alternatives. None are " +
+			"picked by default.",
 		Commands: []string{
 			product.Command + " templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none",
 			product.Command + " templates install <template> [--set <param>=<value>]...",
