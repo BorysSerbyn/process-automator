@@ -24,6 +24,17 @@ func readOnly() map[string]string { return map[string]string{annReadOnly: "true"
 
 func isReadOnly(c *cobra.Command) bool { return c.Annotations[annReadOnly] == "true" }
 
+// ranReadOnly says this invocation had no side effects: a read-only command,
+// or one run with its read-only flag (setup --json, run --dry-run).
+func ranReadOnly(c *cobra.Command) bool {
+	if isReadOnly(c) {
+		return true
+	}
+	flag := c.Annotations[annReadOnlyWith]
+	on, _ := c.Flags().GetBool(flag)
+	return flag != "" && on
+}
+
 // annNotForMCP marks a flag that frontends exposing commands generically
 // (the MCP server) leave out, e.g. one that reads a local file.
 const annNotForMCP = "procauto/not-for-mcp"

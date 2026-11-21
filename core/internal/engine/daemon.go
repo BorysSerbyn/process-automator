@@ -204,6 +204,22 @@ func heartbeat(ctx context.Context, path string) {
 	}
 }
 
+// SyncStatus records each routine's state in run status (paused or not, its
+// next run, why it can't be scheduled), as the scheduler does on each pass:
+// after a command changes a routine, frontends see it at once, not up to a
+// pass later. Until the scheduler has first recorded what's trusted, it's
+// left to the scheduler.
+func (a *App) SyncStatus(now time.Time) error {
+	if _, initialized, err := a.TrustStore().Load(); err != nil || !initialized {
+		return err
+	}
+	jobs, problems, err := scheduledJobs(a)
+	if err != nil {
+		return err
+	}
+	return runstatus.Sync(a.Layout.RunStatus(), statusSetups(jobs, problems, now), now)
+}
+
 // statusSetups is how each routine is set up, for runstatus.Sync: enabled,
 // next slot, and why it can't be scheduled (broken file or settings).
 func statusSetups(jobs []scheduler.Job, problems map[string]string, now time.Time) map[string]runstatus.Setup {

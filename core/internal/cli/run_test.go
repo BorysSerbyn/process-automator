@@ -398,6 +398,46 @@ func TestSetupStatusRefreshes(t *testing.T) {
 	}
 }
 
+// A routine turned on (or paused) shows so in run status at once, without
+// waiting for the scheduler's next pass; a read-only command writes nothing.
+func TestRoutineStateAtOnce(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	enginetest.Load(t, cfg)
+	src := "---\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"
+	if _, err := cli(t, cfg, "routines", "create", "daily", "--source", src); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cli(t, cfg, "routines", "trust", "daily", "--yes", "--resume"); err != nil {
+		t.Fatal(err)
+	}
+	status := filepath.Join(filepath.Dir(cfg), "run-status.json")
+	routine := func() runstatus.Routine {
+		s, _ := runstatus.Load(status)
+		for _, r := range s.Routines {
+			if r.Name == "daily" {
+				return r
+			}
+		}
+		return runstatus.Routine{}
+	}
+	if r := routine(); !r.Enabled || r.NextRunAt == nil {
+		t.Errorf("turned on, run status says: %+v", r)
+	}
+	if _, err := cli(t, cfg, "routines", "pause", "daily"); err != nil {
+		t.Fatal(err)
+	}
+	if r := routine(); r.Enabled || r.Summary != "Paused" {
+		t.Errorf("paused, run status says: %+v", r)
+	}
+	info, _ := os.Stat(status)
+	if _, err := cli(t, cfg, "setup", "--json"); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.Stat(status); !after.ModTime().Equal(info.ModTime()) {
+		t.Error("setup --json rewrote run status")
+	}
+}
+
 // Recording what setup has left never makes the data folder again: after
 // `uninstall --purge` it's gone, and stays gone.
 func TestSetupStatusNotWithoutData(t *testing.T) {
@@ -410,7 +450,7 @@ func TestSetupStatusNotWithoutData(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd.SetContext(context.Background())
-	refreshSetupStatus(cmd)
+	refreshStatus(cmd)
 	if _, err := os.Stat(filepath.Dir(cfg)); err == nil {
 		t.Error("the data folder was made again")
 	}

@@ -33,7 +33,7 @@ func NewRoot(plugins []pluginapi.Plugin) *cobra.Command {
 	}
 	root.PersistentFlags().String("config", "", "config file (default: per-user config dir)")
 	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) { adoptLoginPath(cmd) }
-	root.PersistentPostRun = func(cmd *cobra.Command, _ []string) { refreshSetupStatus(cmd) }
+	root.PersistentPostRun = func(cmd *cobra.Command, _ []string) { refreshStatus(cmd) }
 	root.AddCommand(newVersionCmd(), newAuthCmd(), newSettingsCmd(), newMCPCmd(), newRunCmd(), newDaemonCmd(), newRoutinesCmd(), newPathsCmd(), newUpdateCmd(), newRunsCmd(), newTemplatesCmd(), newPluginsCmd(), newStartCmd(), newStopCmd(), newScheduleCmd(), newUsageCmd(), newSetupCmd(), newNotificationsCmd(), newStatusCmd(), newDoctorCmd(), newMemoryCmd(), newLoginItemsCmd(), newUninstallCmd())
 	root.SetContext(withPlugins(context.Background(), plugins))
 	return root
@@ -106,14 +106,18 @@ func adoptLoginPath(cmd *cobra.Command) {
 	}
 }
 
-// refreshSetupStatus records the setup steps left in run status after a
-// command that succeeded, so frontends showing run status (the menu) and
-// `setup --json` (the setup window) agree at once, not on the scheduler's
-// next pass. Every command that may change what setup has left does it:
-// all but the read-only ones, `usage` (it reads the plan's usage again) and
-// `setup --json` (whoever looks at setup gets run status up to date). It only
-// reads files, and run status is written only when what's left changed.
-func refreshSetupStatus(cmd *cobra.Command) {
+// refreshStatus brings run status up to date after a command that
+// succeeded, so frontends following it (the menu, the routine windows) show
+// the change at once, not on the scheduler's next pass:
+//   - the setup steps left, after every command that may change them: all
+//     but the read-only ones, `usage` (it reads the plan's usage again) and
+//     `setup --json` (the setup window and the menu agree); written only when
+//     they changed;
+//   - each routine's state (paused, next run, problem), after a command
+//     that changes something (not one run read-only, like `setup --json`).
+//
+// It only reads files.
+func refreshStatus(cmd *cobra.Command) {
 	path := strings.TrimPrefix(cmd.CommandPath(), cmd.Root().Name()+" ")
 	if isReadOnly(cmd) && path != "usage" {
 		return
@@ -130,6 +134,9 @@ func refreshSetupStatus(cmd *cobra.Command) {
 	a, err := loadApp(cmd)
 	if err != nil {
 		return
+	}
+	if !ranReadOnly(cmd) {
+		_ = a.SyncStatus(time.Now())
 	}
 	left, err := setupLeft(a)
 	if err != nil {

@@ -61,7 +61,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 ## Settings
 - **One registry**: every app-wide setting is declared once in `core/internal/settings/registry.go` (key, type, default, limits, unit, backend, description); `settings list/get/set/reset`, validation, `settings.schema.json` and the settings UI derive from it. Values live under `settings:` in the config file, edited in place with comments kept
 - **Types**: bool, int, number, percent, duration, cron, enum, string, path (`~/` expands), list of strings (a YAML list; comma-separated on the CLI; items optionally limited to an enum)
-- **Live**: the scheduler re-reads config and settings every pass, so changes apply without a restart
+- **Live**: the scheduler re-reads config and settings every pass, so changes apply without a restart. A command that changes something (not one run read-only) records each routine's state in run status itself (paused or not, next run, why it can't be scheduled), as a pass would, so frontends show it at once
 - `settings list --scope app|routines`, `--routine <name>`; settings for the other backend show as `inactive`
 - **Retired settings** (`settings.Retired`): a renamed or removed key in the config file reads as its new key (one already set wins) or not at all, and the next `settings set`/`reset` rewrites the file so. Retired: `notifications.failures` (now `runs.failure-notifications`), `notifications.on-click` (removed). A routine's `onNotificationClick` is gone too, from settings (ignored) and routine files (an unknown field)
 

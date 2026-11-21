@@ -225,6 +225,13 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 - **GitHub artifact attestations**: need `gh` on every machine, and GitHub Enterprise Cloud for a private repository
 - **Checksum only on macOS too**: the Developer ID is already required for Gatekeeper, and checking it is free
 
+## Decision: commands bring run status up to date
+Run status is the scheduler's record, but a command that changes something also records each routine's state there when it succeeds, as the scheduler's pass would. Otherwise turning a routine on in the setup window left it showing as paused for up to a pass (30 seconds). Commands run read-only (`setup --json`, `run --dry-run`) don't write it, so frontends that poll them don't make it change.
+
+### Rejected
+- **Only the scheduler writes routine state**: what I just did shows late
+- **Frontends showing the change themselves until the next pass**: they'd need the core's logic
+
 ## Decision: saving sessions doesn't need a folder
 `session: save` and `folder` are separate settings. Claude Code files a session under the folder it ran in and resumes it only from there, so a routine that saves its sessions without a folder works in an empty folder of its own (`<data>/session-folders/<name>/`) that's kept, not a temporary one. Each run records the folder it worked in (`folder` on `lastRun` and in history), so a frontend resumes or forks it from there. The trust surface is still the `folder` setting, so turning saving on or off doesn't ask for trust again.
 
