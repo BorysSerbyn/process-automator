@@ -16,7 +16,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Build values are set at link time** in `core/automator` by the Makefile: the version, the source checkout (`SOURCE_DIR`), where the templates are packaged, the release API, and `BUNDLE_PREFIX` over the app's prefix
 - **Another app** is a Go module that requires this one and has its own main package, plugins and templates; it builds with this repository's Makefile and scripts at the same version (see [[Spec/Requirements/Technical/Distribution|Technical: Distribution]])
 - **Blank-slate engine**: the engine knows no specific service and the app compiles in no plugins; routines use the plugins every app ships with (`core/plugins`: `notify`) and the MCP servers added in config
-- **OS-neutral core**: OS calls live in per-OS files (`name_darwin.go`, `name_unix.go`, `name_other.go`, or a `//go:build` line), OS-bound integrations are plugins, and delivering to the OS (notifications, the menu bar) is the frontends' job. `internal/osboundary`'s test (no `runtime.GOOS`, `syscall`, OS tools or OS paths in shared files) and CI's Linux and Windows cross-compiles enforce it
+- **OS-neutral core**: OS calls live in per-OS files (`name_darwin.go`, `name_unix.go`, `name_other.go`, or a `//go:build` line), OS-bound integrations are plugins, and delivering the app's own state to the OS (its notifications, the menu bar) is the frontends' job. The one exception is the notify plugin, which shows routines' notifications itself (see [[#Shipped plugins]]). `internal/osboundary`'s test (no `runtime.GOOS`, `syscall`, OS tools or OS paths in shared files) and CI's Linux and Windows cross-compiles enforce it
 - **Config**: one YAML file, `config.yaml` in the per-user config folder (`os.UserConfigDir()/<Folder>/`: `process-automator/`), decoded strictly: unknown or retired fields are errors. It holds `mcpServers` (external servers), `plugins` (in-process plugins' own sections) and `settings`. `--config` points the CLI at another file
 - **Data folder** is the config file's folder; everything the app keeps is in it:
 
@@ -62,7 +62,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Types**: bool, int, number, percent, duration, cron, enum, string, path (`~/` expands), list of strings (a YAML list; comma-separated on the CLI; items optionally limited to an enum)
 - **Live**: the scheduler re-reads config and settings every pass, so changes apply without a restart
 - `settings list --scope app|routines`, `--routine <name>`; settings for the other backend show as `inactive`
-- **Retired settings** (`settings.Retired`): a renamed or removed key in the config file reads as its new key (one already set wins) or not at all, and the next `settings set`/`reset` rewrites the file so. Retired: `notifications.failures` (now `runs.failure-notifications`), `notifications.on-click` (removed)
+- **Retired settings** (`settings.Retired`): a renamed or removed key in the config file reads as its new key (one already set wins) or not at all, and the next `settings set`/`reset` rewrites the file so. Retired: `notifications.failures` (now `runs.failure-notifications`), `notifications.on-click` (removed). A routine's `onNotificationClick` is gone too, from settings (ignored) and routine files (an unknown field)
 
 | Setting | Default | |
 |---|---|---|
@@ -79,9 +79,9 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 ## Routines
 - **One Dotprompt file per routine**: `<data>/routines/<name>.prompt`; the file name is the routine name (lowercase letters, digits and dashes). Parsed with Dotprompt's own parser
 - **Dotprompt's directory conventions**: `_<name>.prompt` files are partials (`{{> name}}`); `memories` is reserved for the app
-- **Frontmatter**: plain Dotprompt (`description`, `model`, `config`, `tools` = the allowlist, `output`) plus the app's fields as Dotprompt extension fields in the `automator` namespace, written dotted (`automator.servers:`). A nested `automator:` block, an unknown `automator.*` field, invalid YAML and an empty file are rejected; `tools` without `automator.servers`, `automator.staleness` without `automator.schedule`, and a plugin's field without that plugin in `automator.servers`, are errors
+- **Frontmatter**: plain Dotprompt (`description`, `model`, `config`, `tools` = the allowlist, `output`) plus the app's fields as Dotprompt extension fields in the `automator` namespace, written dotted (`automator.servers:`). A nested `automator:` block, an unknown `automator.*` field, invalid YAML and an empty file are rejected; `tools` without `automator.servers`, and `automator.staleness` without `automator.schedule`, are errors
 - **Each file loads independently**: a broken file is reported (`routines list`, warnings) and skipped, never taking down the others
-- **Per-routine fields are declared once** (`settings.RoutineFields`: name, type, default, description, scheduled-only, the plugin it's about); parsing, validation, `settings`, the settings schema (`routines.<name>.<field>`) and `routines list --json` derive from it. Each is a frontmatter key `automator.<field>`, overridable by the setting `routines.<name>.<field>`; absent means the default
+- **Per-routine fields are declared once** (`settings.RoutineFields`: name, type, default, description, scheduled-only); parsing, validation, `settings`, the settings schema (`routines.<name>.<field>`) and `routines list --json` derive from it. Each is a frontmatter key `automator.<field>`, overridable by the setting `routines.<name>.<field>`; absent means the default
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -94,7 +94,6 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `session` | `discard` | `save` keeps the agent CLI session: the core picks its ID (`--session-id`) and records it in `lastRun.sessionId` and history. Needs a `folder`; dry runs never keep one |
 | `builtinTools` | `[]` | Agent CLI built-in tools by name, allowed explicitly, never by permission bypass; file tools stay inside the working folder. Agent CLI backends only |
 | `concurrency` | `queue` | `queue` or `parallel` |
-| `onNotificationClick` | `show-run` | What clicking a notification the routine sent (`notify_me`) does. Only for routines with `notify` in `automator.servers` |
 
 - **Servers and tools**: `automator.servers` lists the servers the routine uses; every tool in `tools` must be offered by exactly one of them, and only those tools are registered with the model
 - **Parameters** (`automator.parameters`: name, setting type, default, description, enum): values are per-routine settings `routines.<name>.params.<param>`, passed to the prompt as inputs; a name is lowercase letters, digits and underscores and can't shadow a built-in input; a required one without a value makes the routine unschedulable
@@ -168,7 +167,11 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **`plugins list`** shows every server routines can use; `mcp tools <server> [--json]` its tools, marking read-only ones
 
 ## Shipped plugins
-- **`notify`** (`core/plugins/notify`): `notify_me(title, body?, open?, urgent?)`, a write tool, recorded with the routine and its run. Its only setting is each routine's `onNotificationClick`; it has no app-wide one. `open` is an existing file or folder (relative to the routine's folder), never an app, script or executable; `urgent` maps to macOS time-sensitive or Linux `critical`
+- **`notify`** (`core/plugins/notify`): `notify_me(title, body?, urgent?)`, a write tool (dry runs intercept it) that shows a desktop notification itself, through the OS, not through the app's notifications file or automator-ui. It has no settings, and clicking one does nothing. The call is in the run's history like any tool call; nothing else is kept
+  - **macOS**: UserNotifications, from a darwin-only cgo file (`deliver_darwin.go`, built `darwin && cgo`; the core is built with `MACOSX_DEPLOYMENT_TARGET=14.0`). The core runs from inside the app's bundle and is signed with the app's bundle ID as its identifier, so its notifications are the app's and share its permission; if macOS hasn't been asked, the first one asks. Outside an app bundle (a development build) it reports that it can't notify rather than calling UserNotifications. `urgent` is time-sensitive
+  - **Linux**: the freedesktop notification service (`org.freedesktop.Notifications.Notify`) on the session bus, in pure Go (godbus), as the app's name; `urgent` is critical urgency. Linux builds stay CGO-free
+  - **Other OSes** (and macOS without cgo): `notify_me` fails, saying it isn't supported
+  - **Tests** replace the OS call (`notify.Deliver`) and never show a notification
 
 ## Sign-ins and secrets
 - **`auth login <server|anthropic|claude-code>`**: OAuth in the browser for remote servers (dynamic client registration or the server's `oauthClient`, PKCE, rotating refresh tokens persisted); keys and tokens typed in the terminal, or on a short-lived local page with `--browser`. A plugin with `Prepare` steps shows them and waits for me to say they're done before asking for anything. Web addresses and Markdown links (`[text](https://…)`) in the steps are links on the secret page and in the Setup window; the terminal shows a Markdown link as its text and address. `auth logout` forgets a server's credentials; `auth status` shows which are stored
@@ -177,9 +180,9 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Never in config**: secrets live only in the store
 
 ## Notifications
-- **Recorded by the core** in `notifications.json` next to run status (schema in `contracts/notifications.schema.json`), by `kind`: what routines asked through the notify plugin (`routine`), and the app's own, written by the core directly, never through the plugin: runs that failed, needed a sign-in, were missed or skipped (`failure`, unless `runs.failure-notifications` is off) and update results (`app`). The newest 200 within 30 days are kept
+- **The app's own**, recorded by the core in `notifications.json` next to run status (schema in `contracts/notifications.schema.json`), by `kind`: runs that failed, needed a sign-in, were missed or skipped (`failure`, unless `runs.failure-notifications` is off) and update results (`app`). The newest 200 within 30 days are kept. Routines' notifications never come here (the notify plugin shows them itself); entries of the retired kind `routine` are dropped when the file is read
 - **Delivered by frontends**, which mark them delivered (`notifications delivered <id>...`); `notifications list [--pending]` lists them. automator-ui delivers only while macOS allows notifications, so none are lost before the permission prompt is answered
-- **Clicking is the core's**: the frontend runs `notifications open <id>`. The app's own show the run they're about (`show-run`; `none` for one about no run), whatever any routine's settings say. A routine's opens the file it attached, else does its routine's `onNotificationClick` (`show-run` if the routine is gone). Actions: `show-run` (the run it's about: a frontend's routine window with `--frontend-shows-runs`, otherwise a readable report), `open <file, folder or URL>`, `run <shell command>` (detached, with `PROCAUTO_NOTIFICATION_ID`, `PROCAUTO_NOTIFICATION_TITLE`, `PROCAUTO_NOTIFICATION_BODY`, `PROCAUTO_ROUTINE` and `PROCAUTO_RUN` set) or `none`. Actions are validated when set
+- **Clicking is the core's**: the frontend runs `notifications open <id>`, which shows the run the notification is about (`show-run`: a frontend's routine window with `--frontend-shows-runs`, otherwise a readable report), or does nothing (`none`) for one about no run
 - **Opening** files and URLs uses `open` on macOS and `xdg-open` on Linux
 
 ## Usage limit
@@ -229,7 +232,7 @@ automator-ui (SwiftUI, macOS 14+; `automator-ui/`, executable `AutomatorUI`, lib
 - **A routine's window**: Run Now / Dry Run (`start <routine> [--dry-run]`), Stop while it runs or waits (`stop`), Pause / Resume (`routines pause|resume`), Delete… (`routines delete`, confirmed); a Not trusted banner with Review… (`routines trust <name> --check --json`, then `--yes`); its status, schedule with a days-and-time picker or custom cron (`schedule describe`/`build`, applied with `settings set` on Save), and what it can reach; its runs (`runs show`); its memories; its own settings (`settings list --routine <name>`)
 - **Updates**: `update --check` on launch and daily; "Update to X…" installs with `update --detach`, which runs in the background so it survives automator-ui restarting, logs to `update.log`, and reports its result as a notification. An install holds `locks/update.lock`, so a second one refuses and the menu shows one in progress
 - **Start at login**: `login-items status|enable|disable` over the build's login items (`ui` and `scheduler` on macOS, `scheduler` on Linux); launchd's enable/disable override on the installed LaunchAgents, or enabling the systemd user unit. It never starts or stops what's running; `installed` is false before the app is installed
-- **Notifications**: the pending ones in the core's notifications file are shown, urgent ones as time-sensitive, then marked delivered; a click runs `notifications open <id>`
+- **Notifications**: the pending ones in the core's notifications file (the app's own) are shown, then marked delivered; a click runs `notifications open <id>`
 - Each window and its data are freed when it closes
 
 ## Linux

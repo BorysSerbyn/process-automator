@@ -366,9 +366,6 @@ func settingsSchema() ([]byte, error) {
 		if f.ScheduledOnly {
 			p["x-scheduledOnly"] = true
 		}
-		if f.Server != "" {
-			p["x-server"] = f.Server
-		}
 		patterns[`^routines\.[a-z0-9][a-z0-9-]*\.`+f.Name+`$`] = p
 	}
 	patterns[`^routines\.[a-z0-9][a-z0-9-]*\.params\.[a-z][a-z0-9_]*$`] = map[string]any{

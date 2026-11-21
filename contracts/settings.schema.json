@@ -48,13 +48,6 @@
       "type": "string",
       "x-type": "path"
     },
-    "^routines\\.[a-z0-9][a-z0-9-]*\\.onNotificationClick$": {
-      "default": "show-run",
-      "description": "What clicking a notification this routine sends (notify_me) does, unless it attached a file to open: show-run (the run that sent it), open <file, folder or URL>, run <shell command> or none. Defaults to `automator.onNotificationClick` in the routine's file.",
-      "type": "string",
-      "x-server": "notify",
-      "x-type": "string"
-    },
     "^routines\\.[a-z0-9][a-z0-9-]*\\.params\\.[a-z][a-z0-9_]*$": {
       "description": "A routine parameter's value (declared in its file's automator.parameters, with its type and default; required ones have no default).",
       "x-type": "parameter"

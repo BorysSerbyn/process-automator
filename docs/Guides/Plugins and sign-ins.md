@@ -27,7 +27,7 @@ The app ships with no integrations; one plugin comes with it and needs no sign-i
 
 | Server | What routines get |
 |---|---|
-| `notify` | `notify_me`: a desktop notification to you ([[Guides/Writing a routine#Notifying you\|Notifying you]]) |
+| `notify` | `notify_me`: a desktop notification to you, shown by the plugin itself (macOS, Linux) ([[Guides/Writing a routine#Notifying you\|Notifying you]]) |
 
 Everything else is a server you add: see [[Guides/Adding a plugin|Adding a plugin]].
 

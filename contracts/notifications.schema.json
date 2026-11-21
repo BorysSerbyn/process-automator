@@ -18,11 +18,10 @@
           "kind": {
             "type": "string",
             "enum": [
-              "routine",
               "failure",
               "app"
             ],
-            "description": "Kind is \"routine\" (a routine's notify_me), or the app's own: \"failure\" (a\nrun that failed, needs a sign-in, or was skipped or missed) or \"app\"\n(about the app, e.g. an update)."
+            "description": "Kind is \"failure\" (a run that failed, needs a sign-in, or was skipped\nor missed) or \"app\" (about the app, e.g. an update)."
           },
           "title": {
             "type": "string"
@@ -30,20 +29,12 @@
           "body": {
             "type": "string"
           },
-          "urgent": {
-            "type": "boolean",
-            "description": "Urgent asks frontends to break through focus modes where the OS allows\n(macOS time-sensitive, Linux critical urgency)."
-          },
           "routine": {
             "type": "string",
             "description": "Routine and Run (a run ID, as in `runs show`) are what it's about, if any."
           },
           "run": {
             "type": "string"
-          },
-          "open": {
-            "type": "string",
-            "description": "Open is a file the routine asked to open on click (instead of its\nroutine's click action)."
           },
           "deliveredAt": {
             "type": "string",

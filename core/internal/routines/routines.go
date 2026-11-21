@@ -124,7 +124,7 @@ func (r Routine) RunsHere() bool {
 // Settings are the routine's per-routine settings, with defaults from its
 // file: the declared fields, then one per parameter.
 func (r Routine) Settings() []settings.Setting {
-	out := settings.RoutineSettings(r.Name, r.File, r.Servers)
+	out := settings.RoutineSettings(r.Name, r.File)
 	for _, p := range r.Params {
 		out = append(out, p.Setting(r.Name))
 	}
@@ -351,11 +351,6 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 	}
 	if _, ok := file["staleness"]; ok && !r.Scheduled() {
 		return Routine{}, fmt.Errorf("%s.staleness needs %s.schedule", Namespace, Namespace)
-	}
-	for _, f := range settings.RoutineFields {
-		if _, ok := file[f.Name]; ok && f.Server != "" && !slices.Contains(servers, f.Server) {
-			return Routine{}, fmt.Errorf("%s.%s is for routines that use %s: add it to %s.servers", Namespace, f.Name, f.Server, Namespace)
-		}
 	}
 	// Validate every field with the same rules `settings set` uses.
 	for _, def := range r.Settings() {

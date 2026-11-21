@@ -84,13 +84,21 @@ A **template** is a routine file tracked in the repository's `templates/` so any
 - **"Recipe"** (Goose's name): a second name for a routine
 - **Compiling templates into the binary**: sharing one would need a release
 
-## Decision: the app's own notifications don't go through the notify plugin
-`notify` is a plugin routines choose to use, so its one setting, what a click does, is each routine's (`onNotificationClick`), offered only to routines that use it. The app's own notifications (a run that failed, needs a sign-in, was skipped or missed; an update) are the core's: written directly, never through the plugin, and clicking one shows the run; their only setting is an on/off for the run ones (`runs.failure-notifications`). Both are kept in the one notifications file, told apart by `kind`, so a frontend delivers them the same way, and nothing a routine sets reaches the app's own.
+## Decision: the notify plugin shows its notifications itself; the app's own go through automator-ui
+`notify` is a plugin routines choose to use, so it delivers what it's asked to the OS on its own: on macOS through UserNotifications, as the app (the core lives in the app's bundle and is signed with its bundle ID, so it shares the app's permission to notify), on Linux through the freedesktop notification service. It needs no frontend, no file and no settings. Clicking one does nothing: a plugin only runs during its routine's run, and on macOS a click goes to the app's main executable, automator-ui, which knows nothing of it. The app's own notifications (a run that failed, needs a sign-in, was skipped or missed; an update) are the core's: recorded in its notifications file, delivered by automator-ui, and clicking one shows the run; their only setting is an on/off for the run ones (`runs.failure-notifications`). Nothing a routine does reaches them.
 
 ### Rejected
-- **An app-wide click action with per-routine overrides**: it governed the app's notifications too, so a routine's setting changed what clicking "<routine> failed" did, and it was an app-wide setting for a plugin many routines don't use
-- **A file and a delivery path per sender**: the same notification shape twice over for the frontend; `kind` already tells them apart
+- **Routines' notifications through the app's file and automator-ui**: ties a plugin to the menu bar app, so nothing shows without it (on Linux, nothing at all), and its settings (what a click does) ended up as the app's
+- **An app-wide click action with per-routine overrides**: it governed the app's notifications too, so a routine's setting changed what clicking "<routine> failed" did
 - **The app notifying through `notify_me`**: the app's alerts would depend on a plugin, its trust and dry runs
+- **Shelling out to `osascript` or `notify-send`**: notifications attributed to Script Editor rather than the app, or a tool that may not be installed
+
+## Decision: cgo for macOS notifications, and only there
+The core is pure Go, except one darwin-only cgo file in the notify plugin: UserNotifications has no command-line or pure-Go way in that keeps the notification the app's. It builds only with `darwin && cgo` (without cgo, macOS says notifications aren't supported), so Linux and Windows builds and cross-compiles stay CGO-free, and Linux uses D-Bus in pure Go.
+
+### Rejected
+- **A helper in automator-ui** (the core asks the Swift app to post): the plugin would depend on the menu bar app running, the coupling this removes
+- **A separate small Swift or Objective-C helper binary**: another executable to build, sign and ship for one call
 
 ## Decision: frontends talk to the core through the CLI and the run-status file
 The CLI is the API: a frontend runs commands with `--json` to read state and make changes, and watches the run-status file the core writes (file events, with a slow poll as fallback). The core never needs to know a frontend exists, either side restarts independently, and the same works on any OS. Frontends hold no logic: the core decides health, and the one thing a frontend judges is whether the core is responding (the scheduler's heartbeat).
@@ -105,7 +113,7 @@ The Go types are the source of truth: `make contracts` emits JSON Schemas and `c
 - **Hand-written Swift types**: they'd drift from the core unnoticed
 
 ## Decision: automator-ui is a separate Swift app, macOS only
-The UI is a native SwiftUI/AppKit app, separate from the Go core, which stays pure Go. Every cross-platform option loses on macOS what the Swift app does well (dependable notification clicks, time-sensitive notifications, native menu bar behaviour, about 11 MB idle), and Linux trays need extensions on stock GNOME whatever the toolkit, so Linux runs the CLI and scheduler only. The app is named for being a UI app (automator-ui); the indicator is its menu bar part.
+The UI is a native SwiftUI/AppKit app, separate from the Go core, which stays pure Go (but for one cgo file, see the notify plugin). Every cross-platform option loses on macOS what the Swift app does well (dependable notification clicks, time-sensitive notifications, native menu bar behaviour, about 11 MB idle), and Linux trays need extensions on stock GNOME whatever the toolkit, so Linux runs the CLI and scheduler only. The app is named for being a UI app (automator-ui); the indicator is its menu bar part.
 
 ### Rejected
 - **A Go menu bar library** (e.g. `fyne.io/systray`): one binary, but reaches AppKit through cgo

@@ -13,6 +13,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 |---|---|
 | CLI | `procauto` (`Command`) |
 | Bundle ID | `<BUNDLE_PREFIX>.procauto` (`BUNDLE_PREFIX` defaults to `dev`) |
+| The core's signing identifier | The bundle ID, so the notify plugin's notifications are the app's |
 | macOS login items | `<prefix>.procauto.ui`, `<prefix>.procauto.scheduler` |
 | Linux login item | `procauto-scheduler.service` (systemd user unit) |
 | Secrets service | `<prefix>.procauto`, the bundle ID |

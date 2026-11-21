@@ -4,6 +4,7 @@ go 1.27.4
 
 require (
 	github.com/firebase/genkit/go v1.14.0
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/google/dotprompt/go v0.0.0-20260708220100-73beb993ac95
 	github.com/google/jsonschema-go v0.4.3
 	github.com/invopop/jsonschema v0.14.0

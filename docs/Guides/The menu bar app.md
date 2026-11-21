@@ -37,8 +37,8 @@ Setup's steps, grouped: **Templates** (tick templates, fill in their parameters,
 **Start at login**, the **LLM usage** card, then every app-wide setting as a tree (`llm` › `budget` › …), each with a control for its type and **Reset** to go back to the default. Changes apply at once. See [[Guides/Settings|Settings]].
 
 ## Notifications
-The app shows desktop notifications for:
-- its own: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), and update results. Clicking one shows the run it's about
-- what routines tell you with `notify_me` (see [[Guides/Writing a routine#Notifying you|Notifying you]]); an **urgent** one breaks through Focus and stays until dismissed. Clicking one shows the run that sent it, unless the routine attached a file to open, or you changed that routine's click action (`routines.<name>.onNotificationClick`: `show-run`, `open <file, folder or URL>`, `run <shell command>` or `none`)
+The menu bar app shows the app's own desktop notifications: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), and update results. Clicking one shows the run it's about.
 
-macOS asks once whether the app may show notifications; until you allow it, they wait. A `run` command gets `PROCAUTO_NOTIFICATION_ID`, `PROCAUTO_NOTIFICATION_TITLE`, `PROCAUTO_NOTIFICATION_BODY`, `PROCAUTO_ROUTINE` and `PROCAUTO_RUN` in its environment.
+What routines tell you with `notify_me` isn't the menu bar app's: the `notify` plugin shows it itself, also as the app (see [[Guides/Writing a routine#Notifying you|Notifying you]]).
+
+macOS asks once whether the app may show notifications (for both); until you allow it, the app's own wait.

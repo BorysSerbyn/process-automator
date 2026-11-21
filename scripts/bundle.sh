@@ -30,8 +30,10 @@ sed -e "s|__SHORT_VERSION__|${VERSION%%-*}|g" -e "s|__VERSION__|$VERSION|g" -e "
 # Signing refuses extended attributes (Finder info, quarantine) on what it seals.
 xattr -cr "$app"
 # Sign inner binary first, then the bundle, with a stable identity so macOS keeps permission grants across rebuilds.
+# The core is signed as the app (its bundle ID): macOS attributes the notify plugin's notifications by the
+# caller's signing identifier, so the core shares the app's permission to notify.
 # shellcheck disable=SC2086 # SIGN_FLAGS is a list of flags
-codesign --force ${SIGN_FLAGS:-} --sign "$identity" --identifier "$BUNDLE_ID.core" "$app/Contents/MacOS/$COMMAND"
+codesign --force ${SIGN_FLAGS:-} --sign "$identity" --identifier "$BUNDLE_ID" "$app/Contents/MacOS/$COMMAND"
 # shellcheck disable=SC2086
 codesign --force ${SIGN_FLAGS:-} --sign "$identity" "$app"
 echo "$app"

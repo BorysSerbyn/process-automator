@@ -27,9 +27,6 @@ type RoutineConfig struct {
 	BuiltinTools []string
 	// Parallel runs alongside other runs instead of in the run queue.
 	Parallel bool
-	// OnClick is what clicking a notification the routine sent (notify_me)
-	// does; "" for a routine that doesn't use notify.
-	OnClick string
 	// Params are the routine's parameter values, by name (its prompt inputs).
 	Params map[string]any
 }
@@ -67,7 +64,6 @@ func (a *App) RoutineConfig(r routines.Routine) (RoutineConfig, error) {
 	}
 	c.BuiltinTools = vals.List(key("builtinTools"))
 	c.Parallel = vals.String(key("concurrency")) == "parallel"
-	c.OnClick = vals.String(key("onNotificationClick"))
 	c.Params = map[string]any{}
 	for _, p := range r.Params {
 		v := vals.Value(key("params." + p.Name))

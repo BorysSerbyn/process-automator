@@ -7,7 +7,7 @@ Process Automator runs **routines**: prompt files that a model (Claude, through 
 - **routines:** create, edit, run now or as a dry run (nothing posted), pause, stop, delete; schedules in plain words; run history with every tool call, output and cost;
 - **plugins:** add any MCP server (remote, local, or a folder they wrote), try it before it's installed, sign in;
 - **settings:** app-wide and per routine (schedule, model, effort, timeout, working folder, which tools it may use, ...);
-- **memories** routines read, **notifications** routines send, **templates** to start from, an **LLM budget** that keeps scheduled runs from overspending, and **guardrails**: a routine runs for real only once trusted with what it can reach;
+- **memories** routines read, desktop **notifications** routines send, **templates** to start from, an **LLM budget** that keeps scheduled runs from overspending, and **guardrails**: a routine runs for real only once trusted with what it can reach;
 - a menu bar app on macOS (status, routines, settings, setup), and `doctor` to explain anything red.
 
 **All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. On the `claude-code` backend, setup connects Claude Code to it (the `mcp` step below); for another MCP client, its stdio command is `procauto mcp serve`.
