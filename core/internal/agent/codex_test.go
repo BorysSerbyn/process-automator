@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/firebase/genkit/go/genkit"
 )
 
 // codexConfig is the --config values of a codex command line, by key.
@@ -53,10 +55,12 @@ func TestCodexCommandLine(t *testing.T) {
 		"--config", "features.computer_use=false", "--config", "features.in_app_browser=false", "--config", "features.memories=false",
 		"--config", "features.goals=false", "--config", "features.hooks=false",
 		"--config", "skills.include_instructions=false", "--config", "skills.bundled.enabled=false",
+		"--config", "tools.experimental_request_user_input.enabled=false",
 		"--config", `mcp_servers.procauto.url="http://127.0.0.1:5555/mcp"`,
 		"--config", `mcp_servers.procauto.bearer_token_env_var="AUTOMATOR_MCP_TOKEN"`,
 		"--config", "mcp_servers.procauto.required=true",
 		"--config", `mcp_servers.procauto.default_tools_approval_mode="approve"`,
+		"--config", `mcp_servers.procauto.omit_tools_from=["deferred"]`,
 		"--config", "mcp_servers.procauto.tool_timeout_sec=3600.0",
 		"--config", `model_reasoning_effort="high"`,
 		"-",
@@ -243,9 +247,15 @@ func TestCodexResult(t *testing.T) {
 		t.Errorf("no final message: %v", err)
 	}
 
-	stderr := []byte("Error: required MCP servers failed to initialize: procauto\n")
-	if _, err := c.Result(CLIRun{}, nil, stderr, exit); err == nil || !strings.Contains(err.Error(), "required MCP servers failed") {
-		t.Errorf("non-zero exit: %v", err)
+	// As Codex 0.171.0 printed it when the app's MCP server refused the token.
+	stderr := readFixture(t, "mcp-unauthorized.stderr")
+	err = func() error { _, err := c.Result(CLIRun{}, nil, stderr, exit); return err }()
+	if err == nil || !strings.HasPrefix(err.Error(), "codex: the routine's tools couldn't be reached: thread/start: thread/start failed") ||
+		strings.Contains(err.Error(), "codex login") || len(err.Error()) > 700 {
+		t.Errorf("MCP server refused: %v", err)
+	}
+	if _, err := c.Result(CLIRun{}, nil, []byte("Reading prompt from stdin...\nsomething broke\n"), exit); err == nil || !strings.Contains(err.Error(), "something broke") {
+		t.Errorf("non-zero exit, plain stderr: %v", err)
 	}
 	if _, err := c.Result(CLIRun{}, readFixture(t, "success.jsonl"), nil, exit); err == nil {
 		t.Error("a non-zero exit passed")
@@ -352,5 +362,47 @@ func TestCodexThroughCLI(t *testing.T) {
 	var exit *exec.ExitError
 	if _, err := b.Run(context.Background(), Job{Name: "t", Source: "---\nmodel: googleai/gemini\n---\nx"}); err == nil || errors.As(err, &exit) {
 		t.Fatalf("a non-OpenAI model: %v", err)
+	}
+}
+
+// Picoschema's optional fields (a type beside anyOf [that type, null], seen
+// sent to Codex as is) become just the alternatives in the strict form; a
+// null the model gives for one is dropped, and the result checks against the
+// routine's own schema.
+func TestStrictSchemaFromPicoschema(t *testing.T) {
+	g := genkit.Init(context.Background())
+	src := "---\noutput:\n  schema:\n    fruit: string\n    note?: string\n    box?(object):\n      size: integer\n---\nName a fruit."
+	p, err := genkit.LoadPromptFromSource(g, src, "f", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts, err := p.Render(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := outputSchema(opts)
+	props := strictSchema(schema)["properties"].(map[string]any)
+	note := props["note"].(map[string]any)
+	if _, typed := note["type"]; typed || len(note["anyOf"].([]any)) != 2 || !nullable(note) {
+		t.Errorf("note: %v", note)
+	}
+	box := props["box"].(map[string]any)
+	inner := box["anyOf"].([]any)[0].(map[string]any)
+	if _, typed := box["type"]; typed || inner["additionalProperties"] != false || !slices.Equal(stringList(inner["required"]), []string{"size"}) {
+		t.Errorf("box: %v", box)
+	}
+	v := dropOptionalNulls(schema, map[string]any{"fruit": "fig", "note": nil, "box": nil})
+	if err := checkOutput(schema, v); err != nil {
+		t.Errorf("a strict result fails the routine's schema: %v (%v)", err, v)
+	}
+}
+
+// Events as Codex 0.171.0 printed them for a saved-session run (with a fake
+// model provider): the thread ID, tool calls, final message and usage.
+func TestCodexResultRecorded(t *testing.T) {
+	out, err := (&Codex{}).Result(CLIRun{SaveSession: true}, readFixture(t, "recorded-0.171.0.jsonl"), nil, nil)
+	if err != nil || out.Text != "pineapple" || out.SessionID != "01a1ff87-7bc8-7563-ac62-d49ae02c5096" ||
+		out.InputTokens != 3003 || out.CachedTokens != 1800 || out.OutputTokens != 153 {
+		t.Fatalf("%+v %v", out, err)
 	}
 }

@@ -198,10 +198,12 @@ func (b *Codex) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 		"features.computer_use=false", "features.in_app_browser=false", "features.memories=false",
 		"features.goals=false", "features.hooks=false",
 		"skills.include_instructions=false", "skills.bundled.enabled=false",
+		"tools.experimental_request_user_input.enabled=false", // nobody answers
 		mcp + "url=" + tomlString(r.MCP.URL),
 		mcp + "bearer_token_env_var=" + tomlString(CodexTokenEnv),
 		mcp + "required=true",                         // a run that can't reach its tools fails
 		mcp + `default_tools_approval_mode="approve"`, // the gateway decides what runs
+		mcp + `omit_tools_from=["deferred"]`,          // in the model's tool list, not behind tool_search
 		mcp + "tool_timeout_sec=3600.0",               // the routine's timeout bounds a run
 	}
 	if builtins[codexNetwork] {
@@ -253,6 +255,15 @@ func writeCodexSchema(dir string, schema map[string]any) (string, error) {
 // properties as required and allows no others, and a property that wasn't
 // required may be null instead (see dropOptionalNulls).
 func strictSchema(s map[string]any) map[string]any {
+	if alts, ok := s["anyOf"].([]any); ok && allTyped(alts) {
+		// Typed alternatives are the whole schema; Picoschema's optional
+		// fields repeat the first one's keywords beside them, which strict
+		// mode doesn't take.
+		s = map[string]any{"anyOf": alts, "description": s["description"]}
+		if s["description"] == nil {
+			delete(s, "description")
+		}
+	}
 	out := make(map[string]any, len(s)+2)
 	for k, v := range s {
 		out[k] = v
@@ -315,7 +326,8 @@ func strictSchema(s map[string]any) map[string]any {
 	return out
 }
 
-// nullable says whether a schema already takes null at its top level.
+// nullable says whether a schema already takes null at its top level (its
+// type, or one of its anyOf alternatives).
 func nullable(s map[string]any) bool {
 	switch t := s["type"].(type) {
 	case string:
@@ -323,7 +335,21 @@ func nullable(s map[string]any) bool {
 	case []any:
 		return slices.Contains(t, any("null"))
 	}
-	return false
+	alts, _ := s["anyOf"].([]any)
+	return slices.ContainsFunc(alts, func(a any) bool {
+		m, ok := a.(map[string]any)
+		return ok && nullable(m)
+	})
+}
+
+// allTyped says whether every alternative is a schema with a type.
+func allTyped(alts []any) bool {
+	for _, a := range alts {
+		if m, ok := a.(map[string]any); !ok || m["type"] == nil {
+			return false
+		}
+	}
+	return len(alts) > 0
 }
 
 func stringList(v any) []string {
@@ -457,7 +483,7 @@ func (b *Codex) Result(r CLIRun, stdout, stderr []byte, runErr error) (*Output, 
 		msg = lastErr
 	}
 	if msg == "" {
-		msg = tail(strings.TrimSpace(string(stderr)), 2000)
+		msg = stderrError(string(stderr))
 	}
 	switch {
 	case msg == "" && runErr != nil:
@@ -475,6 +501,9 @@ func (b *Codex) Result(r CLIRun, stdout, stderr []byte, runErr error) (*Output, 
 func codexError(msg string) error {
 	low := strings.ToLower(msg)
 	switch {
+	case strings.Contains(low, "required mcp servers failed to initialize"):
+		// Before "401": the app's own MCP server refusing isn't a Codex sign-in.
+		return fmt.Errorf("codex: the routine's tools couldn't be reached: %s", msg)
 	case strings.Contains(low, "usage limit") || strings.Contains(low, "quota exceeded"):
 		return fmt.Errorf("codex: Codex's usage limit is reached: %s", msg)
 	case strings.Contains(low, "not logged in") || strings.Contains(low, "401") || strings.Contains(low, "unauthorized"):
@@ -483,12 +512,20 @@ func codexError(msg string) error {
 	return fmt.Errorf("codex: %s", msg)
 }
 
-// tail is the last n bytes of s, at most.
-func tail(s string, n int) string {
-	if len(s) <= n {
-		return s
+// stderrError is the error Codex printed last on stderr ("Error: …", which
+// can run to several kilobytes of nested causes), shortened from its end;
+// without one, stderr's last lines.
+func stderrError(stderr string) string {
+	s := strings.TrimSpace(stderr)
+	if i := strings.LastIndex(s, "Error: "); i >= 0 && (i == 0 || s[i-1] == '\n') {
+		s = s[i+len("Error: "):]
+	} else if len(s) > 2000 {
+		s = "…" + s[len(s)-2000:]
 	}
-	return "…" + s[len(s)-n:]
+	if len(s) > 600 {
+		s = s[:600] + "…"
+	}
+	return s
 }
 
 // CodexLoginStatus runs `codex login status`, which reads the sign-in Codex
