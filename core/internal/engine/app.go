@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"slices"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -83,7 +84,7 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 		}
 		dataDir := files.PluginData(p.Name)
 		conn.Builtins[p.Name] = func(run pluginapi.Run) (*sdk.Server, error) {
-			return p.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, run: run})
+			return p.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, config: path, run: run})
 		}
 	}
 	return &App{Config: cfg, Layout: files, Connector: conn, Plugins: plugins}, nil
@@ -145,7 +146,7 @@ func (a *App) KnownServer(name string) bool {
 
 // pluginHost is a plugin's host outside any run (for reading its config).
 func (a *App) pluginHost(p pluginapi.Plugin) *host {
-	return &host{plugin: p, cfg: a.Config, conn: a.Connector, dataDir: a.Layout.PluginData(p.Name)}
+	return &host{plugin: p, cfg: a.Config, conn: a.Connector, dataDir: a.Layout.PluginData(p.Name), config: a.Layout.Config()}
 }
 
 // host is the engine side of pluginapi.Host for one in-process plugin.
@@ -155,6 +156,7 @@ type host struct {
 	cfg     config.Config
 	conn    *mcp.Connector
 	dataDir string
+	config  string // the config file, for ConnectApp
 	run     pluginapi.Run
 }
 
@@ -193,6 +195,31 @@ func (h *host) RoutineConfig(v any) error {
 // go through the run's gateway), so it serves no run.
 func (h *host) Connect(ctx context.Context, name string) (*mcp.Session, error) {
 	return h.conn.Connect(ctx, name)
+}
+
+// AppServerCommand is the command ConnectApp starts: this executable serving
+// the app's MCP server, read-only, on the config at path. Tests replace it.
+var AppServerCommand = func(path string) (*exec.Cmd, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command(exe, "--config", path, "mcp", "serve", "--read-only"), nil
+}
+
+// ConnectApp opens a session to the app's own MCP server, read-only, over
+// stdio. Like Connect, it serves no run.
+func (h *host) ConnectApp(ctx context.Context) (*mcp.Session, error) {
+	cmd, err := AppServerCommand(h.config)
+	if err != nil {
+		return nil, err
+	}
+	client := sdk.NewClient(&sdk.Implementation{Name: h.conn.Name, Version: h.conn.Version}, nil)
+	s, err := client.Connect(ctx, &sdk.CommandTransport{Command: cmd}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("connect to the app's MCP server: %w", err)
+	}
+	return s, nil
 }
 
 func (h *host) Config(v any) error { return h.cfg.DecodePlugin(h.plugin.Name, v) }

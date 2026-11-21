@@ -65,6 +65,12 @@ type Host interface {
 	// Connect opens a session to another plugin by name (e.g. a plugin that
 	// reads through a local app's MCP server). The caller closes it.
 	Connect(ctx context.Context, name string) (*sdk.ClientSession, error)
+	// ConnectApp opens a session to this app's own MCP server, read-only (`mcp
+	// serve --read-only` on the app's config: its read-only tools, such as
+	// routines_list and runs), for a plugin that needs the app's routines or
+	// runs. The app's server isn't a plugin, and plugins never read the app's
+	// files: this is their way in. The caller closes it.
+	ConnectApp(ctx context.Context) (*sdk.ClientSession, error)
 	// Config decodes this plugin's config section (plugins.<name>) into v, keeping
 	// v's values for absent fields. Unknown fields are an error. Like
 	// RoutineConfig, it decodes by yaml tags.

@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
@@ -78,5 +82,69 @@ func TestReloadWithAppPlugins(t *testing.T) {
 	}
 	if n[notifyplugin.Name] != 1 || n["automator"] != 0 {
 		t.Fatalf("the shipped plugins registered %v times", n)
+	}
+}
+
+// A plugin reaches the app's own MCP server, read-only, through
+// Host.ConnectApp: the real server (this test binary as the CLI), so the
+// tools plugins use are checked by name and shape.
+func TestPluginConnectsToTheApp(t *testing.T) {
+	t.Setenv(cliEnv, "1") // the server, and the commands it runs, are this binary
+	type seen struct {
+		tools []string
+		runs  string
+		err   error
+	}
+	got := make(chan seen, 1)
+	probe := pluginapi.Plugin{Name: "probe", Serve: func(h pluginapi.Host) (*sdk.Server, error) {
+		var s seen
+		defer func() { got <- s }()
+		ctx := context.Background()
+		app, err := h.ConnectApp(ctx)
+		if err != nil {
+			s.err = err
+			return sdk.NewServer(&sdk.Implementation{Name: "probe"}, nil), nil
+		}
+		defer func() { _ = app.Close() }()
+		for tool, err := range app.Tools(ctx, nil) {
+			if err != nil {
+				s.err = err
+				break
+			}
+			s.tools = append(s.tools, tool.Name)
+		}
+		res, err := app.CallTool(ctx, &sdk.CallToolParams{Name: "runs", Arguments: map[string]any{"limit": 0}})
+		if err != nil || res.IsError {
+			s.err = fmt.Errorf("runs: %v %s", err, pluginapi.ResultText(res))
+		} else {
+			s.runs = pluginapi.ResultText(res)
+		}
+		return sdk.NewServer(&sdk.Implementation{Name: "probe"}, nil), nil
+	}}
+	a, err := loadTest(filepath.Join(t.TempDir(), "config.yaml"), []pluginapi.Plugin{probe})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := a.Connector.Connect(context.Background(), "probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+	r := <-got
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	for _, want := range []string{"runs", "routines_list"} {
+		if !slices.Contains(r.tools, want) {
+			t.Errorf("no %s among %v", want, r.tools)
+		}
+	}
+	for _, write := range []string{"run", "routines_create", "settings_set"} {
+		if slices.Contains(r.tools, write) {
+			t.Errorf("read-only server offers %s", write)
+		}
+	}
+	if strings.TrimSpace(r.runs) != "[]" {
+		t.Errorf("runs on an empty app: %q", r.runs)
 	}
 }

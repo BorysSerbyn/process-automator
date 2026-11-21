@@ -28,4 +28,4 @@ After `procauto update`, reconnect the server so the client sees new or changed 
 Everything Claude changes through the server is logged in `mcp-changes.jsonl` in the data folder (`procauto paths` shows where).
 
 ## Inside routines
-Routines don't get this server: it's the app's interface for you and Claude, not a plugin.
+Routines don't get this server: it's the app's interface for you and Claude, not a plugin. A Go plugin compiled into a build can read it (`Host.ConnectApp`, read-only tools only).
