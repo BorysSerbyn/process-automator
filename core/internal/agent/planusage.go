@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -83,7 +82,7 @@ func parseUsageReport(stream []byte) ([]usage.Limit, error) {
 				return limits, nil
 			}
 		}
-		return nil, errors.New("claude /usage gave a usage report without a 5-hour or weekly limit this app can read (its format may have changed)")
+		return nil, usage.Unreadable("claude /usage gave a usage report without a 5-hour or weekly limit this app can read (its format may have changed)")
 	}
-	return nil, errors.New("claude /usage gave no usage report (it needs Claude Code signed in with your claude.ai account)")
+	return nil, usage.Unreadable("claude /usage gave no usage report (it needs Claude Code signed in with your claude.ai account)")
 }

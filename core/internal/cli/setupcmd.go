@@ -232,15 +232,16 @@ func backendStep(a *engine.App) (SetupStep, error) {
 }
 
 // usageStep is there while the app can't read the Claude plan's usage from
-// Claude Code's /usage (claude-code only): it reads it from Claude Code's
-// status line instead, once that runs the app's command.
+// Claude Code's /usage (claude-code only; usage.Plan.CantRead: not for one
+// failed try): it reads it from Claude Code's status line instead, once that
+// runs the app's command.
 func usageStep(a *engine.App) (SetupStep, bool, error) {
 	def, err := a.BackendDef()
 	if err != nil || def.PlanUsage == nil {
 		return SetupStep{}, false, err
 	}
 	plan, err := usage.LoadPlan(a.Layout.PlanUsage())
-	if err != nil || plan.TryError == "" {
+	if err != nil || !plan.CantRead() {
 		return SetupStep{}, false, err
 	}
 	settingsPath, err := statusline.SettingsPath()

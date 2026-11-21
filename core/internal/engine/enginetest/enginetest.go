@@ -4,7 +4,6 @@ package enginetest
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -76,7 +75,7 @@ func UseBackend(t *testing.T, b agent.Backend) {
 		AgentModel: orig.AgentModel,
 		Ready:      func(*engine.App) (string, string) { return "", "" },
 		PlanUsage: func(context.Context, *engine.App) ([]usage.Limit, error) {
-			return nil, errors.New("no Claude plan in tests")
+			return nil, usage.Unreadable("no Claude plan in tests")
 		},
 	}
 	t.Cleanup(func() { engine.Backends["claude-code"] = orig })

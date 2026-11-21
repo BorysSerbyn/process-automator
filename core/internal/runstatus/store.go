@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -222,7 +223,11 @@ func whyUnhealthy(r Routine, now time.Time) Reason {
 }
 
 // SetSetup records the setup steps still to do (none: setup is done).
+// Unchanged, it writes nothing (frontends following run status see no change).
 func SetSetup(path string, left []string, now time.Time) error {
+	if cur, err := Load(path); err == nil && slices.Equal(cur.SetupLeft, left) {
+		return nil
+	}
 	return update(path, now, func(s *Status) { s.SetupLeft = left })
 }
 
