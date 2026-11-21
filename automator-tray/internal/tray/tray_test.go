@@ -203,7 +203,7 @@ func TestInstallingAnUpdate(t *testing.T) {
 	})
 }
 
-// Where notifications can't ask, the terminal asks (the CLI's update).
+// Where notifications can't ask, the terminal asks (`update --ask`).
 func TestInstallingWithoutActionsAsksInTheTerminal(t *testing.T) {
 	f := newFakeCLI(t)
 	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false}`)

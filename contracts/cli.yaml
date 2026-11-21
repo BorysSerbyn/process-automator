@@ -525,6 +525,9 @@ commands:
     usage: procauto update [flags]
     summary: Install the latest release; --check only reports
     flags:
+      - name: --ask
+        type: bool
+        usage: say what's available and ask in the terminal before installing it (frontends that can't ask themselves)
       - name: --check
         type: bool
         usage: only report whether a newer release exists

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -161,8 +162,37 @@ func updating(a *engine.App) bool {
 // notification, since whoever started it may be gone (automator-ui restarts).
 const detachedEnv = "PROCAUTO_DETACHED_UPDATE"
 
+// askable is whether `update --ask` has a terminal to ask in (tests fake one).
+var askable = func() bool { return isTerminal(os.Stdin) }
+
+// askFirst asks in the terminal before installing (`update --ask`): it says
+// what's available and what installing involves. install is false when
+// there's nothing to install or the answer was no, which it has said.
+func askFirst(cmd *cobra.Command, a *engine.App) (install bool, err error) {
+	if !askable() {
+		return false, errors.New("--ask needs a terminal to ask in")
+	}
+	plan, err := planUpdate(cmd.Context(), a)
+	if err != nil {
+		return false, err
+	}
+	res := UpdateOutput{Current: product.Version, Latest: plan.tag, UpdateAvailable: update.Newer(product.Version, plan.tag)}
+	out := cmd.OutOrStdout()
+	if !res.UpdateAvailable {
+		fmt.Fprintln(out, describeUpdate(res))
+		return false, nil
+	}
+	fmt.Fprintf(out, "%s is available (this is %s). %s\nInstall it now? [y/N] ", plan.tag, product.Version, plan.note())
+	line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
+		fmt.Fprintln(out, "Not updated.")
+		return false, nil
+	}
+	return true, nil
+}
+
 func newUpdateCmd() *cobra.Command {
-	var check, asJSON, background bool
+	var check, asJSON, background, ask bool
 	cmd := &cobra.Command{
 		Use: "update",
 		Annotations: map[string]string{
@@ -182,6 +212,11 @@ func newUpdateCmd() *cobra.Command {
 			a, err := loadApp(cmd)
 			if err != nil {
 				return err
+			}
+			if ask && !check {
+				if install, err := askFirst(cmd, a); err != nil || !install {
+					return err
+				}
 			}
 			detached := os.Getenv(detachedEnv) == "1"
 			// progress records what an update installing does, for `update
@@ -268,6 +303,7 @@ func newUpdateCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&check, "check", false, "only report whether a newer release exists")
 	cmd.Flags().BoolVar(&background, "detach", false, "install in the background and return at once; the result comes as a notification (frontends)")
+	cmd.Flags().BoolVar(&ask, "ask", false, "say what's available and ask in the terminal before installing it (frontends that can't ask themselves)")
 	jsonFlag(cmd.Flags(), &asJSON, UpdateOutput{})
 	cmd.AddCommand(newUpdateProgressCmd())
 	return cmd

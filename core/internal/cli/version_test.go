@@ -291,3 +291,58 @@ func TestUpdateProgress(t *testing.T) {
 		t.Fatalf("done: %+v", p)
 	}
 }
+
+// update --ask says what's available and installs nothing unless the answer
+// is yes; without a terminal it refuses, and up to date it says so.
+func TestUpdateAsksFirst(t *testing.T) {
+	name, err := update.AssetName("99.0.0")
+	if err != nil {
+		t.Skip(err)
+	}
+	pages := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/pt/public/releases/latest":
+			http.Redirect(w, r, "/pt/public/releases/tag/v99.0.0", http.StatusFound)
+		case "/pt/public/releases/download/v99.0.0/SHA256SUMS":
+			_, _ = w.Write([]byte(strings.Repeat("0", 64) + "  " + name + "\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer pages.Close()
+	releasesAt(t, true, pages.URL, "pt/public")
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	run := func(terminal bool, answer string) (string, error) {
+		orig := askable
+		askable = func() bool { return terminal }
+		defer func() { askable = orig }()
+		root := NewRoot(nil)
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&out)
+		root.SetIn(strings.NewReader(answer))
+		root.SetArgs([]string{"--config", cfg, "update", "--ask"})
+		err := root.Execute()
+		return out.String(), err
+	}
+
+	if out, err := run(false, ""); err == nil || !strings.Contains(out, "needs a terminal") {
+		t.Errorf("no terminal: %s (%v)", out, err)
+	}
+	out, err := run(true, "n\n")
+	if err != nil || !strings.Contains(out, "v99.0.0 is available") || !strings.Contains(out, installNote) || !strings.Contains(out, "Not updated.") {
+		t.Errorf("answered no: %s (%v)", out, err)
+	}
+	a, err := loadTest(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := updateProgress(a, time.Now()); err != nil || p.State != "none" {
+		t.Errorf("answering no started an update: %+v (%v)", p, err)
+	}
+	// Yes goes on to install (which, this not being an installed app, fails
+	// finding it).
+	if out, err := run(true, "y\n"); err == nil || !strings.Contains(out, "Update to v99.0.0 failed") && !strings.Contains(out, "templates") {
+		t.Errorf("answered yes: %s (%v)", out, err)
+	}
+}

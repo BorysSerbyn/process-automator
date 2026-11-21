@@ -56,4 +56,4 @@ It has no windows: what opens a window on macOS runs its `procauto` command in y
 | **Settings** | `procauto settings list --scope app` |
 | **Updating to X…** | `procauto update progress` |
 
-**Update to X…** asks in a notification, with **Update** and **Later**. On GNOME the tray needs the AppIndicator extension (Ubuntu has it on); see [[Guides/Getting started#On Linux|On Linux]].
+**Update to X…** asks in a notification, with **Update** and **Later** (where notifications have no buttons, in your terminal: `procauto update --ask`). On GNOME the tray needs the AppIndicator extension (Ubuntu has it on); see [[Guides/Getting started#On Linux|On Linux]].

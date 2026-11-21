@@ -169,7 +169,7 @@ func (u *Updates) ShowProgress() { u.open(Window{Kind: UpdateWindow}) }
 
 // Install asks before installing the newer release (with the core's note
 // on what installing involves), then starts it. Where notifications can't
-// ask, the terminal asks (the CLI's own update).
+// ask, the terminal asks (`update --ask`).
 func (u *Updates) Install() {
 	u.mu.Lock()
 	update := u.update

@@ -66,7 +66,7 @@ func TestWindowsAreTheirCommands(t *testing.T) {
 		{Kind: RoutinesWindow}:                      {"routines", "list"},
 		{Kind: RoutineWindow, Routine: "my_report"}: {"routines", "show", "my_report"},
 		{Kind: UpdateWindow}:                        {"update", "progress"},
-		{Kind: ConfirmUpdateWindow}:                 {"update"},
+		{Kind: ConfirmUpdateWindow}:                 {"update", "--ask"},
 	} {
 		if got := w.Command(); !reflect.DeepEqual(got, want) {
 			t.Errorf("%+v: %q", w, got)

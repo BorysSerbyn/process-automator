@@ -43,7 +43,7 @@ func (w Window) Command() []string {
 	case UpdateWindow:
 		return []string{"update", "progress"}
 	case ConfirmUpdateWindow:
-		return []string{"update"}
+		return []string{"update", "--ask"}
 	}
 	return []string{"routines", "list"}
 }

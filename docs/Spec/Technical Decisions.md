@@ -136,6 +136,8 @@ The Linux frontend is automator-tray, a Go binary on `fyne.io/systray`, which sp
 - **One process for the tray and the windows** (Fyne's own tray): its OpenGL window stack, through cgo, would stay loaded while no window is open, which is nearly always
 - **Notifications through `notify-send`**: may not be installed, and gives no clicks back
 
+Where the notification service has no buttons, the terminal asks before an update installs: `update --ask`, the core saying what's available and asking, since asking is the core's (the tray decides nothing). Whatever the tray waits for (a CLI command, the notification service) has a time limit: one that hangs mustn't stop notifications or update checks for the rest of its life.
+
 ## Decision: the Linux tray starts at login from an XDG autostart entry
 The installer writes `~/.config/autostart/<Command>-tray.desktop`. Every desktop session runs autostart entries (GNOME, KDE, Xfce, Cinnamon, MATE, LXQt), only graphical ones do, so a server or a headless session never starts the tray, and the tray gets the session's environment (its display, its terminal). Turned off, the entry is hidden (`Hidden=true`), which every desktop honours. The installer starts and stops the tray itself: it finds the running one by its executable, waits for it to exit before starting the new one (as for macOS's login items), and starts it in the environment the old one ran in, so an update run from a shell without a display still restarts it on the desktop. As a backstop, the newest tray takes the app's name on the session bus and the older one quits.
 

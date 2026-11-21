@@ -77,7 +77,7 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 - **Settings window**: start at login, LLM usage, and every app-wide setting with a control for its type
 - **Updates**: see whether a newer release exists, and install it
 - **Start at login**: on or off
-- **Linux tray**: the same menu, updates and notifications; each window is its CLI command run in my terminal (Setup: `setup`; Settings: `settings list --scope app`; Routines: `routines list`; a routine: `routines show <routine>`; Updating: `update progress`), and installing an update is confirmed in a notification
+- **Linux tray**: the same menu, updates and notifications; each window is its CLI command run in my terminal (Setup: `setup`; Settings: `settings list --scope app`; Routines: `routines list`; a routine: `routines show <routine>`; Updating: `update progress`), and installing an update is confirmed in a notification (in my terminal where notifications have no buttons)
 
 ## CLI
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each
