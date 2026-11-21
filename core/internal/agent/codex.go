@@ -202,7 +202,7 @@ func (b *Codex) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 		mcp + "bearer_token_env_var=" + tomlString(CodexTokenEnv),
 		mcp + "required=true",                         // a run that can't reach its tools fails
 		mcp + `default_tools_approval_mode="approve"`, // the gateway decides what runs
-		mcp + "tool_timeout_sec=3600",                 // the routine's timeout bounds a run
+		mcp + "tool_timeout_sec=3600.0",               // the routine's timeout bounds a run
 	}
 	if builtins[codexNetwork] {
 		config = append(config, "sandbox_workspace_write.network_access=true")

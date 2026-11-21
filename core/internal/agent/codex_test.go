@@ -57,7 +57,7 @@ func TestCodexCommandLine(t *testing.T) {
 		"--config", `mcp_servers.procauto.bearer_token_env_var="AUTOMATOR_MCP_TOKEN"`,
 		"--config", "mcp_servers.procauto.required=true",
 		"--config", `mcp_servers.procauto.default_tools_approval_mode="approve"`,
-		"--config", "mcp_servers.procauto.tool_timeout_sec=3600",
+		"--config", "mcp_servers.procauto.tool_timeout_sec=3600.0",
 		"--config", `model_reasoning_effort="high"`,
 		"-",
 	}
