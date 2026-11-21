@@ -22,12 +22,11 @@ Routines run on one of two backends, set with `procauto settings set llm.backend
 
 Each has its own usage limit ([[Guides/Settings#Usage limit|Usage limit]]).
 
-## Built-in servers
-The app ships with no integrations; these two come with the core and need no sign-in:
+## The plugin that ships with the app
+The app ships with no integrations; one plugin comes with it and needs no sign-in:
 
 | Server | What routines get |
 |---|---|
-| `automator` | This app's own read-only tools: routines, runs, settings, templates, plugins |
 | `notify` | `notify_me`: a desktop notification to you ([[Guides/Writing a routine#Notifying you\|Notifying you]]) |
 
 Everything else is a server you add: see [[Guides/Adding a plugin|Adding a plugin]].

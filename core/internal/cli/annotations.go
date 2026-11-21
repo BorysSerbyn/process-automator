@@ -14,9 +14,9 @@ const (
 	// annReadOnlyWith names a bool flag that makes the command read-only
 	// (run --dry-run, update --check).
 	annReadOnlyWith = "procauto/read-only-with"
-	// annNotForRoutines keeps a command from routines (the automator server
-	// inside a run), with the reason.
-	annNotForRoutines = "procauto/not-for-routines"
+	// annNotReadOnly keeps a command, read-only variants included, from
+	// `mcp serve --read-only`, with the reason.
+	annNotReadOnly = "procauto/not-read-only"
 )
 
 // readOnly is the annotation set of a command with no side effects.

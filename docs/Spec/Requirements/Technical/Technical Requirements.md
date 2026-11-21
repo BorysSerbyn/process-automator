@@ -15,7 +15,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 
 - **Build values are set at link time** in `core/automator` by the Makefile: the version, the source checkout (`SOURCE_DIR`), where the templates are packaged, the release API, and `BUNDLE_PREFIX` over the app's prefix
 - **Another app** is a Go module that requires this one and has its own main package, plugins and templates; it builds with this repository's Makefile and scripts at the same version (see [[Spec/Requirements/Technical/Distribution|Technical: Distribution]])
-- **Blank-slate engine**: the engine knows no specific service and the app compiles in no plugins; routines use the core's built-in servers (`automator`, `notify`) and the MCP servers added in config
+- **Blank-slate engine**: the engine knows no specific service and the app compiles in no plugins; routines use the plugins every app ships with (`core/plugins`: `notify`) and the MCP servers added in config
 - **OS-neutral core**: OS calls live in per-OS files (`name_darwin.go`, `name_unix.go`, `name_other.go`, or a `//go:build` line), OS-bound integrations are plugins, and delivering to the OS (notifications, the menu bar) is the frontends' job. `internal/osboundary`'s test (no `runtime.GOOS`, `syscall`, OS tools or OS paths in shared files) and CI's Linux and Windows cross-compiles enforce it
 - **Config**: one YAML file, `config.yaml` in the per-user config folder (`os.UserConfigDir()/<Folder>/`: `process-automator/`), decoded strictly: unknown or retired fields are errors. It holds `mcpServers` (external servers), `plugins` (in-process plugins' own sections) and `settings`. `--config` points the CLI at another file
 - **Data folder** is the config file's folder; everything the app keeps is in it:
@@ -167,8 +167,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **In-process plugins** (`core/pluginapi`, public, a leaf package with no engine dependencies): a `Plugin` is a name, a description and either an `External` server spec or `Serve`; it may declare a `RoutineSection`, the servers it `Uses`, and `Prepare` (steps done outside the app before its first sign-in). Its `Host` gives `Connect` (another server), `Config` (its `plugins.<name>` section, strict), `Secret` (only those it declares), `DataDir()` (`<data>/plugin-data/<name>/`), `RoutineConfig(v)` (the running routine's section, strict) and `Run()` (the routine, its run's history ID and folder). A host is made per session; outside a run, the routine parts are empty. A config `mcpServers.<name>` that clashes with an in-process plugin's name is an error
 - **`plugins list`** shows every server routines can use; `mcp tools <server> [--json]` its tools, marking read-only ones
 
-## Built-in servers
-- **`automator`**: the CLI's read-only tools (routines, runs with their session IDs, settings, templates, plugins), served in-process to routines; plugins reach it through `Host.Connect("automator")` rather than reading core files
+## Shipped plugins
 - **`notify`** (`core/plugins/notify`): `notify_me(title, body?, open?, urgent?)`, a write tool, recorded with the routine and its run. Its only setting is each routine's `onNotificationClick`; it has no app-wide one. `open` is an existing file or folder (relative to the routine's folder), never an app, script or executable; `urgent` maps to macOS time-sensitive or Linux `critical`
 
 ## Sign-ins and secrets
@@ -192,14 +191,14 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
   - A run that hits the plan's limit records it until the reset (an hour when it gives no time). No cost is recorded or worked out for these runs
 - **`api`**: budgets in USD per rolling window (`llm.budget.window`, `llm.budget.window-usd`) and per 7 days (`llm.budget.weekly-usd`), 0 meaning none: the sum of `api` runs' `costUsd`, priced by the core from their tokens with a price table (cache reads, cache writes at 1.25× input, output); a model missing from it isn't counted, and its run's log says so
 
-## Automator MCP server
-- **`procauto mcp serve [--read-only]`** (stdio) serves the CLI as tools
+## The app's MCP server
+- **`procauto mcp serve [--read-only]`** (stdio) serves the CLI as tools to Claude and other MCP clients. It's the app's interface, not a plugin: routines don't get it
 - **`procauto mcp connect`** registers it with Claude Code at user scope: `claude mcp add --scope user procauto -- <procauto> mcp serve`, by the `~/.local/bin` link when there is one (else `procauto` on `PATH`, else the running binary), so updates don't break it. It's connected when Claude Code's config (`.claude.json` in `$CLAUDE_CONFIG_DIR`, else in my home folder) has a user-scope `mcpServers.procauto` whose command exists; read from the file, no `claude` process. Nothing changes when it's connected; one whose command is gone is replaced
 - **Parity**: every CLI command is a tool, derived from the command tree at startup (arguments and flags as the input schema); each call runs the CLI as a subprocess (`--json` when available), its log lines streaming as progress. Arguments are checked against the tool's schema. Flags that read local files (`--from`) aren't exposed; a routine's source reaches the command on stdin
 - **Cancelling** a call, or the server stopping, interrupts the command, which records its outcome
-- **Safety on the command** (cobra annotations): `procauto/read-only`; `procauto/read-only-with: <flag>`, which adds a read-only variant tool (`run --dry-run`, `update --check`, `setup --json`); `procauto/not-for-routines`. Unmarked commands are destructive, so clients ask before calling them
+- **Safety on the command** (cobra annotations): `procauto/read-only`; `procauto/read-only-with: <flag>`, which adds a read-only variant tool (`run --dry-run`, `update --check`, `setup --json`); `procauto/not-read-only`. Unmarked commands are destructive, so clients ask before calling them
 - **Overrides**, the one place a tool differs from its command (a test checks each names a real command): `daemon`, `mcp serve`, `mcp connect`, `help`, `completion`, `routines trust` and `uninstall` are excluded; `auth login` asks through the client; `update` reminds to reconnect
-- **Routines get less**: only read-only tools, and nothing marked not for routines (e.g. anything that runs a routine)
+- **`--read-only` serves less**: only read-only tools, and nothing marked `not-read-only` (anything that runs, stops or sets up something, read-only variants included)
 - **Secrets never pass through the model**: `auth login` shows the OAuth page, or the local page that stores a key straight in the secrets store, through URL elicitation, run across calls; if the client can't show URLs, the browser opens directly. A secret is never a tool argument
 - **Change log**: every side-effecting call is recorded in `mcp-changes.jsonl`, with long values shortened, plugin env and header values left out, and one older file kept past 5 MB
 

@@ -3,7 +3,7 @@
 Follow this when someone asks you to install process-automator for them. (Working on the code instead? See `docs/Guides/Developing.md`.)
 
 ## What the app does
-Process Automator runs **routines**: prompt files that a model (Claude, through Claude Code or the API) runs on a schedule in the background, with tools from **plugins** (MCP servers: the app's own `automator` (read-only) and `notify`, plus any MCP server they add). Out of the box it does nothing: anything a prompt plus tools can do, a routine can do. Around that it has:
+Process Automator runs **routines**: prompt files that a model (Claude, through Claude Code or the API) runs on a schedule in the background, with tools from **plugins** (MCP servers: `notify`, which ships with the app, plus any MCP server they add). Out of the box it does nothing: anything a prompt plus tools can do, a routine can do. Around that it has:
 - **routines:** create, edit, run now or as a dry run (nothing posted), pause, stop, delete; schedules in plain words; run history with every tool call, output and cost;
 - **plugins:** add any MCP server (remote, local, or a folder they wrote), try it before it's installed, sign in;
 - **settings:** app-wide and per routine (schedule, model, effort, timeout, working folder, which tools it may use, ...);

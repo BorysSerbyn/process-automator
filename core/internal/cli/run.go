@@ -20,8 +20,8 @@ func newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "run <routine>",
 		Annotations: map[string]string{
-			annReadOnlyWith:   "dry-run",
-			annNotForRoutines: "a routine can't run a routine: runs take turns, so it would wait on itself",
+			annReadOnlyWith: "dry-run",
+			annNotReadOnly:  "running a routine, even a dry run, uses the model and takes a turn in the run queue",
 		},
 		Short: "Run a routine from the routines folder now (ignores its schedule and enabled flag)",
 		Long: "Runs a routine now. With --date it runs as of that day (a backfill): its today, since and now " +

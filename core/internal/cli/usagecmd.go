@@ -111,7 +111,7 @@ func newStatusLineCmd() *cobra.Command {
 			"status line (in ~/.claude/settings.json, changing nothing else); it runs the status line you had with " +
 			"the same input, so it looks the same. `uninstall` puts yours back. Run with no subcommand, it's the " +
 			"status line itself: it reads Claude Code's input on stdin, and never fails.",
-		Annotations: map[string]string{annNotForRoutines: "it's Claude Code's status line"},
+		Annotations: map[string]string{annNotReadOnly: "it's Claude Code's status line"},
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			in, _ := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 1<<20))
@@ -134,7 +134,7 @@ func newStatusLineCmd() *cobra.Command {
 		}
 		c := &cobra.Command{
 			Use: use, Short: short, Args: cobra.NoArgs,
-			Annotations: map[string]string{annNotForRoutines: "it changes Claude Code's settings"},
+			Annotations: map[string]string{annNotReadOnly: "it changes Claude Code's settings"},
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				a, err := loadApp(cmd)
 				if err != nil {

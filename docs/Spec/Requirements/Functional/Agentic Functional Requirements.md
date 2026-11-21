@@ -12,7 +12,6 @@ What LLM clients can do through the app, and how the agent behaves inside a rout
   - secrets and sign-ins happen in my browser, never through the model
   - uninstalling the app and running the scheduler stay in my terminal
   - every change Claude makes through the server is logged
-- **Inside routines**: the app's read-only tools are available to routines like any plugin's (as the `automator` server), allowed explicitly
 
 ## The agent inside a routine
 - **Only allowed tools**: the agent can call only the tools its routine's file allows, from the servers it lists

@@ -34,7 +34,6 @@ Finish by replying with what changed, or that nothing did.
 - `automator.servers` lists the servers the routine uses; `tools` lists, by name, every tool the model may call. Nothing else is reachable
 - `procauto plugins list` shows the servers and `procauto mcp tools <server>` each one's tools (`--json` marks the read-only ones). `procauto routines trust <name> --check` shows a routine's tools split into writes and reads
 - Tools that don't only read are **writes**: dry runs intercept them, and trusting the routine lists them separately
-- The built-in `automator` server gives a routine the app's own read-only tools (other routines, their runs and settings)
 
 ## Frontmatter
 Plain Dotprompt keys:

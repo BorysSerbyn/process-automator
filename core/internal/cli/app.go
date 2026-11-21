@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"slices"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
@@ -37,14 +36,13 @@ func configPath(cmd *cobra.Command) (string, error) {
 	return config.DefaultPath()
 }
 
-// loadApp loads the app for the command's config, with the installed
-// plugins and the core's automator server.
+// loadApp loads the app for the command's config, with the installed plugins.
 func loadApp(cmd *cobra.Command) (*engine.App, error) {
 	path, err := configPath(cmd)
 	if err != nil {
 		return nil, err
 	}
-	return engine.Load(path, withAutomator(path, pluginsFrom(cmd.Context())), secretStore())
+	return engine.Load(path, pluginsFrom(cmd.Context()), secretStore())
 }
 
 // loadAppForEdit is loadApp under the edit lock (see engine.LoadForEdit).
@@ -53,14 +51,7 @@ func loadAppForEdit(cmd *cobra.Command) (a *engine.App, unlock func(), err error
 	if err != nil {
 		return nil, nil, err
 	}
-	return engine.LoadForEdit(path, withAutomator(path, pluginsFrom(cmd.Context())), secretStore())
-}
-
-// withAutomator adds the core's own server for routines (automator.servers:
-// [automator]) to the plugins, without one already there.
-func withAutomator(path string, plugins []pluginapi.Plugin) []pluginapi.Plugin {
-	given := slices.DeleteFunc(slices.Clone(plugins), func(p pluginapi.Plugin) bool { return p.Name == automatorServerName })
-	return append(given, automatorPlugin(engine.LayoutOf(path), given))
+	return engine.LoadForEdit(path, pluginsFrom(cmd.Context()), secretStore())
 }
 
 func writeJSON(w io.Writer, v any) error {

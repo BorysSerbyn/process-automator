@@ -6,7 +6,7 @@ Everything needed to use the app, in reading order:
 - [[Guides/The menu bar app|The menu bar app]] (the status dot, its menu and windows, notifications)
 - [[Guides/Routines|Routines]] (templates, dry runs, trust, turning them on, running, history, memories)
 - [[Guides/Writing a routine|Writing a routine]] (the routine file: servers, tools, schedule, settings, inputs, outcome, structured output)
-- [[Guides/Plugins and sign-ins|Plugins and sign-ins]] (the model backend, the built-in servers, signing in)
+- [[Guides/Plugins and sign-ins|Plugins and sign-ins]] (the model backend, the plugin that ships with the app, signing in)
 - [[Guides/Adding a plugin|Adding a plugin]] (any MCP server: remote or local, OAuth, API key or public, or a folder)
 - [[Guides/Settings|Settings]] (app-wide and per routine, the usage limit, start at login)
 - [[Guides/Using it from Claude|Using it from Claude]] (the MCP server)

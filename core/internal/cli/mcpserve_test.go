@@ -30,7 +30,7 @@ var testSecrets = enginetest.Secrets
 
 // loadTest loads the app as commands do, with plugins and the test secrets.
 func loadTest(cfg string, plugins []pluginapi.Plugin) (*engine.App, error) {
-	return engine.Load(cfg, withAutomator(cfg, plugins), testSecrets)
+	return engine.Load(cfg, plugins, testSecrets)
 }
 
 func TestMain(m *testing.M) {
@@ -127,7 +127,7 @@ func TestToolsDerivedFromCommands(t *testing.T) {
 	}
 }
 
-// Routines get only read-only tools, minus those that would run a routine.
+// --read-only serves only read-only tools, minus those that run anything.
 func TestReadOnlyServer(t *testing.T) {
 	tools := toolMap(testServer(t, true))
 	if _, ok := tools["routines_list"]; !ok {
@@ -140,7 +140,7 @@ func TestReadOnlyServer(t *testing.T) {
 	}
 	for _, name := range []string{"run", "run_dry_run", "auth_login", "routines_create"} {
 		if _, ok := tools[name]; ok {
-			t.Errorf("%s served to routines", name)
+			t.Errorf("%s served read-only", name)
 		}
 	}
 }

@@ -23,15 +23,13 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
-// The automator's own MCP server makes the CLI available to MCP clients
-// (Claude) and, read-only, to routines. Every CLI command is a tool by
+// The app's own MCP server makes the CLI available to MCP clients (Claude).
+// It's the app's interface, like the CLI, not a plugin: routines don't get
+// it. Every CLI command is a tool by
 // default, derived from the command tree: arguments and flags become the
 // input schema, and a call runs the command (with --json when it has it). The
 // MCP server is never edited when the CLI grows; mcpOverrides is the one place
 // where a tool differs from its command.
-
-// automatorServerName is the server's name for routines (automator.servers).
-const automatorServerName = "automator"
 
 // mcpOverride changes how one command (by path, e.g. "auth login") is served.
 type mcpOverride struct {
@@ -74,7 +72,7 @@ func newMCPServeCmd() *cobra.Command {
 		Long: "Every " + product.Command + " command is a tool. Read-only commands are marked read-only; the rest are " +
 			"marked destructive, so clients ask before calling them. Sign-ins and keys are entered by you in the " +
 			"browser (MCP URL elicitation), never passed through the model. --read-only serves only read-only " +
-			"tools (what routines get as the automator server).",
+			"tools, minus those that run, stop or set up anything.",
 		Example: "  claude mcp add " + product.Command + " -- " + product.Command + " mcp serve",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -113,7 +111,7 @@ type automatorServer struct {
 	env        []string // extra environment for commands (tests)
 	configPath string
 	plugins    []pluginapi.Plugin
-	// readOnly serves only read-only tools, minus those kept from routines.
+	// readOnly serves only read-only tools, minus those marked annNotReadOnly.
 	readOnly bool
 	logins   loginRegistry
 	// base ends with the server (interrupt, terminate): in-flight calls are
@@ -189,7 +187,7 @@ func toolName(parts ...string) string {
 // toolsFor is a command's tool, plus a read-only variant when a flag makes it
 // read-only (run_dry_run, update_check).
 func (s *automatorServer) toolsFor(c *cobra.Command, key string, ov mcpOverride) []cliTool {
-	if s.readOnly && c.Annotations[annNotForRoutines] != "" {
+	if s.readOnly && c.Annotations[annNotReadOnly] != "" {
 		return nil
 	}
 	roFlag := c.Annotations[annReadOnlyWith]
@@ -545,23 +543,6 @@ func (s *automatorServer) logChange(t cliTool, args map[string]any, res *sdk.Cal
 	}
 	_, _ = f.Write(append(b, '\n'))
 	_ = f.Close()
-}
-
-// automatorPlugin is the core's own server for routines: the read-only tools.
-func automatorPlugin(l engine.Layout, plugins []pluginapi.Plugin) pluginapi.Plugin {
-	return pluginapi.Plugin{
-		Name: automatorServerName,
-		Description: "This automator: its routines, runs, settings, templates and plugins (read-only; " +
-			"MCP clients get everything with `" + product.Command + " mcp serve`)",
-		Serve: func(pluginapi.Host) (*sdk.Server, error) {
-			exe, err := os.Executable()
-			if err != nil {
-				return nil, err
-			}
-			s := &automatorServer{root: NewRoot(plugins), exe: exe, configPath: l.Config(), plugins: plugins, readOnly: true}
-			return s.build()
-		},
-	}
 }
 
 // redactPairs keeps the names of name=value pairs and drops the values.
