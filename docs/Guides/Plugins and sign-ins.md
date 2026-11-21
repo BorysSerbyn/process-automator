@@ -24,7 +24,7 @@ Routines run on one of three backends, set with `procauto settings set llm.backe
 Claude Code and the API each have their own usage limit ([[Guides/Settings#Usage limit|Usage limit]]).
 
 ### OpenAI-compatible servers (experimental, untested)
-On the `api` backend, a routine whose model is `openai-compat/<model>` runs on an OpenAI-compatible server instead of Anthropic's API: a local one (Ollama, llama.cpp's `llama-server`, vLLM, LM Studio) or a hosted one (DeepSeek, Qwen on DashScope, Kimi on Moonshot, ...). It has run only against a stand-in for the API, never a real server: prefer `claude-code`, or `api` with Anthropic models.
+On the `api` backend, a routine whose model is `openai-compat/<model>` runs on an OpenAI-compatible server instead of Anthropic's API: a local one (Ollama, llama.cpp's `llama-server`, vLLM, LM Studio) or a hosted one (DeepSeek, Qwen on DashScope, Kimi on Moonshot, ...). It has been tried only against a stand-in for the API and small models on Ollama, never with real work: prefer `claude-code`, or `api` with Anthropic models.
 - **The server**: `llm.openai-compat.base-url`, by default Ollama on this machine (`http://localhost:11434/v1`). There's one: every `openai-compat/…` model runs on it
 - **Its API key**, for a server that needs one (hosted ones do; Ollama doesn't): `procauto auth login openai-compat`
 - **The model** is the server's own name for it, after the prefix: `openai-compat/qwen3:8b` on Ollama (pull it first: `ollama pull qwen3:8b`), `openai-compat/deepseek-chat` on DeepSeek. Pick one that calls tools: routines need it to, and small models often don't, or call them wrong
