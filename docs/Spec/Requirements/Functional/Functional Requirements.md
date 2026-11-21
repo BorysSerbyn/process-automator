@@ -17,9 +17,9 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Optional per-routine settings**: each one left out keeps the default behaviour
   - **Timeout**: how long a run may take before it's stopped and fails
   - **Effort**: how hard the model thinks
-  - **Folder**: the folder the run works in instead of an empty temporary one (e.g. a repository it checks), with its `CLAUDE.md` as instructions
-  - **Built-in tools**: which of the agent CLI's own tools the routine gets (e.g. Read, Bash, Edit); none by default
-  - **Save session**: keep the run's agent session and record its ID with the run, so I can resume it
+  - **Folder**: the folder the run works in instead of an empty temporary one (e.g. a repository it checks), with its project instructions (`CLAUDE.md`, or `AGENTS.md` on Codex) as instructions
+  - **Built-in tools**: which of the agent CLI's own tools the routine gets, in that CLI's terms (Claude Code's Read, Bash, Edit; Codex's shell, write, web search); none by default
+  - **Save session**: keep the run's agent session and record its ID and backend with the run, so I can resume it with that CLI
   - **Concurrency**: wait its turn (default: one run at a time, manual runs included) or run alongside other runs. A routine never overlaps itself; a run waiting its turn shows as queued
   - **Parameters**: values that make a shared routine mine (a channel, a team), asked for at install and changeable later
   - **Platforms**: the operating systems it runs on
@@ -37,9 +37,9 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
 
 ## Model backend
-- **Two backends**: Claude Code on my Claude plan (`claude-code`), or an Anthropic API key (`api`), chosen by a setting
-- **Usage limit, by backend**: on my Claude plan, scheduled runs don't start while the plan's 5-hour or weekly usage is above a share I set; with an API key, they don't start once API spend in a short rolling window or the last 7 days passes the budgets I set. A run that doesn't start is recorded as skipped with the reason (red indicator, failure notification); runs I start by hand still run, with a warning. `usage` shows where I stand
-- **No cost for plan runs**: on a Claude plan the app never works out a dollar cost
+- **Three backends**: Claude Code on my Claude plan (`claude-code`), OpenAI's Codex CLI on my Codex sign-in (`codex`), or an Anthropic API key (`api`), chosen by a setting
+- **Usage limit, by backend**: on my Claude plan, scheduled runs don't start while the plan's 5-hour or weekly usage is above a share I set; with an API key, they don't start once API spend in a short rolling window or the last 7 days passes the budgets I set; on Codex there's none (a run that hits Codex's own limit fails, saying so). A run that doesn't start is recorded as skipped with the reason (red indicator, failure notification); runs I start by hand still run, with a warning. `usage` shows where I stand
+- **No cost for plan runs**: on Claude Code or Codex the app never works out a dollar cost
 
 ## Runs
 - **Inspecting runs**: which ran, how each ended and why, with its inputs, tool calls, writes and final text, from the CLI and the UI; also as a readable report

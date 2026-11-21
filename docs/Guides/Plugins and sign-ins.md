@@ -15,12 +15,13 @@ procauto mcp call <server> <tool> '<json args>'   # call one tool by hand (write
 `auth login` opens your browser for OAuth sign-ins and asks for keys and tokens in the terminal; with `--browser` it asks for them on a local page instead. `procauto setup` and the Setup window offer a sign-in for each server your routines use. Sign-ins are refreshed automatically; when one can't be, runs end with "needs a sign-in" and you run `auth login` again.
 
 ## Model backend
-Routines run on one of two backends, set with `procauto settings set llm.backend <name>`:
+Routines run on one of three backends, set with `procauto settings set llm.backend <name>`:
 
 - **`claude-code`**: Claude Code on your Claude plan. Install [Claude Code](https://claude.com/claude-code) and sign in to it (run `claude` once). If scheduled runs say Claude Code isn't logged in, run `claude setup-token` and store its token with `procauto auth login claude-code`
+- **`codex`**: OpenAI's [Codex CLI](https://developers.openai.com/codex/cli) on your Codex sign-in (a ChatGPT plan or an OpenAI API key). Install it and run `codex login` once; the app uses that sign-in and keeps none of its own. Runs don't load your Codex `config.toml`, and read the sign-in from `~/.codex/auth.json` (Codex's default), not from the system keyring
 - **`api`** (the default): an Anthropic API key, paid per token. Store it with `procauto auth login anthropic`
 
-Each has its own usage limit ([[Guides/Settings#Usage limit|Usage limit]]).
+Claude Code and the API each have their own usage limit ([[Guides/Settings#Usage limit|Usage limit]]).
 
 ## The plugin that ships with the app
 The app ships with no integrations; one plugin comes with it and needs no sign-in:

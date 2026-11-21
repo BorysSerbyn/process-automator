@@ -49,4 +49,6 @@ A routine stays red until its next run goes well (or you pause it).
 - **A server's tool is missing from `routines check`**: the server doesn't offer it, often for lack of a scope or permission on your account. Check the server's scopes, sign in again, and look at `procauto mcp tools <server>`
 - **"Claude Code isn't installed"**: the `claude-code` backend can't find `claude`. Install Claude Code and sign in to it; the app looks it up on your login shell's `PATH`
 - **Claude Code isn't logged in during scheduled runs**: store a token with `claude setup-token` and `procauto auth login claude-code`
+- **"Codex isn't installed"** or **"Codex isn't signed in"**: the `codex` backend can't find `codex` on your login shell's `PATH`, or `codex login status` says it isn't signed in. Install the Codex CLI and run `codex login`. Runs read the sign-in from `~/.codex/auth.json`: one Codex keeps in the system keyring (`cli_auth_credentials_store`) isn't seen
+- **"Codex's usage limit is reached"**: the run hit your Codex plan's limit; it says when to try again. The app can't see Codex's usage ahead of time, so scheduled runs still start
 - **A local server isn't found by the scheduler**: give its command as an absolute path, or make sure it's on your login shell's `PATH`
