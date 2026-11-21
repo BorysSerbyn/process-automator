@@ -139,27 +139,54 @@ login_items() {
 launchd_domain() { echo "gui/$(id -u)"; }
 disabled() { launchctl print-disabled "$(launchd_domain)" | grep -Eq "\"$1\" => (disabled|true)"; }
 
+# stop_agent <label>: boots the agent out and waits (up to a minute) for its
+# process to exit. bootout returns while it's still stopping (the scheduler
+# waits up to 30s for its runs), and loading the agent again before it has
+# exited fails ("Bootstrap failed: 5: Input/output error").
+stop_agent() {
+  local job pid
+  job="$(launchd_domain)/$1"
+  pid=$(launchctl print "$job" 2>/dev/null | sed -n 's/^[[:space:]]*pid = \([0-9][0-9]*\)$/\1/p' | head -n 1)
+  launchctl bootout "$job" 2>/dev/null || true
+  [ -n "$pid" ] || return 0
+  for _ in $(seq 1 60); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 1
+  done
+}
+
+# bootstrap <domain> <plist>: loads the agent, trying again for a few seconds
+# while launchd is still letting go of the one before; the last try's error
+# is shown.
+bootstrap() {
+  for _ in 1 2 3 4 5; do
+    launchctl bootstrap "$1" "$2" 2>/dev/null && return 0
+    sleep 2
+  done
+  launchctl bootstrap "$1" "$2"
+}
+
 # load_agent <plist> <label>: (re)loads the agent, keeping it disabled at
 # login when it was.
 load_agent() {
   local plist=$1 label=$2 domain
   domain=$(launchd_domain)
-  launchctl bootout "$domain/$label" 2>/dev/null || true
+  stop_agent "$label"
   if disabled "$label"; then
     local status=0
     launchctl enable "$domain/$label"
-    launchctl bootstrap "$domain" "$plist" || status=$?
+    bootstrap "$domain" "$plist" || status=$?
     launchctl disable "$domain/$label"
     return $status
   fi
-  launchctl bootstrap "$domain" "$plist"
+  bootstrap "$domain" "$plist"
 }
 
 stop_items() {
   system || return 0
   if [ "$OS" = macos ]; then
-    launchctl bootout "$(launchd_domain)/$UI_LABEL" 2>/dev/null || true
-    launchctl bootout "$(launchd_domain)/$SCHED_LABEL" 2>/dev/null || true
+    stop_agent "$UI_LABEL"
+    stop_agent "$SCHED_LABEL"
   else
     systemctl --user stop "$SCHED_LABEL" 2>/dev/null || true
   fi
