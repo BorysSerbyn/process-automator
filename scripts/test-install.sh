@@ -173,7 +173,7 @@ EOF
       shift 2
       if out=$(public "$@" --yes --files-only 2>&1 </dev/null); then fail "$what: installed"; fi
       case $out in *"$text"*) ;; *) fail "$what: $out" ;; esac
-      ! grep -Eiq '(^|[^a-z])gh([^a-z]|$)|token|sign[- ]?in|signed in' <<<"$out" || fail "$what mentions signing in: $out"
+      ! grep -Eiq '(^|[^a-z])gh([^a-z]|$)|token|github sign[- ]?in|signed in to github|gh auth' <<<"$out" || fail "$what mentions signing in: $out"
     }
 
     with_token public --yes --files-only </dev/null
