@@ -34,23 +34,47 @@ func configDir() (string, error) {
 	return filepath.Join(home, ".config"), nil
 }
 
-// itemFile is where a login item is: autostart entries in autostart/, units
-// in systemd/user/.
-func itemFile(config, label string) string {
-	if strings.HasSuffix(label, ".desktop") {
-		return filepath.Join(config, "autostart", label)
+// unitConfigDir is the config folder systemd's user manager reads this
+// user's units from: its own XDG_CONFIG_HOME, which needn't be this
+// process's, else ~/.config; this process's when there's no manager to ask
+// (install-app.sh's units_dir puts the unit there).
+func unitConfigDir() (string, error) {
+	out, err := exec.Command("systemctl", "--user", "show-environment").Output()
+	if err != nil {
+		return configDir()
 	}
-	return filepath.Join(config, "systemd", "user", label)
+	for _, line := range strings.Split(string(out), "\n") {
+		// A value with special characters comes $'quoted': not one to read.
+		if v, ok := strings.CutPrefix(line, "XDG_CONFIG_HOME="); ok && v != "" && !strings.HasPrefix(v, "$'") {
+			return v, nil
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config"), nil
+}
+
+// itemFile is where a login item is: autostart entries in this session's
+// autostart/, units in systemd/user/ where systemd reads them.
+func itemFile(label string) (string, error) {
+	if strings.HasSuffix(label, ".desktop") {
+		config, err := configDir()
+		return filepath.Join(config, "autostart", label), err
+	}
+	config, err := unitConfigDir()
+	return filepath.Join(config, "systemd", "user", label), err
 }
 
 func loginItems(labels map[string]string) ([]LoginItem, error) {
-	config, err := configDir()
-	if err != nil {
-		return nil, err
-	}
 	var items []LoginItem
 	for name, label := range labels {
-		b, readErr := os.ReadFile(itemFile(config, label))
+		path, err := itemFile(label)
+		if err != nil {
+			return nil, err
+		}
+		b, readErr := os.ReadFile(path)
 		it := LoginItem{Name: name, Label: label, Installed: readErr == nil}
 		switch {
 		case !it.Installed:
@@ -68,10 +92,6 @@ func loginItems(labels map[string]string) ([]LoginItem, error) {
 }
 
 func setLoginItems(labels map[string]string, on bool) error {
-	config, err := configDir()
-	if err != nil {
-		return err
-	}
 	verb := "disable"
 	if on {
 		verb = "enable"
@@ -79,7 +99,11 @@ func setLoginItems(labels map[string]string, on bool) error {
 	var errs []error
 	for _, label := range labels {
 		if strings.HasSuffix(label, ".desktop") {
-			path := itemFile(config, label)
+			path, err := itemFile(label)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
 			b, err := os.ReadFile(path)
 			if errors.Is(err, os.ErrNotExist) {
 				continue // not installed (install the app first): nothing starts it

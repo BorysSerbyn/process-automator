@@ -77,7 +77,7 @@ Run it in a terminal with `procauto setup`, which asks before each step and skip
 `procauto paths` shows where the app keeps its config file, routines folder, run status, history, notifications and templates. The data folder is `~/Library/Application Support/process-automator/` on macOS and `~/.config/process-automator/` on Linux; on macOS the scheduler logs to `~/Library/Logs/process-automator/scheduler.log`.
 
 ## On Linux
-The CLI and the scheduler work as on macOS. Only templates that run on Linux are offered. The scheduler is the systemd user unit `procauto-scheduler.service` (logs: `journalctl --user -u procauto-scheduler`).
+The CLI and the scheduler work as on macOS. Only templates that run on Linux are offered. The scheduler is the systemd user unit `procauto-scheduler.service` (logs: `journalctl --user -u procauto-scheduler`). systemd runs it only while you're logged in: on a server, to run routines when you're not, turn on lingering once (`sudo loginctl enable-linger $USER`; the installer says so when it's off). If you set `XDG_CONFIG_HOME`, set it for systemd's user session too (`~/.config/environment.d/`), or the scheduler reads another config folder than `procauto` (the installer notes it).
 
 In a desktop session the **tray** takes the menu bar app's place: the same icon and status dot, menu and notifications ([[Guides/The menu bar app#The Linux tray|The Linux tray]]). It starts at login from `~/.config/autostart/procauto-tray.desktop`, and the installer starts it at once when you install from the desktop. On a machine with no desktop nothing starts it, and the app works the same without it.
 

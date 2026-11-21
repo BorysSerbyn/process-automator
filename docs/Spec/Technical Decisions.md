@@ -143,6 +143,14 @@ The installer writes `~/.config/autostart/<Command>-tray.desktop`. Every desktop
 - **A systemd user unit bound to `graphical-session.target`**: several desktops never reach that target, so the tray wouldn't start there; and the update the tray starts (`update --detach`) would run in the unit's cgroup, which restarting the unit kills mid-install
 - **The scheduler starting the tray**: it runs as a systemd user unit, outside any desktop session; it would have to find one, and on a headless machine there's none to find
 
+## Decision: the scheduler's unit goes where systemd reads it; lingering stays my choice
+systemd's user manager reads units from its own `XDG_CONFIG_HOME` (usually none: `~/.config`), not the installing shell's, so the installer asks it where (`systemctl --user show-environment`) and `login-items` looks there too; a shell whose `XDG_CONFIG_HOME` differs gets a note, since the scheduler would then keep its config apart from the CLI's. A user manager runs only while I'm logged in unless lingering is on; outside a desktop session (a server, where that matters) the installer says so and gives the command, but doesn't run it: it needs root, and it's a choice about the machine.
+
+### Rejected
+- **The unit beside the shell's `XDG_CONFIG_HOME`**: systemd doesn't read it there, so enabling it fails and the install stops
+- **The installing shell's `XDG_CONFIG_HOME` written into the unit**: an update run from the tray, whose session may not have it, would write the unit without it and move the scheduler to another config folder
+- **Enabling lingering**: `sudo` in an installer that otherwise never needs it
+
 ## Decision: Claude manages routines through the core's own MCP server
 People make routines by talking to Claude, so Claude is another frontend: `procauto mcp serve` serves the same surface as the CLI. Every CLI command is a tool by default, derived from the command tree, and one override table holds the exceptions, so the server isn't edited when the CLI grows. The guardrail is my approval rather than missing tools: side-effecting tools are annotated so the client asks first, created routines start disabled and untrusted, and trust stays in my terminal.
 

@@ -21,7 +21,8 @@ name=$(install_var NAME) command=$(install_var COMMAND) folder=$(install_var FOL
 sandbox=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/$command-install-test.XXXXXX")" && pwd -P)
 server=""
 trap '[ -z "$server" ] || kill "$server" 2>/dev/null; rm -rf "$sandbox"' EXIT
-export HOME="$sandbox/home" XDG_CONFIG_HOME="$sandbox/home/.config" PROCAUTO_INSTALL_FILES_ONLY=1
+# A home with a space in its path, as paths in login items must survive.
+export HOME="$sandbox/home dir" XDG_CONFIG_HOME="$sandbox/home dir/.config" PROCAUTO_INSTALL_FILES_ONLY=1
 # Local builds carry an ad-hoc signature, not the release's Developer ID.
 export PROCAUTO_INSTALL_UNSIGNED=${PROCAUTO_INSTALL_UNSIGNED-1}
 unset INSTALL_DIR BIN_DIR
@@ -51,7 +52,10 @@ case $(uname -s) in
     app="$HOME/.local/lib/$folder"
     [ -x "$app/bin/$command" ] || fail "no app at $app"
     unit="$XDG_CONFIG_HOME/systemd/user/$command-scheduler.service"
-    grep -q "^ExecStart=$app/bin/$command daemon$" "$unit" || fail "the scheduler unit doesn't run the installed app"
+    grep -qxF "ExecStart=\"$app/bin/$command\" daemon" "$unit" || fail "the scheduler unit doesn't run the installed app"
+    grep -qxF "Environment=\"PATH=$HOME/.local/bin:$HOME/.local/bin:/opt/homebrew/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin\"" "$unit" ||
+      fail "the scheduler unit's PATH isn't one quoted assignment"
+    grep -qxF "Description=$name scheduler (runs routines on their schedules)" "$unit" || fail "the scheduler unit doesn't name the app"
     [ -x "$app/bin/automator-tray" ] || fail "no tray beside the CLI"
     entry="$XDG_CONFIG_HOME/autostart/$command-tray.desktop"
     grep -qx "Exec=\"$app/bin/automator-tray\"" "$entry" || fail "the tray's autostart entry doesn't run the installed tray"

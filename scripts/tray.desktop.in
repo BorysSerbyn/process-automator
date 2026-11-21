@@ -2,6 +2,6 @@
 Type=Application
 Name=__NAME__
 Comment=__NAME__ in the system tray: status, routines, notifications and updates
-Exec="__PROGRAM__"
+Exec=__PROGRAM__
 Icon=__ICON__
 Terminal=false

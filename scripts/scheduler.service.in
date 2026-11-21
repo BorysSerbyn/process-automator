@@ -1,10 +1,10 @@
 [Unit]
-Description=Process Automator scheduler (runs routines on their schedules)
+Description=__NAME__ scheduler (runs routines on their schedules)
 After=network-online.target
 
 [Service]
 ExecStart=__PROGRAM__ daemon
-Environment=PATH=__PATH__
+Environment=__PATH__
 Restart=always
 RestartSec=30
 

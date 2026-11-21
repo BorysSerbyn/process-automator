@@ -129,14 +129,50 @@ login_items() {
   fi
 }
 
+# sed_value <text>: text as a sed replacement (delimiter |).
+sed_value() { printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'; }
+
+# unit_quoted <text> [exec]: text as one double-quoted word of a systemd unit
+# setting (spaces and quotes kept, % not a specifier; in ExecStart, $ not a
+# variable either).
+unit_quoted() {
+  local v=${1//\\/\\\\}
+  v=${v//\"/\\\"} v=${v//%/%%}
+  if [ -n "${2:-}" ]; then v=${v//\$/\$\$}; fi
+  printf '"%s"' "$v"
+}
+
+# user_session: systemd's user manager is reachable (a login session, or lingering).
+user_session() { systemctl --user show-environment >/dev/null 2>&1; }
+
+# manager_config: the XDG_CONFIG_HOME systemd's user manager has (empty when
+# it has none, or none it says plainly), which may not be this shell's.
+manager_config() {
+  local v
+  v=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^XDG_CONFIG_HOME=//p')
+  case $v in "\$'"*) v="" ;; esac
+  printf '%s' "$v"
+}
+
+# units_dir: where systemd's user manager reads this user's units: its
+# XDG_CONFIG_HOME, not necessarily this shell's (files only: this shell's).
+units_dir() {
+  local conf=${XDG_CONFIG_HOME:-}
+  if system && user_session; then conf=$(manager_config); fi
+  echo "${conf:-$HOME/.config}/systemd/user"
+}
+
 install_scheduler() {
-  local app=$1 units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user existed=""
+  local app=$1 units existed=""
+  units=$(units_dir)
   mkdir -p "$units"
   [ -f "$units/$SCHED_LABEL" ] && existed=1
-  sed -e "s|__PROGRAM__|$app/$core_rel|" -e "s|__PATH__|$(sched_path)|" \
+  sed -e "s|__NAME__|$(sed_value "${NAME//%/%%}")|" \
+    -e "s|__PROGRAM__|$(sed_value "$(unit_quoted "$app/$core_rel" exec)")|" \
+    -e "s|__PATH__|$(sed_value "$(unit_quoted "PATH=$(sched_path)")")|" \
     "$here/scheduler.service.in" > "$units/$SCHED_LABEL"
   if system; then
-    if ! systemctl --user show-environment >/dev/null 2>&1; then
+    if ! user_session; then
       echo "No systemd user session here: start the scheduler yourself with \`$COMMAND daemon\`." >&2
       return 0
     fi
@@ -144,8 +180,25 @@ install_scheduler() {
     # A first install starts at login; a reinstall keeps the choice.
     [ -z "$existed" ] && systemctl --user enable "$SCHED_LABEL"
     systemctl --user restart "$SCHED_LABEL"
+    scheduler_notes
   fi
   echo "Login item: $SCHED_LABEL (log: journalctl --user -u $SCHED_LABEL)"
+}
+
+# scheduler_notes: what keeps the scheduler from doing what this shell's
+# commands expect: a config folder of its own, or stopping at logout.
+scheduler_notes() {
+  local conf
+  conf=$(manager_config)
+  if [ "${XDG_CONFIG_HOME:-$HOME/.config}" != "${conf:-$HOME/.config}" ]; then
+    echo "Note: XDG_CONFIG_HOME is ${XDG_CONFIG_HOME:-unset} here but ${conf:-unset} for systemd's user session," \
+      "so the scheduler would read another config folder than \`$COMMAND\` here. Set it the same for both" \
+      "(e.g. in ~/.config/environment.d/), log in again, and reinstall." >&2
+  fi
+  if ! graphical_session && [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = no ]; then
+    echo "Note: the scheduler runs only while you're logged in. To run routines when you're not," \
+      "keep your user session running: \`sudo loginctl enable-linger $(id -un)\`." >&2
+  fi
 }
 
 # --- The Linux tray ---------------------------------------------------------
@@ -162,7 +215,8 @@ install_tray() {
   if [ -f "$entry" ] && grep -Eq '^[[:space:]]*(Hidden[[:space:]]*=[[:space:]]*true|X-GNOME-Autostart-enabled[[:space:]]*=[[:space:]]*false)' "$entry"; then
     hidden=1
   fi
-  sed -e "s|__NAME__|$NAME|g" -e "s|__PROGRAM__|$exe|" -e "s|__ICON__|$app/share/$FOLDER/tray/app.png|" \
+  sed -e "s|__NAME__|$(sed_value "$NAME")|g" -e "s|__PROGRAM__|$(sed_value "$(desktop_quoted "$exe")")|" \
+    -e "s|__ICON__|$(sed_value "$app/share/$FOLDER/tray/app.png")|" \
     "$here/tray.desktop.in" > "$entry"
   [ -z "$hidden" ] || echo "Hidden=true" >> "$entry"
   local started=""
@@ -171,6 +225,15 @@ install_tray() {
     start_tray "$exe" && started=1
   fi
   echo "Login item: $UI_LABEL (the tray, in desktop sessions${started:+; started})"
+}
+
+# desktop_quoted <path>: path as a desktop entry's Exec argument: quoted,
+# with \ " ` $ escaped inside the quotes and % doubled (the Exec key's rules,
+# then the string type's: each backslash written twice).
+desktop_quoted() {
+  local v=${1//\\/\\\\\\\\}
+  v=${v//\"/\\\\\"} v=${v//\`/\\\\\`} v=${v//\$/\\\\\$} v=${v//%/%%}
+  printf '"%s"' "$v"
 }
 
 # tray_pids <exe>: this user's processes running the tray at <exe> (others'
@@ -291,9 +354,8 @@ uninstall_app() {
   if [ "$OS" = macos ]; then
     rm -f "$HOME/Library/LaunchAgents/$UI_LABEL.plist" "$HOME/Library/LaunchAgents/$SCHED_LABEL.plist"
   else
-    local units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
     if system; then systemctl --user disable "$SCHED_LABEL" 2>/dev/null || true; fi
-    rm -f "$units/$SCHED_LABEL"
+    rm -f "$(units_dir)/$SCHED_LABEL"
     [ -z "$UI_LABEL" ] || rm -f "$(autostart_entry)"
     if system; then systemctl --user daemon-reload 2>/dev/null || true; fi
   fi
