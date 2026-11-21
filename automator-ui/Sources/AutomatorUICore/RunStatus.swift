@@ -1,6 +1,8 @@
 import Foundation
 
-/// The run-status file (contracts/run-status.schema.json), generated from the Go core's types.
+/// The core's run status (`status --json`, contracts/run-status.schema.json),
+/// generated from the Go core's types. automator-ui follows it through the
+/// CLI (StatusStream), never the file.
 public typealias RunStatus = Components.Schemas.RunStatus
 
 extension RunStatus {
@@ -8,15 +10,6 @@ extension RunStatus {
 
     public static func decode(_ data: Data) throws -> RunStatus {
         try CoreJSON.decoder().decode(RunStatus.self, from: data)
-    }
-
-    /// Loads the file. Missing, unreadable or unsupported → nil.
-    public static func load(from url: URL) -> RunStatus? {
-        guard let data = try? Data(contentsOf: url),
-            let status = try? decode(data),
-            status.schemaVersion == supportedSchemaVersion
-        else { return nil }
-        return status
     }
 
     /// What the menu bar dot shows.

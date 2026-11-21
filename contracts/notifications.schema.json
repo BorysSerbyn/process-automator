@@ -62,5 +62,5 @@
     "notifications"
   ],
   "title": "Notifications",
-  "description": "Written by the Go core, delivered by frontends: File is the notifications file: written by the core, read by frontends."
+  "description": "Written by the Go core, delivered by frontends: File is the notifications file: written and read by the core only."
 }

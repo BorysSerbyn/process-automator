@@ -54,14 +54,11 @@ func TestPluginsAddRemove(t *testing.T) {
 	if _, err := cli(t, cfg, "plugins", "add", "acme", "--command", "acme-mcp"); err == nil {
 		t.Fatal("add replaced without --replace")
 	}
-	if _, err := cli(t, cfg, "plugins", "add", "notify", "--command", "x"); err == nil {
-		t.Fatal("a shipped plugin was shadowed")
-	}
 	b, _ := os.ReadFile(cfg)
 	if !strings.Contains(string(b), "# keep me") || !strings.Contains(string(b), "llm.backend") || !strings.Contains(string(b), "{acme-key}") {
 		t.Fatalf("config not edited in place:\n%s", b)
 	}
-	if out, err := cli(t, cfg, "plugins", "list"); err != nil || !strings.Contains(out, "acme") || !strings.Contains(out, "notify") {
+	if out, err := cli(t, cfg, "plugins", "list"); err != nil || !strings.Contains(out, "acme") {
 		t.Fatalf("list: %s %v", out, err)
 	}
 	if _, err := cli(t, cfg, "plugins", "remove", "acme"); err != nil {

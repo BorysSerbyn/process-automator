@@ -14,7 +14,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/update"
 )
@@ -247,7 +247,7 @@ func startDetachedUpdate(a *engine.App) error {
 
 // recordApp records a notification about the app itself.
 func recordApp(a *engine.App, title, body string) {
-	if _, err := notify.Add(a.Layout.Notifications(), notify.Notification{Kind: notify.KindApp, Title: title, Body: body}, time.Now()); err != nil {
+	if _, err := notifications.Add(a.Layout.Notifications(), notifications.Notification{Kind: notifications.KindApp, Title: title, Body: body}, time.Now()); err != nil {
 		fmt.Fprintln(os.Stderr, "warning: could not record a notification:", err)
 	}
 }

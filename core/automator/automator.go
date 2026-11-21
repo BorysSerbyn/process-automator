@@ -46,7 +46,8 @@ type App struct {
 	// TeamID is the Apple Developer team that signs releases; when set,
 	// installs and updates on macOS accept only its notarized signature.
 	TeamID string
-	// Plugins are compiled into the app, beside the ones every app ships with (core/plugins: notify).
+	// Plugins are compiled into the app: its own, and any of core/plugins it
+	// wants (e.g. notify). The engine adds none.
 	Plugins []pluginapi.Plugin
 }
 

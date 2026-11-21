@@ -88,8 +88,7 @@ var Registry = []Setting{
 	},
 	{
 		Key: "runs.failure-notifications", Type: TypeBool, Default: true,
-		Description: "Notify me when a run fails, needs a sign-in, or is skipped or missed. These are the app's own " +
-			"notifications (clicking one shows the run), not those routines send.",
+		Description: "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one shows the run).",
 	},
 	{
 		Key: "update.source-dir", Type: TypeString, Default: "",
@@ -108,7 +107,7 @@ var Registry = []Setting{
 // new keys, and the next change to the settings rewrites them so.
 var Retired = map[string]string{
 	"notifications.failures": "runs.failure-notifications",
-	// Clicking the app's own notifications shows the run; notify's do nothing.
+	// Clicking a notification always shows its run.
 	"notifications.on-click": "",
 }
 

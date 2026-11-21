@@ -33,7 +33,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/cli"
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
@@ -205,7 +205,7 @@ func runStatusSchema(comments map[string]string) ([]byte, error) {
 
 func notificationsSchema(comments map[string]string) ([]byte, error) {
 	r := &jsonschema.Reflector{ExpandedStruct: true, DoNotReference: true, CommentMap: comments, Mapper: enums}
-	s := r.Reflect(notify.File{})
+	s := r.Reflect(notifications.File{})
 	s.ID = "notifications.schema.json"
 	s.Title = "Notifications"
 	s.Description = "Written by the Go core, delivered by frontends: " + s.Description
@@ -255,7 +255,7 @@ func openAPI(comments map[string]string, outputs map[string]any) ([]byte, error)
 	if err := add(runstatus.Status{}); err != nil {
 		return nil, err
 	}
-	if err := add(notify.File{}); err != nil {
+	if err := add(notifications.File{}); err != nil {
 		return nil, err
 	}
 	if err := add(cli.ErrorOutput{}); err != nil {
@@ -314,7 +314,7 @@ func componentName(t reflect.Type) string {
 	if strings.HasSuffix(t.PkgPath(), "/runstatus") {
 		return "RunStatus" + strings.TrimPrefix(t.Name(), "Status")
 	}
-	if strings.HasSuffix(t.PkgPath(), "/notify") && t.Name() == "File" {
+	if strings.HasSuffix(t.PkgPath(), "/notifications") && t.Name() == "File" {
 		return "NotificationsFile"
 	}
 	return t.Name()

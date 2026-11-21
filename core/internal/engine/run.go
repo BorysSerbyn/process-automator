@@ -205,7 +205,7 @@ func forOccurrence(run runstatus.Run, o trigger.Occurrence) runstatus.Run {
 }
 
 // recordRun records how a run ended, or why it never ran: in run status, in
-// history, and as a notification when it failed (see notifyFailure).
+// history, and as a notification when it failed (see addFailureNotification).
 func recordRun(a *App, name string, occ trigger.Occurrence, inputs map[string]any, run runstatus.Run, res *agent.Result) {
 	run = forOccurrence(run, occ)
 	writeStatus(a.Layout.RunStatus(), name, run)
@@ -214,7 +214,7 @@ func recordRun(a *App, name string, occ trigger.Occurrence, inputs map[string]an
 		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt,
 		Outcome: run.Outcome, Reason: run.Reason, Inputs: inputs, Result: res,
 	})
-	notifyFailure(a, name, run)
+	addFailureNotification(a, name, run)
 }
 
 func runOutcome(started, finished time.Time, res *agent.Result, runErr error) runstatus.Run {

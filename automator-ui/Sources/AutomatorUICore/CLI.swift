@@ -91,11 +91,6 @@ public struct CLI: Sendable {
         return output.ok ? nil : output.failure
     }
 
-    /// Where the core keeps its files (`paths`).
-    public func paths() -> Components.Schemas.PathsOutput? {
-        try? call(Components.Schemas.PathsOutput.self, ["paths"]).get()
-    }
-
     /// App-wide settings (`settings list --scope app`).
     public func appSettings() -> Result<[Components.Schemas.State], Failure> {
         call([Components.Schemas.State].self, ["settings", "list", "--scope", "app"])
@@ -281,12 +276,18 @@ public struct CLI: Sendable {
         perform(["memory", "rm", id])
     }
 
+    /// The app's own notifications not delivered yet, oldest first
+    /// (`notifications list --pending`).
+    public func pendingNotifications() -> Result<[CoreNotification], Failure> {
+        call([CoreNotification].self, ["notifications", "list", "--pending"])
+    }
+
     /// Records that notifications were shown.
     public func markDelivered(_ ids: [String]) {
         _ = perform(["notifications", "delivered"] + ids)
     }
 
-    /// Does what clicking a notification does (the core carries out the action).
+    /// Does what clicking a notification does (the core shows its run).
     public func openNotification(_ id: String) {
         _ = perform(["notifications", "open", id])
     }

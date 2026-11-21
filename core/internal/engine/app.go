@@ -24,7 +24,6 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
-	"github.com/BorysSerbyn/process-automator/core/plugins/notify"
 )
 
 // App is the engine on one data folder: the config, the plugins and the
@@ -44,14 +43,10 @@ const AnthropicKey = "anthropic-api-key"
 const ClaudeCodeTokenKey = "claude-code-oauth-token"
 
 // Load loads the config at path over the plugins' defaults and wires the
-// plugins, adding the built-in notify plugin; secrets is where secrets are
-// kept.
+// plugins it's given (the app's, the ones every app ships with included: the
+// engine adds none); secrets is where secrets are kept.
 func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App, error) {
 	files := LayoutOf(path)
-	// Callers may pass an app's plugins back in (the daemon reloads that way),
-	// so notify is added to the given plugins without one already there.
-	plugins = slices.DeleteFunc(slices.Clone(plugins), func(p pluginapi.Plugin) bool { return p.Name == notify.Name })
-	plugins = append(plugins, notify.Plugin())
 	if err := pluginapi.Validate(plugins); err != nil {
 		return nil, err
 	}
@@ -223,6 +218,8 @@ func (h *host) ConnectApp(ctx context.Context) (*mcp.Session, error) {
 }
 
 func (h *host) Config(v any) error { return h.cfg.DecodePlugin(h.plugin.Name, v) }
+
+func (h *host) AppName() string { return product.Name }
 
 // Secret returns a secret the plugin declared; undeclared names are refused so a
 // plugin can only read its own secrets.

@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "status.schema.json",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "validUntil": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ValidUntil is the scheduler's heartbeat: the status holds until then.\nPast it (or absent), the core isn't responding."
+    },
+    "health": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "error",
+        "none"
+      ]
+    },
+    "setupLeft": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "SetupLeft names the setup steps still to do (`setup --json`'s titles;\nempty when setup is done). Unfinished setup makes health error."
+    },
+    "busy": {
+      "type": "boolean",
+      "description": "Busy is true while a routine is running (not counting runs stuck past\nMaxRunDuration); frontends show activity from it."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Summary is the state in a few words (\"All good\", \"No routines\nenabled\"), for frontends to show when there are no reasons."
+    },
+    "problem": {
+      "type": "string",
+      "description": "Problem says why the scheduler can't work right now (e.g. the config\nfile doesn't load); set and cleared by the scheduler on every check."
+    },
+    "routines": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "problem": {
+            "type": "string",
+            "description": "Problem says why the routine can't be scheduled (e.g. its file doesn't\nparse). It's current state, cleared as soon as the routine is fixed."
+          },
+          "nextRunAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "NextRunAt is the next slot the scheduler will handle (enabled, scheduled\nroutines only). The scheduler moves it forward as soon as it picks a slot\nup, so one more than SchedulerGrace in the past means it didn't."
+          },
+          "lastRun": {
+            "properties": {
+              "trigger": {
+                "type": "string",
+                "description": "Trigger is what started the run: \"schedule\", \"manual\" or \"backfill\"\n(empty in records from before triggers were recorded)."
+              },
+              "for": {
+                "type": "string",
+                "format": "date-time",
+                "description": "For is the time the run is for (the schedule slot, the backfilled day)."
+              },
+              "id": {
+                "type": "string",
+                "description": "ID is the run's history ID (as `runs show` takes)."
+              },
+              "sessionId": {
+                "type": "string",
+                "description": "SessionID is the run's saved agent CLI session (routines with\nsession: save), set when the run starts."
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "finishedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deadline": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Deadline is when a running run is stopped (its routine's timeout)."
+              },
+              "queuedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "QueuedAt is when the run started waiting for its turn, if it had to."
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "failed",
+                  "skipped",
+                  "missed",
+                  "needs-reauth",
+                  "running",
+                  "queued",
+                  "stopped"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "startedAt",
+              "outcome"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "description": "Health is the routine's own verdict: error when it makes the app's\nhealth error, ok while it's enabled and fine, none while it's paused."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Summary is its state in a few words (\"Next: tomorrow 09:20\", \"standup\nfailed\", \"Paused\"), for frontends to show as is."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "enabled"
+        ],
+        "description": "Routine is one routine's entry."
+      },
+      "type": "array"
+    },
+    "reasons": {
+      "items": {
+        "properties": {
+          "routine": {
+            "type": "string",
+            "description": "Routine it's about; empty for the scheduler itself."
+          },
+          "text": {
+            "type": "string",
+            "description": "Text is a short headline (\"standup failed\"); Detail the full story (the\nrun's reason), for frontends to show on demand."
+          },
+          "detail": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string",
+            "description": "Run is the run it's about (a history ID, as `runs show` takes), if any."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "description": "Reason is one thing making health error."
+      },
+      "type": "array",
+      "description": "Reasons say why health is error, in words, for frontends to show as\nthey are; empty when it isn't. They come from the same rules as health."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "updatedAt",
+    "health",
+    "busy",
+    "routines"
+  ],
+  "title": "procauto status --json",
+  "description": "Status is the whole record."
+}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -13,12 +12,9 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
-	notifyplugin "github.com/BorysSerbyn/process-automator/core/plugins/notify"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Queued routines take turns, shown as queued while they wait; a parallel
@@ -146,54 +142,21 @@ func TestFailureNotification(t *testing.T) {
 	if _, err := a.Execute(context.Background(), set, r, engine.RunOptions{}); err == nil {
 		t.Fatal("run should fail")
 	}
-	f, _ := notify.Load(a.Layout.Notifications())
-	if len(f.Notifications) != 1 || f.Notifications[0].Kind != notify.KindFailure || f.Notifications[0].Title != "r failed" ||
+	f, _ := notifications.Load(a.Layout.Notifications())
+	if len(f.Notifications) != 1 || f.Notifications[0].Kind != notifications.KindFailure || f.Notifications[0].Title != "r failed" ||
 		!strings.Contains(f.Notifications[0].Body, "fell over") || f.Notifications[0].Run == "" {
 		t.Fatalf("failure notification: %+v", f.Notifications)
 	}
 	enginetest.Set(t, a.Layout.Config(), "runs.failure-notifications", "false")
 	_, _ = a.Execute(context.Background(), set, r, engine.RunOptions{})
-	if f, _ := notify.Load(a.Layout.Notifications()); len(f.Notifications) != 1 {
+	if f, _ := notifications.Load(a.Layout.Notifications()); len(f.Notifications) != 1 {
 		t.Fatal("notified with runs.failure-notifications off")
 	}
 	// Dry runs record nothing, notifications included.
 	_ = os.Remove(a.Layout.Notifications())
 	enginetest.Set(t, a.Layout.Config(), "runs.failure-notifications", "true")
 	_, _ = a.Execute(context.Background(), set, r, engine.RunOptions{DryRun: true})
-	if f, _ := notify.Load(a.Layout.Notifications()); len(f.Notifications) != 0 {
+	if f, _ := notifications.Load(a.Layout.Notifications()); len(f.Notifications) != 0 {
 		t.Fatal("a dry run notified")
-	}
-}
-
-// notify_me shows the notification through the OS (stubbed here), never
-// through the app's own notifications.
-func TestNotifyMe(t *testing.T) {
-	var shown []notifyplugin.Note
-	orig := notifyplugin.Deliver
-	notifyplugin.Deliver = func(n notifyplugin.Note) error { shown = append(shown, n); return nil }
-	t.Cleanup(func() { notifyplugin.Deliver = orig })
-	cfg := filepath.Join(t.TempDir(), "config.yaml")
-	a, err := engine.Load(cfg, nil, enginetest.Secrets)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	cs, err := a.Connector.ConnectFor(ctx, "notify", engine.RunOf(routines.Routine{Name: "scout"}, "", "scout/2026-11-19T092000"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cs.Close()
-	res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me", Arguments: map[string]any{"title": "3 open threads", "body": "see the thread", "urgent": true}})
-	if err != nil || res.IsError {
-		t.Fatalf("notify_me: %v %+v", err, res)
-	}
-	if len(shown) != 1 || shown[0] != (notifyplugin.Note{Title: "3 open threads", Body: "see the thread", Urgent: true}) {
-		t.Fatalf("shown %+v", shown)
-	}
-	if f, _ := notify.Load(a.Layout.Notifications()); len(f.Notifications) != 0 {
-		t.Fatalf("recorded as the app's: %+v", f.Notifications)
-	}
-	if res, _ := cs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me", Arguments: map[string]any{"title": " "}}); !res.IsError {
-		t.Error("an empty title was shown")
 	}
 }

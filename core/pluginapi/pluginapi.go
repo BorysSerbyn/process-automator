@@ -71,6 +71,10 @@ type Host interface {
 	// runs. The app's server isn't a plugin, and plugins never read the app's
 	// files: this is their way in. The caller closes it.
 	ConnectApp(ctx context.Context) (*sdk.ClientSession, error)
+	// AppName is the name of the app the plugin runs in (e.g. "Process
+	// Automator"), for what the plugin shows as the app's, such as a desktop
+	// notification's sender.
+	AppName() string
 	// Config decodes this plugin's config section (plugins.<name>) into v, keeping
 	// v's values for absent fields. Unknown fields are an error. Like
 	// RoutineConfig, it decodes by yaml tags.

@@ -375,7 +375,7 @@ components:
       type: object
     NotificationsFile:
       additionalProperties: false
-      description: 'File is the notifications file: written by the core, read by frontends.'
+      description: 'File is the notifications file: written and read by the core only.'
       properties:
         notifications:
           items:
@@ -429,7 +429,7 @@ components:
           description: MCPChanges logs every side-effecting call made through `mcp serve`.
           type: string
         notifications:
-          description: Notifications is the notifications file frontends deliver from.
+          description: Notifications is the app's own notifications file.
           type: string
         routines:
           type: string
@@ -1105,6 +1105,11 @@ components:
             Prepare is what to do outside the app before signing in (a sign-in
             step whose plugin needs it, e.g. creating a Slack app): numbered steps
             to show, and have done, first. `auth login` shows them too.
+          type: string
+        setting:
+          description: |-
+            Setting is the setting the step chooses, for frontends to show and set
+            (backend: llm.backend).
           type: string
         signIn:
           description: |-
