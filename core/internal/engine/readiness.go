@@ -72,7 +72,7 @@ func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine,
 	if rd.ConfigErr != nil || slices.ContainsFunc(a.Servers(r), func(s string) bool { return !a.KnownServer(s) }) {
 		return
 	}
-	tools, err := agent.CheckTools(ctx, a.Connector, RunOf(r, rd.Config.Folder, ""), r.Servers, r.Tools)
+	tools, err := agent.CheckTools(ctx, a.Connector, RunOf(r, rd.Config.WorkFolder, ""), r.Servers, r.Tools)
 	rd.Tools = tools
 	if err != nil {
 		fix := ""
