@@ -1,16 +1,13 @@
-//go:build !darwin
-
-package notifyplugin
+package notify
 
 import (
 	"os"
 	"strings"
 )
 
-// launchableExts are kinds of file that opening would run on Linux desktops
-// and Windows, rather than show: kept broad, since what opens them varies.
-var launchableExts = []string{".desktop", ".appimage", ".sh", ".py", ".rb", ".pl", ".js", ".jar", ".run",
-	".exe", ".bat", ".cmd", ".com", ".ps1", ".lnk", ".msi", ".vbs", ".scr", ".url"}
+// launchableExts are macOS kinds of file that opening would run rather than show.
+var launchableExts = []string{".app", ".command", ".tool", ".terminal", ".workflow", ".action", ".pkg", ".mpkg",
+	".scpt", ".scptd", ".applescript", ".webloc", ".inetloc", ".fileloc", ".sh", ".py", ".rb", ".pl", ".js"}
 
 // launches reports whether opening path with its default app would run
 // something (an app, a script, an executable) rather than show it.

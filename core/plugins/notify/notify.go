@@ -1,9 +1,10 @@
-// Package notifyplugin is the notify plugin: routines that list it in
+// Package notify is the notify plugin: routines that list it in
 // automator.servers can notify me (notify_me). It's a plugin like any other,
-// built in because what it records is delivered by the app's frontends. Its
-// settings are each routine's (routines.<name>.onNotificationClick); the app's
-// own notifications (runs that failed, updates) never go through it.
-package notifyplugin
+// shipped with every app built on the engine because what it records is
+// delivered by the app's frontends. Its settings are each routine's
+// (routines.<name>.onNotificationClick); the app's own notifications (runs
+// that failed, updates) never go through it.
+package notify
 
 import (
 	"context"
@@ -16,16 +17,16 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	notifications "github.com/BorysSerbyn/process-automator/core/internal/notify"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // Name is the plugin's name, as routines list it in automator.servers.
 const Name = "notify"
 
-// New is the plugin; it records what routines ask in the notifications file
-// at path, for the app's frontends to deliver.
-func New(path string) pluginapi.Plugin {
+// Plugin is the notify plugin; it records what routines ask in the app's
+// notifications file at path, for its frontends to deliver.
+func Plugin(path string) pluginapi.Plugin {
 	return pluginapi.Plugin{
 		Name:        Name,
 		Description: "Lets routines notify me (notify_me), delivered by automator-ui",
@@ -54,8 +55,8 @@ func New(path string) pluginapi.Plugin {
 						return nil, nil, err
 					}
 				}
-				n, err := notify.Add(path, notify.Notification{
-					Kind: notify.KindRoutine, Title: args.Title, Body: args.Body, Urgent: args.Urgent,
+				n, err := notifications.Add(path, notifications.Notification{
+					Kind: notifications.KindRoutine, Title: args.Title, Body: args.Body, Urgent: args.Urgent,
 					Routine: run.Routine, Run: run.ID, Open: open,
 				}, time.Now())
 				if err != nil {

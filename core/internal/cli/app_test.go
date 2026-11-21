@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/notifyplugin"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
+	notifyplugin "github.com/BorysSerbyn/process-automator/core/plugins/notify"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

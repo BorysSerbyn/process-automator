@@ -16,7 +16,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/notify"
-	"github.com/BorysSerbyn/process-automator/core/internal/notifyplugin"
+	notifyplugin "github.com/BorysSerbyn/process-automator/core/plugins/notify"
 )
 
 // Type is a setting's value type.

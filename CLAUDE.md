@@ -3,6 +3,7 @@
 Scheduled LLM routines: prompt files a model runs in the background, on a schedule, with tools from MCP servers.
 
 - `core/internal/`: Go engine (`engine`: loading, readiness, runs, the scheduler; Genkit for LLM) + the `procauto` CLI over it (`cli`: commands and their output), service-agnostic
+- `core/plugins/`: the plugins every app built on the engine ships with (`notify`), each built on `pluginapi` like any other
 - `core/cmd/procauto`: the binary, an `automator.App` handed to `automator.Main`. It compiles in no plugins: routines use the core's built-in servers (`automator`, the app's read-only tools; `notify`, `notify_me`) and the MCP servers added with `procauto plugins add`
 - The public surface is `core/automator` (an app: its names, identifiers, release source, plugins; `Main`, `CheckTemplates`) and `core/pluginapi` (the plugin contract); everything else stays in `internal/`. Other apps import them as a Go module, with their own plugins and templates, and build with this repo's Makefile and scripts. Keep both packages small and stable, and nothing app-specific in this repo
 - Routines are Dotprompt files on the device, not in the binary; their settings are `automator.*` frontmatter keys. `templates/` holds shareable ones (none ship yet; an empty or missing folder must keep working)
