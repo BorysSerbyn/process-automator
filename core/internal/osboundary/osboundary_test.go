@@ -16,8 +16,34 @@ var rules = []struct {
 }{
 	{"runtime.GOOS (put OS branches in per-OS files)", regexp.MustCompile(`runtime\.GOOS`)},
 	{`the syscall package (OS calls go in per-OS files)`, regexp.MustCompile(`"syscall"`)},
-	{"running an OS tool", regexp.MustCompile(`exec\.Command(Context)?\((ctx, )?"(open|xdg-open|osascript|launchctl|security|defaults|systemctl|notify-send|powershell|cmd)"`)},
-	{"an OS-specific path", regexp.MustCompile(`"(/Applications/|~/Library/|/Library/|/usr/share/|~/.config/|C:\\)`)},
+	{"running an OS tool", regexp.MustCompile(`exec\.Command(Context)?\(([^,()"]+, )?"(open|xdg-open|osascript|launchctl|security|defaults|systemctl|loginctl|journalctl|notify-send|secret-tool|gio|gdbus|dbus-send|caffeinate|pmset|sw_vers|powershell|cmd|/usr/bin/[^"]*|/bin/[^"]*)"`)},
+	{"an OS-specific path", regexp.MustCompile(`"(/Applications/|~/Library/|/Library/|Library"|Application Support|/usr/share/|~/.config/|/proc/|/run/user/|C:\\)`)},
+	{"an OS-specific package", regexp.MustCompile(`"(golang\.org/x/sys/(unix|windows)|github\.com/godbus/dbus[^"]*)"`)},
+}
+
+// Each rule catches what it's about, written the ways code writes it, so the
+// test can't quietly stop enforcing.
+func TestRulesCatchOSCode(t *testing.T) {
+	for _, src := range []string{
+		`runtime.GOOS == "linux"`,
+		`import "syscall"`,
+		`exec.Command("xdg-open", url)`,
+		`exec.CommandContext(ctx, "systemctl", "--user")`,
+		`exec.CommandContext(c.ctx, "secret-tool", "lookup")`,
+		`exec.Command("/usr/bin/security", "-i")`,
+		`filepath.Join(home, "Library", "Logs")`,
+		`os.ReadFile("/proc/self/exe")`,
+		`import "github.com/godbus/dbus/v5"`,
+		`import "golang.org/x/sys/unix"`,
+	} {
+		caught := false
+		for _, r := range rules {
+			caught = caught || r.re.MatchString(src)
+		}
+		if !caught {
+			t.Errorf("no rule catches %s", src)
+		}
+	}
 }
 
 // allowed are the exceptions, each with why.
