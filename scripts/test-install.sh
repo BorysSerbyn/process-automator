@@ -99,6 +99,21 @@ if [ "$(uname -s)" = Linux ]; then
     fail "installing without a terminal failed: $out"
   case $out in *"$command setup"*) ;; *) fail "installing without a terminal didn't point to setup: $out" ;; esac
 fi
+# A copy that fails halfway (a full disk) leaves the installed app as it
+# was, and says so.
+mkdir -p "$sandbox/failbin"
+for tool in cp ditto; do
+  real=$(command -v "$tool" || true)
+  [ -n "$real" ] || continue
+  printf '#!/bin/sh\ncase "$*" in *.new) echo "%s: no space left on device" >&2; exit 1 ;; esac\nexec %s "$@"\n' "$tool" "$real" > "$sandbox/failbin/$tool"
+  chmod +x "$sandbox/failbin/$tool"
+done
+if out=$(PATH="$sandbox/failbin:$PATH" "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
+  fail "a failed copy installed: $out"
+fi
+case $out in *"left as it was"*) ;; *) fail "a failed copy didn't say the app was left as it was: $out" ;; esac
+"$cli" version >/dev/null || fail "a failed copy broke the installed app"
+[ ! -e "$app.new" ] && [ ! -e "$app.old" ] || fail "a failed copy left $app.new or $app.old"
 expect "uninstall without a terminal didn't ask for --yes" "--yes" "$cli" uninstall
 "$cli" settings set history.retention-days 30 >/dev/null
 data=$("$cli" paths --json | sed -n 's/^  "data": "\(.*\)",*$/\1/p')

@@ -86,11 +86,14 @@ install_app() {
   mkdir -p "$(dirname "$dest")"
   if [ "$root" != "$dest" ]; then
     stop_items "$dest"
-    # Copy beside it, then swap, so a failed copy leaves the installed app whole.
+    # Copy beside it, then swap, so a failed copy leaves the installed app
+    # whole; and running again, since it was just stopped.
     rm -rf "$dest.new" "$dest.old"
-    if [ "$OS" = macos ]; then ditto "$root" "$dest.new"; else cp -R "$root" "$dest.new"; fi
-    if [ -e "$dest" ]; then mv "$dest" "$dest.old"; fi
-    mv "$dest.new" "$dest"
+    if ! copy_app "$root" "$dest.new" || ! swap_in "$dest"; then
+      rm -rf "$dest.new"
+      if [ -x "$dest/$core_rel" ]; then login_items "$dest" >/dev/null || true; fi
+      die "couldn't put $NAME $VERSION in place at $dest: the app there is left as it was"
+    fi
     rm -rf "$dest.old"
   fi
   if [ -n "$link" ]; then
@@ -100,6 +103,21 @@ install_app() {
   login_items "$dest"
   echo "Installed $NAME $VERSION: $dest"
   if [ -n "$link" ]; then echo "CLI: $BIN_DIR/$COMMAND"; fi
+}
+
+# copy_app <from> <to>: a copy of the app, as each OS's tools make one.
+copy_app() {
+  if [ "$OS" = macos ]; then ditto "$1" "$2"; else cp -R "$1" "$2"; fi
+}
+
+# swap_in <dest>: <dest>.new in place of <dest> (kept as <dest>.old), or,
+# when that fails, <dest> as it was.
+swap_in() {
+  local dest=$1
+  if [ -e "$dest" ]; then mv "$dest" "$dest.old" || return 1; fi
+  mv "$dest.new" "$dest" && return 0
+  if [ -e "$dest.old" ]; then mv "$dest.old" "$dest"; fi
+  return 1
 }
 
 # The scheduler's PATH: launchd's and systemd's defaults lack ~/.local/bin and
