@@ -1,0 +1,203 @@
+package tray
+
+import (
+	"reflect"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// clock is a settable now.
+type clock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *clock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *clock) set(t time.Time) {
+	c.mu.Lock()
+	c.t = t
+	c.mu.Unlock()
+}
+
+// Each status shows at once and asks for notifications (a run's end
+// changes it); what didn't change isn't set again; a status past its
+// validUntil goes red on the next refresh.
+func TestAStatusShowsAndDelivers(t *testing.T) {
+	f := newFakeCLI(t)
+	f.answer("notifications list --pending --json", pending)
+	tr, v, n, _ := newTray(t, f)
+	c := &clock{t: fresh}
+	tr.now = c.now
+
+	tr.Show(status(t, lineOK))
+	frame, menu, icons, menus := v.last()
+	if frame != (Frame{Light: Green}) || menu[1].Text != "All good" || icons != 1 || menus != 1 {
+		t.Fatalf("%+v %+v %d %d", frame, menu, icons, menus)
+	}
+	eventually(t, "the notifications", func() bool { return n.count() == 2 })
+
+	tr.render() // nothing changed
+	if _, _, icons, menus := v.last(); icons != 1 || menus != 1 {
+		t.Fatalf("set again: %d icons, %d menus", icons, menus)
+	}
+	c.set(stale)
+	tr.render()
+	frame, menu, _, _ = v.last()
+	if frame != (Frame{Light: Red}) || menu[1].Text != "Not responding" {
+		t.Fatalf("stale: %+v %+v", frame, menu[1])
+	}
+	tr.Show(nil) // unreadable
+	if frame, _, _, _ := v.last(); frame != (Frame{Light: Red}) {
+		t.Fatalf("unreadable: %+v", frame)
+	}
+}
+
+// While busy the dot pulses: dimmed and bright in turn; it stops when the
+// core says it's done.
+func TestBusyPulses(t *testing.T) {
+	saved := PulseInterval
+	PulseInterval = 5 * time.Millisecond
+	t.Cleanup(func() { PulseInterval = saved })
+	f := newFakeCLI(t)
+	tr, v, _, _ := newTray(t, f)
+	tr.now = func() time.Time { return fresh }
+
+	tr.Show(status(t, lineBusy))
+	eventually(t, "a dim frame and a bright one after it", func() bool {
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		for i := 1; i < len(v.icons); i++ {
+			if v.icons[i-1] == (Frame{Light: Green, Dim: true}) && v.icons[i] == (Frame{Light: Green}) {
+				return true
+			}
+		}
+		return false
+	})
+	tr.Show(status(t, lineOK))
+	time.Sleep(30 * time.Millisecond)
+	_, _, before, _ := v.last()
+	time.Sleep(30 * time.Millisecond)
+	frame, _, after, _ := v.last()
+	if frame != (Frame{Light: Green}) || after != before {
+		t.Fatalf("still pulsing: %+v, %d → %d icons", frame, before, after)
+	}
+}
+
+// Menu items do what automator-ui's do: a reason opens its run, windows open
+// through the seam, Quit quits the tray.
+func TestChoosingMenuItems(t *testing.T) {
+	f := newFakeCLI(t)
+	tr, _, n, w := newTray(t, f)
+	quit := make(chan struct{})
+	tr.quit = func() { close(quit) }
+
+	tr.Choose(Action{Kind: OpenRun, Run: "r-42"})
+	eventually(t, "the run", func() bool { return f.hasRun("runs show r-42 --open") })
+	for _, win := range []Window{{Kind: SetupWindow}, {Kind: SettingsWindow}, {Kind: RoutinesWindow}, {Kind: RoutineWindow, Routine: "standup"}} {
+		tr.Choose(Action{Kind: ShowWindow, Window: win})
+		if !w.has(win) {
+			t.Fatalf("%+v not opened", win)
+		}
+	}
+	tr.Choose(Action{Kind: Quit})
+	<-quit
+
+	// No terminal: it says what to run instead.
+	w.err = ErrNoTerminal
+	tr.Choose(Action{Kind: ShowWindow, Window: Window{Kind: SetupWindow}})
+	id := n.find("No terminal to open it in")
+	if id == 0 || !strings.Contains(n.note(id).Body, "Run `acme-auto setup` in a terminal") {
+		t.Fatalf("%+v", n.notes)
+	}
+	// A run that doesn't open says why.
+	f.fail("runs show r-1 --open", "no run r-1")
+	tr.Choose(Action{Kind: OpenRun, Run: "r-1"})
+	eventually(t, "the alert", func() bool { return n.find("Couldn't open the run") != 0 })
+}
+
+func TestTheUpdateItem(t *testing.T) {
+	f := newFakeCLI(t)
+	tr, _, _, _ := newTray(t, f)
+	u := tr.updates
+	if got := u.MenuItem(); !reflect.DeepEqual(got, MenuItem{Text: "Check for Updates", Action: Action{Kind: CheckUpdates}}) {
+		t.Fatalf("%+v", got)
+	}
+	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false,"note":"It restarts."}`)
+	u.Check(true)
+	if got := u.MenuItem(); !reflect.DeepEqual(got, MenuItem{Text: "Update to v2.2.0…", Action: Action{Kind: InstallUpdate}}) {
+		t.Fatalf("%+v", got)
+	}
+}
+
+// Installing asks first (a note with the core's note and Update/Later),
+// then starts it detached and opens the update window, which follows it
+// (`update progress`, the menu says "Updating to X…") until it's over.
+func TestInstallingAnUpdate(t *testing.T) {
+	savedEvery := ProgressEvery
+	ProgressEvery = 5 * time.Millisecond
+	t.Cleanup(func() { ProgressEvery = savedEvery })
+	f := newFakeCLI(t)
+	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false,"note":"It restarts."}`)
+	f.answer("update --detach --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":true,"started":true}`)
+	f.answer("update progress --json", `{"state":"installing","tag":"v2.2.0","step":"Downloading","log":"/x/update.log"}`)
+	tr, _, n, w := newTray(t, f)
+
+	tr.Choose(Action{Kind: CheckUpdates}) // not quietly: available, so install
+	eventually(t, "the question", func() bool { return n.find("Update to v2.2.0?") != 0 })
+	ask := n.note(n.find("Update to v2.2.0?"))
+	if ask.Body != "It restarts." || strings.Join(ask.Actions, ",") != "update,Update,later,Later" || !ask.Persistent {
+		t.Fatalf("%+v", ask)
+	}
+	tr.Desk().Invoked(n.find("Update to v2.2.0?"), "later")
+	time.Sleep(20 * time.Millisecond)
+	if f.hasRun("update --detach --json") {
+		t.Fatal("Later installed it")
+	}
+
+	tr.Desk().Invoked(n.find("Update to v2.2.0?"), "update")
+	eventually(t, "the update window", func() bool { return w.has(Window{Kind: UpdateWindow}) })
+	eventually(t, "Updating to v2.2.0…", func() bool {
+		return reflect.DeepEqual(tr.updates.MenuItem(), MenuItem{Text: "Updating to v2.2.0…", Action: Action{Kind: ShowUpdate}})
+	})
+	// It ended (here, failed: the app didn't restart): the menu asks again.
+	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false}`)
+	f.answer("update progress --json", `{"state":"failed","tag":"v2.2.0","error":"checksum mismatch","log":"/x/update.log"}`)
+	eventually(t, "Update to v2.2.0… again", func() bool {
+		return reflect.DeepEqual(tr.updates.MenuItem(), MenuItem{Text: "Update to v2.2.0…", Action: Action{Kind: InstallUpdate}})
+	})
+}
+
+// Where notifications can't ask, the terminal asks (the CLI's update).
+func TestInstallingWithoutActionsAsksInTheTerminal(t *testing.T) {
+	f := newFakeCLI(t)
+	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false}`)
+	tr, _, n, w := newTray(t, f)
+	n.canAsk = false
+	tr.updates.Check(false)
+	if !w.has(Window{Kind: ConfirmUpdateWindow}) || n.count() != 0 {
+		t.Fatalf("%+v %+v", w.opened, n.notes)
+	}
+}
+
+func TestCheckingForUpdatesSaysWhatItFound(t *testing.T) {
+	f := newFakeCLI(t)
+	tr, _, n, _ := newTray(t, f)
+	f.fail("update --check --json", "can't reach GitHub")
+	tr.updates.Check(false)
+	if id := n.find("Couldn't check for updates"); id == 0 || n.note(id).Body != "can't reach GitHub" {
+		t.Fatalf("%+v", n.notes)
+	}
+	f.unfail("update --check --json")
+	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.1.0","updateAvailable":false,"updated":false,"inProgress":false}`)
+	tr.updates.Check(false)
+	if id := n.find("You're up to date"); id == 0 || n.note(id).Body != "This is 2.1.0." {
+		t.Fatalf("%+v", n.notes)
+	}
+}

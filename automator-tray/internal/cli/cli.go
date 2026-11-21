@@ -1,0 +1,112 @@
+// Package cli is the core's CLI, the tray's only way to ask the core
+// anything or have it do something: it runs the app's commands and reads
+// what they print, as automator-ui's CLI does. Every call blocks until the
+// command exits: make them off the tray's loop.
+package cli
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+// CLI runs the app's CLI at Path.
+type CLI struct {
+	Path string
+	// Command is the CLI's name, for messages.
+	Command string
+}
+
+// Failure is why a command failed, in the core's words.
+type Failure struct{ Message string }
+
+func (f *Failure) Error() string { return f.Message }
+
+// Exec runs a command and returns what it printed. err is a *Failure: the
+// core's error object (commands given --json print one), else what it wrote
+// to stderr.
+func (c CLI) Exec(args ...string) ([]byte, error) {
+	cmd := exec.Command(c.Path, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			return nil, &Failure{Message: "couldn't start " + c.Command}
+		}
+		return stdout.Bytes(), c.failure(stdout.Bytes(), stderr.String())
+	}
+	return stdout.Bytes(), nil
+}
+
+func (c CLI) failure(stdout []byte, stderr string) *Failure {
+	var out errorOutput
+	if json.Unmarshal(stdout, &out) == nil && out.Error != "" {
+		return &Failure{Message: out.Error}
+	}
+	msg := strings.TrimPrefix(strings.TrimSpace(stderr), "Error: ")
+	if msg == "" {
+		msg = c.Command + " failed"
+	}
+	return &Failure{Message: msg}
+}
+
+// call runs a command given --json and decodes what it printed into out.
+func (c CLI) call(out any, args ...string) error {
+	stdout, err := c.Exec(append(args, "--json")...)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(stdout, out); err != nil {
+		return &Failure{Message: fmt.Sprintf("%s answered something unexpected: %v", c.Command, err)}
+	}
+	return nil
+}
+
+// PendingNotifications are the app's own notifications no frontend has
+// delivered yet, oldest first (`notifications list --pending`).
+func (c CLI) PendingNotifications() ([]Notification, error) {
+	var out []Notification
+	return out, c.call(&out, "notifications", "list", "--pending")
+}
+
+// MarkDelivered records that notifications were shown.
+func (c CLI) MarkDelivered(ids []string) error {
+	_, err := c.Exec(append([]string{"notifications", "delivered"}, ids...)...)
+	return err
+}
+
+// OpenNotification says what clicking a notification shows (`notifications open`).
+func (c CLI) OpenNotification(id string) (ClickOutput, error) {
+	var out ClickOutput
+	return out, c.call(&out, "notifications", "open", id)
+}
+
+// OpenRun opens a readable report of a run (the core writes and opens it).
+func (c CLI) OpenRun(id string) error {
+	_, err := c.Exec("runs", "show", id, "--open")
+	return err
+}
+
+// UpdateCheck says whether a newer release exists, and whether one is
+// installing (`update --check`).
+func (c CLI) UpdateCheck() (UpdateOutput, error) {
+	var out UpdateOutput
+	return out, c.call(&out, "update", "--check")
+}
+
+// StartUpdate starts installing the newer release in the background
+// (`update --detach`); the app restarts when it's done, and the result comes
+// as a notification.
+func (c CLI) StartUpdate() (UpdateOutput, error) {
+	var out UpdateOutput
+	return out, c.call(&out, "update", "--detach")
+}
+
+// UpdateProgress is what the update installing is doing, or how the latest
+// one ended (`update progress`).
+func (c CLI) UpdateProgress() (UpdateProgress, error) {
+	var out UpdateProgress
+	return out, c.call(&out, "update", "progress")
+}

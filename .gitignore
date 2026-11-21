@@ -1,6 +1,7 @@
 # Build output
 /build/
 /core/procauto
+/automator-tray/automator-tray
 automator-ui/.build/
 automator-ui/.swiftpm/
 *.app
