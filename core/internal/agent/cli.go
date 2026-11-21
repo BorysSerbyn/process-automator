@@ -109,10 +109,10 @@ func CLIServer() string { return product.Command }
 const defaultSystemPrompt = "You carry out an automation routine for the user, unattended: " +
 	"nobody will answer questions, so finish the task with the tools provided, then reply as the routine asks."
 
-// Name implements Backend.
 // cliWaitDelay is how long a killed agent CLI's output is waited for.
 var cliWaitDelay = 5 * time.Second
 
+// Name implements Backend.
 func (b *CLI) Name() string { return b.Tool.Name() }
 
 // PicksSessionID implements SessionPicker: its tool's CLI picks the ID.

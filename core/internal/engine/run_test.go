@@ -121,7 +121,9 @@ func TestInterruptedWhateverTheBackendSays(t *testing.T) {
 	}()
 	enginetest.WaitOutcome(t, a, "long", runstatus.OutcomeRunning)
 	cancel()
-	<-done
+	if err := <-done; err == nil {
+		t.Fatal("a cancelled run ended without an error")
+	}
 	if run := enginetest.LastRun(a, "long"); !strings.Contains(run.Reason, "interrupted") {
 		t.Fatalf("recorded %+v", run)
 	}
