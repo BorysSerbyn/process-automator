@@ -34,7 +34,7 @@ The model loop sits behind a `Backend` interface chosen by `llm.backend`. `api` 
 - **Treating an unreadable source as empty**: "no data" and "couldn't read" would look the same
 
 ## Decision: a blank-slate engine; integrations are MCP servers
-The engine knows no specific service, and the app ships with no integrations: a plugin is an MCP server registered in config, written in any language, so routines reach every service the same way and any server built for other MCP clients works as is. Every app ships one plugin, `notify` (routines' notifications, which the app's frontends deliver), in `core/plugins`. The in-process plugin API stays, for Go plugins compiled into a build.
+The engine knows no specific service, and the app ships with no integrations: a plugin is an MCP server registered in config, written in any language, so routines reach every service the same way and any server built for other MCP clients works as is. `core/plugins` holds plugins any app may compile in, such as `notify` (desktop notifications from routines); the engine adds none, and an app lists the ones it wants. The in-process plugin API stays, for Go plugins compiled into a build.
 
 ### Rejected
 - **Bundled presets for particular services**: each needs upkeep and ties the app to services I may not use; `plugins add` covers them with no code
@@ -100,11 +100,15 @@ The core is pure Go, except one darwin-only cgo file in the notify plugin: UserN
 - **A helper in automator-ui** (the core asks the Swift app to post): the plugin would depend on the menu bar app running, the coupling this removes
 - **A separate small Swift or Objective-C helper binary**: another executable to build, sign and ship for one call
 
-## Decision: frontends talk to the core through the CLI and the run-status file
-The CLI is the API: a frontend runs commands with `--json` to read state and make changes, and watches the run-status file the core writes (file events, with a slow poll as fallback). The core never needs to know a frontend exists, either side restarts independently, and the same works on any OS. Frontends hold no logic: the core decides health, and the one thing a frontend judges is whether the core is responding (the scheduler's heartbeat).
+## Decision: frontends talk to the core through the CLI only
+The CLI is the API: a frontend runs commands with `--json` to read state and make changes, and follows run status with `status --watch`, a long-running command that prints a JSON line at once and on each change. It reads none of the core's files, so the files' places and shapes stay the core's to change, and a frontend needs nothing but the CLI. The core never needs to know a frontend exists, either side restarts independently, and the same works on any OS. Frontends hold no logic: the core decides health, and the one thing a frontend judges is whether the core is responding (the scheduler's heartbeat, `validUntil`).
+
+`status --watch` checks the file's time and size once a second: a stat, next to nothing, with no file-watching dependency, and the dot follows within a second.
 
 ### Rejected
+- **Frontends reading the run-status and notifications files** (as they used to, with a folder watch): a second interface beside the CLI, tying the UI to the core's file layout
 - **Push over a local socket or XPC**: a protocol and a connection lifecycle to maintain for no gain at this scale; reconsider if a frontend ever needs live streaming of a run
+- **Polling `status --json` from the UI**: a process every few seconds, and a slower dot
 
 ## Decision: frontend types are generated from the Go types
 The Go types are the source of truth: `make contracts` emits JSON Schemas and `contracts/openapi.yaml` (Go doc comments as descriptions), and automator-ui generates its Swift types from it at build time (Apple's swift-openapi-generator), as Goose generates its UI's client from its Rust types. The core and the UI ship together, so decoding the full types is safe.

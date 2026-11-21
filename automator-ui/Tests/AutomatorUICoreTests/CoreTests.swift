@@ -47,19 +47,17 @@ import Testing
     #expect(RunStatus.light(for: try status("ok", validUntil: nil), now: now) == .red)
 }
 
-@Test func unsupportedSchemaIsUnknown() throws {
-    let url = FileManager.default.temporaryDirectory.appending(path: "rs-\(UUID()).json")
-    try Data(#"{"schemaVersion":99,"updatedAt":"2026-11-18T09:31:00Z","health":"ok","routines":[]}"#.utf8)
-        .write(to: url)
-    #expect(RunStatus.load(from: url) == nil)
-    #expect(RunStatus.load(from: url.appending(path: "missing")) == nil)
+@Test func unsupportedSchemaIsUnknown() {
+    let line = Data(#"{"schemaVersion":99,"updatedAt":"2026-11-18T09:31:00Z","health":"ok","routines":[]}"#.utf8)
+    #expect(StatusStream.status(from: line) == nil)
+    #expect(StatusStream.status(from: Data("not json".utf8)) == nil)
 }
 
 @Test func cliRunsCommandsAndReportsFailure() throws {
     let echo = CLI(executable: URL(filePath: "/bin/echo")).exec(["hi"])
     #expect(echo.ok && String(decoding: echo.stdout, as: UTF8.self) == "hi\n")
     #expect(!CLI(executable: URL(filePath: "/usr/bin/false")).exec([]).ok)
-    #expect(CLI(executable: URL(filePath: "/nonexistent")).paths() == nil)
+    #expect(!CLI(executable: URL(filePath: "/nonexistent")).exec([]).ok)
     // stderr is captured alongside stdout.
     let sh = CLI(executable: URL(filePath: "/bin/sh")).exec([
         "-c", "echo out; echo 'Error: no such routine' >&2; exit 1",
@@ -113,16 +111,28 @@ import Testing
     #expect(!RunStatus.pulsing(for: nil, now: now))
 }
 
-@Test func decodesNotifications() throws {
+@Test func decodesPendingNotifications() throws {
+    // `notifications list --pending --json`.
     let json = """
-        {"schemaVersion":1,"notifications":[
-          {"id":"a","at":"2026-11-19T09:21:03.5-05:00","kind":"failure","title":"scrum failed","body":"timed out",
-           "routine":"scrum","run":"scrum/2026-11-19T092001","deliveredAt":"2026-11-19T09:21:05Z"},
-          {"id":"b","at":"2026-11-19T10:00:00Z","kind":"app","title":"Updated to 2.2.0"}]}
+        [{"id":"a","at":"2026-11-19T09:21:03.5-05:00","kind":"failure","title":"scrum failed","body":"timed out",
+          "routine":"scrum","run":"scrum/2026-11-19T092001"},
+         {"id":"b","at":"2026-11-19T10:00:00Z","kind":"app","title":"Updated to 2.2.0"}]
         """
-    let file = try NotificationsFile.decode(Data(json.utf8))
-    #expect(file.pending.map(\.id) == ["b"])
-    #expect(file.pending.first?.kind == .app)
+    let list = try CoreJSON.decoder().decode([CoreNotification].self, from: Data(json.utf8))
+    #expect(list.map(\.id) == ["a", "b"])
+    #expect(list.last?.kind == .app)
+}
+
+@Test func statusStreamSplitsLines() {
+    // `status --watch` prints a line per status; reads can split them anywhere.
+    let one = #"{"schemaVersion":1,"updatedAt":"2026-11-18T09:30:00Z","health":"ok","busy":false,"routines":[]}"#
+    var buffer = Data((one + "\n" + one.prefix(20)).utf8)
+    let lines = StatusStream.lines(from: &buffer)
+    #expect(lines.count == 1)
+    #expect(StatusStream.status(from: lines[0])?.health == .ok)
+    buffer.append(Data((one.dropFirst(20) + "\n").utf8))
+    #expect(StatusStream.lines(from: &buffer).count == 1)
+    #expect(buffer.isEmpty)
 }
 
 @Test func groupsSettingsTwoLevelsDeep() {

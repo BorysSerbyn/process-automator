@@ -12,7 +12,6 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
-	notifyplugin "github.com/BorysSerbyn/process-automator/core/plugins/notify"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -68,7 +67,9 @@ func TestLogoutForgetsHeaderSecrets(t *testing.T) {
 // core's own automator and notify servers: they must not register twice.
 func TestReloadWithAppPlugins(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
-	a, err := loadTest(cfg, nil)
+	other := notesPlugin()
+	other.Name = "other"
+	a, err := loadTest(cfg, []pluginapi.Plugin{notesPlugin(), other})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,8 +81,8 @@ func TestReloadWithAppPlugins(t *testing.T) {
 	for _, p := range b.Plugins {
 		n[p.Name]++
 	}
-	if n[notifyplugin.Name] != 1 || n["automator"] != 0 {
-		t.Fatalf("the shipped plugins registered %v times", n)
+	if len(n) != 2 || n["notes"] != 1 || n["other"] != 1 {
+		t.Fatalf("plugins after a reload: %v", n)
 	}
 }
 

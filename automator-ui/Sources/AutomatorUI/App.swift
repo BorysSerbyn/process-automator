@@ -3,9 +3,9 @@ import AutomatorUICore
 import SwiftUI
 
 /// automator-ui: the indicator (menu bar icon and menu), the routines and
-/// settings windows, desktop notifications and updates. It shows what the
-/// core says and runs what the core offers: it reads the core's files and
-/// runs its CLI.
+/// settings windows, the app's own desktop notifications and updates. It
+/// shows what the core says and runs what the core offers, through its CLI
+/// only: it reads none of the core's files.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let cli = CLI.bundled
@@ -13,13 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var updates: Updates!
     private let notifier = Notifier()
 
-    /// Where the core writes run status and notifications; asked from the CLI
-    /// (nil until it answers).
-    private var statusURL: URL?
-    private var notificationsURL: URL?
-    private var locating = false
-    private var dirSource: DispatchSourceFileSystemObject?
+    /// The core's run status, followed through `status --watch`; the last
+    /// one it printed (nil: none yet, or unreadable).
+    private var statusStream: StatusStream?
+    private var status: RunStatus?
     private var refreshTimer: Timer?
+    private var ticks = 0
 
     private var routineWindows: RoutineWindows?
     private var setupWindow: SetupWindow?
@@ -32,9 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         updates = Updates(cli: cli)
         if let cli {
-            // After a setup action, run status is read again at once (the core
-            // has written it), so the dot and Finish Setup… follow without
-            // waiting for the folder watch.
+            // After a setup action, the app's notifications are asked for
+            // again; run status follows on its own (status --watch).
             setupWindow = SetupWindow(
                 cli: cli, openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name) },
                 changed: { [weak self] in self?.reload() })
@@ -50,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             openRun: { [weak self] id in self?.openRun(id) },
             openSetup: { [weak self] in self?.setupWindow?.show() })
         notifier.setUp(cli: cli)
-        watchCoreFiles()
+        followStatus()
         updates.start()
     }
 
@@ -94,77 +92,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // MARK: The core's files
+    // MARK: The core's status
 
-    /// Re-reads run status (the indicator shows it) and delivers new
-    /// notifications. Also runs on a timer, so an expired status (the core
-    /// stopped responding) shows without a file change.
+    /// Shows the last status (the indicator, the routine windows) and
+    /// delivers new notifications.
     private func reload() {
-        guard let statusURL else {
-            locateFiles()
-            return
-        }
-        let status = RunStatus.load(from: statusURL)
         indicator.show(status)
         routineWindows?.update(status)
-        if let notificationsURL { notifier.deliver(from: notificationsURL) }
+        notifier.deliver()
     }
 
-    /// Asks the core where its files are, then watches and reads them. Until
-    /// it answers, the status is unknown; the refresh timer asks again.
-    private func locateFiles() {
-        guard !locating, let cli else {
-            indicator.show(nil)
-            return
-        }
-        locating = true
-        Task {
-            let paths = await cli.background { $0.paths() }
-            locating = false
-            if let paths {
-                statusURL = URL(filePath: paths.runStatus)
-                notificationsURL = URL(filePath: paths.notifications)
-                if dirSource == nil { startDirSource() }
-                reload()
-            } else {
-                indicator.show(nil)
-            }
-        }
-    }
-
-    /// The core replaces its files atomically (write + rename), so watch the
-    /// folder, not the files. A 15s timer notices an expired status (the core
-    /// stopped heartbeating), the folder not existing yet, or a missed event.
-    private func watchCoreFiles() {
+    /// Follows run status through the CLI: each status it prints is shown at
+    /// once, and the app's notifications asked for (a run's end changes it).
+    /// A 15s timer shows a status past its validUntil as red (the core
+    /// stopped heartbeating, or the stream did), and asks for notifications
+    /// every minute (an update's result changes no status).
+    private func followStatus() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                if self.dirSource == nil { self.startDirSource() }
-                self.reload()
+                self.ticks += 1
+                self.indicator.show(self.status)
+                self.routineWindows?.update(self.status)
+                if self.ticks % 4 == 0 { self.notifier.deliver() }
             }
         }
-        reload()
-    }
-
-    private func startDirSource() {
-        guard let dir = statusURL?.deletingLastPathComponent() else { return }
-        let fd = open(dir.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd, eventMask: [.write, .delete, .rename], queue: .main)
-        source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                if source.data.contains(.delete) || source.data.contains(.rename) {
-                    source.cancel()  // folder itself went away; the timer re-arms
-                    self.dirSource = nil
+        guard let cli else {
+            indicator.show(nil)
+            return
+        }
+        let stream = StatusStream(cli: cli) { [weak self] status in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.status = status
+                    self.reload()
                 }
-                self.reload()
             }
         }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        dirSource = source
+        statusStream = stream
+        stream.start()
+        reload()
     }
 }
 

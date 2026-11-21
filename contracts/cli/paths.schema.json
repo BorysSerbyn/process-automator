@@ -19,7 +19,7 @@
     },
     "notifications": {
       "type": "string",
-      "description": "Notifications is the notifications file frontends deliver from."
+      "description": "Notifications is the app's own notifications file."
     },
     "mcpChanges": {
       "type": "string",

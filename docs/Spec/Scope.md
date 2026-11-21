@@ -2,7 +2,7 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 
 ## What it is
 - **A blank canvas for scheduled LLM routines**: a routine is one Dotprompt file on my device saying what the model should do, which tools it may use and when it runs. The app ships with no routines, no templates and no bundled integrations
-- **Tools come from MCP servers**: any server I add (remote or local, or a folder I wrote), plus `notify` (`notify_me`), the plugin every app ships with
+- **Tools come from MCP servers**: any server I add (remote or local, or a folder I wrote), plus `notify` (`notify_me`), a plugin compiled into the app
 - **Two model backends**: Claude Code on my Claude plan (`claude-code`), or an Anthropic API key (`api`)
 - **A scheduler** that starts at login, catches up after sleep within each routine's staleness, and records every due run
 - **Guardrails**: a tool allowlist per routine, dry runs that intercept every write, and trust: a routine runs for real only while what it can reach is what I approved

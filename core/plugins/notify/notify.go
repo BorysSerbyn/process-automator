@@ -1,10 +1,9 @@
 // Package notify is the notify plugin: routines that list it in
 // automator.servers can notify me (notify_me). It's a plugin like any other,
-// shipped with every app built on the engine, and it shows its notifications
-// itself, through the OS (macOS: UserNotifications, as the app; Linux: the
-// freedesktop notification service), not through the app's frontends. Clicking
-// one does nothing. The app's own notifications (runs that failed, updates)
-// never go through it.
+// built only on pluginapi, for apps that list it in their plugins. It shows
+// its notifications itself, through the OS (macOS: UserNotifications, as the
+// app; Linux: the freedesktop notification service). Clicking one does
+// nothing.
 package notify
 
 import (
@@ -22,6 +21,9 @@ const Name = "notify"
 
 // Note is one notification to show.
 type Note struct {
+	// App is the app's name, the notification's sender where the OS asks for
+	// one (Linux; macOS takes the app bundle's).
+	App         string
 	Title, Body string
 	// Urgent breaks through focus modes where the OS allows (macOS
 	// time-sensitive, Linux critical urgency).
@@ -37,7 +39,7 @@ func Plugin() pluginapi.Plugin {
 	return pluginapi.Plugin{
 		Name:        Name,
 		Description: "Lets routines notify me (notify_me) with a desktop notification",
-		Serve: func(pluginapi.Host) (*sdk.Server, error) {
+		Serve: func(h pluginapi.Host) (*sdk.Server, error) {
 			s := sdk.NewServer(&sdk.Implementation{Name: Name, Version: "1"}, nil)
 			type in struct {
 				Title  string `json:"title" jsonschema:"short, like a headline"`
@@ -53,7 +55,7 @@ func Plugin() pluginapi.Plugin {
 				if strings.TrimSpace(args.Title) == "" {
 					return nil, nil, errors.New("title is required")
 				}
-				if err := Deliver(Note(args)); err != nil {
+				if err := Deliver(Note{App: h.AppName(), Title: args.Title, Body: args.Body, Urgent: args.Urgent}); err != nil {
 					return nil, nil, err
 				}
 				return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "Shown."}}}, nil, nil

@@ -12,10 +12,10 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 )
 
-// The core records the app's own notifications; frontends deliver them (see package notify).
+// The core records the app's own notifications; frontends deliver them (see package notifications).
 
 // ClickOutput is `notifications open --json`: what clicking did.
 type ClickOutput struct {
@@ -48,7 +48,7 @@ func newNotificationsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			f, err := notify.Load(a.Layout.Notifications())
+			f, err := notifications.Load(a.Layout.Notifications())
 			if err != nil {
 				return err
 			}
@@ -77,7 +77,7 @@ func newNotificationsListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&pending, "pending", false, "only those not delivered yet")
-	jsonFlag(cmd.Flags(), &asJSON, []notify.Notification{})
+	jsonFlag(cmd.Flags(), &asJSON, []notifications.Notification{})
 	return cmd
 }
 
@@ -92,7 +92,7 @@ func newNotificationsDeliveredCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return notify.MarkDelivered(a.Layout.Notifications(), args, time.Now())
+			return notifications.MarkDelivered(a.Layout.Notifications(), args, time.Now())
 		},
 	}
 }
@@ -111,7 +111,7 @@ func newNotificationsOpenCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			n, err := notify.Get(a.Layout.Notifications(), args[0])
+			n, err := notifications.Get(a.Layout.Notifications(), args[0])
 			if err != nil {
 				return err
 			}

@@ -15,17 +15,17 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 
 - **Build values are set at link time** in `core/automator` by the Makefile: the version, the source checkout (`SOURCE_DIR`), where the templates are packaged, the release API, and `BUNDLE_PREFIX` over the app's prefix
 - **Another app** is a Go module that requires this one and has its own main package, plugins and templates; it builds with this repository's Makefile and scripts at the same version (see [[Spec/Requirements/Technical/Distribution|Technical: Distribution]])
-- **Blank-slate engine**: the engine knows no specific service and the app compiles in no plugins; routines use the plugins every app ships with (`core/plugins`: `notify`) and the MCP servers added in config
-- **OS-neutral core**: OS calls live in per-OS files (`name_darwin.go`, `name_unix.go`, `name_other.go`, or a `//go:build` line), OS-bound integrations are plugins, and delivering the app's own state to the OS (its notifications, the menu bar) is the frontends' job. The one exception is the notify plugin, which shows routines' notifications itself (see [[#Shipped plugins]]). `internal/osboundary`'s test (no `runtime.GOOS`, `syscall`, OS tools or OS paths in shared files) and CI's Linux and Windows cross-compiles enforce it
+- **Blank-slate engine**: the engine knows no specific service and adds no plugin; routines use the plugins the app compiles in (its `automator.App.Plugins`; procauto's is `notify`, from `core/plugins`) and the MCP servers added in config. Nothing in `core/internal/` imports a plugin; the engine runs only the list it's given
+- **OS-neutral core**: OS calls live in per-OS files (`name_darwin.go`, `name_unix.go`, `name_other.go`, or a `//go:build` line), OS-bound integrations are plugins, and delivering the app's own state to the OS (its notifications, the menu bar) is the frontends' job. The one exception is the notify plugin, which shows routines' notifications itself (see [[#Plugins in `core/plugins`]]). `internal/osboundary`'s test (no `runtime.GOOS`, `syscall`, OS tools or OS paths in shared files) and CI's Linux and Windows cross-compiles enforce it
 - **Config**: one YAML file, `config.yaml` in the per-user config folder (`os.UserConfigDir()/<Folder>/`: `process-automator/`), decoded strictly: unknown or retired fields are errors. It holds `mcpServers` (external servers), `plugins` (in-process plugins' own sections) and `settings`. `--config` points the CLI at another file
 - **Data folder** is the config file's folder; everything the app keeps is in it:
 
 | Path | What |
 |---|---|
 | `routines/` | Routine files and partials |
-| `run-status.json` | Run status, watched by frontends |
+| `run-status.json` | Run status (frontends follow it through `status --watch`) |
 | `history/<routine>/` | One record per due run |
-| `notifications.json` | Notifications for frontends to deliver |
+| `notifications.json` | The app's own notifications (frontends get them through `notifications list`) |
 | `memories/` | `_global.md` and `<routine>.md` |
 | `trust.json` | What each routine was trusted with |
 | `plugins/<name>/` | Installed plugin folders |
@@ -41,7 +41,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Files are written atomically**, and shared state written during runs has one writer per file
 
 ## Frontends and the contract
-- **The CLI is the API**: every command a frontend needs supports `--json` with a stable shape; frontends never read config or internal state, except the run-status file they watch and the notifications they deliver. automator-ui and Claude (through `mcp serve`) are frontends over it; none has its own logic or routines, and anything a frontend needs is added to the core for every frontend
+- **The CLI is the API**: every command a frontend needs supports `--json` with a stable shape; frontends read none of the core's files (config, run status, notifications, history): only what the CLI prints. Run status comes from `status --json`, or `status --watch`, which prints it as one JSON line at once and again whenever it changes (it checks the file once a second) until stopped; the MCP server doesn't offer `--watch`, which never ends. automator-ui and Claude (through `mcp serve`) are frontends over it; none has its own logic or routines, and anything a frontend needs is added to the core for every frontend
 - **Contract in `contracts/`**, generated from code by `make contracts` and committed; a test fails when it drifts:
 
 | File | What |
@@ -49,7 +49,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `cli.yaml` | Every command: usage, flags, the schema of its `--json` output |
 | `cli/<command>.schema.json` | Each `--json` output |
 | `settings.schema.json` | Every setting: type, default, limits, unit, description |
-| `run-status.schema.json`, `notifications.schema.json` | The files frontends read |
+| `run-status.schema.json`, `notifications.schema.json` | The core's own files, as `status --json` and `notifications list --json` print them |
 | `openapi.yaml` | Every type a frontend reads, as OpenAPI components; automator-ui generates its Swift types from it at build time |
 | `examples/` | Hand-written examples both test suites check |
 
@@ -163,11 +163,11 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **`plugins add <name>`** (`--url` or `--command` with `--arg`/`--env`, `--auth`, `--transport`, `--header`, `--scope`, `--description`, or `--dir`; `--replace`) writes the server to `mcpServers`, validated like config loading. Plugin names are lowercase letters, digits and dashes; local commands are absolute paths or names on PATH. `plugins remove` deletes it from config, then its installed folder and its credentials, keeping secrets another server still references
 - **Trial**: `plugins add` starts the server, does the handshake and lists its tools before writing anything. Rejected if it doesn't answer within 90s, offers no tools, lists a tool twice, or has a non-object input schema; plugin folders also need annotations on every tool (a warning for other servers). It reports each tool as read-only or write. A server needing credentials is tried as far as possible (a remote one must at least answer HTTP); `plugins check [<name>]` runs the full trial after sign-in. The trial runs the server unsandboxed, under the approval `plugins add` already needs
 - **Plugin folders**: `plugins add <name> --dir <folder>` copies a folder with a `plugin.yaml` (`command`, `args`, `env`, `description`) to `<data>/plugins/<name>/`, trying the staged copy before moving it into place; relative commands resolve inside it, and neither the command nor any symlink in the folder may point outside it. `--replace` keeps the old copy if the new one fails
-- **In-process plugins** (`core/pluginapi`, public, a leaf package with no engine dependencies): a `Plugin` is a name, a description and either an `External` server spec or `Serve`; it may declare a `RoutineSection`, the servers it `Uses`, and `Prepare` (steps done outside the app before its first sign-in). Its `Host` gives `Connect` (another server), `ConnectApp` (the app's own MCP server, read-only: `<this executable> --config <config> mcp serve --read-only` over stdio), `Config` (its `plugins.<name>` section, strict), `Secret` (only those it declares), `DataDir()` (`<data>/plugin-data/<name>/`), `RoutineConfig(v)` (the running routine's section, strict) and `Run()` (the routine, its run's history ID and folder). A host is made per session; outside a run, the routine parts are empty. A config `mcpServers.<name>` that clashes with an in-process plugin's name is an error
+- **In-process plugins** (`core/pluginapi`, public, a leaf package with no engine dependencies): a `Plugin` is a name, a description and either an `External` server spec or `Serve`; it may declare a `RoutineSection`, the servers it `Uses`, and `Prepare` (steps done outside the app before its first sign-in). Its `Host` gives `Connect` (another server), `ConnectApp` (the app's own MCP server, read-only: `<this executable> --config <config> mcp serve --read-only` over stdio), `AppName()` (the app's name, e.g. a notification's sender), `Config` (its `plugins.<name>` section, strict), `Secret` (only those it declares), `DataDir()` (`<data>/plugin-data/<name>/`), `RoutineConfig(v)` (the running routine's section, strict) and `Run()` (the routine, its run's history ID and folder). A host is made per session; outside a run, the routine parts are empty. A config `mcpServers.<name>` that clashes with an in-process plugin's name is an error
 - **`plugins list`** shows every server routines can use; `mcp tools <server> [--json]` its tools, marking read-only ones
 
-## Shipped plugins
-- **`notify`** (`core/plugins/notify`): `notify_me(title, body?, urgent?)`, a write tool (dry runs intercept it) that shows a desktop notification itself, through the OS, not through the app's notifications file or automator-ui. It has no settings, and clicking one does nothing. The call is in the run's history like any tool call; nothing else is kept
+## Plugins in `core/plugins`
+- **`notify`** (`core/plugins/notify`, built only on `pluginapi`, in an app only if its `Plugins` list it; procauto's do). It shares no code, type, file or setting with the app's own notifications: `notify_me(title, body?, urgent?)`, a write tool (dry runs intercept it) that shows a desktop notification itself, through the OS, not through the app's notifications file or automator-ui. It has no settings, and clicking one does nothing. The call is in the run's history like any tool call; nothing else is kept
   - **macOS**: UserNotifications, from a darwin-only cgo file (`deliver_darwin.go`, built `darwin && cgo`; the core is built with `MACOSX_DEPLOYMENT_TARGET=14.0`). The core runs from inside the app's bundle and is signed with the app's bundle ID as its identifier, so its notifications are the app's and share its permission; if macOS hasn't been asked, the first one asks. Outside an app bundle (a development build) it reports that it can't notify rather than calling UserNotifications. `urgent` is time-sensitive
   - **Linux**: the freedesktop notification service (`org.freedesktop.Notifications.Notify`) on the session bus, in pure Go (godbus), as the app's name; `urgent` is critical urgency. Linux builds stay CGO-free
   - **Other OSes** (and macOS without cgo): `notify_me` fails, saying it isn't supported
@@ -223,7 +223,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 ## automator-ui
 automator-ui (SwiftUI, macOS 14+; `automator-ui/`, executable `AutomatorUI`, library `AutomatorUICore`) is the app: the indicator (menu bar icon with its status dot and menu, `Indicator/`), and the Settings, Setup and Routines windows. It shows what the core says and runs what the core offers; the one thing it judges is whether the core is responding.
 - **Every action is a CLI command** with `--json`, run off the main thread
-- **Watches run status** (file events, with a slow poll as fallback); missing or past `validUntil` shows red, "Not responding"
+- **Follows run status** through `status --watch` (started again 5s after it ends); none yet, unreadable, or past `validUntil` (checked every 15s, so a stream that stopped goes red too) shows red, "Not responding". It reads no file and knows no path
 - **Logo**: its icon and the indicator's glyph come from one source (`automator-ui/Resources/Logo/`): an hourglass drawn as one stroke whose head runs into the status dot
 - **Menu**: one fixed width; text lines wrap or end in an ellipsis to fit (the full text on hover). The version; the status in the core's words (`reasons`, each opening its run with `runs show <id> --open`, else `summary`); Finish Setup… while `setupLeft` isn't empty; **Routines ›** (All Routines…, then each routine with its `health` and `summary`, opening its window); the update item; Settings; Quit
 - **Settings window**: Start at login, the LLM usage card (`usage --json`), then the app-wide settings (`settings list --scope app`) as a collapsible tree from their dotted keys, one control per setting type (toggle, picker, text field, file chooser), shown and sent as text (`valueText`, `defaultText`); a text field saves on Return and when it loses focus; the core's message shows when it refuses a value; Reset; settings declared ahead of their feature are tagged and disabled. It re-reads everything each time it opens
@@ -232,7 +232,7 @@ automator-ui (SwiftUI, macOS 14+; `automator-ui/`, executable `AutomatorUI`, lib
 - **A routine's window**: Run Now / Dry Run (`start <routine> [--dry-run]`), Stop while it runs or waits (`stop`), Pause / Resume (`routines pause|resume`), Delete… (`routines delete`, confirmed); a Not trusted banner with Review… (`routines trust <name> --check --json`, then `--yes`); its status, schedule with a days-and-time picker or custom cron (`schedule describe`/`build`, applied with `settings set` on Save), and what it can reach; its runs (`runs show`); its memories; its own settings (`settings list --routine <name>`)
 - **Updates**: `update --check` on launch and daily; "Update to X…" installs with `update --detach`, which runs in the background so it survives automator-ui restarting, logs to `update.log`, and reports its result as a notification. An install holds `locks/update.lock`, so a second one refuses and the menu shows one in progress
 - **Start at login**: `login-items status|enable|disable` over the build's login items (`ui` and `scheduler` on macOS, `scheduler` on Linux); launchd's enable/disable override on the installed LaunchAgents, or enabling the systemd user unit. It never starts or stops what's running; `installed` is false before the app is installed
-- **Notifications**: the pending ones in the core's notifications file (the app's own) are shown, then marked delivered; a click runs `notifications open <id>`
+- **Notifications** (the app's own): `notifications list --pending --json` when run status changes and every minute; each is shown, then marked delivered (`notifications delivered`); a click runs `notifications open <id>`
 - Each window and its data are freed when it closes
 
 ## Linux

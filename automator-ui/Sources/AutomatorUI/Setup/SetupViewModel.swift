@@ -183,8 +183,8 @@ final class SetupViewModel: ObservableObject {
         Task {
             switch await cli.background({ $0.appSettings() }) {
             case .success(let list):
-                backend = list.first { $0.key == "llm.backend" }
-                if backend == nil { errors[Self.id(step)] = "The core lists no llm.backend setting." }
+                backend = list.first { $0.key == step.setting }
+                if backend == nil { errors[Self.id(step)] = "The core lists no setting for this step." }
             case .failure(let failure):
                 errors[Self.id(step)] = failure.message
             }

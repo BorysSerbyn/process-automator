@@ -1,17 +1,17 @@
 ---
 name: architecture-boundaries
-description: Keeps process-automator's layer boundaries intact (the UI only runs the CLI; the core uses no plugins; plugins are OS-independent; the MCP server is the core's). Use when changing automator-ui/, core/, core/plugins/, the MCP server, contracts/ or the run-status file, adding anything UI-visible, or touching OS-specific APIs (macOS, launchd, Keychain, systemd, /Applications, ~/Library).
+description: Keeps process-automator's layer boundaries intact (the UI depends only on the CLI; the core uses no plugins; plugins are OS-independent; the MCP server is the core's). Use when changing automator-ui/, core/, core/plugins/, the MCP server, contracts/ or the CLI's output, adding anything UI-visible, or touching OS-specific APIs (macOS, launchd, Keychain, systemd, /Applications, ~/Library).
 ---
 
 # Architecture boundaries
 
-**1. automator-ui (the indicator and its windows) is only a frontend.** It shows the run-status file as is (`health`: ok green, error red, none grey) and acts only by running `procauto` CLI commands. Its one judgement: a missing or expired (`validUntil`) status is red. No logic, and no knowledge of the core's internals: file locations come from `procauto paths --json`; never compute health, schedules or times, or read config, routines or the Keychain. Need something new? Add it to Go (run-status field or CLI `--json` command), then display it.
+**1. automator-ui (the indicator and its windows) is only a frontend, and depends on nothing but the CLI.** It acts only by running `procauto` CLI commands and shows what they print as is (`health`: ok green, error red, none grey): run status through `status --watch` (one JSON line per change), the app's notifications through `notifications list --pending --json`. It reads none of the core's files and knows no path. Its one judgement: no status, or one past its `validUntil`, is red. No logic, and no knowledge of the core's internals: never compute health, schedules or times, hard-code setting keys (the core's output names them, e.g. a setup step's `setting`), or read config, routines or the Keychain. Need something new? Add it to Go (a CLI `--json` command or field), then display it.
 
-**2. The Go core doesn't know who calls it.** The CLI is the API (contracts in `contracts/`, `make contracts`); the run-status file is its only output to frontends. No caller-specific branches, no UI wording or colours. All decisions live here.
+**2. The Go core doesn't know who calls it.** The CLI is the API (contracts in `contracts/`, `make contracts`), and its only interface to frontends. No caller-specific branches, no UI wording or colours. All decisions live here.
 
 **3. The Go core doesn't know which OS it runs on.** OS-specific things live outside shared code: external apps are MCP servers added as plugins, launchd/systemd/bundling in `Makefile` and `scripts/`, unavoidable OS calls behind a per-OS file with a fallback for other OSes (`secrets/default_darwin.go`, `filelock`, `cli/browser_darwin.go`). `internal/osboundary`'s test enforces it, and `core/` must cross-compile (`GOOS=linux go build ./...`, `GOOS=windows go build ./...`).
 
-**4. The core uses no plugins.** Plugins live in `core/plugins/` (`notify` ships with every app built on the engine; apps add their own), each built only on `pluginapi`, and the core runs them for routines without knowing any by name: no imports of a plugin, no special cases. The app's own features never go through a plugin: its notifications (failed runs, sign-ins, updates) are the core's, delivered by automator-ui; a plugin's notifications are the plugin's.
+**4. The core uses no plugins.** Plugins live in `core/plugins/` (e.g. `notify`), each built only on `pluginapi` (nothing from `core/internal/`). The engine adds none: an app lists the ones it wants in its `automator.App.Plugins` (`cmd/procauto` lists `notify`), and the core runs that list for routines without knowing any by name: nothing in `core/internal/` or `core/automator` imports a plugin, no special cases. The app's own features never go through a plugin, and share nothing with one: its notifications (failed runs, sign-ins, updates) are the core's (`internal/notifications`, the `notifications` command, automator-ui's Notifier); the notify plugin's are the plugin's, with no package, type, file, setting or helper in common.
 
 **5. A plugin is independent of the OS.** It works wherever the core does; what it needs from one OS sits in per-OS files inside the plugin (e.g. `notify`'s macOS and Linux delivery), with a clear answer elsewhere.
 
@@ -19,4 +19,4 @@ description: Keeps process-automator's layer boundaries intact (the UI only runs
 
 **7. Only `core/automator`, `core/pluginapi` and `core/plugins/` are public.** Other apps import them (and build with this repo's Makefile and scripts), so keep them small and their changes deliberate; anything else goes in `internal/`. Nothing app-specific belongs in this repo: names come from the `automator.App` (`internal/product` in the core, `AppInfo` in automator-ui), never literals.
 
-When a run-status or `--json` shape changes, run `make contracts`: the Swift types are generated from `contracts/openapi.yaml` at build time, never hand-written.
+When a `--json` shape changes, run `make contracts`: the Swift types are generated from `contracts/openapi.yaml` at build time, never hand-written.

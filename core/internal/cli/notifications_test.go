@@ -9,7 +9,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 )
 
 // Clicking one of the app's notifications shows the run it's about (a
@@ -26,8 +26,8 @@ func TestNotificationClick(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID := lastRunID(t, a, "r")
-	add := func(n notify.Notification) string {
-		n, err := notify.Add(a.Layout.Notifications(), n, time.Now())
+	add := func(n notifications.Notification) string {
+		n, err := notifications.Add(a.Layout.Notifications(), n, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,7 +35,7 @@ func TestNotificationClick(t *testing.T) {
 	}
 	cfg := a.Layout.Config()
 
-	id := add(notify.Notification{Kind: notify.KindFailure, Title: "r failed", Routine: "r", Run: runID})
+	id := add(notifications.Notification{Kind: notifications.KindFailure, Title: "r failed", Routine: "r", Run: runID})
 	if out, err := cli(t, cfg, "notifications", "open", id); err != nil || len(opened) != 1 || !strings.HasSuffix(opened[0], ".txt") {
 		t.Fatalf("show-run: %s %v %v", out, err, opened)
 	}
@@ -47,7 +47,7 @@ func TestNotificationClick(t *testing.T) {
 		t.Fatalf("frontend-shows-runs: %s %v", out, opened)
 	}
 	// One about no run (an update) does nothing.
-	upd := add(notify.Notification{Kind: notify.KindApp, Title: "Updated"})
+	upd := add(notifications.Notification{Kind: notifications.KindApp, Title: "Updated"})
 	if out, err := cli(t, cfg, "notifications", "open", upd, "--json"); err != nil || !strings.Contains(out, `"action": "none"`) || len(opened) != 1 {
 		t.Fatalf("app click: %s %v %v", out, err, opened)
 	}

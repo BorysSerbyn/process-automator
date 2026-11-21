@@ -2,15 +2,17 @@ import AppKit
 import AutomatorUICore
 import UserNotifications
 
-/// Desktop notifications for the app's own notifications the core records
-/// (runs that failed, updates): shows the ones no frontend delivered yet,
-/// tells the core which were delivered, and has the core carry out a click.
-/// What routines send (the notify plugin) the core shows itself.
+/// Desktop notifications for the app's own notifications (runs that failed,
+/// updates): asks the core for the ones no frontend delivered yet, shows
+/// them, tells the core which were delivered, and has the core carry out a
+/// click.
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private var cli: CLI?
     /// Notifications already handed to macOS, until the core marks them delivered.
     private var posted: Set<String> = []
+    /// Whether the core is being asked for pending ones (one ask at a time).
+    private var asking = false
 
     /// Notifications need the app bundle (not `swift run`).
     private var canNotify: Bool { Bundle.main.bundleIdentifier != nil }
@@ -23,13 +25,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
-    /// Shows the pending notifications in the core's file. While macOS doesn't
+    /// Shows the notifications the core says are pending. While macOS doesn't
     /// allow notifications (not answered yet, or turned off), they stay pending.
-    func deliver(from url: URL) {
-        guard canNotify, let cli, let file = NotificationsFile.load(from: url) else { return }
-        let fresh = file.pending.filter { !posted.contains($0.id) }
+    func deliver() {
+        guard canNotify, let cli, !asking else { return }
+        asking = true
+        Task {
+            let pending = (try? await cli.background { $0.pendingNotifications() }.get()) ?? []
+            asking = false
+            post(pending.filter { !posted.contains($0.id) }, cli: cli)
+        }
+    }
+
+    private func post(_ fresh: [CoreNotification], cli: CLI) {
         guard !fresh.isEmpty else { return }
-        posted.formUnion(fresh.map(\.id))  // claimed: the next reload won't post them again
+        posted.formUnion(fresh.map(\.id))  // claimed: the next delivery won't post them again
         Task {
             let center = UNUserNotificationCenter.current()
             let allowed = await center.notificationSettings().authorizationStatus

@@ -1,12 +1,14 @@
 // Command procauto is the Process Automator CLI and backend: the engine
-// (automator) with no plugins of its own. Routines use the engine's built-in
-// servers and the MCP servers added with `procauto plugins add`.
+// (automator) with the notify plugin. Routines use it and the MCP servers
+// added with `procauto plugins add`.
 package main
 
 import (
 	"os"
 
 	"github.com/BorysSerbyn/process-automator/core/automator"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/plugins/notify"
 )
 
 // app is Process Automator. The Makefile and install.sh say the same; a test
@@ -17,6 +19,7 @@ var app = automator.App{
 	Folder:       "process-automator",
 	BundlePrefix: "dev",
 	ReleaseRepo:  "BorysSerbyn/process-automator",
+	Plugins:      []pluginapi.Plugin{notify.Plugin()},
 }
 
 func main() {

@@ -8,15 +8,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// PathsOutput is `paths --json`: where the app keeps its files. Frontends get
-// the run-status file's location from here instead of assuming it.
+// PathsOutput is `paths --json`: where the app keeps its files. Frontends
+// read none of them: they ask the CLI (`status`, `notifications list`).
 type PathsOutput struct {
 	Config    string `json:"config"`
 	Data      string `json:"data"`
 	Routines  string `json:"routines"`
 	RunStatus string `json:"runStatus"`
 	History   string `json:"history"`
-	// Notifications is the notifications file frontends deliver from.
+	// Notifications is the app's own notifications file.
 	Notifications string `json:"notifications"`
 	// MCPChanges logs every side-effecting call made through `mcp serve`.
 	MCPChanges string `json:"mcpChanges"`

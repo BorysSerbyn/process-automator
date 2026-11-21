@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	"github.com/godbus/dbus/v5"
-
-	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // deliver shows n through the freedesktop notification service on the
@@ -23,7 +21,7 @@ func deliver(n Note) error {
 	hints := map[string]dbus.Variant{"urgency": dbus.MakeVariant(urgency)}
 	obj := conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
 	call := obj.Call("org.freedesktop.Notifications.Notify", 0,
-		product.Name, uint32(0), "", n.Title, n.Body, []string{}, hints, int32(-1))
+		n.App, uint32(0), "", n.Title, n.Body, []string{}, hints, int32(-1))
 	if call.Err != nil {
 		return fmt.Errorf("the desktop's notification service: %w", call.Err)
 	}

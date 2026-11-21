@@ -33,7 +33,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Plugins
 - **A plugin is an MCP server**, written in any language: remote (OAuth, an API key in headers, or public) or a local command, or a folder of my own with a `plugin.yaml`
 - **Adding one** needs no code; it's tried first and nothing is added if it doesn't work. Removing one forgets its credentials
-- **Shipped plugin**: `notify` (desktop notifications from routines), in every app built on the engine
+- **The `notify` plugin**: desktop notifications from routines; this app compiles it in
 - **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
 
 ## Model backend

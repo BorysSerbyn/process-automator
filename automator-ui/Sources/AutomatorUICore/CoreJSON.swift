@@ -1,6 +1,6 @@
 import Foundation
 
-/// Decoding the files the Go core writes (run status, notifications).
+/// Decoding what the Go core prints (its CLI's JSON).
 enum CoreJSON {
     /// A decoder for the core's JSON: dates are RFC 3339, with or without
     /// fractional seconds (Go writes up to nanoseconds).

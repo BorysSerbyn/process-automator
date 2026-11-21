@@ -1,10 +1,10 @@
-// Package notify keeps the app's own notifications (runs that failed, needed
-// a sign-in, were skipped or missed; updates) for frontends to deliver. The
-// core only records them; frontends show them (automator-ui as desktop
-// notifications), mark them delivered, and on a click run `procauto
-// notifications open <id>`, which shows the run it's about. What routines
-// send (the notify plugin) never comes here: the plugin shows it itself.
-package notify
+// Package notifications keeps the app's own notifications (runs that
+// failed, needed a sign-in, were skipped or missed; updates) for frontends
+// to deliver. The core only records them; frontends ask for the pending ones
+// (`procauto notifications list --pending --json`), show them (automator-ui
+// as desktop notifications), mark them delivered, and on a click run
+// `procauto notifications open <id>`, which shows the run it's about.
+package notifications
 
 import (
 	"crypto/rand"
@@ -36,7 +36,7 @@ const (
 	keepFor = 30 * 24 * time.Hour
 )
 
-// File is the notifications file: written by the core, read by frontends.
+// File is the notifications file: written and read by the core only.
 type File struct {
 	SchemaVersion int            `json:"schemaVersion"`
 	Notifications []Notification `json:"notifications"`
@@ -109,8 +109,8 @@ func Load(path string) (*File, error) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	// Older versions also kept routines' notifications here (kind
-	// "routine"); they're dropped, and gone from the file at the next write.
+	// Older versions also kept another kind ("routine"): it's dropped,
+	// and gone from the file at the next write.
 	kept := []Notification{}
 	for _, n := range f.Notifications {
 		if n.Kind == KindFailure || n.Kind == KindApp {

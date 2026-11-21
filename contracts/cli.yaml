@@ -467,6 +467,17 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/start.schema.json
+  - command: status
+    usage: procauto status [flags]
+    summary: 'Show the app''s status: health, why, and each routine''s last and next run'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+      - name: --watch
+        type: bool
+        usage: print it again, as one JSON line, each time it changes (until stopped)
+    jsonOutput: cli/status.schema.json
   - command: stop
     usage: procauto stop <routine> [flags]
     summary: Stop a routine's run in progress (or waiting for its turn); it's recorded as stopped

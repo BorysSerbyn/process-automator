@@ -52,6 +52,9 @@ type SetupStep struct {
 	// SignIn is what the step still needs signed in (`auth login <signIn>
 	// --browser`): a server, or the API key the api backend needs.
 	SignIn string `json:"signIn,omitempty"`
+	// Setting is the setting the step chooses, for frontends to show and set
+	// (backend: llm.backend).
+	Setting string `json:"setting,omitempty"`
 	// Commands do the step once I've answered: placeholders in <angle
 	// brackets> are my answers, and a trailing # comment says when a command
 	// applies or what to do with its output.
@@ -219,8 +222,9 @@ func backendStep(a *engine.App) (SetupStep, error) {
 	}
 	def, _ := settings.Lookup("llm.backend")
 	st := SetupStep{Step: stepBackend, Title: "Model backend", Done: b.Problem == "", Status: b.Status(), SignIn: b.SignIn,
+		Setting:  def.Key,
 		Ask:      "Which backend should run routines? " + def.Description,
-		Commands: []string{product.Command + " settings set llm.backend <" + strings.Join(def.Enum, "|") + ">"}}
+		Commands: []string{product.Command + " settings set " + def.Key + " <" + strings.Join(def.Enum, "|") + ">"}}
 	if b.SignIn != "" {
 		st.Commands = append(st.Commands, product.Command+" auth login "+b.SignIn+" --browser")
 	}
