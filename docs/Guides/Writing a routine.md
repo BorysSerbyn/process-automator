@@ -61,6 +61,7 @@ The app's own keys, written dotted (`automator.servers:`, not a nested `automato
 | `automator.concurrency` | `queue` | `queue` waits for other runs (one at a time); `parallel` runs alongside them. A routine never overlaps itself |
 | `automator.parameters` | | Values set at install (see below) |
 | `automator.platforms` | all | `[macos]`, `[linux]` or both |
+| `automator.backends` | all | The backends it works with, e.g. `[claude-code]` for a routine using `builtinTools`, `folder`, `session` or `effort`; a template that doesn't list the selected `llm.backend` won't install |
 | `automator.plugins.<name>` | | A section for an in-process plugin that takes one (none ship with the app) |
 
 From `automator.schedule` to `automator.concurrency`, each key is also a per-routine setting, and so is each parameter: the file gives the default, and `procauto settings set` overrides it without editing the file, e.g. `settings set routines.digest.timeout 45m` or `settings set routines.digest.params.repo my-org/other-repo` (see [[Guides/Settings|Settings]]).

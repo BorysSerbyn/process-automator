@@ -25,9 +25,16 @@ type TemplateInfo struct {
 	templates.Template
 	// RunsHere is false for templates for another OS (listed with --all).
 	RunsHere bool `json:"runsHere"`
+	// SupportsBackend is false for a template that doesn't work with the
+	// selected backend (llm.backend): installing it is refused.
+	SupportsBackend bool `json:"supportsBackend"`
 	// Installed is true when a routine with the template's name exists.
 	Installed bool `json:"installed"`
 }
+
+// Installable says the template can be installed now: for this OS and the
+// selected backend, and not installed yet.
+func (t TemplateInfo) Installable() bool { return t.RunsHere && t.SupportsBackend && !t.Installed }
 
 // InstallOutput is `templates install --json`.
 type InstallOutput struct {
@@ -83,13 +90,18 @@ func templateRows(a *engine.App, all bool) ([]TemplateInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	backend, err := a.BackendDef()
+	if err != nil {
+		return nil, err
+	}
 	rows := []TemplateInfo{}
 	for _, t := range list {
 		if !all && !t.RunsHere() {
 			continue
 		}
 		_, findErr := set.Find(t.Name)
-		rows = append(rows, TemplateInfo{Template: t, RunsHere: t.RunsHere(), Installed: findErr == nil})
+		rows = append(rows, TemplateInfo{Template: t, RunsHere: t.RunsHere(), SupportsBackend: t.Routine.Supports(backend.Name),
+			Installed: findErr == nil})
 	}
 	return rows, nil
 }
@@ -119,7 +131,7 @@ func newTemplatesListCmd() *cobra.Command {
 				return nil
 			}
 			tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "TEMPLATE\tPARAMETERS\tPLATFORMS\tINSTALLED\tDESCRIPTION")
+			fmt.Fprintln(tw, "TEMPLATE\tPARAMETERS\tPLATFORMS\tBACKENDS\tINSTALLED\tDESCRIPTION")
 			for _, r := range rows {
 				var params []string
 				for _, p := range r.Params {
@@ -133,7 +145,11 @@ func newTemplatesListCmd() *cobra.Command {
 				if platforms == "" {
 					platforms = "all"
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%v\t%s\n", r.ID, orDash(strings.Join(params, ", ")), platforms, r.Installed, oneLine(r.Description, 60))
+				backends := strings.Join(r.Backends, ",")
+				if backends == "" {
+					backends = "all"
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%v\t%s\n", r.ID, orDash(strings.Join(params, ", ")), platforms, backends, r.Installed, oneLine(r.Description, 60))
 			}
 			_ = tw.Flush()
 			fmt.Fprintln(out, "\n* required. Install with: "+product.Command+" templates install <template> [--as <name>] [--set param=value]")
@@ -175,6 +191,12 @@ func newTemplatesInstallCmd() *cobra.Command {
 			}
 			if !t.RunsHere() {
 				return fmt.Errorf("%s runs on %s, not %s", t.ID, strings.Join(t.Platforms, ", "), routines.Platform())
+			}
+			if backend, err := a.BackendDef(); err != nil {
+				return err
+			} else if !t.Routine.Supports(backend.Name) {
+				return fmt.Errorf("%s works only with the %s backend, and llm.backend is %s: switch with `%s settings set llm.backend %s` first",
+					t.ID, strings.Join(t.Backends, " or "), backend.Name, product.Command, t.Backends[0])
 			}
 			name := t.Name
 			if as != "" {

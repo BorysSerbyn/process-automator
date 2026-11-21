@@ -66,6 +66,9 @@ type Routine struct {
 	Params []Param
 	// Platforms it runs on (automator.platforms: macos, linux); empty means all.
 	Platforms []string
+	// Backends it works with (automator.backends: llm.backend's values);
+	// empty means any.
+	Backends []string
 	// Plugins holds the routine's section for each in-process plugin it uses
 	// (automator.plugins.<name>), as written; the plugin decodes its own.
 	Plugins map[string]any
@@ -119,6 +122,12 @@ func Platform() string {
 // RunsHere reports whether the routine supports this OS.
 func (r Routine) RunsHere() bool {
 	return len(r.Platforms) == 0 || slices.Contains(r.Platforms, Platform())
+}
+
+// Supports reports whether the routine works with backend (an llm.backend
+// value).
+func (r Routine) Supports(backend string) bool {
+	return len(r.Backends) == 0 || slices.Contains(r.Backends, backend)
 }
 
 // Settings are the routine's per-routine settings, with defaults from its
@@ -272,12 +281,12 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 			}
 		}
 	}
-	fields := map[string]bool{"servers": true, "parameters": true, "platforms": true, "plugins": true}
+	fields := map[string]bool{"servers": true, "parameters": true, "platforms": true, "backends": true, "plugins": true}
 	for _, n := range settings.RoutineFieldNames() {
 		fields[n] = true
 	}
 	file := map[string]any{}
-	var servers, platforms []string
+	var servers, platforms, backends []string
 	var params []Param
 	for k, v := range ext {
 		switch {
@@ -314,6 +323,12 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 			}{&platforms}); err != nil {
 				return Routine{}, fmt.Errorf("%s.platforms: %w", Namespace, err)
 			}
+		case k == "backends":
+			if err := decodeStrict(map[string]any{"b": v}, &struct {
+				B *[]string `json:"b"`
+			}{&backends}); err != nil {
+				return Routine{}, fmt.Errorf("%s.backends: %w", Namespace, err)
+			}
 		case fields[k]:
 			file[k] = v
 		default:
@@ -325,7 +340,7 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 	}
 	r := Routine{
 		Name: name, Path: path, Servers: servers, Tools: doc.Tools, Model: doc.Model, Description: doc.Description,
-		File: file, Params: params, Platforms: platforms, Source: string(raw),
+		File: file, Params: params, Platforms: platforms, Backends: backends, Source: string(raw),
 	}
 	if len(plugins) > 0 {
 		r.Plugins = plugins
@@ -347,6 +362,13 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 	for _, p := range platforms {
 		if !knownPlatforms[p] {
 			return Routine{}, fmt.Errorf("%s.platforms: unknown platform %q (want macos or linux)", Namespace, p)
+		}
+	}
+	if def, ok := settings.Lookup("llm.backend"); ok {
+		for _, b := range backends {
+			if !slices.Contains(def.Enum, b) {
+				return Routine{}, fmt.Errorf("%s.backends: unknown backend %q (want %s)", Namespace, b, strings.Join(def.Enum, " or "))
+			}
 		}
 	}
 	if _, ok := file["staleness"]; ok && !r.Scheduled() {

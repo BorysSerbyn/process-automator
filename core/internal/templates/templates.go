@@ -32,12 +32,14 @@ type Template struct {
 	Tags []string `json:"tags"`
 	// Project is the project it's for (its folder under projects/, e.g.
 	// "acme"); empty for every project or none.
-	Project     string           `json:"project,omitempty"`
-	Description string           `json:"description,omitempty"`
-	Platforms   []string         `json:"platforms,omitempty"`
-	Params      []routines.Param `json:"params,omitempty"`
-	Path        string           `json:"-"`
-	Routine     routines.Routine `json:"-"`
+	Project     string   `json:"project,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Platforms   []string `json:"platforms,omitempty"`
+	// Backends it works with (llm.backend values); none: any.
+	Backends []string         `json:"backends,omitempty"`
+	Params   []routines.Param `json:"params,omitempty"`
+	Path     string           `json:"-"`
+	Routine  routines.Routine `json:"-"`
 }
 
 // ProjectsTag is the folder whose subfolders are projects.
@@ -92,7 +94,7 @@ func List(dir string) ([]Template, error) {
 		for _, r := range set.Routines {
 			out = append(out, Template{
 				ID: strings.Join(append(slices.Clone(tags), r.Name), "/"), Name: r.Name, Tags: tags, Project: projectOf(tags),
-				Description: r.Description, Platforms: r.Platforms, Params: r.Params, Path: r.Path, Routine: r,
+				Description: r.Description, Platforms: r.Platforms, Backends: r.Backends, Params: r.Params, Path: r.Path, Routine: r,
 			})
 		}
 	}

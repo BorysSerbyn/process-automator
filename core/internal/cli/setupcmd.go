@@ -181,7 +181,7 @@ func templatesStep(set *routines.Set, offered int) SetupStep {
 			"your projects and those for any project? Templates with the same name are alternatives. None are " +
 			"picked by default.",
 		Commands: []string{
-			product.Command + " templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none",
+			product.Command + " templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none, and only those with supportsBackend (the others need another llm.backend)",
 			product.Command + " templates install <template> [--set <param>=<value>]...",
 		}}
 	if offered == 0 {
@@ -198,8 +198,9 @@ func templatesStep(set *routines.Set, offered int) SetupStep {
 	return st
 }
 
-// templatesOffered counts the templates for this OS not installed yet; a
-// build that doesn't know where its templates are has none.
+// templatesOffered counts the templates that can be installed (for this OS
+// and the selected backend, not installed yet); a build that doesn't know
+// where its templates are has none.
 func templatesOffered(a *engine.App) int {
 	rows, err := templateRows(a, false)
 	if err != nil {
@@ -207,7 +208,7 @@ func templatesOffered(a *engine.App) int {
 	}
 	n := 0
 	for _, t := range rows {
-		if !t.Installed {
+		if t.Installable() {
 			n++
 		}
 	}
@@ -542,7 +543,7 @@ func setupTemplates(a *engine.App, w io.Writer, ask func(string) string, self fu
 	}
 	var offer []TemplateInfo
 	for _, t := range rows {
-		if !t.Installed && (t.Project == "" || mine[t.Project]) {
+		if t.Installable() && (t.Project == "" || mine[t.Project]) {
 			offer = append(offer, t)
 		}
 	}

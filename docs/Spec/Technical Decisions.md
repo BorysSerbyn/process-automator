@@ -225,6 +225,13 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 - **GitHub artifact attestations**: need `gh` on every machine, and GitHub Enterprise Cloud for a private repository
 - **Checksum only on macOS too**: the Developer ID is already required for Gatekeeper, and checking it is free
 
+## Decision: templates name the backends they work with
+A template can list the backends it works with (`automator.backends`), and installing it on another backend is refused, saying how to switch. Some routines only make sense on an agent CLI (built-in tools, a folder, a saved session, effort): on the api backend they'd install and set up fine, then fail every run. Setup only offers templates that can be installed; `templates list` still shows the others, marked, since the backend can change.
+
+### Rejected
+- **Working it out from the fields a template uses**: implicit; a template author states it once instead
+- **Hiding them from `templates list`**: switching backends would make templates appear from nowhere
+
 ## Decision: commands bring run status up to date
 Run status is the scheduler's record, but a command that changes something also records each routine's state there when it succeeds, as the scheduler's pass would. Otherwise turning a routine on in the setup window left it showing as paused for up to a pass (30 seconds). Commands run read-only (`setup --json`, `run --dry-run`) don't write it, so frontends that poll them don't make it change.
 
