@@ -7,7 +7,7 @@ Back to [[Home]]. See also: [[Spec/Requirements/Technical/Distribution|Technical
 make deps      # dev tools (Go, golangci-lint, shellcheck) via Homebrew
 make test      # Go + Swift tests
 make lint
-make ci        # before pushing: tests, lint, Linux/Windows builds, shellcheck, the macOS artifact's install test
+make ci        # before pushing: tests, lint, Linux/Windows builds, the tray's Linux builds, shellcheck, the Linux package, the macOS artifact's install test
 make install   # build, sign, install to ~/Applications, (re)start; CLI linked to ~/.local/bin
 make help      # everything else
 ```

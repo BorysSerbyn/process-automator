@@ -42,4 +42,4 @@ Keeps scheduled runs from using too much, depending on the backend:
 A run that doesn't start is recorded as skipped, with the reason, and the dot turns red. Runs you start by hand still run, with a warning. `procauto usage` shows where you stand; so does the **LLM usage** card in the Settings window.
 
 ## Start at login
-The scheduler and the menu bar app start at login. `procauto login-items status|enable|disable` (or **Start at login** in the Settings window) changes that; it doesn't start or stop what's running now.
+The scheduler and the menu bar app (on Linux, the tray, in desktop sessions) start at login. `procauto login-items status|enable|disable` (or **Start at login** in the Settings window) changes that; it doesn't start or stop what's running now.

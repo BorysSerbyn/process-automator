@@ -39,6 +39,7 @@ A routine stays red until its next run goes well (or you pause it).
 |---|---|
 | Scheduler (macOS) | `~/Library/Logs/process-automator/scheduler.log` |
 | Scheduler (Linux) | `journalctl --user -u procauto-scheduler` |
+| Tray (Linux) | the desktop session's log (`journalctl --user -b`) when the session started it; none when the installer did |
 | Runs started in the background (`start`, **Run Now** in the menu bar app) | `start.log` in the data folder |
 | Updates started from the menu | `update.log` in the data folder |
 | Changes made by Claude through the MCP server | `mcp-changes.jsonl` in the data folder |

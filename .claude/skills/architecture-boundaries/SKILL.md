@@ -1,11 +1,11 @@
 ---
 name: architecture-boundaries
-description: Keeps process-automator's layer boundaries intact (the UI depends only on the CLI; the core uses no plugins; plugins are OS-independent; the MCP server is the core's). Use when changing automator-ui/, core/, core/plugins/, the MCP server, contracts/ or the CLI's output, adding anything UI-visible, or touching OS-specific APIs (macOS, launchd, Keychain, systemd, /Applications, ~/Library).
+description: Keeps process-automator's layer boundaries intact (the UI depends only on the CLI; the core uses no plugins; plugins are OS-independent; the MCP server is the core's). Use when changing automator-ui/, automator-tray/, core/, core/plugins/, the MCP server, contracts/ or the CLI's output, adding anything UI-visible, or touching OS-specific APIs (macOS, launchd, Keychain, systemd, /Applications, ~/Library).
 ---
 
 # Architecture boundaries
 
-**1. automator-ui (the indicator and its windows) is only a frontend, and depends on nothing but the CLI.** It acts only by running `procauto` CLI commands and shows what they print as is (`health`: ok green, error red, none grey): run status through `status --watch` (one JSON line per change), the app's notifications through `notifications list --pending --json`. It reads none of the core's files and knows no path. Its one judgement: no status, or one past its `validUntil`, is red. No logic, and no knowledge of the core's internals: never compute health, schedules or times, hard-code setting keys (the core's output names them, e.g. a setup step's `setting`), or read config, routines or the Keychain. Need something new? Add it to Go (a CLI `--json` command or field), then display it.
+**1. automator-ui (the indicator and its windows) and automator-tray (Linux's tray) are only frontends, and depend on nothing but the CLI.** Each acts only by running `procauto` CLI commands and shows what they print as is (`health`: ok green, error red, none grey): run status through `status --watch` (one JSON line per change), the app's notifications through `notifications list --pending --json`. It reads none of the core's files and knows no path. Its one judgement: no status, or one past its `validUntil`, is red. No logic, and no knowledge of the core's internals: never compute health, schedules or times, hard-code setting keys (the core's output names them, e.g. a setup step's `setting`), or read config, routines or the Keychain. Need something new? Add it to Go (a CLI `--json` command or field), then display it.
 
 **2. The Go core doesn't know who calls it.** The CLI is the API (contracts in `contracts/`, `make contracts`), and its only interface to frontends. No caller-specific branches, no UI wording or colours. All decisions live here.
 
@@ -17,6 +17,6 @@ description: Keeps process-automator's layer boundaries intact (the UI depends o
 
 **6. The MCP server is part of the core, not a plugin.** `mcp serve` is the CLI's commands as MCP tools for Claude and other clients. There's no plugin for it and it isn't listed as one; routines don't use it. A plugin that needs the app talks to the server through `pluginapi`'s session to it.
 
-**7. Only `core/automator`, `core/pluginapi` and `core/plugins/` are public.** Other apps import them (and build with this repo's Makefile and scripts), so keep them small and their changes deliberate; anything else goes in `internal/`. Nothing app-specific belongs in this repo: names come from the `automator.App` (`internal/product` in the core, `AppInfo` in automator-ui), never literals.
+**7. Only `core/automator`, `core/pluginapi` and `core/plugins/` are public.** Other apps import them (and build with this repo's Makefile and scripts), so keep them small and their changes deliberate; anything else goes in `internal/`. Nothing app-specific belongs in this repo: names come from the `automator.App` (`internal/product` in the core, `AppInfo` in automator-ui, the package's `install.env` in automator-tray), never literals.
 
 When a `--json` shape changes, run `make contracts`: the Swift types are generated from `contracts/openapi.yaml` at build time, never hand-written.

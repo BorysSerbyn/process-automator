@@ -84,8 +84,8 @@ A **template** is a routine file tracked in the repository's `templates/` so any
 - **"Recipe"** (Goose's name): a second name for a routine
 - **Compiling templates into the binary**: sharing one would need a release
 
-## Decision: the notify plugin shows its notifications itself; the app's own go through automator-ui
-`notify` is a plugin routines choose to use, so it delivers what it's asked to the OS on its own: on macOS through UserNotifications, as the app (the core lives in the app's bundle and is signed with its bundle ID, so it shares the app's permission to notify), on Linux through the freedesktop notification service. It needs no frontend, no file and no settings. Clicking one does nothing: a plugin only runs during its routine's run, and on macOS a click goes to the app's main executable, automator-ui, which knows nothing of it. The app's own notifications (a run that failed, needs a sign-in, was skipped or missed; an update) are the core's: recorded in its notifications file, delivered by automator-ui, and clicking one opens the app (on the run it's about, in its routine's window); their only setting is an on/off for the run ones (`runs.failure-notifications`). Nothing a routine does reaches them.
+## Decision: the notify plugin shows its notifications itself; the app's own go through the frontends
+`notify` is a plugin routines choose to use, so it delivers what it's asked to the OS on its own: on macOS through UserNotifications, as the app (the core lives in the app's bundle and is signed with its bundle ID, so it shares the app's permission to notify), on Linux through the freedesktop notification service. It needs no frontend, no file and no settings. Clicking one does nothing: a plugin only runs during its routine's run, and on macOS a click goes to the app's main executable, automator-ui, which knows nothing of it. The app's own notifications (a run that failed, needs a sign-in, was skipped or missed; an update) are the core's: recorded in its notifications file, delivered by automator-ui on macOS and the tray on Linux, and clicking one opens the app (on the run it's about, in its routine's window); their only setting is an on/off for the run ones (`runs.failure-notifications`). Nothing a routine does reaches them.
 
 ### Rejected
 - **Routines' notifications through the app's file and automator-ui**: ties a plugin to the menu bar app, so nothing shows without it (on Linux, nothing at all), and its settings (what a click does) ended up as the app's
@@ -118,7 +118,7 @@ The Go types are the source of truth: `make contracts` emits JSON Schemas and `c
 - **Hand-written Swift types**: they'd drift from the core unnoticed
 
 ## Decision: automator-ui is a separate Swift app, macOS only
-The UI is a native SwiftUI/AppKit app, separate from the Go core, which stays pure Go (but for one cgo file, see the notify plugin). Every cross-platform option loses on macOS what the Swift app does well (dependable notification clicks, time-sensitive notifications, native menu bar behaviour, about 11 MB idle), and Linux trays need extensions on stock GNOME whatever the toolkit, so Linux runs the CLI and scheduler only. The app is named for being a UI app (automator-ui); the indicator is its menu bar part.
+The UI is a native SwiftUI/AppKit app, separate from the Go core, which stays pure Go (but for one cgo file, see the notify plugin). Every cross-platform option loses on macOS what the Swift app does well (dependable notification clicks, time-sensitive notifications, native menu bar behaviour, about 11 MB idle), so Linux has a frontend of its own (the tray, below). The app is named for being a UI app (automator-ui); the indicator is its menu bar part.
 
 ### Rejected
 - **A Go menu bar library** (e.g. `fyne.io/systray`): one binary, but reaches AppKit through cgo
@@ -126,6 +126,22 @@ The UI is a native SwiftUI/AppKit app, separate from the Go core, which stays pu
 - **Wails v3**: the core's language, but in beta, with an unstable tray API
 - **Qt 6, Fyne, Flutter, Electron**: a heavy toolchain, non-native windows without notification clicks, uneven Linux plugins, or far too heavy
 - **Native shells per OS with one shared web UI**: only pays off if a Linux menu bar app is wanted; the UI having no logic keeps a second shell cheap if it ever is
+
+## Decision: Linux's tray is a small pure-Go process; its windows a separate one, on demand
+The Linux frontend is automator-tray, a Go binary on `fyne.io/systray`, which speaks StatusNotifierItem and dbusmenu straight over D-Bus (godbus): no cgo, GTK or libappindicator, so it builds CGO-free like the core, ships as one small static binary beside it, and stays about 10 MB resident, all day. Notifications go to `org.freedesktop.Notifications` the same way, with a default action for clicks and buttons for asking. It's a frontend like automator-ui (the CLI only, no names of its own), in its own Go module so the core's dependencies don't grow. Its icon frames are PNGs made from the app's logo when it's packaged, so the running tray only loads files; busy is two frames shown in turn rather than an animation, a signal every 0.8 seconds and only while a routine runs. Windows (setup, settings, routines) will be a separate process (Fyne) started when one is opened and gone when it's closed, so the toolkit is never resident; until then the one function that opens a window runs the window's CLI command in a terminal. On stock GNOME a StatusNotifierItem shows only with the AppIndicator extension, which Ubuntu enables by default; any toolkit's tray has the same need.
+
+### Rejected
+- **GTK in the tray process** (libayatana-appindicator through cgo): cgo in the Linux build, and a GTK stack resident all day for an icon and a menu
+- **WebKit-based** (Tauri, Electron, Wails): a web engine resident for an icon and a menu, tens to hundreds of MB; Tauri's Linux tray fires no click events
+- **One process for the tray and the windows** (Fyne's own tray): its OpenGL window stack, through cgo, would stay loaded while no window is open, which is nearly always
+- **Notifications through `notify-send`**: may not be installed, and gives no clicks back
+
+## Decision: the Linux tray starts at login from an XDG autostart entry
+The installer writes `~/.config/autostart/<Command>-tray.desktop`. Every desktop session runs autostart entries (GNOME, KDE, Xfce, Cinnamon, MATE, LXQt), only graphical ones do, so a server or a headless session never starts the tray, and the tray gets the session's environment (its display, its terminal). Turned off, the entry is hidden (`Hidden=true`), which every desktop honours. The installer starts and stops the tray itself: it finds the running one by its executable, waits for it to exit before starting the new one (as for macOS's login items), and starts it in the environment the old one ran in, so an update run from a shell without a display still restarts it on the desktop. As a backstop, the newest tray takes the app's name on the session bus and the older one quits.
+
+### Rejected
+- **A systemd user unit bound to `graphical-session.target`**: several desktops never reach that target, so the tray wouldn't start there; and the update the tray starts (`update --detach`) would run in the unit's cgroup, which restarting the unit kills mid-install
+- **The scheduler starting the tray**: it runs as a systemd user unit, outside any desktop session; it would have to find one, and on a headless machine there's none to find
 
 ## Decision: Claude manages routines through the core's own MCP server
 People make routines by talking to Claude, so Claude is another frontend: `procauto mcp serve` serves the same surface as the CLI. Every CLI command is a tool by default, derived from the command tree, and one override table holds the exceptions, so the server isn't edited when the CLI grows. The guardrail is my approval rather than missing tools: side-effecting tools are annotated so the client asks first, created routines start disabled and untrusted, and trust stays in my terminal.

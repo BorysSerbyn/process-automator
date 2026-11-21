@@ -8,7 +8,7 @@ Process Automator runs **routines**: prompt files that a model (Claude, through 
 - **plugins:** add any MCP server (remote, local, or a folder they wrote), try it before it's installed, sign in;
 - **settings:** app-wide and per routine (schedule, model, effort, timeout, working folder, which tools it may use, ...);
 - **memories** routines read, desktop **notifications** routines send, **templates** to start from, an **LLM budget** that keeps scheduled runs from overspending, and **guardrails**: a routine runs for real only once trusted with what it can reach;
-- a menu bar app on macOS (status, routines, settings, setup), and `doctor` to explain anything red.
+- a menu bar app on macOS (status, routines, settings, setup), a tray in Linux desktop sessions (status, routines, notifications, updates), and `doctor` to explain anything red.
 
 **All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. On the `claude-code` backend, setup connects Claude Code to it (the `mcp` step below); for another MCP client, its stdio command is `procauto mcp serve`.
 
@@ -34,7 +34,7 @@ curl -fsSL https://github.com/BorysSerbyn/process-automator/releases/latest/down
 
 or from a checkout of the repository, `./install.sh --yes`.
 
-It downloads the latest release for this machine, checks its checksum (and on macOS its signature), installs it (macOS: `~/Applications/Process Automator.app`; Linux: `~/.local/lib/process-automator`), links `procauto` into `~/.local/bin`, and starts the scheduler (and on macOS the menu bar app) now and at login. If a check fails, show them the error; don't work around it.
+It downloads the latest release for this machine, checks its checksum (and on macOS its signature), installs it (macOS: `~/Applications/Process Automator.app`; Linux: `~/.local/lib/process-automator`), links `procauto` into `~/.local/bin`, and starts the scheduler (and the menu bar app on macOS, or the tray in a Linux desktop session) now and at login. On a Linux machine without a desktop it says the tray starts only in desktop sessions: that's expected, nothing is missing. If a check fails, show them the error; don't work around it.
 
 **No published release for this machine** (install.sh says so): build it from a checkout instead (clone `https://github.com/BorysSerbyn/process-automator` first if there isn't one). On macOS:
 1. Prerequisites, each with their go-ahead: the Xcode command line tools (`xcode-select --install`: *they* confirm the dialog), Homebrew, then `make deps` (Go and the other build tools).
@@ -71,6 +71,6 @@ Setup is finished when `procauto setup --json` says `"done": true`. Steps they s
 
 ## 4. Finish
 Tell them:
-- what's installed and running (`procauto routines list`, and on macOS the hourglass in the menu bar);
+- what's installed and running (`procauto routines list`, and the hourglass in the macOS menu bar or the Linux tray; on GNOME the tray needs the AppIndicator extension, which Ubuntu enables by default);
 - `procauto doctor` explains a red light; `procauto update` installs new releases (the menu offers them too); `procauto uninstall` removes the app (`--purge` also removes their config, routines, history, logs and secrets);
 - you (or any MCP client) can do basically anything with the app from now on through its MCP server (on `claude-code`, setup connected it to Claude Code; after a restart `/mcp` lists `procauto`): offer to help them write their first routine.

@@ -8,12 +8,12 @@ Process Automator runs **routines**: prompt files that a model (Claude) runs on 
 - **The model backend** runs routines: `claude-code` (Claude Code on your Claude plan), `codex` (OpenAI's Codex CLI on your Codex sign-in; experimental, untested) or `api` (an Anthropic API key, paid per token; or, experimental and untested, models on an OpenAI-compatible server such as Ollama)
 - **The scheduler** starts at login and runs enabled routines on their schedules
 - **The `procauto` CLI** does everything; every command has `--help`
-- **The menu bar app** (macOS) shows whether all is well and lets you manage routines without a terminal ([[Guides/The menu bar app|The menu bar app]])
+- **The menu bar app** (macOS) shows whether all is well and lets you manage routines without a terminal; on Linux, **the tray** shows the same status, menu and notifications ([[Guides/The menu bar app|The menu bar app]])
 - **The MCP server** gives Claude everything the CLI does ([[Guides/Using it from Claude|Using it from Claude]])
 
 ## Requirements
 - macOS 14 or later on a Mac with Apple silicon (Intel Macs aren't supported), or Linux (x86-64 or ARM64)
-- Linux only: `secret-tool` (package `libsecret-tools`) to keep sign-ins, and a systemd user session to start the scheduler at login
+- Linux only: `secret-tool` (package `libsecret-tools`) to keep sign-ins, and a systemd user session to start the scheduler at login. The tray needs a desktop with a system tray (StatusNotifierItem): on GNOME, the AppIndicator extension, which Ubuntu enables by default
 
 ## Install
 From a checkout of the repository:
@@ -30,7 +30,7 @@ curl -fsSL https://github.com/BorysSerbyn/process-automator/releases/latest/down
 
 Neither needs a GitHub account or the GitHub CLI. (An app built on Process Automator whose releases are private is different: installing and updating it need a GitHub sign-in that can read them, with `gh auth login` or a token in `GH_TOKEN`.)
 
-It downloads the latest release for your machine, checks its checksum (and on macOS its signature), installs it, links `procauto` into `~/.local/bin`, starts the scheduler (and on macOS the menu bar app) now and at login, then offers to run setup. If `~/.local/bin` isn't on your `PATH`, add it.
+It downloads the latest release for your machine, checks its checksum (and on macOS its signature), installs it, links `procauto` into `~/.local/bin`, starts the scheduler, and the menu bar app on macOS or the tray in a Linux desktop session, now and at login, then offers to run setup. If `~/.local/bin` isn't on your `PATH`, add it.
 
 | | Where the app goes |
 |---|---|
@@ -65,10 +65,10 @@ Setup takes you through what the app needs, in order:
 6. **Sign-ins**: each server your routines use. One that needs something set up first walks you through it before asking for anything ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
 7. **Turn on routines**: what each routine can reach, for you to approve; one yes trusts it and runs it on its schedule ([[Guides/Routines#Turn it on|Turn it on]])
 
-Run it in a terminal with `procauto setup`, which asks before each step and skips what's done, or on macOS open **Finish Setup…** from the menu bar (or **Setup** in the Routines window), which shows every step with a button for each. Run it again any time, e.g. after adding a routine. Until the required steps are done, the menu bar dot is red with "Setup isn't finished".
+Run it in a terminal with `procauto setup`, which asks before each step and skips what's done, or on macOS open **Finish Setup…** from the menu bar (or **Setup** in the Routines window), which shows every step with a button for each (on Linux, the tray's **Finish Setup…** runs `procauto setup` in a terminal). Run it again any time, e.g. after adding a routine. Until the required steps are done, the menu bar dot is red with "Setup isn't finished".
 
 ## Update
-`procauto update` installs the latest release if it's newer (`--check` only reports; `update progress` says what one installing is doing). It verifies the download like the installer, replaces the app where it is and restarts it. On macOS the menu offers it too (**Update to X…**, or **Check for Updates**), and shows its progress. Your routines, settings and sign-ins are kept.
+`procauto update` installs the latest release if it's newer (`--check` only reports; `update progress` says what one installing is doing). It verifies the download like the installer, replaces the app where it is and restarts it. The menu bar app and the Linux tray offer it too (**Update to X…**, or **Check for Updates**), and show its progress. Your routines, settings and sign-ins are kept.
 
 ## Uninstall
 `procauto uninstall` removes the app, its `procauto` link and its login items. Your config, routines, history, logs and secrets stay, unless you add `--purge`.
@@ -77,4 +77,8 @@ Run it in a terminal with `procauto setup`, which asks before each step and skip
 `procauto paths` shows where the app keeps its config file, routines folder, run status, history, notifications and templates. The data folder is `~/Library/Application Support/process-automator/` on macOS and `~/.config/process-automator/` on Linux; on macOS the scheduler logs to `~/Library/Logs/process-automator/scheduler.log`.
 
 ## On Linux
-The CLI and the scheduler work as on macOS, with no menu bar app: use the CLI, or Claude through the MCP server. Only templates that run on Linux are offered. The scheduler is the systemd user unit `procauto-scheduler.service` (logs: `journalctl --user -u procauto-scheduler`). Notifications are recorded but not shown on screen: `procauto notifications list` lists them.
+The CLI and the scheduler work as on macOS. Only templates that run on Linux are offered. The scheduler is the systemd user unit `procauto-scheduler.service` (logs: `journalctl --user -u procauto-scheduler`).
+
+In a desktop session the **tray** takes the menu bar app's place: the same icon and status dot, menu and notifications ([[Guides/The menu bar app#The Linux tray|The Linux tray]]). It starts at login from `~/.config/autostart/procauto-tray.desktop`, and the installer starts it at once when you install from the desktop. On a machine with no desktop nothing starts it, and the app works the same without it.
+
+On GNOME the tray shows only with the **AppIndicator extension**: Ubuntu enables it by default; elsewhere install "AppIndicator and KStatusNotifierItem Support" (package `gnome-shell-extension-appindicator`) and turn it on. KDE Plasma, Xfce, Cinnamon and most other desktops show it as they are.

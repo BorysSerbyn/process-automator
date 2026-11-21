@@ -2,7 +2,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## Platforms
 - **macOS and Linux**: the same CLI, scheduler and routines on both
-- **automator-ui on macOS only**: on Linux I use the CLI, or Claude through the MCP server
+- **A menu bar app on macOS, a tray on Linux**: macOS's menu bar app (automator-ui) has the windows too; Linux's tray has the same icon, menu and notifications, and opens what would be a window as its CLI command in my terminal
 
 ## Routines
 - **Routines are files on my device**: the app ships with none; a routine is added or changed by adding or editing its file in the routines folder, with no app update
@@ -51,20 +51,20 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## Notifications
 - **From routines** (the notify plugin): a routine can send me a short desktop notification, a title and a message, shown by the plugin itself through the OS (macOS, as the app; Linux, through the desktop's notification service), not by the menu bar app. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade. Clicking one does nothing. It has no settings, app-wide or per routine
-- **The app's own**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app; clicking one opens the app: on the run it's about, in its routine's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
-- **On Linux** the app's own notifications are recorded and listed by the CLI; nothing shows them on screen
+- **The app's own**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app on macOS and the tray on Linux; clicking one opens the app: on the run it's about, in its routine's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
+- **On Linux** clicking one opens its run's report, or (an update's) the routines list in a terminal
 
 ## Status indicator
-- **Icon** in the macOS menu bar with a status dot:
+- **Icon** in the macOS menu bar, or the Linux tray, with a status dot:
   - **Green**: every enabled routine is fine. A routine with no runs yet is fine while its next run is ahead
   - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled, didn't start at its time or is stuck; setup isn't finished; or the scheduler isn't responding
   - **Grey**: no routines are enabled
-  - **Pulsing**: a routine is running (whatever the colour)
+  - **Pulsing**: a routine is running (whatever the colour); in the Linux tray the dot dims and brightens
 - Updates within seconds of anything changing
 
 ## UI
-Managing the app is possible entirely from automator-ui, without a terminal. The CLI does all of it too; the UI is another way in, not a replacement.
-- **Menu**: the version; the status in words (each reason the dot is red, opening the run it's about); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); updates; Settings; Quit
+Managing the app is possible entirely from macOS's menu bar app (automator-ui), without a terminal. The CLI does all of it too; the UI is another way in, not a replacement.
+- **Menu** (the menu bar app's and the Linux tray's): the version; the status in words (each reason the dot is red, opening the run it's about); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); updates; Settings; Quit
 - **Routines window**: every routine with its health, schedule in words, last run and status
 - **A routine's window**:
   - status: last run (when, outcome, reason), next run, why it can't be scheduled
@@ -77,6 +77,7 @@ Managing the app is possible entirely from automator-ui, without a terminal. The
 - **Settings window**: start at login, LLM usage, and every app-wide setting with a control for its type
 - **Updates**: see whether a newer release exists, and install it
 - **Start at login**: on or off
+- **Linux tray**: the same menu, updates and notifications; each window is its CLI command run in my terminal (Setup: `setup`; Settings: `settings list --scope app`; Routines: `routines list`; a routine: `routines show <routine>`; Updating: `update progress`), and installing an update is confirmed in a notification
 
 ## CLI
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each

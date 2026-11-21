@@ -6,14 +6,14 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 - **Three model backends**: Claude Code on my Claude plan (`claude-code`), OpenAI's Codex CLI on my Codex sign-in (`codex`, experimental and untested), or an Anthropic API key (`api`), which also runs models on one OpenAI-compatible server, local or hosted (experimental and untested)
 - **A scheduler** that starts at login, catches up after sleep within each routine's staleness, and records every due run
 - **Guardrails**: a tool allowlist per routine, dry runs that intercept every write, and trust: a routine runs for real only while what it can reach is what I approved
-- **Frontends over one core**: the `procauto` CLI (the API), automator-ui on macOS, and Claude or any MCP client through `procauto mcp serve`
+- **Frontends over one core**: the `procauto` CLI (the API), automator-ui on macOS, a tray on Linux, and Claude or any MCP client through `procauto mcp serve`
 - **Around runs**: run history, memories, notifications, a usage limit per backend, `doctor`, templates to share routines, a guided `setup`
 - **Distribution**: prebuilt, verified releases for macOS and Linux, one-command install, update and uninstall, a private Homebrew tap, and installing through an LLM (`AGENTS.md`)
 
 ## What it isn't
 - Not a chat assistant or an open-ended agent: routines are fixed prompts run unattended, with no one answering questions mid-run
 - Not tied to any service: the engine knows no specific service; integrations are MCP servers I add
-- No menu bar app on Linux: the CLI and the scheduler only
+- No app windows on Linux: the tray opens setup, settings and routines as CLI commands in a terminal
 - No Windows support (the core cross-compiles for it, nothing more)
 - Memories are mine: routines never write them
 

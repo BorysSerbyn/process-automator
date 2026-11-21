@@ -13,13 +13,13 @@ Back to [[Home]]. See also [[Spec/Requirements/Technical/Distribution|Technical:
 - **Updates show their progress**: while one installs, what it's doing (downloading, verifying, installing, or building, which takes minutes), so it never looks stuck; and how it ended if it failed
 - **Updates keep everything**: my routines, settings, sign-ins and whether the app starts at login
 - **Uninstalling keeps my data**: config, routines, history, logs and secrets stay unless I ask for them to go too
-- **Starts at login**: install sets the scheduler (and on macOS the menu bar app) to start at login and starts them now
+- **Starts at login**: install sets the scheduler, and the menu bar app on macOS or the tray in Linux desktop sessions, to start at login and starts them now (the tray only in a desktop session: a headless machine runs without it)
 - **Seamless dev updates**: reinstalling a local build is one quick command; no re-granting permissions, no re-entering secrets, no logging out; running apps restart on the new build
 - **Homebrew**: a private tap, for invited people (a cask on macOS, a formula on Linux)
 
 ## Versions
 - **Every install is a known version**, following semantic versioning (major.minor.patch)
-- **Shown** in the menu bar menu and by the CLI (`version`, `--version`)
+- **Shown** in the menu bar app's or tray's menu and by the CLI (`version`, `--version`)
 - **Development builds are marked** as such (`0.1.0-dev+<commit>`), distinct from releases
 - **Cutting a release is one command**
 
