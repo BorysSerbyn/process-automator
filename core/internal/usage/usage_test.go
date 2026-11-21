@@ -2,6 +2,7 @@ package usage
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -71,6 +72,24 @@ func TestPlan(t *testing.T) {
 	p, _ = Refresh(path, 10*time.Minute, now.Add(30*time.Minute), failing)
 	if r := AssessPlan(p, 50, now.Add(30*time.Minute)); !r.Over || r.ReadError != "rate limited" {
 		t.Errorf("after a failed read: %+v", r)
+	}
+	// One failed try, or two, isn't /usage that can't be read; three in a
+	// row are, and a reading clears it. An answer without a report is at once.
+	if p.CantRead() {
+		t.Errorf("can't be read after one failed try: %+v", p)
+	}
+	_, _ = Refresh(path, 10*time.Minute, now.Add(41*time.Minute), failing)
+	p, _ = Refresh(path, 10*time.Minute, now.Add(52*time.Minute), failing)
+	if !p.CantRead() || p.TryFailures != 3 {
+		t.Errorf("readable after 3 failed tries in a row: %+v", p)
+	}
+	p, _ = Refresh(path, 10*time.Minute, now.Add(63*time.Minute), fetch)
+	if p.CantRead() || p.TryFailures != 0 {
+		t.Errorf("can't be read after a reading: %+v", p)
+	}
+	noReport := func() ([]Limit, error) { return nil, fmt.Errorf("claude: %w", Unreadable("no usage report")) }
+	if p, _ = Refresh(path, 10*time.Minute, now.Add(74*time.Minute), noReport); !p.CantRead() {
+		t.Errorf("readable after an answer without a report: %+v", p)
 	}
 	// Nothing known: never over.
 	empty, _ := Refresh(filepath.Join(t.TempDir(), "p.json"), time.Minute, now, failing)

@@ -105,20 +105,16 @@ func adoptLoginPath(cmd *cobra.Command) {
 	}
 }
 
-// changesSetup are the commands whose success can change what setup has
-// left: run status says so at once, not on the scheduler's next pass.
-var changesSetup = map[string]bool{
-	"auth login": true, "auth logout": true, "settings set": true, "settings reset": true,
-	"templates install": true, "routines create": true, "routines update": true, "routines delete": true,
-	"routines trust": true, "routines pause": true, "routines resume": true,
-	"plugins add": true, "plugins remove": true, "usage statusline install": true, "usage statusline uninstall": true, "mcp connect": true,
-}
-
 // refreshSetupStatus records the setup steps left in run status after a
-// command that changes them (it only runs after a command succeeds).
+// command that succeeded, so frontends showing run status (the menu) and
+// `setup --json` (the setup window) agree at once, not on the scheduler's
+// next pass. Every command that may change what setup has left does it:
+// all but the read-only ones, `usage` (it reads the plan's usage again) and
+// `setup --json` (whoever looks at setup gets run status up to date). It only
+// reads files, and run status is written only when what's left changed.
 func refreshSetupStatus(cmd *cobra.Command) {
 	path := strings.TrimPrefix(cmd.CommandPath(), cmd.Root().Name()+" ")
-	if !changesSetup[path] {
+	if isReadOnly(cmd) && path != "usage" {
 		return
 	}
 	a, err := loadApp(cmd)

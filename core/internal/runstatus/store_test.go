@@ -280,6 +280,13 @@ func TestSetupLeft(t *testing.T) {
 		!strings.Contains(s.Reasons[0].Detail, "Model backend, Trust standup") {
 		t.Errorf("unfinished setup: %s %+v", s.Health, s.Reasons)
 	}
+	// The same again writes nothing: frontends following run status see no change.
+	if err := SetSetup(path, []string{"Model backend", "Trust standup"}, t0.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := Load(path); !s.UpdatedAt.Equal(t0) {
+		t.Errorf("rewritten without a change (updated %v)", s.UpdatedAt)
+	}
 	if err := SetSetup(path, nil, t0); err != nil {
 		t.Fatal(err)
 	}

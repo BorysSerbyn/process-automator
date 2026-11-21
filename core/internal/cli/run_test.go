@@ -289,6 +289,26 @@ func TestPlanUsageFallback(t *testing.T) {
 	if s, done := step(); s.Step == "" || s.Done || done {
 		t.Fatalf("no unfinished plan usage step: %+v (setup done %v)", s, done)
 	}
+	// Run status (the menu) agrees with setup (the setup window) at once: after
+	// `setup --json`, and after `usage` reads the plan's usage again.
+	left := func() []string { s, _ := runstatus.Load(a.Layout.RunStatus()); return s.SetupLeft }
+	if !slices.Contains(left(), "Plan usage") {
+		t.Errorf("run status after setup --json: %v", left())
+	}
+	unreadable := engine.Backends["claude-code"]
+	enginetest.UsePlanUsage(usage.Limit{Kind: "session", Percent: 10, ResetsAt: time.Now().Add(time.Hour)})
+	_ = os.Remove(a.Layout.PlanUsage()) // due for a reading
+	if _, err := cli(t, cfg, "usage"); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(left(), "Plan usage") {
+		t.Errorf("run status after usage read it: %v", left())
+	}
+	engine.Backends["claude-code"] = unreadable
+	_ = os.Remove(a.Layout.PlanUsage())
+	if _, err := a.Usage(context.Background(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	if out, _ := cli(t, cfg, "doctor"); strings.Contains(out, "usage") {
 		t.Errorf("doctor reports it:\n%s", out)
 	}

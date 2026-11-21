@@ -25,6 +25,11 @@ type Plan struct {
 	FetchedAt *time.Time `json:"fetchedAt,omitempty"`
 	TriedAt   *time.Time `json:"triedAt,omitempty"`
 	TryError  string     `json:"tryError,omitempty"`
+	// TryFailures counts the tries in a row that failed, and Unreadable says
+	// the last one answered without a report the app can read (an Unreadable
+	// error): see CantRead.
+	TryFailures int  `json:"tryFailures,omitempty"`
+	Unreadable  bool `json:"unreadable,omitempty"`
 	// RecordedAt is when Claude Code's status line last recorded it (the
 	// fallback while /usage can't be read).
 	RecordedAt *time.Time `json:"recordedAt,omitempty"`
@@ -49,6 +54,24 @@ type Limit struct {
 	Model    string
 	Percent  float64
 	ResetsAt time.Time
+}
+
+// Unreadable is a /usage failure that trying again won't fix: Claude Code
+// answered, without a usage report the app can read.
+type Unreadable string
+
+func (e Unreadable) Error() string { return string(e) }
+
+// failuresUnreadable is how many tries in a row must fail before /usage
+// counts as unreadable when it didn't answer at all: one try can fail (a slow
+// start, a busy machine, its rate limit) and the next one work.
+const failuresUnreadable = 3
+
+// CantRead says /usage can't be read: it answered without a report the app
+// can read, or failuresUnreadable tries in a row failed. A reading since
+// clears it.
+func (p *Plan) CantRead() bool {
+	return p.TryError != "" && (p.Unreadable || p.TryFailures >= failuresUnreadable)
 }
 
 // limitHitRetry is when to try again after a run hit a limit without saying
@@ -86,10 +109,11 @@ func Refresh(path string, maxAge time.Duration, now time.Time, fetch func() ([]L
 		p.TriedAt = &now
 		limits, err := fetch()
 		if err != nil {
-			p.TryError = err.Error()
+			var unreadable Unreadable
+			p.TryError, p.TryFailures, p.Unreadable = err.Error(), p.TryFailures+1, errors.As(err, &unreadable)
 			return nil
 		}
-		p.FetchedAt, p.TryError = &now, ""
+		p.FetchedAt, p.TryError, p.TryFailures, p.Unreadable = &now, "", 0, false
 		p.Session, p.Weekly, p.Models = nil, nil, nil
 		for _, l := range limits {
 			w := PlanWindow{UsedPercent: l.Percent, ResetsAt: l.ResetsAt}

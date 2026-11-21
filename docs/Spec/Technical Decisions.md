@@ -225,6 +225,19 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 - **GitHub artifact attestations**: need `gh` on every machine, and GitHub Enterprise Cloud for a private repository
 - **Checksum only on macOS too**: the Developer ID is already required for Gatekeeper, and checking it is free
 
+## Decision: setup's state is recorded by whatever computes it
+Run status's `setupLeft` (the menu's Finish Setup…) is refreshed after every command that isn't read-only, after `usage` and after `setup --json`, not only after a list of commands known to change setup. The list missed some (reading the plan's usage again), so the menu kept Finish Setup… while the setup window had nothing left. Working out what's left only reads files, and run status is written only when it changes.
+
+### Rejected
+- **A list of the commands that change setup**: it goes stale whenever a step depends on something new
+- **Frontends computing setup themselves**: the menu would need setup's logic; it only shows the core's output
+
+## Decision: /usage can't be read only after it keeps failing
+Setup's `usage` step comes up when `/usage` answered without a usage report the app can read, or 3 tries in a row failed. One failed try (a slow start while a routine runs, its rate limit) used to make it a setup step that the next reading took away.
+
+### Rejected
+- **The last try decides**: setup flickers with every timeout
+
 ## Decision: macOS releases are for Apple silicon only
 A release builds the macOS app for Apple silicon only: building automator-ui for Intel too doubled the release build, for Macs nobody using the app has. The installer and `update` say so on an Intel Mac instead of installing an app that can't run.
 
