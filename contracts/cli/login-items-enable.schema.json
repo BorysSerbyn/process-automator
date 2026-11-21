@@ -15,7 +15,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Name is ui (automator-ui: the menu bar indicator, settings, …) or scheduler."
+            "description": "Name is ui (macOS's menu bar app, automator-ui; Linux's tray) or scheduler."
           },
           "label": {
             "type": "string"

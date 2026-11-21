@@ -8,7 +8,7 @@ import (
 
 // LoginItem is one thing that starts at login.
 type LoginItem struct {
-	// Name is ui (automator-ui: the menu bar indicator, settings, …) or scheduler.
+	// Name is ui (macOS's menu bar app, automator-ui; Linux's tray) or scheduler.
 	Name  string `json:"name"`
 	Label string `json:"label"`
 	// Installed is whether it's set up to start at login at all (the
@@ -33,7 +33,7 @@ func newLoginItemsCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "login-items",
-		Short: "Whether the app (automator-ui and the scheduler) starts at login",
+		Short: "Whether the app (its menu bar app or tray, and the scheduler) starts at login",
 		Long: "status shows it; enable and disable turn starting at login on or off. Neither starts nor stops " +
 			"what's running now.",
 	}
