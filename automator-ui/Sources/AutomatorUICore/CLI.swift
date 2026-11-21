@@ -4,6 +4,10 @@ import Foundation
 /// Every call blocks until the command exits: run them with `background`.
 public struct CLI: Sendable {
     public let executable: URL
+    /// How long a command may take before it's stopped and the call fails:
+    /// one that hangs (a keyring prompt nobody sees, a stuck server) must
+    /// not hold up what waits for it. Sign-in has no limit (it waits for me).
+    public var timeout: TimeInterval = 120
 
     public init(executable: URL) { self.executable = executable }
 
@@ -47,8 +51,9 @@ public struct CLI: Sendable {
         }
     }
 
-    /// Runs a command and returns what it printed.
-    public func exec(_ arguments: [String]) -> Output {
+    /// Runs a command and returns what it printed. `timeout` (default: the
+    /// CLI's) stops it, failing the call; `.infinity` waits as long as it runs.
+    public func exec(_ arguments: [String], timeout: TimeInterval? = nil) -> Output {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
@@ -66,11 +71,34 @@ public struct CLI: Sendable {
             errData.set(err.fileHandleForReading.readDataToEndOfFile())
             errRead.signal()
         }.start()
+        let limit = timeout ?? self.timeout
+        let timedOut = LockedFlag()
+        var deadline: DispatchWorkItem?
+        if limit.isFinite {
+            let pid = process.processIdentifier
+            let item = DispatchWorkItem {
+                timedOut.set()
+                kill(pid, SIGTERM)
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + limit, execute: item)
+            deadline = item
+        }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        deadline?.cancel()
         errRead.wait()
+        if timedOut.get() {
+            let what = ([AppInfo.command] + arguments).joined(separator: " ")
+            return Output(stdout: Data(), stderr: "\(what) didn't answer in \(Self.duration(limit))", ok: false)
+        }
         let stderr = String(decoding: errData.get(), as: UTF8.self)
         return Output(stdout: data, stderr: stderr, ok: process.terminationStatus == 0)
+    }
+
+    /// A limit in words: "2 minutes", "30 seconds".
+    static func duration(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds.rounded())
+        return s >= 60 && s % 60 == 0 ? "\(s / 60) minute\(s == 60 ? "" : "s")" : "\(s) second\(s == 1 ? "" : "s")"
     }
 
     /// Runs a command given --json and decodes what it printed.
@@ -86,8 +114,8 @@ public struct CLI: Sendable {
     }
 
     /// Runs a command for what it does; the core's message when it fails.
-    func perform(_ arguments: [String]) -> Failure? {
-        let output = exec(arguments)
+    func perform(_ arguments: [String], timeout: TimeInterval? = nil) -> Failure? {
+        let output = exec(arguments, timeout: timeout)
         return output.ok ? nil : output.failure
     }
 
@@ -227,7 +255,7 @@ public struct CLI: Sendable {
     /// --browser`: OAuth in the browser, keys on a local page there). It
     /// blocks until that's done.
     public func signIn(_ server: String) -> Failure? {
-        perform(["auth", "login", server, "--browser"])
+        perform(["auth", "login", server, "--browser"], timeout: .infinity)  // waits while I sign in
     }
 
     /// Records the Claude plan's usage from Claude Code's status line: wraps
@@ -301,6 +329,23 @@ public struct CLI: Sendable {
 }
 
 /// Data written by one thread and read by another.
+final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func set() {
+        lock.lock()
+        value = true
+        lock.unlock()
+    }
+
+    func get() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
 final class LockedData: @unchecked Sendable {
     private let lock = NSLock()
     private var data = Data()

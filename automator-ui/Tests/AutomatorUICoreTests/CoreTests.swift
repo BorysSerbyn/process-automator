@@ -65,6 +65,18 @@ import Testing
     #expect(!sh.ok && sh.failure.message == "no such routine")
 }
 
+@Test func cliStopsACommandThatHangs() {
+    var cli = CLI(executable: URL(filePath: "/bin/sleep"))
+    cli.timeout = 0.5
+    let started = Date()
+    let hung = cli.exec(["30"])
+    #expect(!hung.ok && hung.failure.message.hasSuffix(" 30 didn't answer in 1 second"))
+    #expect(Date().timeIntervalSince(started) < 10)
+    // .infinity waits for it; a quick one is unaffected by the limit.
+    #expect(cli.exec(["0.1"], timeout: .infinity).ok)
+    #expect(CLI.duration(120) == "2 minutes" && CLI.duration(30) == "30 seconds")
+}
+
 @Test func failureIsTheCoresErrorObject() {
     func output(_ stdout: String, _ stderr: String) -> CLI.Output {
         CLI.Output(stdout: Data(stdout.utf8), stderr: stderr, ok: false)
