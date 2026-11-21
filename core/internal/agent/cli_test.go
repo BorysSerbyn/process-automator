@@ -43,7 +43,7 @@ func (f *fakeCLI) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 	return exec.CommandContext(ctx, "/bin/sh", "-c", `printf '%s|' "$(pwd)"; ls -A; cat`), nil
 }
 
-func (f *fakeCLI) Result(stdout, _ []byte, runErr error) (*Output, error) {
+func (f *fakeCLI) Result(_ CLIRun, stdout, _ []byte, runErr error) (*Output, error) {
 	return &Output{Text: string(stdout)}, runErr
 }
 

@@ -24,7 +24,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
-// ClaudeCode is the Claude Code CLI (`claude -p`) as an CLI tool, so
+// ClaudeCode is the Claude Code CLI (`claude -p`) as a CLI tool, so
 // routines run on the user's Claude subscription.
 //
 // It's isolated from the user's own setup: no settings, hooks, plugins or
@@ -74,7 +74,7 @@ func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
-	system, err := withProjectInstructions(r.System, r.Folder)
+	system, err := withProjectInstructions(r.System, r.Folder, "CLAUDE.md")
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 		}
 		args = append(args, "--json-schema", string(schema))
 	}
-	if r.SessionID != "" {
+	if r.SaveSession && r.SessionID != "" {
 		args = append(args, "--session-id", r.SessionID)
 	} else {
 		args = append(args, "--no-session-persistence")
@@ -137,12 +137,19 @@ func claudeBuiltins(names []string, dryRun bool) ([]string, error) {
 	return out, nil
 }
 
-// withProjectInstructions adds the folder's CLAUDE.md, if any, to the system prompt.
-func withProjectInstructions(system, folder string) (string, error) {
+// CheckClaudeBuiltins says whether builtinTools are names the claude-code backend takes.
+func CheckClaudeBuiltins(names []string) error {
+	_, err := claudeBuiltins(names, false)
+	return err
+}
+
+// withProjectInstructions adds the folder's project instructions file (the
+// CLI's own: CLAUDE.md, AGENTS.md), if any, to the system prompt.
+func withProjectInstructions(system, folder, file string) (string, error) {
 	if folder == "" {
 		return system, nil
 	}
-	path := filepath.Join(folder, "CLAUDE.md")
+	path := filepath.Join(folder, file)
 	b, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return system, nil
@@ -154,7 +161,7 @@ func withProjectInstructions(system, folder string) (string, error) {
 }
 
 // Result implements CLITool: Claude Code's `--output-format json` result.
-func (b *ClaudeCode) Result(stdout, stderr []byte, runErr error) (*Output, error) {
+func (b *ClaudeCode) Result(_ CLIRun, stdout, stderr []byte, runErr error) (*Output, error) {
 	var res struct {
 		Result     string `json:"result"`
 		Structured any    `json:"structured_output"`
@@ -228,9 +235,9 @@ func (b *ClaudeCode) env() []string {
 // startMessage is the user turn for prompts written entirely as system text.
 const startMessage = "Run the routine now."
 
-// splitMessages turns a rendered prompt into Claude Code's system prompt and the
-// user prompt. Claude Code takes one user turn, so other roles aren't supported.
-// A system-only prompt gets a short user turn that starts it.
+// splitMessages turns a rendered prompt into an agent CLI's system prompt (or
+// instructions) and the user prompt. The CLIs take one user turn, so other
+// roles aren't supported. A system-only prompt gets a short user turn that starts it.
 func splitMessages(msgs []*ai.Message) (system, user string, err error) {
 	var sys, usr []string
 	for _, m := range msgs {
@@ -240,7 +247,7 @@ func splitMessages(msgs []*ai.Message) (system, user string, err error) {
 		case ai.RoleUser:
 			usr = append(usr, m.Text())
 		default:
-			return "", "", fmt.Errorf("the claude-code backend supports only system and user messages, not %q", m.Role)
+			return "", "", fmt.Errorf("agent CLI backends support only system and user messages, not %q", m.Role)
 		}
 	}
 	if len(usr) == 0 {

@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"019a7c3e-8a4e-7c53-af44-6d8e5eb07c93"}
+{"type":"turn.started"}
+{"type":"error","message":"Reconnecting... 1/5 (stream disconnected before completion: error sending request)"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"model rerouted: gpt-5.5 -> gpt-5.5-mini (HighRiskCyberActivity)"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Done: nothing new today."}}
+{"type":"turn.completed","usage":{"input_tokens":500,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0}}

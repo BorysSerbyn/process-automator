@@ -46,10 +46,16 @@ type Backend struct {
 	Gates map[string]chan struct{}
 	// Jobs, if set, gets each job the backend runs.
 	Jobs chan<- agent.Job
+	// SessionID, if set, makes it a backend that picks a kept session's ID
+	// itself (agent.SessionPicker), and reports this one.
+	SessionID string
 }
 
 // Name implements agent.Backend.
 func (*Backend) Name() string { return "fake" }
+
+// PicksSessionID implements agent.SessionPicker.
+func (b *Backend) PicksSessionID() bool { return b.SessionID != "" }
 
 // Run implements agent.Backend.
 func (b *Backend) Run(ctx context.Context, j agent.Job) (*agent.Output, error) {
@@ -70,7 +76,14 @@ func (b *Backend) Run(ctx context.Context, j agent.Job) (*agent.Output, error) {
 			}
 		}
 	}
-	return &agent.Output{Text: "ok"}, nil
+	out := &agent.Output{Text: "ok"}
+	if j.SaveSession {
+		out.SessionID = j.SessionID
+		if b.SessionID != "" {
+			out.SessionID = b.SessionID
+		}
+	}
+	return out, nil
 }
 
 // UseBackend makes the claude-code backend b for the test. Its plan usage

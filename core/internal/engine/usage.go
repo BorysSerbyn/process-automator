@@ -15,16 +15,19 @@ const PlanUsageMaxAge = 10 * time.Minute
 
 // Usage is the LLM usage limit now, as the backend in use means it: the
 // Claude plan's usage against llm.usage-limit (claude-code, read from Claude
-// Code when the last reading is older than PlanUsageMaxAge), or API spend
-// against the llm.budget.* budgets (api).
+// Code when the last reading is older than PlanUsageMaxAge), API spend
+// against the llm.budget.* budgets (api), or none (a backend with neither).
 func (a *App) Usage(ctx context.Context, now time.Time) (usage.Report, error) {
 	vals, err := a.Settings()
 	if err != nil {
 		return usage.Report{}, err
 	}
 	def, ok := Backends[vals.String("llm.backend")]
-	if !ok || def.PlanUsage == nil {
+	switch {
+	case !ok || def.Priced:
 		return apiBudget(a, vals, now)
+	case def.PlanUsage == nil:
+		return usage.Report{Kind: usage.KindNone, Windows: []usage.Window{}}, nil
 	}
 	plan, err := usage.Refresh(a.Layout.PlanUsage(), PlanUsageMaxAge, now, func() ([]usage.Limit, error) {
 		return def.PlanUsage(ctx, a)

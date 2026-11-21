@@ -26,7 +26,7 @@ type Readiness struct {
 	Untrusted string
 	TrustErr  error
 	// Problems keep it from running whether trusted or not: a missing
-	// folder, a server nothing provides and, once CheckTools has run, its
+	// folder, built-in tools its backend doesn't have, a server nothing provides and, once CheckTools has run, its
 	// tools or a sign-in.
 	Problems []Problem
 	// Tools are its allowlisted tools as a run gets them (CheckTools).
@@ -40,7 +40,8 @@ type Problem struct {
 }
 
 // Assess checks what can be checked without connecting to anything:
-// its settings resolve, its folder exists, every server it uses (directly or
+// its settings resolve, its folder exists, its built-in tools are the
+// backend's, every server it uses (directly or
 // through its plugins) is provided, and whether it's trusted.
 func (a *App) Assess(r routines.Routine) Readiness {
 	var rd Readiness
@@ -52,6 +53,15 @@ func (a *App) Assess(r routines.Routine) Readiness {
 			rd.Problems = append(rd.Problems, Problem{
 				Text: fmt.Sprintf("its folder %s doesn't exist", folder),
 				Fix:  fmt.Sprintf("create it, or `"+product.Command+" settings set routines.%s.folder <folder>`", r.Name),
+			})
+		}
+	}
+	// Each agent CLI names its own built-in tools.
+	if def, err := a.BackendDef(); err == nil && def.CheckBuiltinTools != nil && len(rd.Config.BuiltinTools) > 0 {
+		if err := def.CheckBuiltinTools(rd.Config.BuiltinTools); err != nil {
+			rd.Problems = append(rd.Problems, Problem{
+				Text: fmt.Sprintf("on the %s backend, %v", def.Name, err),
+				Fix:  fmt.Sprintf("`"+product.Command+" settings set routines.%s.builtinTools <tools>`, or another llm.backend", r.Name),
 			})
 		}
 	}

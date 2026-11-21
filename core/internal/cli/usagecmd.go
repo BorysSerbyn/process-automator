@@ -21,13 +21,13 @@ func newUsageCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "usage",
-		Short: "LLM usage against its limit: the Claude plan's usage (claude-code) or API spend (api)",
+		Short: "LLM usage against its limit: the Claude plan's usage (claude-code) or API spend (api); none on codex",
 		Long: "On a Claude plan (claude-code), the plan's 5-hour and weekly usage against llm.usage-limit, as " +
 			"Claude Code's /usage reports it (read again when the last reading is over 10 minutes old; no tokens " +
 			"used); the app never works out a cost for this backend. With an API key (api), what runs spent at " +
 			"list prices against the " +
 			"llm.budget.* budgets. Past the limit, scheduled runs don't start and are recorded as skipped; runs " +
-			"started by hand still run.",
+			"started by hand still run. On codex the app can't read Codex's usage, so there's no limit (kind none).",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -43,9 +43,12 @@ func newUsageCmd() *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), r)
 			}
 			w := cmd.OutOrStdout()
-			if r.Kind == "plan" {
+			switch r.Kind {
+			case "plan":
 				printPlan(w, r)
-			} else {
+			case usage.KindNone:
+				fmt.Fprintln(w, "No usage limit with this backend: the app can't read its usage, and its runs have no cost.")
+			default:
 				printBudget(w, r)
 			}
 			if r.Over {

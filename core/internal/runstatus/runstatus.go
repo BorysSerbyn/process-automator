@@ -119,8 +119,12 @@ type Run struct {
 	// ID is the run's history ID (as `runs show` takes).
 	ID string `json:"id,omitempty"`
 	// SessionID is the run's saved agent CLI session (routines with
-	// session: save), set when the run starts.
+	// session: save): set when the run starts if the app picks its ID, when
+	// it ends if the CLI does (Backend says which CLI resumes it).
 	SessionID string `json:"sessionId,omitempty"`
+	// Backend is the model backend running it, or that ran it (llm.backend's
+	// value), once it got as far as the model.
+	Backend string `json:"backend,omitempty"`
 	// Folder is the folder the run worked in (where its session resumes
 	// from), unless it was an empty temporary one.
 	Folder     string     `json:"folder,omitempty"`

@@ -61,8 +61,9 @@ func ptr(f float64) *float64 { return &f }
 // Registry lists every setting. Keys are dotted, lowercase, kebab-case segments.
 var Registry = []Setting{
 	{
-		Key: "llm.backend", Type: TypeEnum, Default: "api", Enum: []string{"api", "claude-code"},
-		Description: "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription.",
+		Key: "llm.backend", Type: TypeEnum, Default: "api", Enum: []string{"api", "claude-code", "codex"},
+		Description: "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription; " +
+			"codex = headless OpenAI Codex CLI on your Codex sign-in (ChatGPT plan or OpenAI API key).",
 	},
 	{
 		Key: "llm.usage-limit", Type: TypePercent, Default: 90.0, Min: ptr(0), Max: ptr(100), Unit: "%", Backend: "claude-code",
@@ -153,15 +154,16 @@ var RoutineFields = []RoutineField{
 	},
 	{
 		Name: "folder", Type: TypePath,
-		Description: "Folder the run works in (agent CLI backends), with its CLAUDE.md added to the instructions. " +
+		Description: "Folder the run works in (agent CLI backends), with its project instructions added to the routine's " +
+			"(CLAUDE.md on claude-code, AGENTS.md on codex). " +
 			"Without one, runs work in an empty temporary folder, or, with session save, in an empty folder of the " +
 			"routine's own that's kept.",
 	},
 	{
 		Name: "session", Type: TypeEnum, Default: "discard", Enum: []string{"discard", "save"},
-		Description: "save keeps the agent CLI session and records its ID and folder with the run, so it can be " +
-			"resumed from that folder (the routine's folder, or one of its own when it has none); discard leaves " +
-			"nothing behind.",
+		Description: "save keeps the agent CLI session and records its ID, folder and backend with the run, so it can " +
+			"be resumed from that folder with that backend's CLI (the routine's folder, or one of its own when it has " +
+			"none); discard leaves nothing behind.",
 	},
 	{
 		Name: "concurrency", Type: TypeEnum, Default: "queue", Enum: []string{"queue", "parallel"},
@@ -170,8 +172,9 @@ var RoutineFields = []RoutineField{
 	},
 	{
 		Name: "builtinTools", Type: TypeList, Default: []string{},
-		Description: "Agent CLI built-in tools the run may use (e.g. Read, Grep, Bash, Edit), allowed explicitly. " +
-			"Dry runs get only the read-only ones.",
+		Description: "Agent CLI built-in tools the run may use, allowed explicitly, in the backend's own names: " +
+			"claude-code's tools (e.g. Read, Grep, Bash, Edit); on codex shell, write (the sandbox may write in the " +
+			"run's folder), network (with write), web_search, view_image. Dry runs get only those that can't change anything.",
 	},
 }
 

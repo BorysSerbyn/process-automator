@@ -588,10 +588,12 @@ components:
         kind:
           description: |-
             Kind is "plan" (claude-code: the Claude plan's usage against
-            llm.usage-limit) or "budget" (api: spend against llm.budget.*).
+            llm.usage-limit), "budget" (api: spend against llm.budget.*) or "none"
+            (a backend with no usage limit in the app, e.g. codex: no windows, never over).
           enum:
             - plan
             - budget
+            - none
           type: string
         limitPercent:
           description: LimitPercent is llm.usage-limit (plan).
@@ -640,8 +642,8 @@ components:
           type: array
         costUsd:
           description: |-
-            CostUSD is the run's cost at API list prices: api runs only (claude-code
-            runs are on a Claude plan, and the app never works out a cost for them).
+            CostUSD is the run's cost at API list prices: api runs only (agent CLI
+            runs are on the CLI's own plan, and the app never works out a cost for them).
           type: number
         dryRun:
           type: boolean
@@ -728,8 +730,9 @@ components:
         agentModel:
           description: |-
             AgentModel and AgentEffort are the model and effort as the configured
-            backend's agent CLI takes them (e.g. claude --model/--effort), worked out
-            by the core so frontends never translate; empty means the CLI's default.
+            backend's agent CLI takes them (claude --model/--effort; codex --model and
+            model_reasoning_effort), worked out by the core so frontends never
+            translate; empty means the CLI's default.
           type: string
         builtinTools:
           description: BuiltinTools are the agent CLI built-in tools its runs may use.
@@ -813,8 +816,9 @@ components:
         agentModel:
           description: |-
             AgentModel and AgentEffort are the model and effort as the configured
-            backend's agent CLI takes them (e.g. claude --model/--effort), worked out
-            by the core so frontends never translate; empty means the CLI's default.
+            backend's agent CLI takes them (claude --model/--effort; codex --model and
+            model_reasoning_effort), worked out by the core so frontends never
+            translate; empty means the CLI's default.
           type: string
         builtinTools:
           description: BuiltinTools are the agent CLI built-in tools its runs may use.
@@ -1006,6 +1010,11 @@ components:
       additionalProperties: false
       description: Run is the most recent run of a routine.
       properties:
+        backend:
+          description: |-
+            Backend is the model backend running it, or that ran it (llm.backend's
+            value), once it got as far as the model.
+          type: string
         deadline:
           description: Deadline is when a running run is stopped (its routine's timeout).
           format: date-time
@@ -1045,7 +1054,8 @@ components:
         sessionId:
           description: |-
             SessionID is the run's saved agent CLI session (routines with
-            session: save), set when the run starts.
+            session: save): set when the run starts if the app picks its ID, when
+            it ends if the CLI does (Backend says which CLI resumes it).
           type: string
         startedAt:
           format: date-time
@@ -1266,7 +1276,7 @@ components:
       description: Summary is an entry without the agent result, for listings.
       properties:
         backend:
-          description: Backend is what ran it (claude-code, api), when it got as far as the model.
+          description: Backend is what ran it (an llm.backend value), when it got as far as the model.
           type: string
         costUsd:
           description: |-

@@ -41,7 +41,7 @@
       },
       "backend": {
         "type": "string",
-        "description": "Backend is what ran it (claude-code, api), when it got as far as the model."
+        "description": "Backend is what ran it (an llm.backend value), when it got as far as the model."
       },
       "costUsd": {
         "type": "number",

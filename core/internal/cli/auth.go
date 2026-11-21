@@ -28,7 +28,8 @@ func newAuthLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "login <server|anthropic|claude-code>",
 		Short: "Sign in to a server (browser for remote servers; paste credentials for local ones; " +
-			"`anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional)",
+			"`anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional; " +
+			"codex keeps its own sign-in: `codex login`)",
 		Long: "Signs in to a server. OAuth servers open the browser. Keys and tokens are pasted into the terminal " +
 			"(or read from stdin), or with --browser entered on a local page that stores them straight in the " +
 			"system's secret store (for frontends without a terminal).",
@@ -88,6 +89,8 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 		}
 		ui.Say("Saved the Claude Code token.")
 		return nil
+	case "codex":
+		return errors.New("the codex backend uses Codex's own sign-in: run `codex login` in a terminal")
 	}
 	// What I do outside the app first, before any credential is asked for
 	// (only while something's still missing).

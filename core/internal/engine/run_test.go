@@ -177,7 +177,7 @@ func TestSessionWithoutFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := a.Layout.SessionFolder("sweep")
-	if j := <-jobs; j.Folder != want || j.SessionID == "" {
+	if j := <-jobs; j.Folder != want || j.SessionID == "" || !j.SaveSession {
 		t.Errorf("ran in %q with session %q, want %s", j.Folder, j.SessionID, want)
 	}
 	if info, err := os.Stat(want); err != nil || !info.IsDir() {
@@ -192,5 +192,38 @@ func TestSessionWithoutFolder(t *testing.T) {
 	after, _ := a.RoutineConfig(r)
 	if !engine.SurfaceOf(r, before).Equal(engine.SurfaceOf(r, after)) {
 		t.Error("saving its session changed what it's trusted with")
+	}
+}
+
+// A backend whose CLI picks the session ID (as codex does) gets none from the
+// app; the ID it reports is recorded with the run, and so is the backend
+// that resumes it.
+func TestBackendPicksSessionID(t *testing.T) {
+	a, set := enginetest.Fixture(t, map[string]string{"sweep": "queue"}, nil)
+	r, _ := set.Find("sweep")
+	enginetest.Set(t, a.Layout.Config(), "routines.sweep.session", "save", r.Settings()...)
+	jobs := make(chan agent.Job, 2)
+	enginetest.UseBackend(t, &enginetest.Backend{Jobs: jobs, SessionID: "019a7c3e-thread"})
+	a = enginetest.Load(t, a.Layout.Config())
+	if err := <-enginetest.Start(t, a, set, "sweep"); err != nil {
+		t.Fatal(err)
+	}
+	if j := <-jobs; j.SessionID != "" || !j.SaveSession {
+		t.Errorf("job: save %v, session %q (the CLI picks it)", j.SaveSession, j.SessionID)
+	}
+	if run := enginetest.LastRun(a, "sweep"); run == nil || run.SessionID != "019a7c3e-thread" || run.Backend != "fake" {
+		t.Errorf("last run: %+v", run)
+	}
+	list, _ := history.List(a.Layout.History(), history.Filter{})
+	if len(list) != 1 || list[0].SessionID != "019a7c3e-thread" || list[0].Backend != "fake" {
+		t.Errorf("history: %+v", list)
+	}
+
+	// A dry run keeps no session, whoever would pick its ID.
+	if _, err := a.Execute(context.Background(), set, r, engine.RunOptions{DryRun: true}); err != nil {
+		t.Fatal(err)
+	}
+	if j := <-jobs; j.SaveSession || j.SessionID != "" {
+		t.Errorf("dry run job keeps a session: %+v", j)
 	}
 }

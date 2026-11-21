@@ -68,12 +68,11 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 	}
 	inputs := routines.Inputs(occ)
 	cfg, cfgErr := a.RoutineConfig(r)
-	// A saved session gets its ID now, so it's on record while it runs. Dry
-	// runs never keep one: it would sit among my own Claude Code sessions.
-	sessionID := ""
-	if cfgErr == nil && cfg.SaveSession && !o.DryRun {
-		sessionID = newSessionID()
-	}
+	// Dry runs never keep a session: it would sit among my own agent CLI
+	// sessions. A kept session's ID is on record while the run runs when the
+	// app picks it (see agent.SessionPicker), from its end when the CLI does.
+	saveSession := cfgErr == nil && cfg.SaveSession && !o.DryRun
+	sessionID, backendName := "", ""
 	if !o.DryRun && cfgErr == nil {
 		if err := a.InitTrust(); err != nil {
 			return nil, err
@@ -95,13 +94,13 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 	// finish records how it ended. Dry runs record nothing.
 	record := func(run runstatus.Run) {
 		if !o.DryRun {
-			run.SessionID, run.Folder, run.QueuedAt = sessionID, cfg.WorkFolder, queuedAt
+			run.SessionID, run.Folder, run.QueuedAt, run.Backend = sessionID, cfg.WorkFolder, queuedAt, backendName
 			writeStatus(a.Layout.RunStatus(), r.Name, forOccurrence(run, occ))
 		}
 	}
 	finish := func(run runstatus.Run, res *agent.Result) {
 		if !o.DryRun {
-			run.SessionID, run.Folder, run.QueuedAt = sessionID, cfg.WorkFolder, queuedAt
+			run.SessionID, run.Folder, run.QueuedAt, run.Backend = sessionID, cfg.WorkFolder, queuedAt, backendName
 			recordRun(a, r.Name, occ, inputs, run, res)
 		}
 	}
@@ -170,13 +169,17 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 			return nil, cfgErr
 		}
 		deadline := started.Add(cfg.Timeout)
-		record(runstatus.Run{StartedAt: started, Outcome: runstatus.OutcomeRunning, Deadline: &deadline})
-		runCtx, cancel := context.WithDeadline(ctx, deadline)
-		defer cancel()
 		backend, err := a.NewBackend()
 		if err != nil {
 			return nil, err
 		}
+		backendName = backend.Name()
+		if saveSession && !agent.PicksSessionID(backend) {
+			sessionID = newSessionID()
+		}
+		record(runstatus.Run{StartedAt: started, Outcome: runstatus.OutcomeRunning, Deadline: &deadline})
+		runCtx, cancel := context.WithDeadline(ctx, deadline)
+		defer cancel()
 		if cfg.WorkFolder != cfg.Folder { // the routine's own: made on its first run
 			if err := os.MkdirAll(cfg.WorkFolder, 0o700); err != nil {
 				return nil, err
@@ -189,8 +192,11 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 			Run:      RunOf(r, cfg.WorkFolder, history.RunID(r.Name, started)),
 			Partials: set.PromptPartials(mem),
 			Effort:   cfg.Effort,
-			Folder:   cfg.WorkFolder, SessionID: sessionID, BuiltinTools: cfg.BuiltinTools,
+			Folder:   cfg.WorkFolder, SaveSession: saveSession, SessionID: sessionID, BuiltinTools: cfg.BuiltinTools,
 		})
+		if res != nil && res.SessionID != "" {
+			sessionID = res.SessionID // the one the CLI kept
+		}
 		if err != nil && ctx.Err() == nil && errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 			err = fmt.Errorf("timed out after %s (routines.%s.timeout): %w", settings.DurationText(cfg.Timeout), r.Name, err)
 		}
