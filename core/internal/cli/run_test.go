@@ -81,17 +81,18 @@ func TestSetupSteps(t *testing.T) {
 		t.Errorf("setup --json changed a setting: %s", out)
 	}
 
-	// Trusted but still paused, and no routine runs on its schedule: resuming it is required.
+	// Trusted but paused, even with no routine on its schedule: paused is my
+	// choice, so resuming it is only offered, and setup is done.
 	if _, err := cli(t, cfg, "routines", "trust", "fresh", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	got, m = steps()
-	if s := m["turn-on fresh"]; s.Done || s.Optional || !strings.HasPrefix(s.Status, "Trusted, but paused") ||
+	if s := m["turn-on fresh"]; s.Done || !s.Optional || !strings.HasPrefix(s.Status, "Trusted, but paused") ||
 		!strings.HasPrefix(s.Ask, "Run fresh on its schedule") {
 		t.Errorf("trusted but paused, nothing scheduled: %+v", s)
 	}
-	if got.Done {
-		t.Error("done while no routine runs on its schedule")
+	if !got.Done {
+		t.Error("not done with only a paused routine")
 	}
 	// The same command finishes it: trusted already, it only resumes.
 	if out, err := cli(t, cfg, "routines", "trust", "fresh", "--yes", "--resume"); err != nil || !strings.Contains(out, "Resumed fresh") {
@@ -101,15 +102,15 @@ func TestSetupSteps(t *testing.T) {
 		t.Errorf("after turning it on: %+v", m["turn-on fresh"])
 	}
 
-	// Another one, trusted but paused while fresh runs on its schedule: optional (paused on purpose, maybe).
-	if _, err := cli(t, cfg, "routines", "create", "later", "--source", src); err != nil {
+	// Pausing it again doesn't make setup unfinished: run status stays without setup left.
+	if _, err := cli(t, cfg, "routines", "pause", "fresh"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cli(t, cfg, "routines", "trust", "later", "--yes"); err != nil {
-		t.Fatal(err)
+	if got, m = steps(); !m["turn-on fresh"].Optional || !got.Done {
+		t.Errorf("paused again: %+v (done %v)", m["turn-on fresh"], got.Done)
 	}
-	if got, m = steps(); !m["turn-on later"].Optional || m["turn-on later"].Done || !got.Done {
-		t.Errorf("a trusted paused routine next to a scheduled one: %+v", m["turn-on later"])
+	if s, _ := runstatus.Load(filepath.Join(filepath.Dir(cfg), "run-status.json")); len(s.SetupLeft) > 0 || s.Health == runstatus.HealthError {
+		t.Errorf("run status after pausing: %s %v", s.Health, s.SetupLeft)
 	}
 
 	// A routine whose settings don't resolve is a step to fix; setup still answers.

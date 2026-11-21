@@ -75,7 +75,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 | `mcp` | On `claude-code`: Claude Code has the app's MCP server at user scope (`mcp connect`); `auto` |
 | `routine` | A routine that can't run, and why |
 | `sign-in` | Each server the routines use that isn't signed in, with its `prepare` steps first |
-| `turn-on` | Each routine, done once it's trusted and not paused: `routines trust <name> --yes --resume` trusts it and resumes it in one step. Untrusted, it's required; trusted but paused, it's optional once another routine runs on its schedule |
+| `turn-on` | Each routine, done once it's trusted and not paused: `routines trust <name> --yes --resume` trusts it and resumes it in one step. Untrusted, it's required; trusted but paused, it's optional (pausing a routine never makes setup unfinished) |
 
 - **Setup is done** when every step that isn't optional is
 - **Setup left shows in run status**: the scheduler checks setup on every pass and records the steps still to do (`setupLeft`), and so does every command that succeeds except the read-only ones, plus `usage` and `setup --json`, so the menu and the setup window always agree; it's written only when what's left changed; unfinished setup makes health `error`, with a reason saying what's left

@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -369,8 +368,6 @@ func turnOnSteps(a *engine.App, loaded []loadedRoutine) ([]SetupStep, error) {
 			untrusted[r.Name] = why
 		}
 	}
-	runs := func(r loadedRoutine) bool { return r.cfg.Enabled && r.cfg.Schedule != "" && untrusted[r.Name] == "" }
-	anyRuns := slices.ContainsFunc(loaded, runs)
 	steps := make([]SetupStep, 0, len(loaded))
 	for _, r := range loaded {
 		why, words := untrusted[r.Name], schedule.Text(r.cfg.Schedule)
@@ -391,7 +388,9 @@ func turnOnSteps(a *engine.App, loaded []loadedRoutine) ([]SetupStep, error) {
 			st.Ask += "?"
 			st.Commands = append([]string{product.Command + " routines trust " + r.Name + " --check --json   # show me what it can reach before asking"}, st.Commands...)
 		case paused:
-			st.Optional = anyRuns
+			// Trusted, it was turned on once: paused is my choice, never
+			// unfinished setup (nor red), so resuming it is only offered.
+			st.Optional = true
 			st.Status = "Trusted, but paused: it doesn't run on its schedule (" + words + ")"
 			st.Ask = "Run " + r.Name + " on its schedule (" + words + ")?"
 		case r.cfg.Schedule != "":

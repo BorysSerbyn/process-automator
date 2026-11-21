@@ -225,6 +225,12 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 - **GitHub artifact attestations**: need `gh` on every machine, and GitHub Enterprise Cloud for a private repository
 - **Checksum only on macOS too**: the Developer ID is already required for Gatekeeper, and checking it is free
 
+## Decision: a paused routine is never unfinished setup
+Once a routine is trusted, it has been turned on once; pausing it after that is my choice. Its setup step only offers to resume it, and never counts as unfinished, so pausing or resuming a routine never turns the light red.
+
+### Rejected
+- **Required while no other routine runs on its schedule**: pausing my last running routine turned the light red, as if setup were broken
+
 ## Decision: setup's state is recorded by whatever computes it
 Run status's `setupLeft` (the menu's Finish Setup…) is refreshed after every command that isn't read-only, after `usage` and after `setup --json`, not only after a list of commands known to change setup. The list missed some (reading the plan's usage again), so the menu kept Finish Setup… while the setup window had nothing left. Working out what's left only reads files, and run status is written only when it changes.
 
