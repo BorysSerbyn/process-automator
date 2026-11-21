@@ -49,11 +49,17 @@ main() {
   local version="" from="" yes="" files_only=""
   while [ $# -gt 0 ]; do
     case $1 in
-      --version) version=$2; shift 2 ;;
-      --from) from=$2; shift 2 ;;
+      --version|--from)
+        [ $# -ge 2 ] || die "$1 needs a value (see --help)"
+        if [ "$1" = --version ]; then version=$2; else from=$2; fi
+        shift 2 ;;
       --yes) yes=1; shift ;;
       --files-only) files_only=1; shift ;;
-      -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+      -h|--help)
+        # Piped (curl ... | bash), there's no file to read the help from.
+        if [ -f "$0" ]; then sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'
+        else echo "Options: --version <vX.Y.Z>, --from <archive>, --yes, --files-only (the script's header says more)"; fi
+        exit 0 ;;
       *) die "unknown option $1 (see --help)" ;;
     esac
   done
