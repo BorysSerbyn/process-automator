@@ -66,7 +66,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | Setting | Default | |
 |---|---|---|
 | `llm.backend` | `api` | `api` or `claude-code` |
-| `llm.usage-limit` | `50` (%) | `claude-code` only |
+| `llm.usage-limit` | `90` (%) | `claude-code` only |
 | `llm.budget.window` | `5h` | `api` only |
 | `llm.budget.window-usd` | `2` | `api` only; 0 is no limit |
 | `llm.budget.weekly-usd` | `20` | `api` only; 0 is no limit |

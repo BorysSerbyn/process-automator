@@ -129,7 +129,7 @@
       "x-unit": "USD"
     },
     "llm.usage-limit": {
-      "default": 50,
+      "default": 90,
       "description": "Scheduled runs don't start while the Claude plan's 5-hour or weekly usage is above this share (they're recorded as skipped); runs started by hand still run. A run that hits the plan's limit stops scheduled runs until it resets.",
       "maximum": 100,
       "minimum": 0,

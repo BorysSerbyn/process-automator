@@ -86,7 +86,7 @@ func TestStorePreservesRestOfConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, _ = s.Get("llm.usage-limit")
-	if !st.IsDefault || st.Value != 50.0 {
+	if !st.IsDefault || st.Value != 90.0 {
 		t.Fatalf("after reset: %+v", st)
 	}
 	standup, _ := s.Get("routines.standup.enabled")

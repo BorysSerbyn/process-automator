@@ -15,7 +15,7 @@ procauto settings reset llm.backend         # back to the default
 | Setting | Default | |
 |---|---|---|
 | `llm.backend` | `api` | What runs routines: `claude-code` (your Claude plan) or `api` (an Anthropic API key). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
-| `llm.usage-limit` | `50%` | With `claude-code`: see [[#Usage limit]] |
+| `llm.usage-limit` | `90%` | With `claude-code`: see [[#Usage limit]] |
 | `llm.budget.window`, `llm.budget.window-usd`, `llm.budget.weekly-usd` | `5h`, `2`, `20` | With `api`: see [[#Usage limit]] |
 | `notifications.failures` | `true` | Notify you when a run fails, needs a sign-in, is missed or skipped |
 | `notifications.on-click` | `show-run` | What clicking a notification does: `show-run`, `open <file, folder or URL>`, `run <shell command>` or `none` |
