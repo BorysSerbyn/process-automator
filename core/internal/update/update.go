@@ -2,7 +2,9 @@
 // prebuilt artifact. Releases are GitHub releases tagged vMAJOR.MINOR.PATCH,
 // with an artifact per platform and a SHA256SUMS file; untagged builds are
 // "<next-patch>-dev+<sha>", so a dev build is newer than the release it was
-// made after and is left alone.
+// made after and is left alone. A public repository's releases are read from
+// GitHub's web pages and downloads, with no token; a private one's through
+// the GitHub API, signed in.
 //
 // Installing never runs anything from an artifact before it's verified: its
 // checksum, and on macOS its Developer ID signature and notarization (per-OS
@@ -23,6 +25,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,16 +44,30 @@ const SumsName = "SHA256SUMS"
 // templates (macOS: Contents/Resources; Linux: share/process-automator).
 const InstallerName = "install-app.sh"
 
-// maxDownload caps an artifact's size.
-const maxDownload = 512 << 20
+// maxDownload caps an artifact's size, and maxSums a SHA256SUMS file's.
+const (
+	maxDownload = 512 << 20
+	maxSums     = 1 << 20
+)
 
-// Source is where releases come from: a GitHub repository's releases.
+// Source is where releases come from: a GitHub repository's releases, read
+// one of two ways. Public ones (Web set) are read from GitHub's web pages and
+// downloads, as anyone without an account would: the latest release is the
+// one /releases/latest redirects to, and its SHA256SUMS lists its files.
+// That needs no token and has no API rate limit, and no token is ever sent.
+// Private ones are read through the GitHub API, with a token that can read
+// them.
 type Source struct {
-	// API is the GitHub API's base URL (https://api.github.com).
+	// Web is GitHub's web address (https://github.com) when the releases are
+	// public; empty when they're read through the API.
+	Web string
+	// API is the GitHub API's base URL (https://api.github.com), for private
+	// releases.
 	API string
 	// Repo is owner/name.
 	Repo string
-	// Token authorizes requests (a private repository needs one); empty for none.
+	// Token authorizes API requests (a private repository needs one); empty
+	// for none. It's never sent to Web.
 	Token string
 	// Accounts are the GitHub CLI accounts Token tried when none could read
 	// Repo (for saying so).
@@ -69,7 +86,8 @@ type Release struct {
 // Asset is one file of a release.
 type Asset struct {
 	Name string `json:"name"`
-	// URL is its API URL, which serves the file to an authorized request.
+	// URL serves the file: its API URL (to an authorized request) for a
+	// private repository, its download URL for a public one.
 	URL string `json:"url"`
 }
 
@@ -93,24 +111,46 @@ func (s Source) client() *http.Client {
 	return &http.Client{Timeout: 10 * time.Minute}
 }
 
+// public reports whether the releases are read from GitHub's web pages.
+func (s Source) public() bool { return s.Web != "" }
+
+// statusError is an answer other than 200 OK.
+type statusError struct {
+	url, status string
+	code        int
+}
+
+func (e *statusError) Error() string { return e.url + ": " + e.status }
+
+// notFound reports whether err is a 404 answer.
+func notFound(err error) bool {
+	var se *statusError
+	return errors.As(err, &se) && se.code == http.StatusNotFound
+}
+
 func (s Source) get(ctx context.Context, url, accept string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", accept)
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	if s.Token != "" {
-		// Go drops it when the download redirects to another host.
-		req.Header.Set("Authorization", "Bearer "+s.Token)
+	if !s.public() {
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+		if s.Token != "" {
+			// Go drops it when the download redirects to another host.
+			req.Header.Set("Authorization", "Bearer "+s.Token)
+		}
 	}
 	resp, err := s.client().Do(req)
 	if err != nil {
+		if s.public() {
+			return nil, fmt.Errorf("can't reach GitHub: %w", err)
+		}
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
-		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusUnauthorized {
+		if !s.public() && (resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusUnauthorized) {
 			if s.Token == "" {
 				return nil, fmt.Errorf("%s: %s (a private repository needs a GitHub sign-in: `gh auth login`, or set GH_TOKEN)", url, resp.Status)
 			}
@@ -120,16 +160,21 @@ func (s Source) get(ctx context.Context, url, accept string) (*http.Response, er
 			}
 			return nil, fmt.Errorf("%s: %s (does your GitHub account have access to %s?)", url, resp.Status, s.Repo)
 		}
-		return nil, fmt.Errorf("%s: %s", url, resp.Status)
+		return nil, &statusError{url: url, status: resp.Status, code: resp.StatusCode}
 	}
 	return resp, nil
 }
 
 // Latest returns the highest published release (no drafts or pre-releases),
-// or a zero Release when there are none.
+// or a zero Release when there are none. For public releases it's the one
+// GitHub marks as latest: the newest published, which is the highest, since
+// releases only move forward (an older one is never installed: see Newer).
 func (s Source) Latest(ctx context.Context) (Release, error) {
 	if s.Repo == "" {
 		return Release{}, errors.New("this build doesn't know where its releases are")
+	}
+	if s.public() {
+		return s.latestPublic(ctx)
 	}
 	resp, err := s.get(ctx, strings.TrimSuffix(s.API, "/")+"/repos/"+s.Repo+"/releases?per_page=50", "application/vnd.github+json")
 	if err != nil {
@@ -150,6 +195,77 @@ func (s Source) Latest(ctx context.Context) (Release, error) {
 		}
 	}
 	return latest, nil
+}
+
+// releasesURL is the public repository's releases page.
+func (s Source) releasesURL() string {
+	return strings.TrimSuffix(s.Web, "/") + "/" + s.Repo + "/releases"
+}
+
+// downloadURL serves a public release's file.
+func (s Source) downloadURL(tag, name string) string {
+	return s.releasesURL() + "/download/" + url.PathEscape(tag) + "/" + url.PathEscape(name)
+}
+
+// latestPublic finds the latest release from where GitHub's
+// /releases/latest page redirects (…/releases/tag/<tag>, or the releases page
+// when there are none), and its files from its SHA256SUMS.
+func (s Source) latestPublic(ctx context.Context) (Release, error) {
+	latestURL := s.releasesURL() + "/latest"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latestURL, nil)
+	if err != nil {
+		return Release{}, err
+	}
+	noFollow := *s.client()
+	noFollow.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := noFollow.Do(req)
+	if err != nil {
+		return Release{}, fmt.Errorf("can't reach GitHub: %w", err)
+	}
+	_ = resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return Release{}, fmt.Errorf("%s: %s (GitHub has no public repository %s)", latestURL, resp.Status, s.Repo)
+	case resp.StatusCode < 300 || resp.StatusCode > 399:
+		return Release{}, fmt.Errorf("%s: %s", latestURL, resp.Status)
+	}
+	loc, err := resp.Location()
+	if err != nil {
+		return Release{}, fmt.Errorf("%s: %s, to nowhere", latestURL, resp.Status)
+	}
+	i := strings.LastIndex(loc.Path, "/releases/tag/")
+	if i < 0 {
+		return Release{}, nil // GitHub sends the releases page: there are none
+	}
+	tag := loc.Path[i+len("/releases/tag/"):]
+	if !semver.IsValid(tag) || semver.Prerelease(tag) != "" {
+		return Release{}, fmt.Errorf("the latest release's tag %q isn't a release version (vX.Y.Z)", tag)
+	}
+	rel := Release{Tag: tag, Assets: []Asset{{Name: SumsName, URL: s.downloadURL(tag, SumsName)}}}
+	sums, err := s.get(ctx, rel.Assets[0].URL, "application/octet-stream")
+	if notFound(err) {
+		return Release{}, fmt.Errorf("release %s has no %s, so its files can't be verified", tag, SumsName)
+	}
+	if err != nil {
+		return Release{}, fmt.Errorf("release %s's %s: %w", tag, SumsName, err)
+	}
+	defer func() { _ = sums.Body.Close() }()
+	sc := bufio.NewScanner(io.LimitReader(sums.Body, maxSums))
+	for sc.Scan() {
+		fields := strings.Fields(sc.Text())
+		if len(fields) != 2 {
+			continue
+		}
+		name := strings.TrimPrefix(fields[1], "*")
+		if name == SumsName || name != filepath.Base(name) || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+			continue
+		}
+		rel.Assets = append(rel.Assets, Asset{Name: name, URL: s.downloadURL(tag, name)})
+	}
+	if err := sc.Err(); err != nil {
+		return Release{}, fmt.Errorf("release %s's %s: %w", tag, SumsName, err)
+	}
+	return rel, nil
 }
 
 // Newer reports whether the release tag is newer than the running version

@@ -26,8 +26,10 @@ SOURCE_DIR    ?= $(CURDIR)
 SIGN_FLAGS    ?=
 # CPU architecture of the Linux package (amd64, arm64)
 LINUX_ARCH    ?= amd64
-# The GitHub API releases are read from (empty: api.github.com)
+# The GitHub API private releases are read from (empty: api.github.com), and
+# the GitHub web address public ones are (empty: github.com)
 RELEASE_API   ?=
+RELEASE_WEB   ?=
 BUILD         ?= $(CURDIR)/build
 # The build's version, from git tags (scripts/version.sh)
 ifeq ($(origin VERSION),undefined)
@@ -54,7 +56,8 @@ UI_BIN     = $(shell cd automator-ui && swift build -c release --show-bin-path)/
 # The build's values, set in the automator package (the binary's names are its automator.App)
 AUTOMATOR := github.com/BorysSerbyn/process-automator/core/automator
 COMMON_LDFLAGS := -s -w -X "$(AUTOMATOR).version=$(VERSION)" -X "$(AUTOMATOR).sourceDir=$(SOURCE_DIR)" \
-             -X "$(AUTOMATOR).bundlePrefix=$(BUNDLE_PREFIX)" -X "$(AUTOMATOR).releaseAPI=$(RELEASE_API)"
+             -X "$(AUTOMATOR).bundlePrefix=$(BUNDLE_PREFIX)" -X "$(AUTOMATOR).releaseAPI=$(RELEASE_API)" \
+             -X "$(AUTOMATOR).releaseWeb=$(RELEASE_WEB)"
 LDFLAGS   := $(COMMON_LDFLAGS) -X "$(AUTOMATOR).templatesDir=../Resources/templates"
 LINUX_LDFLAGS := $(COMMON_LDFLAGS) -X "$(AUTOMATOR).templatesDir=../share/$(FOLDER)/templates"
 

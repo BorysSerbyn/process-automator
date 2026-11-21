@@ -14,12 +14,13 @@ import (
 // app is Process Automator. The Makefile and install.sh say the same; a test
 // keeps them in step.
 var app = automator.App{
-	Name:         "Process Automator",
-	Command:      "procauto",
-	Folder:       "process-automator",
-	BundlePrefix: "dev",
-	ReleaseRepo:  "BorysSerbyn/process-automator",
-	Plugins:      []pluginapi.Plugin{notify.Plugin()},
+	Name:           "Process Automator",
+	Command:        "procauto",
+	Folder:         "process-automator",
+	BundlePrefix:   "dev",
+	ReleaseRepo:    "BorysSerbyn/process-automator",
+	PublicReleases: true,
+	Plugins:        []pluginapi.Plugin{notify.Plugin()},
 }
 
 func main() {

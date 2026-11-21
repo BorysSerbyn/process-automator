@@ -22,8 +22,8 @@ import (
 )
 
 // App is what makes a build one app. The Makefile's APP_NAME, CLI, FOLDER and
-// BUNDLE_PREFIX, and install.sh's NAME, COMMAND, FOLDER, REPO and TEAM_ID,
-// say the same for packaging and installing: keep them in step.
+// BUNDLE_PREFIX, and install.sh's NAME, COMMAND, FOLDER, REPO, TEAM_ID and
+// PUBLIC, say the same for packaging and installing: keep them in step.
 type App struct {
 	// Name is what people see: the app, its windows and its messages
 	// ("Process Automator").
@@ -40,9 +40,15 @@ type App struct {
 	// service are named after it. A build can override it (BUNDLE_PREFIX).
 	BundlePrefix string
 	// ReleaseRepo is the GitHub repository (owner/name) whose releases
-	// install.sh and `update` install. It may be private: they then read it
-	// with a GitHub sign-in.
+	// install.sh and `update` install.
 	ReleaseRepo string
+	// PublicReleases says ReleaseRepo's releases are public: install.sh and
+	// `update` read them from GitHub's web pages and downloads, with no
+	// sign-in, never running the GitHub CLI or sending a token. Otherwise
+	// (false) they're private, read through the GitHub API with a GitHub
+	// sign-in (GH_TOKEN or GITHUB_TOKEN, else an account the GitHub CLI is
+	// signed in to that can read them). install.sh's PUBLIC says the same.
+	PublicReleases bool
 	// TeamID is the Apple Developer team that signs releases; when set,
 	// installs and updates on macOS accept only its notarized signature.
 	TeamID string
@@ -58,7 +64,8 @@ var (
 	version      string // the build's version (scripts/version.sh)
 	sourceDir    string // the source checkout the build came from (SOURCE_DIR)
 	templatesDir string // the templates, relative to the executable
-	releaseAPI   string // the GitHub API releases are read from (RELEASE_API)
+	releaseAPI   string // the GitHub API private releases are read from (RELEASE_API)
+	releaseWeb   string // the GitHub web address public releases are read from (RELEASE_WEB)
 	bundlePrefix string // overrides App.BundlePrefix (BUNDLE_PREFIX)
 )
 
@@ -78,10 +85,10 @@ func Main(app App) error {
 func (a App) apply() {
 	product.Name, product.Command, product.Folder = a.Name, a.Command, a.Folder
 	product.BundlePrefix = a.BundlePrefix
-	product.ReleaseRepo, product.TeamID = a.ReleaseRepo, a.TeamID
+	product.ReleaseRepo, product.PublicReleases, product.TeamID = a.ReleaseRepo, a.PublicReleases, a.TeamID
 	for dst, v := range map[*string]string{
 		&product.BundlePrefix: bundlePrefix, &product.Version: version, &product.SourceDir: sourceDir,
-		&product.TemplatesDir: templatesDir, &product.ReleaseAPI: releaseAPI,
+		&product.TemplatesDir: templatesDir, &product.ReleaseAPI: releaseAPI, &product.ReleaseWeb: releaseWeb,
 	} {
 		if v != "" {
 			*dst = v

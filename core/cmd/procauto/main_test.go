@@ -18,6 +18,7 @@ func TestIdentityInStep(t *testing.T) {
 		{"install.sh FOLDER", install["FOLDER"], app.Folder},
 		{"install.sh REPO", install["REPO"], app.ReleaseRepo},
 		{"install.sh TEAM_ID", install["TEAM_ID"], app.TeamID},
+		{"install.sh PUBLIC", install["PUBLIC"], map[bool]string{true: "1"}[app.PublicReleases]},
 		{"Makefile BUNDLE_PREFIX", mk["BUNDLE_PREFIX"], app.BundlePrefix},
 	} {
 		if c.got != c.want {

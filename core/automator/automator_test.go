@@ -35,15 +35,18 @@ func TestValidate(t *testing.T) {
 // goes over them.
 func TestApply(t *testing.T) {
 	saved := []*string{&product.Name, &product.Command, &product.Folder, &product.BundlePrefix, &product.ReleaseRepo,
-		&product.TeamID, &product.Version, &product.SourceDir, &product.TemplatesDir, &product.ReleaseAPI, &bundlePrefix, &version}
+		&product.TeamID, &product.Version, &product.SourceDir, &product.TemplatesDir, &product.ReleaseAPI, &product.ReleaseWeb,
+		&bundlePrefix, &version, &releaseWeb}
 	before := make([]string, len(saved))
 	for i, p := range saved {
 		before[i] = *p
 	}
+	wasPublic := product.PublicReleases
 	t.Cleanup(func() {
 		for i, p := range saved {
 			*p = before[i]
 		}
+		product.PublicReleases = wasPublic
 	})
 
 	bundlePrefix, version = "ci.test", "1.2.3"
@@ -53,6 +56,16 @@ func TestApply(t *testing.T) {
 	want := "Acme Automator,acme-auto,acme-auto,ci.test.acme-auto,ci.test.acme-auto,acme/automator,1.2.3"
 	if got != want {
 		t.Fatalf("got %s, want %s", got, want)
+	}
+	// Releases are private unless the app says they're public.
+	if product.PublicReleases {
+		t.Fatal("an app's releases are public by default")
+	}
+	public := good
+	public.PublicReleases, releaseWeb = true, "http://releases.test"
+	public.apply()
+	if !product.PublicReleases || product.ReleaseWeb != "http://releases.test" {
+		t.Fatalf("public app: %v %s", product.PublicReleases, product.ReleaseWeb)
 	}
 }
 

@@ -42,10 +42,15 @@ var SourceDir = ""
 var TemplatesDir = ""
 
 // ReleaseRepo is the GitHub repository (owner/name) whose releases `update`
-// installs, and ReleaseAPI the GitHub API it asks.
+// installs. PublicReleases says they're public: they're read from GitHub's
+// web pages and downloads (ReleaseWeb), with no token and never through the
+// GitHub CLI. Otherwise they're read through the GitHub API (ReleaseAPI),
+// signed in.
 var (
-	ReleaseRepo = "BorysSerbyn/process-automator"
-	ReleaseAPI  = "https://api.github.com"
+	ReleaseRepo    = "BorysSerbyn/process-automator"
+	PublicReleases = true
+	ReleaseWeb     = "https://github.com"
+	ReleaseAPI     = "https://api.github.com"
 )
 
 // TeamID is the Apple Developer team that signs releases. When set, macOS

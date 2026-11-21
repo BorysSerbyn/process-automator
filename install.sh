@@ -3,8 +3,11 @@
 # then offers first-run setup (templates, model backend, sign-ins).
 #
 #   ./install.sh                         from a checkout
+#   curl -fsSL https://github.com/<REPO>/releases/latest/download/install.sh | bash
+#                                        public releases (PUBLIC=1)
 #   gh api repos/<REPO>/contents/install.sh \
 #     -H 'Accept: application/vnd.github.raw' | bash
+#                                        private releases
 #
 # Options:
 #   --version <vX.Y.Z>   install that release instead of the latest
@@ -13,10 +16,10 @@
 #   --yes                ask nothing (no terminal needed); setup is left to
 #                        `<COMMAND> setup` (or `setup --json` for an LLM)
 #   --files-only         only files: no login items started, no keychain (tests)
-# Environment: INSTALL_DIR, BIN_DIR (see scripts/install-app.sh); GH_TOKEN or
-# GITHUB_TOKEN to read a private repository's releases; without them, the
-# first account the GitHub CLI is signed in to that can read it (the active
-# one first, then the others).
+# Environment: INSTALL_DIR, BIN_DIR (see scripts/install-app.sh). Public
+# releases are downloaded with curl, signed in to nothing. Private ones are
+# read with GH_TOKEN or GITHUB_TOKEN, else the first account the GitHub CLI is
+# signed in to that can read them (the active one first, then the others).
 #
 # It downloads the artifact for this platform and its release's SHA256SUMS,
 # checks the checksum and, on macOS, the app's notarized Developer ID
@@ -25,15 +28,21 @@
 set -euo pipefail
 
 # The app: where its releases come from, the Apple team that signs the macOS
-# app, its name, its CLI's name and its folder name (its artifacts are
-# <FOLDER>-<version>-…). The binary says the same (automator.App) and the
-# build reads the names from here (Makefile).
+# app, its name, its CLI's name, its folder name (its artifacts are
+# <FOLDER>-<version>-…) and whether its releases are public (1) or private
+# (empty). The binary says the same (automator.App) and the build reads the
+# names from here (Makefile).
 REPO=BorysSerbyn/process-automator
 TEAM_ID=
 NAME="Process Automator"
 COMMAND=procauto
 FOLDER=process-automator
+PUBLIC=1
 
+# Public releases are read from GitHub's web pages (WEB) with curl, ignoring
+# any .curlrc (-q) so nothing is sent but the request; private ones
+# through its API.
+WEB=https://github.com
 API=https://api.github.com
 
 main() {
@@ -62,7 +71,7 @@ main() {
   esac
   [ "$os/$arch" != macos/amd64 ] || die "$NAME needs a Mac with Apple silicon: there's no release for Intel Macs"
   prerequisites "$os" "$from"
-  [ -n "$from" ] || pick_token
+  [ -n "$from" ] || [ -n "$PUBLIC" ] || pick_token
 
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
@@ -130,7 +139,10 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 prerequisites() {
   local os=$1 from=$2 missing=()
-  [ -n "$from" ] || have curl || have gh || missing+=("curl (or the GitHub CLI, gh)")
+  if [ -n "$from" ]; then :
+  elif [ -n "$PUBLIC" ]; then have curl || missing+=(curl)
+  else have curl || have gh || missing+=("curl (or the GitHub CLI, gh)")
+  fi
   if [ "$os" = macos ]; then
     have ditto || missing+=(ditto)
     have codesign || missing+=(codesign)
@@ -181,8 +193,24 @@ api() {
     die "can't read $REPO's releases: a private repository needs a GitHub sign-in (\`gh auth login\`, or GH_TOKEN)"
 }
 
+# public_latest_tag: the tag GitHub's latest-release page redirects to
+# (…/releases/tag/<tag>; with no releases, it sends the releases page).
+public_latest_tag() {
+  local location
+  location=$(curl -q -sS -o /dev/null -w '%{http_code} %{redirect_url}' "$WEB/$REPO/releases/latest") ||
+    die "can't reach GitHub to find $NAME's latest release"
+  case $location in
+    3??\ */releases/tag/*) echo "${location##*/releases/tag/}" ;;
+    3??\ *) ;;
+    404\ *) die "can't find $NAME's releases: GitHub has no public repository $REPO" ;;
+    *) die "can't read $NAME's latest release from GitHub (HTTP ${location%% *})" ;;
+  esac
+}
+
 latest_tag() {
-  if use_gh; then
+  if [ -n "$PUBLIC" ]; then
+    public_latest_tag
+  elif use_gh; then
     gh release view --repo "$REPO" --json tagName --jq .tagName
   else
     api releases/latest | tr ',' '\n' | sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1
@@ -192,6 +220,18 @@ latest_tag() {
 # download <tag> <file>: a release file into $tmp.
 download() {
   local tag=$1 name=$2
+  if [ -n "$PUBLIC" ]; then
+    # The download URL redirects to where GitHub stores the file.
+    local code
+    code=$(curl -q -sSL -o "$tmp/$name" -w '%{http_code}' "$WEB/$REPO/releases/download/$tag/$name") ||
+      die "can't reach GitHub to download $name"
+    case $code in
+      200) ;;
+      404) no_release "release $tag has no $name" ;;
+      *) die "can't download $name from GitHub (HTTP $code)" ;;
+    esac
+    return
+  fi
   if use_gh; then
     gh release download "$tag" --repo "$REPO" --pattern "$name" --dir "$tmp" ||
       no_release "release $tag has no $name"

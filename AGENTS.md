@@ -19,22 +19,24 @@ Your job is to run the commands and to ask the person, never to choose for them.
 
 ## 1. Check the prerequisites
 - **OS**: macOS 14 or later on Apple silicon (not Intel Macs), or Linux (x86-64 or ARM64). Nothing else is supported; stop and say so.
-- **GitHub access**: the repository is private. `gh auth status` must show a GitHub account that can read it (any of the accounts signed in: install.sh and `procauto update` find the one that can, so the active account needn't be); otherwise ask them to run `gh auth login` (or set `GH_TOKEN`). Check with `GH_TOKEN=$(gh auth token -u <account>) gh repo view BorysSerbyn/process-automator` for each account; don't switch their active account.
+- **curl**: installing downloads the release with it. No GitHub account or GitHub CLI is needed: the releases are public.
 - **Linux only**: `secret-tool` (package `libsecret-tools`) for keeping sign-ins, and a systemd user session for starting the scheduler at login. Install the package only if they agree.
 - **Already installed?** If `procauto version --json` works, the app is there: offer `procauto update` instead, and go on to step 3.
 
 Don't install the model backend's tools or the apps behind MCP servers (Claude Code, the Codex CLI, local servers) yourself; setup says when one is needed, and you ask.
 
 ## 2. Install
-From a checkout of the repository (clone it first if you haven't):
+Without a checkout:
 
 ```sh
-./install.sh --yes
+curl -fsSL https://github.com/BorysSerbyn/process-automator/releases/latest/download/install.sh | bash -s -- --yes
 ```
+
+or from a checkout of the repository, `./install.sh --yes`.
 
 It downloads the latest release for this machine, checks its checksum (and on macOS its signature), installs it (macOS: `~/Applications/Process Automator.app`; Linux: `~/.local/lib/process-automator`), links `procauto` into `~/.local/bin`, and starts the scheduler (and on macOS the menu bar app) now and at login. If a check fails, show them the error; don't work around it.
 
-**No published release for this machine** (install.sh says so): build it from the checkout instead. On macOS:
+**No published release for this machine** (install.sh says so): build it from a checkout instead (clone `https://github.com/BorysSerbyn/process-automator` first if there isn't one). On macOS:
 1. Prerequisites, each with their go-ahead: the Xcode command line tools (`xcode-select --install`: *they* confirm the dialog), Homebrew, then `make deps` (Go and the other build tools).
 2. A code-signing identity named `Process Automator Dev`, which keeps macOS permission grants across rebuilds. *They* create it in Keychain Access, following `docs/Guides/Getting started.md` → "Building it from the checkout"; check with `security find-identity -v -p codesigning`.
 3. `make install`. It builds the core and the app, installs them as above, and remembers this checkout: `procauto update` builds newer tagged releases from it until releases are published.

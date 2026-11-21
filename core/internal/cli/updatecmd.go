@@ -175,8 +175,7 @@ func newUpdateCmd() *cobra.Command {
 			"installs it in place of this app, restarting what's running. When the releases can be read but none " +
 			"has a download for this machine, it builds the newest release tag from the source checkout instead " +
 			"(update.source-dir); when they can't be read, it says why and stops. A dev build newer than the latest " +
-			"release is left alone. A private repository needs a GitHub sign-in: GH_TOKEN, or an account `gh` is " +
-			"signed in to that can read it (the active one first, then the others). An app installed by a Homebrew " +
+			"release is left alone. " + releasesHelp() + " An app installed by a Homebrew " +
 			"formula is updated with brew. `update progress` says what an update installing is doing.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -358,16 +357,29 @@ func sourceDir(a *engine.App) (string, error) {
 	return product.SourceDir, nil
 }
 
-// findReleaseToken finds a GitHub token that can read the releases (tests
-// replace it: they never run the real gh).
+// findReleaseToken finds a GitHub token that can read private releases
+// (tests replace it: they never run the real gh).
 var findReleaseToken = update.Token
 
-// releaseSource is where this build's releases are, signed in to GitHub
-// with an account that can read them when there's one (a private
-// repository needs it).
+// releaseSource is where this build's releases are. Public ones are read
+// from GitHub's web pages with no token: no sign-in is looked for. Private
+// ones are read signed in to GitHub with an account that can read them,
+// when there's one.
 func releaseSource(ctx context.Context) update.Source {
+	if product.PublicReleases {
+		return update.Source{Web: product.ReleaseWeb, Repo: product.ReleaseRepo}
+	}
 	token, accounts := findReleaseToken(ctx, product.ReleaseAPI, product.ReleaseRepo)
 	return update.Source{API: product.ReleaseAPI, Repo: product.ReleaseRepo, Token: token, Accounts: accounts}
+}
+
+// releasesHelp says how update reads the releases, for its help.
+func releasesHelp() string {
+	if product.PublicReleases {
+		return "The releases are public: they're read from GitHub with no sign-in."
+	}
+	return "The releases are private, so they're read with a GitHub sign-in: GH_TOKEN, or an account `gh` is " +
+		"signed in to that can read them (the active one first, then the others)."
 }
 
 // startDetachedUpdate runs this update again in the background, detached, so

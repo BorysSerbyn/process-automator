@@ -314,8 +314,18 @@ Without an Apple Developer account, releases are signed with a self-signed certi
 - **Ad-hoc signing**: a new identity every release, so every grant and Keychain item would be asked for again after each update
 - **Waiting for a Developer ID**: no release anyone else can install until then
 
-## Decision: releases are read with the GitHub CLI's sign-in
-The repository is private, so reading releases needs a GitHub token. `update` and `install.sh` use `GH_TOKEN`/`GITHUB_TOKEN` when set, else the GitHub CLI's sign-in, and no token otherwise. Anyone invited already signs in to GitHub to get the code or the tap, so there's no new credential, and the app never stores one. `gh` can be signed in to several accounts, and the active one is whatever was last switched to for other work, so they try each account until one can read the repository rather than only the active one.
+## Decision: public releases are read from GitHub's web pages, with no sign-in
+Process Automator's releases are public, so installing and updating need no GitHub account and no `gh`. `install.sh` (with curl) and `update` read them as a browser would: the latest release is the tag `https://github.com/<repo>/releases/latest` redirects to, its files are downloaded from `https://github.com/<repo>/releases/download/<tag>/<name>`, and its `SHA256SUMS` is its list of files. No token is sent, there's no API rate limit, and the checksum and signature checks are those of private releases. Whether an app's releases are public is its own choice (`PublicReleases`, `PUBLIC` in `install.sh`), and private is the default, so an app built on the engine that keeps its releases private reads them signed in, as below. Every release carries its app's `install.sh`, so a public app installs with one line from its latest release.
+
+### Rejected
+- **The GitHub API without a token**: 60 requests an hour per IP address, shared by everyone behind it, and a refusal reads like a missing sign-in
+- **A separate public repository for releases**: a second repository to publish to and keep in step, for files the app's own repository can serve
+- **Other hosting** (object storage, a CDN, a website): an account and a bill to keep, and one more place a release could be swapped, for files GitHub already serves
+- **Trying the public pages first, then signing in**: every install of a private app would start with a failing request, and a public app's errors would still talk about signing in
+- **Public by default for every app**: an app with private releases would stop updating as soon as it moved to an engine version with that default
+
+## Decision: private releases are read with the GitHub CLI's sign-in
+An app whose repository is private needs a GitHub token to read its releases. `update` and `install.sh` use `GH_TOKEN`/`GITHUB_TOKEN` when set, else the GitHub CLI's sign-in, and no token otherwise. Anyone invited already signs in to GitHub to get the code or the tap, so there's no new credential, and the app never stores one. `gh` can be signed in to several accounts, and the active one is whatever was last switched to for other work, so they try each account until one can read the repository rather than only the active one.
 
 ### Rejected
 - **A `github` sign-in in the secrets store**: one more secret to hold, ask for and refresh, for access people already have through `gh`

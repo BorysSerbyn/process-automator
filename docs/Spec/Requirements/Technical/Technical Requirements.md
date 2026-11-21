@@ -10,10 +10,10 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `Command` | The CLI's name, and the commands messages suggest | `procauto` |
 | `Folder` | The config and data folder's name, the logs folder, the release artifacts and the Linux install | `process-automator` |
 | `BundlePrefix` | The prefix of the bundle ID (`<prefix>.<Command>`), which names the login items and the secrets service | `dev` |
-| `ReleaseRepo`, `TeamID` | Where `update` gets releases, and the team that must sign them | `REPO`, `TEAM_ID` in `install.sh` |
+| `ReleaseRepo`, `PublicReleases`, `TeamID` | Where `update` gets releases, whether they're public (read with no sign-in) or private (the zero value: read signed in to GitHub), and the team that must sign them | `REPO`, `PUBLIC`, `TEAM_ID` in `install.sh` |
 | `Plugins` | In-process plugins compiled in | none |
 
-- **Build values are set at link time** in `core/automator` by the Makefile: the version, the source checkout (`SOURCE_DIR`), where the templates are packaged, the release API, and `BUNDLE_PREFIX` over the app's prefix
+- **Build values are set at link time** in `core/automator` by the Makefile: the version, the source checkout (`SOURCE_DIR`), where the templates are packaged, the release API and web address, and `BUNDLE_PREFIX` over the app's prefix
 - **Another app** is a Go module that requires this one and has its own main package, plugins and templates; it builds with this repository's Makefile and scripts at the same version (see [[Spec/Requirements/Technical/Distribution|Technical: Distribution]])
 - **Blank-slate engine**: the engine knows no specific service and adds no plugin; routines use the plugins the app compiles in (its `automator.App.Plugins`; procauto's is `notify`, from `core/plugins`) and the MCP servers added in config. Nothing in `core/internal/` imports a plugin; the engine runs only the list it's given
 - **OS-neutral core**: OS calls live in per-OS files (`name_darwin.go`, `name_unix.go`, `name_other.go`, or a `//go:build` line), OS-bound integrations are plugins, and delivering the app's own state to the OS (its notifications, the menu bar) is the frontends' job. The one exception is the notify plugin, which shows routines' notifications itself (see [[#Plugins in `core/plugins`]]). `internal/osboundary`'s test (no `runtime.GOOS`, `syscall`, OS tools or OS paths in shared files) and `make ci`'s Linux and Windows cross-compiles enforce it

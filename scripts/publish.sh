@@ -3,16 +3,18 @@
 # would: builds every platform's artifact with the repository's own make
 # (Linux amd64 and arm64, and the signed macOS app), runs the install test on
 # the macOS one, writes SHA256SUMS, pushes the tag and creates its GitHub
-# release with the artifacts. Nothing is pushed or published unless every step
-# before passed.
+# release with the artifacts and the app's install.sh (so a public app installs
+# with curl -fsSL https://github.com/<repo>/releases/latest/download/install.sh
+# | bash). Nothing is pushed or published unless every step before passed.
 # Usage: run from the app's repository (process-automator's, or an app's built
 # on it: its Makefile has package and package-linux taking SOURCE_DIR,
 # SIGN_IDENTITY, LINUX_ARCH and DIST), at a commit tagged by make release.
 #   SIGN_IDENTITY   an identity in your keychains, by name or hash, or
 #   SIGN_P12        a .p12 (SIGN_P12_PASSWORD), imported into a throwaway
 #                   keychain for the build only
-#   INSTALL_SH      the installer the install test uses (default: the one
-#                   next to these scripts)
+#   INSTALL_SH      the app's installer: the install test uses it and the
+#                   release carries it (default: the one next to these
+#                   scripts)
 #   GH_TOKEN        else the first account gh is signed in to that can push to
 #                   the repository
 #   DRY_RUN=1       builds and tests everything, then stops before pushing
@@ -26,6 +28,11 @@ tag=$(git describe --tags --exact-match --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD 2>/
 version=${tag#v}
 url=$(git remote get-url origin)
 repo=$(sed -E 's#^(https://[^/]+/|[^:]+:)##; s#\.git$##' <<<"$url")
+installer=${INSTALL_SH:-$scripts/../install.sh}
+[[ -f $installer ]] || die "no installer at $installer"
+lower() { tr '[:upper:]' '[:lower:]'; }
+[[ $(sed -n 's/^REPO=//p' "$installer" | tr -d '"' | lower) == "$(lower <<<"$repo")" ]] ||
+  die "$installer installs another repository's releases (its REPO isn't $repo): set INSTALL_SH to this app's"
 
 # A GitHub token that can push to the repository.
 if [[ -z ${GH_TOKEN:-} ]]; then
@@ -71,7 +78,8 @@ make package SOURCE_DIR= SIGN_IDENTITY="$identity" DIST="$out"
 
 zip=$(find "$out" -name "*-$version-macos.zip")
 [[ -n $zip ]] || die "no $version macOS artifact in $out (is the build's version $version?)"
-"$scripts/test-install.sh" "$zip"
+INSTALL_SH=$installer "$scripts/test-install.sh" "$zip"
+cp "$installer" "$out/install.sh"
 (cd "$out" && shasum -a 256 -- * > SHA256SUMS && cat SHA256SUMS)
 
 if [[ -n ${DRY_RUN:-} ]]; then

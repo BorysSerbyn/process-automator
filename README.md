@@ -9,10 +9,10 @@ Scheduled LLM routines for macOS and Linux. Describe a task in a prompt file, ch
 ## Install
 
 ```sh
-./install.sh
+curl -fsSL https://github.com/BorysSerbyn/process-automator/releases/latest/download/install.sh | bash
 ```
 
-Or ask Claude Code (or another coding agent) to "find the process-automator repo and install it": it follows [`AGENTS.md`](AGENTS.md) and walks you through setup. See [Getting started](docs/Guides/Getting%20started.md) for requirements, building from source, updating and uninstalling.
+or `./install.sh` from a checkout. No GitHub account needed. Or ask Claude Code (or another coding agent) to "find the process-automator repo and install it": it follows [`AGENTS.md`](AGENTS.md) and walks you through setup. See [Getting started](docs/Guides/Getting%20started.md) for requirements, building from source, updating and uninstalling.
 
 ## Documentation
 

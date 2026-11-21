@@ -2,13 +2,16 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -83,9 +86,7 @@ func TestUpdateFallsBackToSource(t *testing.T) {
 	}
 	releases := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("[]")) }))
 	defer releases.Close()
-	origAPI, origRepo := product.ReleaseAPI, product.ReleaseRepo
-	product.ReleaseAPI, product.ReleaseRepo = releases.URL, "pt/none"
-	t.Cleanup(func() { product.ReleaseAPI, product.ReleaseRepo = origAPI, origRepo })
+	privateReleases(t, releases.URL, "pt/none")
 	t.Setenv("GH_TOKEN", "pt-token")
 
 	git := func(dir string, args ...string) {
@@ -119,9 +120,7 @@ func TestUpdateFallsBackToSource(t *testing.T) {
 func TestUpdateStopsWhenReleasesCantBeRead(t *testing.T) {
 	releases := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
 	defer releases.Close()
-	origAPI, origRepo := product.ReleaseAPI, product.ReleaseRepo
-	product.ReleaseAPI, product.ReleaseRepo = releases.URL, "pt/private"
-	t.Cleanup(func() { product.ReleaseAPI, product.ReleaseRepo = origAPI, origRepo })
+	privateReleases(t, releases.URL, "pt/private")
 	t.Setenv("GH_TOKEN", "pt-token")
 
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
@@ -130,7 +129,8 @@ func TestUpdateStopsWhenReleasesCantBeRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := cli(t, cfg, "update", "--check", "--json")
-	if err == nil || !strings.Contains(out, "can't read the releases") || !strings.Contains(out, "404") || strings.Contains(out, "fetch tags") {
+	if err == nil || !strings.Contains(out, "can't read the releases") || !strings.Contains(out, "404") || strings.Contains(out, "fetch tags") ||
+		!strings.Contains(out, "does your GitHub account have access to pt/private") {
 		t.Fatalf("update --check: %s (%v)", out, err)
 	}
 	// Installing records the failure as the update's progress.
@@ -141,6 +141,111 @@ func TestUpdateStopsWhenReleasesCantBeRead(t *testing.T) {
 	var p UpdateProgress
 	if json.Unmarshal([]byte(out), &p) != nil || p.State != "failed" || !strings.Contains(p.Error, "can't read the releases") {
 		t.Fatalf("update progress: %s", out)
+	}
+}
+
+// releasesAt points the build's releases at a test server, restored after
+// the test.
+func releasesAt(t *testing.T, public bool, url, repo string) {
+	t.Helper()
+	origPublic, origWeb, origAPI, origRepo := product.PublicReleases, product.ReleaseWeb, product.ReleaseAPI, product.ReleaseRepo
+	t.Cleanup(func() {
+		product.PublicReleases, product.ReleaseWeb, product.ReleaseAPI, product.ReleaseRepo = origPublic, origWeb, origAPI, origRepo
+	})
+	product.PublicReleases, product.ReleaseRepo = public, repo
+	if public {
+		product.ReleaseWeb, product.ReleaseAPI = url, "http://127.0.0.1:1"
+	} else {
+		product.ReleaseAPI, product.ReleaseWeb = url, "http://127.0.0.1:1"
+	}
+}
+
+// privateReleases: a private repository's, read through the API (url) with
+// a sign-in.
+func privateReleases(t *testing.T, url, repo string) { t.Helper(); releasesAt(t, false, url, repo) }
+
+// An app with public releases reads them from GitHub's web pages: no token
+// is looked for or sent (GH_TOKEN neither), gh never runs, and no message
+// mentions signing in.
+func TestUpdatePublicReleases(t *testing.T) {
+	name, err := update.AssetName("99.0.0")
+	if err != nil {
+		t.Skip(err)
+	}
+	var mu sync.Mutex
+	var sums []byte
+	tag, gone := "v99.0.0", false
+	pages := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		for h, vals := range r.Header {
+			if h == "Authorization" || strings.Contains(strings.Join(vals, " "), "pt-token") {
+				t.Errorf("%s was sent %s", r.URL.Path, h)
+			}
+		}
+		switch r.URL.Path {
+		case "/pt/public/releases/latest":
+			if gone {
+				http.NotFound(w, r)
+				return
+			}
+			http.Redirect(w, r, "/pt/public/releases/tag/"+tag, http.StatusFound)
+		case "/pt/public/releases/download/" + tag + "/SHA256SUMS":
+			_, _ = w.Write(sums)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer pages.Close()
+	releasesAt(t, true, pages.URL, "pt/public")
+	t.Setenv("GH_TOKEN", "pt-token")
+	t.Setenv("GITHUB_TOKEN", "pt-token")
+	orig := findReleaseToken
+	findReleaseToken = func(context.Context, string, string) (string, []string) {
+		t.Error("looked for a GitHub sign-in")
+		return "", nil
+	}
+	t.Cleanup(func() { findReleaseToken = orig })
+	ghRan := filepath.Join(t.TempDir(), "gh-ran")
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte("#!/bin/sh\necho \"$@\" >> '"+ghRan+"'\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	signIn := regexp.MustCompile(`(?i)\bgh\b|token|sign[- ]?in|signed in`)
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+
+	setSums := func(b string) { mu.Lock(); sums = []byte(b); mu.Unlock() }
+	setSums(strings.Repeat("0", 64) + "  " + name + "\n")
+	out, err := cli(t, cfg, "update", "--check", "--json")
+	var res UpdateOutput
+	if err != nil || json.Unmarshal([]byte(out), &res) != nil || res.Latest != "v99.0.0" || !res.UpdateAvailable || res.Note != installNote {
+		t.Errorf("update --check: %s (%v)", out, err)
+	}
+
+	// No download for this machine: the source checkout, as for private releases.
+	setSums(strings.Repeat("0", 64) + "  other.zip\n")
+	if _, err := cli(t, cfg, "settings", "set", "update.source-dir", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	out, err = cli(t, cfg, "update", "--check")
+	if err == nil || !strings.Contains(out, "fetch tags") || signIn.MatchString(out) {
+		t.Errorf("no download for this machine: %s (%v)", out, err)
+	}
+
+	// Not there (or not public): says so, and nothing about signing in.
+	mu.Lock()
+	gone = true
+	mu.Unlock()
+	out, err = cli(t, cfg, "update", "--check")
+	if err == nil || !strings.Contains(out, "can't read the releases") || !strings.Contains(out, "no public repository pt/public") || signIn.MatchString(out) {
+		t.Errorf("not found: %s (%v)", out, err)
+	}
+	if b, err := os.ReadFile(ghRan); err == nil {
+		t.Errorf("gh was run: %s", b)
+	}
+	if !strings.Contains(newUpdateCmd().Long, "no sign-in") || strings.Contains(newUpdateCmd().Long, "GH_TOKEN") {
+		t.Errorf("update's help: %s", newUpdateCmd().Long)
 	}
 }
 

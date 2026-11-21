@@ -13,7 +13,6 @@ Process Automator runs **routines**: prompt files that a model (Claude) runs on 
 
 ## Requirements
 - macOS 14 or later on a Mac with Apple silicon (Intel Macs aren't supported), or Linux (x86-64 or ARM64)
-- A GitHub account that can read the private `process-automator` repository, signed in with the GitHub CLI (`gh auth login`) or a token in `GH_TOKEN`
 - Linux only: `secret-tool` (package `libsecret-tools`) to keep sign-ins, and a systemd user session to start the scheduler at login
 
 ## Install
@@ -23,11 +22,13 @@ From a checkout of the repository:
 ./install.sh
 ```
 
-Or without a checkout (`<owner>` is the GitHub account that hosts the repository):
+Or without a checkout:
 
 ```sh
-gh api repos/<owner>/process-automator/contents/install.sh -H 'Accept: application/vnd.github.raw' | bash
+curl -fsSL https://github.com/BorysSerbyn/process-automator/releases/latest/download/install.sh | bash
 ```
+
+Neither needs a GitHub account or the GitHub CLI. (An app built on Process Automator whose releases are private is different: installing and updating it need a GitHub sign-in that can read them, with `gh auth login` or a token in `GH_TOKEN`.)
 
 It downloads the latest release for your machine, checks its checksum (and on macOS its signature), installs it, links `procauto` into `~/.local/bin`, starts the scheduler (and on macOS the menu bar app) now and at login, then offers to run setup. If `~/.local/bin` isn't on your `PATH`, add it.
 
@@ -67,7 +68,7 @@ Setup takes you through what the app needs, in order:
 Run it in a terminal with `procauto setup`, which asks before each step and skips what's done, or on macOS open **Finish Setup…** from the menu bar (or **Setup** in the Routines window), which shows every step with a button for each. Run it again any time, e.g. after adding a routine. Until the required steps are done, the menu bar dot is red with "Setup isn't finished".
 
 ## Update
-`procauto update` installs the latest release if it's newer (`--check` only reports; `update progress` says what one installing is doing). It verifies the download like the installer, replaces the app where it is and restarts it. On macOS the menu offers it too (**Update to X…**, or **Check for Updates**), and shows its progress. Your routines, settings and sign-ins are kept. If `gh` is signed in to several GitHub accounts, it uses the first that can read the releases, so the active one needn't be.
+`procauto update` installs the latest release if it's newer (`--check` only reports; `update progress` says what one installing is doing). It verifies the download like the installer, replaces the app where it is and restarts it. On macOS the menu offers it too (**Update to X…**, or **Check for Updates**), and shows its progress. Your routines, settings and sign-ins are kept.
 
 ## Uninstall
 `procauto uninstall` removes the app, its `procauto` link and its login items. Your config, routines, history, logs and secrets stay, unless you add `--purge`.

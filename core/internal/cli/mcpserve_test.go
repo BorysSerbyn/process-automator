@@ -16,6 +16,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
@@ -48,6 +49,8 @@ func TestMain(m *testing.M) {
 	openExternal = func(string) error { return errors.New("tests don't open things") }
 	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.
 	findReleaseToken = func(context.Context, string, string) (string, []string) { return os.Getenv("GH_TOKEN"), nil }
+	// Nor reach GitHub: tests that read releases serve their own.
+	product.ReleaseWeb, product.ReleaseAPI = "http://127.0.0.1:1", "http://127.0.0.1:1"
 	if mode := os.Getenv(pluginEnv); mode != "" {
 		servePluginFixture(mode)
 		os.Exit(0)
