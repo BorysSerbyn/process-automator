@@ -120,7 +120,10 @@ type Run struct {
 	ID string `json:"id,omitempty"`
 	// SessionID is the run's saved agent CLI session (routines with
 	// session: save), set when the run starts.
-	SessionID  string     `json:"sessionId,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+	// Folder is the folder the run worked in (where its session resumes
+	// from), unless it was an empty temporary one.
+	Folder     string     `json:"folder,omitempty"`
 	StartedAt  time.Time  `json:"startedAt"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 	// Deadline is when a running run is stopped (its routine's timeout).

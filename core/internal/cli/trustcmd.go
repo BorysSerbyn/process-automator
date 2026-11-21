@@ -97,7 +97,7 @@ func newRoutinesTrustCmd() *cobra.Command {
 				}
 				question = "Run " + r.Name + " on its schedule (" + schedule.Text(c.Schedule) + ")"
 			default:
-				tools, toolsErr := agent.CheckTools(cmd.Context(), a.Connector, engine.RunOf(r, c.Folder, ""), r.Servers, r.Tools)
+				tools, toolsErr := agent.CheckTools(cmd.Context(), a.Connector, engine.RunOf(r, c.WorkFolder, ""), r.Servers, r.Tools)
 				out.Tools = tools
 				if toolsErr != nil {
 					out.ToolsError = toolsErr.Error()

@@ -19,9 +19,14 @@ type RoutineConfig struct {
 	Staleness time.Duration // scheduled routines only
 	Timeout   time.Duration
 	Effort    string // "default" leaves it to the backend
-	// Folder is where the run works (home-expanded); empty: a temporary folder.
+	// Folder is the routine's folder setting (home-expanded); empty: none.
 	Folder string
-	// SaveSession keeps the agent CLI session (in Folder).
+	// WorkFolder is where runs work: Folder; without one, a routine that
+	// saves its sessions works in its own folder (Layout.SessionFolder, made
+	// when a run needs it); empty: an empty temporary folder, deleted after.
+	WorkFolder string
+	// SaveSession keeps the agent CLI session (in WorkFolder: an agent CLI
+	// resumes a session from the folder it ran in).
 	SaveSession bool
 	// BuiltinTools are the agent CLI built-in tools allowed.
 	BuiltinTools []string
@@ -59,8 +64,9 @@ func (a *App) RoutineConfig(r routines.Routine) (RoutineConfig, error) {
 		}
 	}
 	c.SaveSession = vals.String(key("session")) == "save"
+	c.WorkFolder = c.Folder
 	if c.SaveSession && c.Folder == "" {
-		return c, fmt.Errorf("routines.%s.session save needs a folder (a saved session belongs to the folder it ran in): set routines.%s.folder", r.Name, r.Name)
+		c.WorkFolder = a.Layout.SessionFolder(r.Name)
 	}
 	c.BuiltinTools = vals.List(key("builtinTools"))
 	c.Parallel = vals.String(key("concurrency")) == "parallel"

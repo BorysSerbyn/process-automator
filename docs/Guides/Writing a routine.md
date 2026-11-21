@@ -55,9 +55,9 @@ The app's own keys, written dotted (`automator.servers:`, not a nested `automato
 | `automator.staleness` | `1h` | How late a missed scheduled run may still start; later, it's recorded as missed |
 | `automator.timeout` | `20m` | How long a run may take before it's stopped and fails |
 | `automator.effort` | `default` | How hard the model thinks: `default`, `low`, `medium`, `high`, `xhigh`, `max` (the `api` backend takes only `default`) |
-| `automator.folder` | an empty temporary folder | The folder it works in; its `CLAUDE.md` is added to the instructions |
+| `automator.folder` | an empty temporary folder (one of its own that's kept, when it saves its session) | The folder it works in; its `CLAUDE.md` is added to the instructions |
 | `automator.builtinTools` | `[]` | Claude Code's own tools it may use, e.g. `[Read, Grep, Bash, Edit]` (`claude-code` backend only; file tools stay inside its folder; dry runs get only the read-only ones) |
-| `automator.session` | `discard` | `save` keeps the Claude Code session in its folder and records its ID with the run, so you can resume it |
+| `automator.session` | `discard` | `save` keeps the Claude Code session and records its ID and folder with the run, so you can resume it from that folder (without `automator.folder`, the routine gets a folder of its own for it) |
 | `automator.concurrency` | `queue` | `queue` waits for other runs (one at a time); `parallel` runs alongside them. A routine never overlaps itself |
 | `automator.parameters` | | Values set at install (see below) |
 | `automator.platforms` | all | `[macos]`, `[linux]` or both |

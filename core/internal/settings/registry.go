@@ -154,12 +154,14 @@ var RoutineFields = []RoutineField{
 	{
 		Name: "folder", Type: TypePath,
 		Description: "Folder the run works in (agent CLI backends), with its CLAUDE.md added to the instructions. " +
-			"Without one, runs work in an empty temporary folder.",
+			"Without one, runs work in an empty temporary folder, or, with session save, in an empty folder of the " +
+			"routine's own that's kept.",
 	},
 	{
 		Name: "session", Type: TypeEnum, Default: "discard", Enum: []string{"discard", "save"},
-		Description: "save keeps the agent CLI session (in the routine's folder) and records its ID with the run, " +
-			"so it can be resumed; discard leaves nothing behind.",
+		Description: "save keeps the agent CLI session and records its ID and folder with the run, so it can be " +
+			"resumed from that folder (the routine's folder, or one of its own when it has none); discard leaves " +
+			"nothing behind.",
 	},
 	{
 		Name: "concurrency", Type: TypeEnum, Default: "queue", Enum: []string{"queue", "parallel"},

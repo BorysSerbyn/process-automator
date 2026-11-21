@@ -50,6 +50,10 @@ func (l Layout) Plugins() string { return l.in("plugins") }
 // PluginData is an in-process plugin's own folder.
 func (l Layout) PluginData(plugin string) string { return l.in("plugin-data", plugin) }
 
+// SessionFolder is where a routine that saves its sessions but sets no
+// folder works: its own, kept, so the sessions can be resumed from it.
+func (l Layout) SessionFolder(routine string) string { return l.in("session-folders", routine) }
+
 // SchedulerState records which slots the scheduler handled.
 func (l Layout) SchedulerState() string { return l.in("scheduler-state.json") }
 
