@@ -153,6 +153,13 @@ systemd's user manager reads units from its own `XDG_CONFIG_HOME` (usually none:
 - **The installing shell's `XDG_CONFIG_HOME` written into the unit**: an update run from the tray, whose session may not have it, would write the unit without it and move the scheduler to another config folder
 - **Enabling lingering**: `sudo` in an installer that otherwise never needs it
 
+## Decision: on Linux, runs don't keep the computer awake
+logind gives sleep and idle inhibitors to sessions; the scheduler runs as a systemd user service, outside any session, and polkit refuses it one (`systemd-inhibit`: "Access denied") unless an administrator's rule allows it. Servers rarely suspend, and a desktop's own idle settings are mine to set.
+
+### Rejected
+- **A polkit rule installed with the app**: root, for an installer that never needs it
+- **Inhibiting from the tray**: only while a desktop session runs it, and frontends don't act on run status beyond showing it
+
 ## Decision: opening something doesn't wait for xdg-open to finish
 Outside GNOME, KDE and Xfce, `xdg-open` runs the browser itself and returns only when it's closed, so a sign-in waiting on it would wait for the browser. A failure (no handler, no display) shows in its first seconds, so it's given 5 and, still running, taken to have opened it.
 
