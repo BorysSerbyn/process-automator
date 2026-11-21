@@ -192,7 +192,11 @@ func TestStopWaitingInDaemonQueue(t *testing.T) {
 	now = now.Add(80 * time.Minute) // 09:20: first runs, second waits in the queue
 	_ = s.Tick(ctx)
 	queued := &queuedSince{at: map[string]time.Time{}}
-	go stopWaiting(ctx, a, s, queued)
+	done := make(chan struct{})
+	go func() { stopWaiting(ctx, a, s, queued); close(done) }()
+	// It records the run (status, then history) after the status shows:
+	// wait for it before the test's folders go.
+	defer func() { cancel(); <-done }()
 	_ = os.MkdirAll(filepath.Dir(a.Layout.StopRequest("second")), 0o700)
 	_ = os.WriteFile(a.Layout.StopRequest("second"), nil, 0o600)
 	waitOutcome(t, a, "second", runstatus.OutcomeStopped)

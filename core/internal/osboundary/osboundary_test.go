@@ -32,7 +32,7 @@ var perOS = regexp.MustCompile(`_(darwin|linux|windows|freebsd|unix|other|bsd)\.
 func TestSharedFilesStayOSNeutral(t *testing.T) {
 	root := filepath.Join("..", "..") // core/
 	var found []string
-	for _, dir := range []string{"internal", "cmd", "automator", "pluginapi"} {
+	for _, dir := range []string{"internal", "cmd", "automator", "pluginapi", "plugins"} {
 		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || perOS.MatchString(path) {
 				return err

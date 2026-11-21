@@ -18,12 +18,12 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/memory"
-	"github.com/BorysSerbyn/process-automator/core/internal/notifyplugin"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/plugins/notify"
 )
 
 // App is the engine on one data folder: the config, the plugins and the
@@ -49,8 +49,8 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 	files := LayoutOf(path)
 	// Callers may pass an app's plugins back in (the daemon reloads that way),
 	// so notify is added to the given plugins without one already there.
-	plugins = slices.DeleteFunc(slices.Clone(plugins), func(p pluginapi.Plugin) bool { return p.Name == notifyplugin.Name })
-	plugins = append(plugins, notifyplugin.New(files.Notifications()))
+	plugins = slices.DeleteFunc(slices.Clone(plugins), func(p pluginapi.Plugin) bool { return p.Name == notify.Name })
+	plugins = append(plugins, notify.Plugin(files.Notifications()))
 	if err := pluginapi.Validate(plugins); err != nil {
 		return nil, err
 	}
