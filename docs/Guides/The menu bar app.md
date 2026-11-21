@@ -46,7 +46,7 @@ macOS asks once whether the app may show notifications (for both); until you all
 ## The Linux tray
 In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the routines list. It starts at login; **Quit** stops it until the next login (or run `~/.local/lib/process-automator/bin/automator-tray &` to bring it back).
 
-It has no windows: what opens a window on macOS runs its `procauto` command in your terminal (`$TERMINAL`, else `x-terminal-emulator`, `gnome-terminal`, `konsole` or `xterm`), which stays open until you press Enter:
+It has no windows: what opens a window on macOS runs its `procauto` command in your terminal (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`), which stays open until you press Enter:
 
 | Menu item | Runs |
 |---|---|

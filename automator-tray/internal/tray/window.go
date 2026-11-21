@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -69,23 +70,45 @@ func OpenWindow(cliPath string, w Window) error {
 const keepOpen = `"$0" "$@"; printf '\nPress Enter to close. '; read -r _`
 
 // ErrNoTerminal says no terminal was found to run a command in.
-var ErrNoTerminal = errors.New("no terminal found: set $TERMINAL, or install one (gnome-terminal, konsole, xterm)")
+var ErrNoTerminal = errors.New("no terminal found: set $TERMINAL, or install one (gnome-terminal, ptyxis, konsole, xterm)")
+
+// terminals are the terminals looked for, in order, each with what comes
+// before the command it runs (its arguments one by one). xdg-terminal-exec
+// is the desktop's chosen terminal; ptyxis and kgx are GNOME's (Fedora's
+// and Ubuntu's default, with no gnome-terminal or xterm beside them).
+var terminals = []struct{ name, flag string }{
+	{"xdg-terminal-exec", ""}, {"x-terminal-emulator", "-e"}, {"ptyxis", "--"}, {"kgx", "--"},
+	{"gnome-terminal", "--"}, {"konsole", "-e"}, {"xfce4-terminal", "-x"}, {"xterm", "-e"},
+}
+
+// terminalFlags are how terminals $TERMINAL may name run a command given as
+// separate arguments, where it isn't -e (theirs takes one string, or none).
+var terminalFlags = map[string][]string{
+	"xdg-terminal-exec": nil, "kitty": nil, "foot": nil, "wezterm": {"start", "--"},
+	"gnome-terminal": {"--"}, "ptyxis": {"--"}, "kgx": {"--"}, "tilix": {"--"},
+	"xfce4-terminal": {"-x"}, "mate-terminal": {"-x"}, "terminator": {"-x"},
+}
 
 // TerminalCommand is the command line that runs command in the user's
-// terminal: $TERMINAL, else the first of x-terminal-emulator,
-// gnome-terminal, konsole and xterm that's installed.
+// terminal: $TERMINAL, else the first installed of terminals.
 func TerminalCommand(getenv func(string) string, lookPath func(string) (string, error), command []string) ([]string, error) {
 	shell := append([]string{"sh", "-c", keepOpen}, command...)
 	if t := strings.Fields(getenv("TERMINAL")); len(t) > 0 {
 		if _, err := lookPath(t[0]); err == nil {
-			return append(append(t, "-e"), shell...), nil
+			flag, known := terminalFlags[filepath.Base(t[0])]
+			if !known {
+				flag = []string{"-e"}
+			}
+			return append(append(t, flag...), shell...), nil
 		}
 	}
-	for _, t := range []struct{ name, flag string }{
-		{"x-terminal-emulator", "-e"}, {"gnome-terminal", "--"}, {"konsole", "-e"}, {"xterm", "-e"},
-	} {
+	for _, t := range terminals {
 		if _, err := lookPath(t.name); err == nil {
-			return append([]string{t.name, t.flag}, shell...), nil
+			argv := []string{t.name}
+			if t.flag != "" {
+				argv = append(argv, t.flag)
+			}
+			return append(argv, shell...), nil
 		}
 	}
 	return nil, ErrNoTerminal

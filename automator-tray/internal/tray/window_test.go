@@ -7,8 +7,8 @@ import (
 )
 
 // The terminal is $TERMINAL, else the first installed of
-// x-terminal-emulator, gnome-terminal, konsole and xterm, each with its way
-// of running a command.
+// xdg-terminal-exec, x-terminal-emulator, ptyxis, kgx, gnome-terminal,
+// konsole, xfce4-terminal and xterm, each with its way of running a command.
 func TestTheTerminalFallbackOrder(t *testing.T) {
 	command := []string{"/opt/acme/bin/acme-auto", "setup"}
 	shell := []string{"sh", "-c", keepOpen, "/opt/acme/bin/acme-auto", "setup"}
@@ -20,6 +20,12 @@ func TestTheTerminalFallbackOrder(t *testing.T) {
 	}{
 		{"$TERMINAL first", "alacritty --class x", []string{"alacritty", "xterm"}, append([]string{"alacritty", "--class", "x", "-e"}, shell...)},
 		{"$TERMINAL not installed", "nope", []string{"konsole"}, append([]string{"konsole", "-e"}, shell...)},
+		{"$TERMINAL whose -e takes one string", "/usr/bin/xfce4-terminal", []string{"/usr/bin/xfce4-terminal"}, append([]string{"/usr/bin/xfce4-terminal", "-x"}, shell...)},
+		{"$TERMINAL with no flag", "kitty", []string{"kitty"}, append([]string{"kitty"}, shell...)},
+		{"xdg-terminal-exec", "", []string{"xterm", "x-terminal-emulator", "xdg-terminal-exec"}, append([]string{"xdg-terminal-exec"}, shell...)},
+		{"ptyxis alone (Fedora's GNOME)", "", []string{"ptyxis"}, append([]string{"ptyxis", "--"}, shell...)},
+		{"GNOME Console", "", []string{"kgx", "xterm"}, append([]string{"kgx", "--"}, shell...)},
+		{"xfce4-terminal", "", []string{"xfce4-terminal", "xterm"}, append([]string{"xfce4-terminal", "-x"}, shell...)},
 		{"x-terminal-emulator", "", []string{"xterm", "konsole", "gnome-terminal", "x-terminal-emulator"}, append([]string{"x-terminal-emulator", "-e"}, shell...)},
 		{"gnome-terminal", "", []string{"xterm", "konsole", "gnome-terminal"}, append([]string{"gnome-terminal", "--"}, shell...)},
 		{"konsole", "", []string{"xterm", "konsole"}, append([]string{"konsole", "-e"}, shell...)},
