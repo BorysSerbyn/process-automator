@@ -225,6 +225,13 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 - **GitHub artifact attestations**: need `gh` on every machine, and GitHub Enterprise Cloud for a private repository
 - **Checksum only on macOS too**: the Developer ID is already required for Gatekeeper, and checking it is free
 
+## Decision: CI and releases run on my Mac
+`make ci` runs the checks and `make publish` builds, signs, tests and publishes a release, both locally; the GitHub Actions workflows are disabled. Actions minutes ran out, and every check but the Linux install test runs as well on a Mac. The workflows are kept, so turning them back on is `gh workflow enable`.
+
+### Rejected
+- **Keeping CI on GitHub for the Linux install test alone**: the minutes, for one check
+- **Deleting the workflows**: bringing them back means rewriting them, secrets and deploy key included
+
 ## Decision: templates name the backends they work with
 A template can list the backends it works with (`automator.backends`), and installing it on another backend is refused, saying how to switch. Some routines only make sense on an agent CLI (built-in tools, a folder, a saved session, effort): on the api backend they'd install and set up fine, then fail every run. Setup only offers templates that can be installed; `templates list` still shows the others, marked, since the backend can change.
 

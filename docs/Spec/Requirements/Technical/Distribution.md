@@ -1,7 +1,7 @@
 Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functional: Distribution]], [[Spec/Requirements/Technical/Technical Requirements|Technical Requirements]]. Why it's built this way: [[Spec/Technical Decisions|Technical Decisions]].
 
 ## Repository
-- **The `process-automator` repository** is private (its GitHub path is `REPO` in `install.sh`). CI (`.github/workflows/ci.yml`) runs on every push: Go tests with `-race` on macOS and Linux, Linux and Windows cross-compiles of the core, the Swift tests, and an install test of each platform's artifact
+- **The `process-automator` repository** is private (its GitHub path is `REPO` in `install.sh`). `make ci` runs the checks on my Mac before a push: Go tests with `-race`, the Swift tests, lint, Linux and Windows cross-compiles of the core, shellcheck, and an install test of the macOS artifact. The GitHub Actions workflows that ran them (and the Linux install test) on every push are kept, disabled
 
 ## Versioning
 - **One version source: git tags** `vX.Y.Z`, embedded at build time into the Go binary (linker flags) and the Swift app (`CFBundleShortVersionString`), so both report the same version
@@ -27,7 +27,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 - **Its scripts are this repository's**: `scripts/bundle.sh`, `package.sh`, `install-app.sh`, `test-install.sh` (`INSTALL_SH` for the app's installer) and `version.sh` take the app's names from `install.env` or its `install.sh`; its `install.sh` is this one with its own names in the header
 
 ## Releases
-- **Built by CI from git tags**: `.github/workflows/release.yml` on a pushed `vX.Y.Z` tag builds every artifact and publishes them as the tag's GitHub release with a `SHA256SUMS` file; run by hand, it only builds them (ad-hoc signed, nothing published)
+- **Built from git tags on my Mac**: `make publish` (`scripts/publish.sh`), at a commit tagged `vX.Y.Z`, builds every artifact with the repository's `make package` and `make package-linux`, signs the macOS app with the given identity or `.p12` (a throwaway keychain), runs the install test, then pushes the tag and publishes them as its GitHub release with a `SHA256SUMS` file; nothing is pushed unless every step passed. An app built on the engine runs the same script from its repository
 - **macOS**: `<Folder>-<version>-macos.zip` (`process-automator-…`), the `.app` with the Go core inside, for Apple silicon (there's no Intel build), zipped with `ditto`. Signed with a Developer ID (hardened runtime) and notarized with the ticket stapled when the release workflow has one (`APPLE_DEVELOPER_ID_P12_*`, `APPLE_API_KEY_*`); otherwise with a self-signed certificate (`SIGNING_CERT_P12_BASE64`, `SIGNING_CERT_PASSWORD`), the same for every release
 - **Linux**: `<Folder>-<version>-linux-<amd64|arm64>.tar.gz`: `bin/<Command>` and `share/<Folder>/` (templates, the installer, the systemd unit template)
 - **Every artifact carries its installer** (`install-app.sh`) and what the build named things (`install.env`: the app's name, command and folder, version, bundle ID, login item labels, secrets service), next to its templates: `Contents/Resources/` in the `.app`, `share/<Folder>/` in the Linux tree
