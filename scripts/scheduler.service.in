@@ -7,6 +7,9 @@ ExecStart=__PROGRAM__ daemon
 Environment=__PATH__
 Restart=always
 RestartSec=30
+# Stopping signals the scheduler alone, which stops its runs (and records
+# them interrupted); what's left once it has exited is killed.
+KillMode=mixed
 
 [Install]
 WantedBy=default.target

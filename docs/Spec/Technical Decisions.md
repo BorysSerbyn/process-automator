@@ -21,7 +21,7 @@ The model loop sits behind a `Backend` interface chosen by `llm.backend`. `api` 
 - **API only**: everyone with a Claude plan would pay twice
 
 ## Decision: an in-process scheduler in a long-running daemon
-`procauto daemon` runs the scheduler; the OS (a LaunchAgent with `KeepAlive`, or a systemd user unit) only starts it at login and keeps it alive. It polls every 30s rather than sleeping until the next slot, which keeps it correct across sleep and wake, and the same daemon runs on both OSes. Started by the OS with a minimal PATH, it adds my login shell's PATH (as Goose's desktop app does), so `claude` and MCP servers are found as in a terminal.
+`procauto daemon` runs the scheduler; the OS (a LaunchAgent with `KeepAlive`, or a systemd user unit) only starts it at login and keeps it alive. It polls every 30s rather than sleeping until the next slot, which keeps it correct across sleep and wake, and the same daemon runs on both OSes. Started by the OS with a minimal PATH, it adds my login shell's PATH (as Goose's desktop app does), so `claude` and MCP servers are found as in a terminal. Stopping it signals the daemon alone (launchd does; systemd is told to, `KillMode=mixed`): it cancels its runs and records them as interrupted, where a run's own process signalled beside it could end first and be recorded as a failure.
 
 ### Rejected
 - **OS scheduling** (launchd `StartCalendarInterval`, systemd timers): a job per routine rewritten on every settings change, per OS, and unable to report "missed" or "can't be scheduled"; cron schedules, staleness and catch-up are the app's policy
