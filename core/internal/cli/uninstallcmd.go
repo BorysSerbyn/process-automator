@@ -49,7 +49,7 @@ func newUninstallCmd() *cobra.Command {
 		Long: "Stops the scheduler and automator-ui, removes their login items, the " + product.Command + " link and the app. " +
 			"Your config, routines, run history, logs and secrets stay unless you add --purge. Asks first; " +
 			"without a terminal it needs --yes. An app installed with Homebrew is removed with brew.",
-		Annotations: map[string]string{annNotForRoutines: "removing the app is mine"},
+		Annotations: map[string]string{annNotReadOnly: "removing the app is mine"},
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := loadApp(cmd)

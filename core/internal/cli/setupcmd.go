@@ -88,7 +88,7 @@ func newSetupCmd() *cobra.Command {
 		Long: "In a terminal, walks through each step and asks before doing anything. With --json it changes " +
 			"nothing: it lists the steps, what's done, what to ask, and the commands that do each one, for an LLM " +
 			"or a frontend guiding me. Run it again any time; done steps are skipped.",
-		Annotations: map[string]string{annReadOnlyWith: "json", annNotForRoutines: "setting up the app is mine"},
+		Annotations: map[string]string{annReadOnlyWith: "json", annNotReadOnly: "setting up the app is mine"},
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := loadApp(cmd)

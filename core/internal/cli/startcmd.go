@@ -27,7 +27,7 @@ func newStartCmd() *cobra.Command {
 		Short: "Start a routine's run in the background and return at once (frontends: run now)",
 		Long: "Runs the routine as `run` does, detached, so it keeps going whatever started it. Follow it in run " +
 			"status (running, queued) and the run history; `stop` stops it.",
-		Annotations: map[string]string{annNotForRoutines: "a routine can't run a routine: runs take turns, so it would wait on itself"},
+		Annotations: map[string]string{annNotReadOnly: "it runs a routine"},
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)

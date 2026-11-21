@@ -59,8 +59,8 @@ func newUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "update",
 		Annotations: map[string]string{
-			annReadOnlyWith:   "check",
-			annNotForRoutines: "routines have no use for the app's own updates (checking runs git)",
+			annReadOnlyWith: "check",
+			annNotReadOnly:  "checking for updates runs git and reaches the network",
 		},
 		Short: "Install the latest release; --check only reports",
 		Long: "Asks GitHub for the latest release, and if it's newer than this build, downloads its artifact " +

@@ -28,4 +28,4 @@ After `procauto update`, reconnect the server so the client sees new or changed 
 Everything Claude changes through the server is logged in `mcp-changes.jsonl` in the data folder (`procauto paths` shows where).
 
 ## Inside routines
-Routines can use the same server's read-only tools as the built-in `automator` server, e.g. to look at other routines' runs.
+Routines don't get this server: it's the app's interface for you and Claude, not a plugin.

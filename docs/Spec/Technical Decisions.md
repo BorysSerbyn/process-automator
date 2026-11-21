@@ -34,7 +34,7 @@ The model loop sits behind a `Backend` interface chosen by `llm.backend`. `api` 
 - **Treating an unreadable source as empty**: "no data" and "couldn't read" would look the same
 
 ## Decision: a blank-slate engine; integrations are MCP servers
-The engine knows no specific service, and the app ships with no integrations: a plugin is an MCP server registered in config, written in any language, so routines reach every service the same way and any server built for other MCP clients works as is. The core keeps only what it owns: `automator` (its own read-only tools) and `notify` (routines' notifications, which the app's frontends deliver). The in-process plugin API stays, for Go plugins compiled into a build.
+The engine knows no specific service, and the app ships with no integrations: a plugin is an MCP server registered in config, written in any language, so routines reach every service the same way and any server built for other MCP clients works as is. Every app ships one plugin, `notify` (routines' notifications, which the app's frontends deliver), in `core/plugins`. The in-process plugin API stays, for Go plugins compiled into a build.
 
 ### Rejected
 - **Bundled presets for particular services**: each needs upkeep and ties the app to services I may not use; `plugins add` covers them with no code
@@ -115,7 +115,7 @@ The UI is a native SwiftUI/AppKit app, separate from the Go core, which stays pu
 - **Native shells per OS with one shared web UI**: only pays off if a Linux menu bar app is wanted; the UI having no logic keeps a second shell cheap if it ever is
 
 ## Decision: Claude manages routines through the core's own MCP server
-People make routines by talking to Claude, so Claude is another frontend: `procauto mcp serve` serves the same surface as the CLI. Every CLI command is a tool by default, derived from the command tree, and one override table holds the exceptions, so the server isn't edited when the CLI grows. The guardrail is my approval rather than missing tools: side-effecting tools are annotated so the client asks first, created routines start disabled and untrusted, and trust stays in my terminal. Routines get only the read-only tools.
+People make routines by talking to Claude, so Claude is another frontend: `procauto mcp serve` serves the same surface as the CLI. Every CLI command is a tool by default, derived from the command tree, and one override table holds the exceptions, so the server isn't edited when the CLI grows. The guardrail is my approval rather than missing tools: side-effecting tools are annotated so the client asks first, created routines start disabled and untrusted, and trust stays in my terminal.
 
 ### Rejected
 - **Claude uses the CLI through a shell**: works in Claude Code, but not in clients without a shell, not inside routines, and the model would parse help text instead of typed tools
@@ -137,10 +137,11 @@ New routines start paused and untrusted, and a routine is only useful once both 
 - **Trusting always resumes**: re-trusting a paused routine after a change would turn it back on behind my back
 - **A new command for both**: one more name for a review that's the trust command's; a flag on it keeps one review and one prompt
 
-## Decision: plugins reach the app's own data through the `automator` server
-The core serves its routines and runs (including saved session IDs) to plugins and routines as the in-process `automator` server. Plugins keep a single way in (`Host.Connect`) and never read the core's files.
+## Decision: the app's MCP server is its interface, not a plugin
+`mcp serve` is how Claude and other MCP clients use the app, as the CLI is in a terminal. Routines don't get it: none needs the app now, and one that did would get a plugin that talks to the MCP server, like any other service.
 
 ### Rejected
+- **Serving it to routines as a built-in `automator` server**: a plugin in name only, special-cased in the core for no routine that needs it
 - **Plugins reading the data folder**: ties every plugin to the core's file layout
 
 ## Decision: MCP sign-in runs across calls

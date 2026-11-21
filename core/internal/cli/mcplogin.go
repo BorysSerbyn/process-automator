@@ -122,7 +122,7 @@ func mcpLogin(ctx context.Context, s *automatorServer, req *sdk.CallToolRequest,
 		if name == "" {
 			return nil, fmt.Errorf("%s is required", t.args[0].prop)
 		}
-		a, err := engine.Load(s.configPath, withAutomator(s.configPath, s.plugins), secretStore())
+		a, err := engine.Load(s.configPath, s.plugins, secretStore())
 		if err != nil {
 			return nil, err
 		}

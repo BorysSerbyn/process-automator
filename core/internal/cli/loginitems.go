@@ -71,9 +71,9 @@ func newLoginItemsCmd() *cobra.Command {
 		&cobra.Command{Use: "status", Short: "Show whether the app starts at login", Annotations: readOnly(), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return show(cmd) }},
 		&cobra.Command{Use: "enable", Short: "Start the app at login", Args: cobra.NoArgs, RunE: set(true),
-			Annotations: map[string]string{annNotForRoutines: "starting at login is mine"}},
+			Annotations: map[string]string{annNotReadOnly: "starting at login is mine"}},
 		&cobra.Command{Use: "disable", Short: "Don't start the app at login (what's running keeps running)", Args: cobra.NoArgs, RunE: set(false),
-			Annotations: map[string]string{annNotForRoutines: "starting at login is mine"}},
+			Annotations: map[string]string{annNotReadOnly: "starting at login is mine"}},
 	)
 	return cmd
 }

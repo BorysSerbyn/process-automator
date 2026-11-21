@@ -87,7 +87,7 @@ func newNotificationsDeliveredCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:         "delivered <id>...",
 		Short:       "Mark notifications delivered (frontends call this after showing them)",
-		Annotations: map[string]string{annNotForRoutines: "only frontends deliver notifications"},
+		Annotations: map[string]string{annNotReadOnly: "only frontends deliver notifications"},
 		Args:        cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)
@@ -108,7 +108,7 @@ func newNotificationsOpenCmd() *cobra.Command {
 			"an update) show the run they're about, if any. One a routine sent (notify_me) opens the file it " +
 			"attached, else does its routine's onNotificationClick (default show-run). show-run opens a readable " +
 			"report of the run, or with --frontend-shows-runs leaves showing it to the frontend.",
-		Annotations: map[string]string{annNotForRoutines: "clicking is mine"},
+		Annotations: map[string]string{annNotReadOnly: "clicking is mine"},
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)

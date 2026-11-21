@@ -4,7 +4,7 @@ Back to [[Home]]. Next: [[Guides/Routines|Routines]], [[Guides/The menu bar app|
 Process Automator runs **routines**: prompt files that a model (Claude) runs on a schedule in the background, with the tools you allow. Out of the box it does nothing; the routines you add give it a purpose (e.g. a morning digest of your open issues, a weekly report, a stand-up draft).
 
 - **Routines** are `.prompt` files in a routines folder on your machine. You write them ([[Guides/Writing a routine|Writing a routine]]), install them from templates your team shares, or ask Claude to write them
-- **Plugins** are MCP servers that give routines their tools: any server you add ([[Guides/Adding a plugin|Adding a plugin]]), plus two built in: `automator` (the app's own read-only tools) and `notify` (desktop notifications) ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
+- **Plugins** are MCP servers that give routines their tools: any server you add ([[Guides/Adding a plugin|Adding a plugin]]), plus `notify` (desktop notifications), which ships with the app ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
 - **The model backend** runs routines: `claude-code` (Claude Code on your Claude plan) or `api` (an Anthropic API key, paid per token)
 - **The scheduler** starts at login and runs enabled routines on their schedules
 - **The `procauto` CLI** does everything; every command has `--help`

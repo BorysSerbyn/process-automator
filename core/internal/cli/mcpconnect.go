@@ -100,7 +100,7 @@ func newMCPConnectCmd() *cobra.Command {
 			"Claude Code lists the app's tools (/mcp) in every folder, by a path that survives updates. Nothing " +
 			"changes when it's registered already; one whose command is gone is replaced. Setup does it on the " +
 			"claude-code backend.",
-		Annotations: map[string]string{annNotForRoutines: "it changes Claude Code's own config"},
+		Annotations: map[string]string{annNotReadOnly: "it changes Claude Code's own config"},
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			command, err := mcpServeCommand()

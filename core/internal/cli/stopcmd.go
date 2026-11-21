@@ -30,7 +30,7 @@ func newStopCmd() *cobra.Command {
 		Short: "Stop a routine's run in progress (or waiting for its turn); it's recorded as stopped",
 		Long: "Asks the run to stop, whichever process runs it (the scheduler, a terminal, a frontend), and waits " +
 			"for it to end. A stopped run is recorded as stopped, not as a failure.",
-		Annotations: map[string]string{annNotForRoutines: "a routine can't stop runs"},
+		Annotations: map[string]string{annNotReadOnly: "it stops runs"},
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)

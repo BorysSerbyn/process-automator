@@ -76,7 +76,7 @@ func TestReloadWithAppPlugins(t *testing.T) {
 	for _, p := range b.Plugins {
 		n[p.Name]++
 	}
-	if n[automatorServerName] != 1 || n[notifyplugin.Name] != 1 {
-		t.Fatalf("the core's own plugins registered %v times", n)
+	if n[notifyplugin.Name] != 1 || n["automator"] != 0 {
+		t.Fatalf("the shipped plugins registered %v times", n)
 	}
 }

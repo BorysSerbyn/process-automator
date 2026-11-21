@@ -242,7 +242,7 @@ func newMemoryCompactCmd() *cobra.Command {
 		Short: "Merge duplicate and outdated memories, after showing you the result",
 		Long: "Asks the model (llm.backend) to merge duplicates and drop memories later ones replaced, without " +
 			"adding anything, shows what would change, and asks before saving (--yes without a terminal).",
-		Annotations: map[string]string{annNotForRoutines: "memories are mine"},
+		Annotations: map[string]string{annNotReadOnly: "memories are mine"},
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, err := loadApp(cmd)

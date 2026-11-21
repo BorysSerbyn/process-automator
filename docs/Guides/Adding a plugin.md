@@ -9,7 +9,7 @@ procauto plugins add files --command npx --arg -y --arg @modelcontextprotocol/se
 procauto plugins add weather --dir ./weather-mcp
 ```
 
-`plugins add` tries the server first (starts it, does the MCP handshake, lists its tools) and adds nothing if that fails. A server that needs credentials is tried as far as it can be: sign in with `auth login <name>`, then `plugins check <name>` tries it fully. `plugins check` with no name tries every plugin. `--replace` replaces a server of the same name. Names are lowercase letters, digits and dashes; `automator` and `notify` are taken by the built-ins.
+`plugins add` tries the server first (starts it, does the MCP handshake, lists its tools) and adds nothing if that fails. A server that needs credentials is tried as far as it can be: sign in with `auth login <name>`, then `plugins check <name>` tries it fully. `plugins check` with no name tries every plugin. `--replace` replaces a server of the same name. Names are lowercase letters, digits and dashes; `notify` is taken by the plugin the app ships with.
 
 ## Plugin folder (your own server)
 A server you wrote (or Claude Code wrote) can be installed as a folder: `procauto plugins add weather --dir ./weather-mcp`. The folder is copied into the app, so it doesn't matter where it was written; `--replace` installs a new version (the old one stays if the new one fails its trial), and `plugins remove` deletes the copy. It needs a `plugin.yaml`:
