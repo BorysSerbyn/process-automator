@@ -19,7 +19,7 @@ Your job is to run the commands and to ask the person, never to choose for them.
 
 ## 1. Check the prerequisites
 - **OS**: macOS 14 or later on Apple silicon (not Intel Macs), or Linux (x86-64 or ARM64). Nothing else is supported; stop and say so.
-- **GitHub access**: the repository is private. `gh auth status` must show a GitHub account that can read it; otherwise ask them to run `gh auth login` (or set `GH_TOKEN`). Check with `gh repo view BorysSerbyn/process-automator`.
+- **GitHub access**: the repository is private. `gh auth status` must show a GitHub account that can read it (any of the accounts signed in: install.sh and `procauto update` find the one that can, so the active account needn't be); otherwise ask them to run `gh auth login` (or set `GH_TOKEN`). Check with `GH_TOKEN=$(gh auth token -u <account>) gh repo view BorysSerbyn/process-automator` for each account; don't switch their active account.
 - **Linux only**: `secret-tool` (package `libsecret-tools`) for keeping sign-ins, and a systemd user session for starting the scheduler at login. Install the package only if they agree.
 - **Already installed?** If `procauto version --json` works, the app is there: offer `procauto update` instead, and go on to step 3.
 

@@ -51,7 +51,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## Notifications
 - **From routines** (the notify plugin): a routine can send me a short desktop notification, a title and a message, shown by the plugin itself through the OS (macOS, as the app; Linux, through the desktop's notification service), not by the menu bar app. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade. Clicking one does nothing. It has no settings, app-wide or per routine
-- **The app's own**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app; clicking one shows the run it's about. They don't depend on the notify plugin
+- **The app's own**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app; clicking one opens the app: on the run it's about, in its routine's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
 - **On Linux** the app's own notifications are recorded and listed by the CLI; nothing shows them on screen
 
 ## Status indicator

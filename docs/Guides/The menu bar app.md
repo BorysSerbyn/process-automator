@@ -14,7 +14,7 @@ The menu bar app (automator-ui, macOS) starts at login. It's an hourglass in the
 - The version, then the status: "All good", or **why it's red**, one line per reason. Hover a reason for the detail; click it to open the run it's about. [[Guides/Troubleshooting|Troubleshooting]] lists the reasons and their fixes
 - **Finish Setup…** while setup has steps left: opens the Setup window
 - **Routines ›**: **All Routines…**, then each routine with its status ("Next: tomorrow 09:20", "Paused", "Running since 09:20", "digest failed"). Click one to open its window
-- **Update to X…** when a newer release exists (or **Check for Updates**)
+- **Update to X…** when a newer release exists (or **Check for Updates**); **Updating to X…** while one installs, which opens the Updating window: what it's doing (downloading, checking it's genuine, installing, or building from the checkout, which takes a few minutes) and the latest line of its output. Close it any time: the update carries on and the app restarts when it's done. If it fails, the window says why
 - **Settings**, **Quit**
 
 ## Routines window
@@ -37,7 +37,7 @@ Setup's steps, grouped: **Templates** (tick templates, fill in their parameters,
 **Start at login**, the **LLM usage** card, then every app-wide setting as a tree (`llm` › `budget` › …), each with a control for its type and **Reset** to go back to the default. Changes apply at once. See [[Guides/Settings|Settings]].
 
 ## Notifications
-The menu bar app shows the app's own desktop notifications: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), and update results. Clicking one shows the run it's about.
+The menu bar app shows the app's own desktop notifications: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), and update results. Clicking one opens the app: a run's opens its routine's window on that run; an update's opens the Routines window.
 
 What routines tell you with `notify_me` isn't the menu bar app's: the `notify` plugin shows it itself, also as the app (see [[Guides/Writing a routine#Notifying you|Notifying you]]).
 

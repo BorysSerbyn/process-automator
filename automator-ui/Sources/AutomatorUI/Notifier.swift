@@ -4,11 +4,13 @@ import UserNotifications
 
 /// Desktop notifications for the app's own notifications (runs that failed,
 /// updates): asks the core for the ones no frontend delivered yet, shows
-/// them, tells the core which were delivered, and has the core carry out a
-/// click.
+/// them, and tells the core which were delivered. A click opens the app
+/// where the core says (`show`).
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private var cli: CLI?
+    /// Shows what a click on one should: its run, or the app.
+    private var show: (Components.Schemas.ClickOutput) -> Void = { _ in }
     /// Notifications already handed to macOS, until the core marks them delivered.
     private var posted: Set<String> = []
     /// Whether the core is being asked for pending ones (one ask at a time).
@@ -17,8 +19,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// Notifications need the app bundle (not `swift run`).
     private var canNotify: Bool { Bundle.main.bundleIdentifier != nil }
 
-    func setUp(cli: CLI?) {
+    func setUp(cli: CLI?, show: @escaping (Components.Schemas.ClickOutput) -> Void) {
         self.cli = cli
+        self.show = show
         guard canNotify else { return }
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -67,7 +70,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// A click: the core carries out the notification's click action.
+    /// A click opens the app: the core says on what.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
     ) async {
@@ -75,7 +78,13 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             let id = response.notification.request.content.userInfo["id"] as? String,
             let cli = CLI.bundled
         else { return }
-        await cli.background { $0.openNotification(id) }
+        let result = await cli.background { $0.openNotification(id) }
+        await MainActor.run {
+            switch result {
+            case .success(let click): show(click)
+            case .failure(let failure): showAlert("Couldn't open the notification", failure.message)
+            }
+        }
     }
 
     /// Shown as banners even if the app happens to be active.

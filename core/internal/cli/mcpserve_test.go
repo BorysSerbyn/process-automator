@@ -46,6 +46,8 @@ func TestMain(m *testing.M) {
 	runClaudeMCP = fakeClaudeMCP
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
+	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.
+	findReleaseToken = func(context.Context, string, string) (string, []string) { return os.Getenv("GH_TOKEN"), nil }
 	if mode := os.Getenv(pluginEnv); mode != "" {
 		servePluginFixture(mode)
 		os.Exit(0)

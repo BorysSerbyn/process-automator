@@ -150,11 +150,8 @@ commands:
     jsonOutput: cli/notifications-list.schema.json
   - command: notifications open
     usage: procauto notifications open <id> [flags]
-    summary: Do what clicking a notification does (frontends call this on a click)
+    summary: Say what clicking a notification shows (frontends call this on a click)
     flags:
-      - name: --frontend-shows-runs
-        type: bool
-        usage: the frontend shows the run itself (show-run opens nothing)
       - name: --json
         type: bool
         usage: machine-readable output
@@ -538,6 +535,14 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/update.schema.json
+  - command: update progress
+    usage: procauto update progress [flags]
+    summary: Show what the update installing is doing, or how the latest one ended
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/update-progress.schema.json
   - command: usage
     usage: procauto usage [flags]
     summary: 'LLM usage against its limit: the Claude plan''s usage (claude-code) or API spend (api)'

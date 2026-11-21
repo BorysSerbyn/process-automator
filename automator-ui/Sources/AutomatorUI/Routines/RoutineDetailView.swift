@@ -8,6 +8,24 @@ struct RoutineDetailView: View {
     @State private var confirmingDelete = false
 
     var body: some View {
+        ScrollViewReader { scroller in
+            content
+                .onChange(of: model.shownRun) { scrollToShownRun(scroller) }
+                .onChange(of: model.runs?.count) { scrollToShownRun(scroller) }
+        }
+    }
+
+    /// Brings the run shown from a notification into view, once it's listed.
+    private func scrollToShownRun(_ scroller: ScrollViewProxy) {
+        guard let id = model.shownRun, model.tab == .runs, model.runs?.contains(where: { $0.id == id }) == true
+        else { return }
+        model.shownRun = nil
+        DispatchQueue.main.async {
+            withAnimation { scroller.scrollTo(id, anchor: .top) }
+        }
+    }
+
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header

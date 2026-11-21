@@ -117,6 +117,12 @@ public struct CLI: Sendable {
         call(Components.Schemas.UpdateOutput.self, ["update", "--detach"])
     }
 
+    /// What the update installing is doing, or how the latest one ended
+    /// (`update progress`).
+    public func updateProgress() -> Result<Components.Schemas.UpdateProgress, Failure> {
+        call(Components.Schemas.UpdateProgress.self, ["update", "progress"])
+    }
+
     /// Whether the app starts at login.
     public func loginItems() -> Result<Components.Schemas.LoginItemsOutput, Failure> {
         call(Components.Schemas.LoginItemsOutput.self, ["login-items", "status"])
@@ -287,9 +293,10 @@ public struct CLI: Sendable {
         _ = perform(["notifications", "delivered"] + ids)
     }
 
-    /// Does what clicking a notification does (the core shows its run).
-    public func openNotification(_ id: String) {
-        _ = perform(["notifications", "open", id])
+    /// What clicking a notification shows (`notifications open`): its run in
+    /// its routine's window, or the app.
+    public func openNotification(_ id: String) -> Result<Components.Schemas.ClickOutput, Failure> {
+        call(Components.Schemas.ClickOutput.self, ["notifications", "open", id])
     }
 }
 

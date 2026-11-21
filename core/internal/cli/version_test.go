@@ -12,8 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
+	"github.com/BorysSerbyn/process-automator/core/internal/update"
 )
 
 func TestVersionJSON(t *testing.T) {
@@ -108,5 +110,79 @@ func TestUpdateFallsBackToSource(t *testing.T) {
 	var res UpdateOutput
 	if err != nil || json.Unmarshal([]byte(out), &res) != nil || res.Latest != "v99.0.0" || !res.UpdateAvailable {
 		t.Errorf("update --check: %s (%v)", out, err)
+	}
+}
+
+// When the releases can't be read (no access, no network), update says why
+// and stops: the source checkout is only for when they were read and none
+// has a download for this machine.
+func TestUpdateStopsWhenReleasesCantBeRead(t *testing.T) {
+	releases := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
+	defer releases.Close()
+	origAPI, origRepo := product.ReleaseAPI, product.ReleaseRepo
+	product.ReleaseAPI, product.ReleaseRepo = releases.URL, "pt/private"
+	t.Cleanup(func() { product.ReleaseAPI, product.ReleaseRepo = origAPI, origRepo })
+	t.Setenv("GH_TOKEN", "pt-token")
+
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	// A checkout that isn't one: reaching it would fail differently.
+	if _, err := cli(t, cfg, "settings", "set", "update.source-dir", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	out, err := cli(t, cfg, "update", "--check", "--json")
+	if err == nil || !strings.Contains(out, "can't read the releases") || !strings.Contains(out, "404") || strings.Contains(out, "fetch tags") {
+		t.Fatalf("update --check: %s (%v)", out, err)
+	}
+	// Installing records the failure as the update's progress.
+	if _, err := cli(t, cfg, "update"); err == nil {
+		t.Fatal("update succeeded")
+	}
+	out, _ = cli(t, cfg, "update", "progress", "--json")
+	var p UpdateProgress
+	if json.Unmarshal([]byte(out), &p) != nil || p.State != "failed" || !strings.Contains(p.Error, "can't read the releases") {
+		t.Fatalf("update progress: %s", out)
+	}
+}
+
+// update progress: none before any update; installing while one holds the
+// lock, or just started one; failed when one stopped without finishing.
+func TestUpdateProgress(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	a, err := loadTest(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	state := func() UpdateProgress {
+		t.Helper()
+		p, err := updateProgress(a, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if p := state(); p.State != "none" {
+		t.Fatalf("%+v", p)
+	}
+	r := update.NewReporter(a.Layout.UpdateProgress(), "Starting the update")
+	r.Tag("v9.0.0")
+	if p := state(); p.State != "installing" || p.Tag != "v9.0.0" || p.Step != "Starting the update" {
+		t.Fatalf("just started: %+v", p)
+	}
+	now = now.Add(time.Hour)
+	if p := state(); p.State != "failed" || !strings.Contains(p.Error, "stopped before it finished") {
+		t.Fatalf("stopped: %+v", p)
+	}
+	unlock, err := filelock.Lock(a.Layout.UpdateLock(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := state(); p.State != "installing" {
+		t.Fatalf("locked: %+v", p)
+	}
+	unlock()
+	r.Finish("Updated 1.0.0 → 9.0.0", nil)
+	if p := state(); p.State != "done" || p.Step != "Updated 1.0.0 → 9.0.0" || p.FinishedAt == nil {
+		t.Fatalf("done: %+v", p)
 	}
 }

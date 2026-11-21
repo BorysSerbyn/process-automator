@@ -12,7 +12,7 @@ import (
 
 // addFailureNotification records a notification for a run that failed,
 // needs a sign-in, or was skipped or missed (unless
-// runs.failure-notifications is off); clicking it shows the run.
+// runs.failure-notifications is off); clicking it opens the app on the run.
 func addFailureNotification(a *App, routine string, run runstatus.Run) {
 	var title string
 	switch run.Outcome {

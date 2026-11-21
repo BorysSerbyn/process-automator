@@ -88,7 +88,7 @@ var Registry = []Setting{
 	},
 	{
 		Key: "runs.failure-notifications", Type: TypeBool, Default: true,
-		Description: "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one shows the run).",
+		Description: "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one opens the app on the run).",
 	},
 	{
 		Key: "update.source-dir", Type: TypeString, Default: "",

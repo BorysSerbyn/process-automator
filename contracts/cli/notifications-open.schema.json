@@ -9,18 +9,15 @@
       "type": "string",
       "enum": [
         "show-run",
-        "none"
+        "show-app"
       ],
-      "description": "Action is what clicking did: show-run (the notification is about a\nrun) or none."
+      "description": "Action is what to show: show-run (the notification is about a run: its\nroutine's window, on that run) or show-app (about the app itself, e.g.\nan update: the app)."
     },
     "routine": {
       "type": "string",
-      "description": "Routine and Run, for show-run: with --frontend-shows-runs the frontend\nshows them itself; otherwise a report of the run was opened (Report)."
+      "description": "Routine and Run, for show-run."
     },
     "run": {
-      "type": "string"
-    },
-    "report": {
       "type": "string"
     }
   },
@@ -31,5 +28,5 @@
     "action"
   ],
   "title": "procauto notifications open --json",
-  "description": "ClickOutput is `notifications open --json`: what clicking did."
+  "description": "ClickOutput is `notifications open --json`: what clicking a notification shows."
 }

@@ -14,7 +14,9 @@
 #                        `<COMMAND> setup` (or `setup --json` for an LLM)
 #   --files-only         only files: no login items started, no keychain (tests)
 # Environment: INSTALL_DIR, BIN_DIR (see scripts/install-app.sh); GH_TOKEN or
-# GITHUB_TOKEN when the GitHub CLI isn't signed in (a private repository needs one).
+# GITHUB_TOKEN to read a private repository's releases; without them, the
+# first account the GitHub CLI is signed in to that can read it (the active
+# one first, then the others).
 #
 # It downloads the artifact for this platform and its release's SHA256SUMS,
 # checks the checksum and, on macOS, the app's notarized Developer ID
@@ -60,6 +62,7 @@ main() {
   esac
   [ "$os/$arch" != macos/amd64 ] || die "$NAME needs a Mac with Apple silicon: there's no release for Intel Macs"
   prerequisites "$os" "$from"
+  [ -n "$from" ] || pick_token
 
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
@@ -141,7 +144,34 @@ prerequisites() {
 
 token() { echo "${GH_TOKEN:-${GITHUB_TOKEN:-}}"; }
 
-# gh signed in is preferred: it reads private repositories with its own sign-in.
+# pick_token: without GH_TOKEN or GITHUB_TOKEN, uses (exports as GH_TOKEN)
+# the token of the first account the GitHub CLI is signed in to for
+# github.com that can read $REPO: the active one first, then the others.
+# None that can: stops, naming the accounts tried. Tokens are never printed.
+pick_token() {
+  [ -z "$(token)" ] && have gh || return 0
+  local t login tried=()
+  if t=$(gh auth token --hostname github.com 2>/dev/null) && [ -n "$t" ]; then
+    if can_read "$t"; then export GH_TOKEN=$t; return 0; fi
+    login=$(gh auth status --hostname github.com --active --json hosts --jq '.hosts["github.com"][0].login' 2>/dev/null) || login=""
+    tried+=("${login:-the active account}")
+  fi
+  for login in $(gh auth status --hostname github.com --json hosts --jq '.hosts["github.com"][] | select(.active | not) | .login' 2>/dev/null); do
+    t=$(gh auth token --hostname github.com --user "$login" 2>/dev/null) && [ -n "$t" ] || continue
+    if can_read "$t"; then export GH_TOKEN=$t; return 0; fi
+    tried+=("$login")
+  done
+  if [ ${#tried[@]} -gt 0 ]; then
+    local names
+    names=$(printf ', %s' "${tried[@]}")
+    die "can't read $REPO's releases: none of the GitHub accounts gh is signed in to (${names#, }) can read it (or GitHub can't be reached); sign in to one that can (\`gh auth login\`), or set GH_TOKEN"
+  fi
+}
+
+# can_read <token>: the token can read $REPO (it's passed in the environment, never on a command line).
+can_read() { GH_TOKEN=$1 gh api "repos/$REPO" --silent >/dev/null 2>&1; }
+
+# gh signed in (or given GH_TOKEN) is preferred: it reads private repositories.
 use_gh() { have gh && gh auth status --hostname github.com >/dev/null 2>&1; }
 
 api() {

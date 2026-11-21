@@ -85,13 +85,14 @@ A **template** is a routine file tracked in the repository's `templates/` so any
 - **Compiling templates into the binary**: sharing one would need a release
 
 ## Decision: the notify plugin shows its notifications itself; the app's own go through automator-ui
-`notify` is a plugin routines choose to use, so it delivers what it's asked to the OS on its own: on macOS through UserNotifications, as the app (the core lives in the app's bundle and is signed with its bundle ID, so it shares the app's permission to notify), on Linux through the freedesktop notification service. It needs no frontend, no file and no settings. Clicking one does nothing: a plugin only runs during its routine's run, and on macOS a click goes to the app's main executable, automator-ui, which knows nothing of it. The app's own notifications (a run that failed, needs a sign-in, was skipped or missed; an update) are the core's: recorded in its notifications file, delivered by automator-ui, and clicking one shows the run; their only setting is an on/off for the run ones (`runs.failure-notifications`). Nothing a routine does reaches them.
+`notify` is a plugin routines choose to use, so it delivers what it's asked to the OS on its own: on macOS through UserNotifications, as the app (the core lives in the app's bundle and is signed with its bundle ID, so it shares the app's permission to notify), on Linux through the freedesktop notification service. It needs no frontend, no file and no settings. Clicking one does nothing: a plugin only runs during its routine's run, and on macOS a click goes to the app's main executable, automator-ui, which knows nothing of it. The app's own notifications (a run that failed, needs a sign-in, was skipped or missed; an update) are the core's: recorded in its notifications file, delivered by automator-ui, and clicking one opens the app (on the run it's about, in its routine's window); their only setting is an on/off for the run ones (`runs.failure-notifications`). Nothing a routine does reaches them.
 
 ### Rejected
 - **Routines' notifications through the app's file and automator-ui**: ties a plugin to the menu bar app, so nothing shows without it (on Linux, nothing at all), and its settings (what a click does) ended up as the app's
 - **An app-wide click action with per-routine overrides**: it governed the app's notifications too, so a routine's setting changed what clicking "<routine> failed" did
 - **The app notifying through `notify_me`**: the app's alerts would depend on a plugin, its trust and dry runs
 - **Shelling out to `osascript` or `notify-send`**: notifications attributed to Script Editor rather than the app, or a tool that may not be installed
+- **A click on the app's own opening a readable report of the run in another program**: leaves the app for a text file, when the routine's window shows the run with everything else about it
 
 ## Decision: cgo for macOS notifications, and only there
 The core is pure Go, except one darwin-only cgo file in the notify plugin: UserNotifications has no command-line or pure-Go way in that keeps the notification the app's. It builds only with `darwin && cgo` (without cgo, macOS says notifications aren't supported), so Linux and Windows builds and cross-compiles stay CGO-free, and Linux uses D-Bus in pure Go.
@@ -238,18 +239,29 @@ Without an Apple Developer account, releases are signed with a self-signed certi
 - **Waiting for a Developer ID**: no release anyone else can install until then
 
 ## Decision: releases are read with the GitHub CLI's sign-in
-The repository is private, so reading releases needs a GitHub token. `update` and `install.sh` use `GH_TOKEN`/`GITHUB_TOKEN` when set, else the GitHub CLI's sign-in, and no token otherwise. Anyone invited already signs in to GitHub to get the code or the tap, so there's no new credential, and the app never stores one.
+The repository is private, so reading releases needs a GitHub token. `update` and `install.sh` use `GH_TOKEN`/`GITHUB_TOKEN` when set, else the GitHub CLI's sign-in, and no token otherwise. Anyone invited already signs in to GitHub to get the code or the tap, so there's no new credential, and the app never stores one. `gh` can be signed in to several accounts, and the active one is whatever was last switched to for other work, so they try each account until one can read the repository rather than only the active one.
 
 ### Rejected
 - **A `github` sign-in in the secrets store**: one more secret to hold, ask for and refresh, for access people already have through `gh`
 - **Public release assets from a private repository**: GitHub doesn't offer it; a separate public releases repository would share the app beyond invited people
+- **Only the active `gh` account**: an update failed whenever another account was active, though one signed in could read the releases
+- **Switching `gh`'s active account**: changes the person's setup for every other tool
 
 ## Decision: `update` replaces the app where it's installed
 An update installs over the running app's own location, whatever installed it, so updating from automator-ui works for an app installed by `install.sh`, `make install` or the Homebrew cask (which declares `auto_updates`, so brew leaves it to the app). Only the Homebrew formula's install, in brew's Cellar, is updated with `brew upgrade`.
 
 ### Rejected
 - **Always `brew upgrade` for Homebrew installs**: automator-ui would need brew and its token in its environment, and the cask's app can't be told apart from one installed by hand
-- **Always building from a source checkout**: needs Go, Xcode and a checkout on every machine, and signs with a local certificate; it remains only the fallback while no release has a download for the machine
+- **Always building from a source checkout**: needs Go, Xcode and a checkout on every machine, and signs with a local certificate; it remains only the fallback when the releases were read and none has a download for the machine
+- **Building from the checkout whenever releases can't be read**: a missing sign-in or a network error turned into a build of minutes, from whatever the checkout's tags were, instead of saying what was wrong
+
+## Decision: an update's progress is a file the installing process keeps
+An update runs detached from whoever started it (automator-ui restarts during it), and a build from the checkout takes minutes, so the process installing writes its step and the latest line of its output to `update-progress.json` as it goes, and `update progress` reports it. A frontend asks for it every few seconds while one installs; the lock still says whether one is.
+
+### Rejected
+- **Reading `update.log`**: frontends read no file of the core's, and a log says what was printed, not what step it's at
+- **`update progress --watch`, a stream like `status --watch`**: a second long-lived process for something that lasts minutes, a few times a year
+- **Progress in run status**: the scheduler writes run status; an update isn't a run, and runs without the scheduler
 
 ## Decision: development builds keep one signing identity
 Every local build is signed with the same self-signed certificate, with a stable bundle ID and install path, and reinstalling restarts the apps in place. macOS ties permission grants and Keychain access to the signing identity, so rebuilding never asks for them again.

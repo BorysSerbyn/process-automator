@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
@@ -183,4 +186,42 @@ func oneLine(s string, width int) string {
 		return string([]rune(s)[:width-1]) + "…"
 	}
 	return s
+}
+
+// reportsKept is how long a run report written for opening is kept.
+const reportsKept = 7 * 24 * time.Hour
+
+// pruneReports removes reports written more than reportsKept ago: they're
+// only for opening, and the run history holds the runs.
+func pruneReports(dir string, now time.Time) {
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > reportsKept {
+			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
+}
+
+// openRunReport writes a readable report of a run (as `runs show` prints it)
+// and opens it (`runs show --open`).
+func openRunReport(a *engine.App, runID string) (string, error) {
+	e, err := history.Get(a.Layout.History(), runID)
+	if err != nil {
+		return "", err
+	}
+	dir := a.Layout.Reports()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	pruneReports(dir, time.Now())
+	path := filepath.Join(dir, strings.ReplaceAll(runID, "/", "_")+".txt")
+	f, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	printRun(f, e)
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return path, openExternal(path)
 }
