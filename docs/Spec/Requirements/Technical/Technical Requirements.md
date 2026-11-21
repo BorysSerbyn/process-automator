@@ -91,8 +91,8 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `staleness` | `1h` | How late a missed slot may still run |
 | `timeout` | `20m` | Counted from when the run starts (not while queued); the deadline is in `lastRun.deadline`; stuck at deadline + 5m |
 | `effort` | `default` | `default`, `low`, `medium`, `high`, `xhigh`, `max`; the agent CLI's `--effort`; the `api` backend takes only `default` |
-| `folder` | an empty temporary folder | Absolute or `~/`; must exist. Its `CLAUDE.md` is added to the system prompt by the core; its settings and hooks are never loaded |
-| `session` | `discard` | `save` keeps the agent CLI session: the core picks its ID (`--session-id`) and records it in `lastRun.sessionId` and history. Needs a `folder`; dry runs never keep one |
+| `folder` | an empty temporary folder (with `session: save`, `<data>/session-folders/<name>/`, kept) | Absolute or `~/`; must exist. Its `CLAUDE.md` is added to the system prompt by the core; its settings and hooks are never loaded |
+| `session` | `discard` | `save` keeps the agent CLI session: the core picks its ID (`--session-id`) and records it in `lastRun.sessionId` and history, with the folder the run worked in (`folder`) that it resumes from. Independent of `folder`: without one, runs work in the routine's own kept folder; dry runs never keep a session |
 | `builtinTools` | `[]` | Agent CLI built-in tools by name, allowed explicitly, never by permission bypass; file tools stay inside the working folder. Agent CLI backends only |
 | `concurrency` | `queue` | `queue` or `parallel` |
 
@@ -152,7 +152,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Logs**: macOS `~/Library/Logs/process-automator/scheduler.log`; Linux the journal
 
 ## Run status and health
-- **`run-status.json`** is the single record frontends read: `health` (`ok`, `error`, `none`), `busy`, `summary`, `reasons`, `setupLeft`, `problem`, `validUntil`, and per routine `enabled`, `problem`, `nextRunAt`, `lastRun` (trigger, for, ID, session ID, started, finished, deadline, queued, outcome, reason), its own `health` and `summary`. Schema in `contracts/run-status.schema.json`
+- **`run-status.json`** is the single record frontends read: `health` (`ok`, `error`, `none`), `busy`, `summary`, `reasons`, `setupLeft`, `problem`, `validUntil`, and per routine `enabled`, `problem`, `nextRunAt`, `lastRun` (trigger, for, ID, session ID, folder, started, finished, deadline, queued, outcome, reason), its own `health` and `summary`. Schema in `contracts/run-status.schema.json`
 - **The core decides health**: a routine is unhealthy when its last run failed, needed a sign-in, was missed or skipped, when it can't be scheduled, when a slot wasn't picked up within 2 minutes, or when a run is past its timeout + 5 minutes (25 minutes without a deadline). Unfinished setup and a scheduler problem also make health `error`. `stopped` and `queued` don't
 - **Reasons**: a short headline per problem with a `detail` and the run it's about, computed by the same rules as `health`
 - **Busy** is set while a routine is `running`

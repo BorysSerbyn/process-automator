@@ -44,7 +44,7 @@
       "x-type": "bool"
     },
     "^routines\\.[a-z0-9][a-z0-9-]*\\.folder$": {
-      "description": "Folder the run works in (agent CLI backends), with its CLAUDE.md added to the instructions. Without one, runs work in an empty temporary folder. Defaults to `automator.folder` in the routine's file.",
+      "description": "Folder the run works in (agent CLI backends), with its CLAUDE.md added to the instructions. Without one, runs work in an empty temporary folder, or, with session save, in an empty folder of the routine's own that's kept. Defaults to `automator.folder` in the routine's file.",
       "type": "string",
       "x-type": "path"
     },
@@ -60,7 +60,7 @@
     },
     "^routines\\.[a-z0-9][a-z0-9-]*\\.session$": {
       "default": "discard",
-      "description": "save keeps the agent CLI session (in the routine's folder) and records its ID with the run, so it can be resumed; discard leaves nothing behind. Defaults to `automator.session` in the routine's file.",
+      "description": "save keeps the agent CLI session and records its ID and folder with the run, so it can be resumed from that folder (the routine's folder, or one of its own when it has none); discard leaves nothing behind. Defaults to `automator.session` in the routine's file.",
       "enum": [
         "discard",
         "save"

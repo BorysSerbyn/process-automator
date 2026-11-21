@@ -225,6 +225,13 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 - **GitHub artifact attestations**: need `gh` on every machine, and GitHub Enterprise Cloud for a private repository
 - **Checksum only on macOS too**: the Developer ID is already required for Gatekeeper, and checking it is free
 
+## Decision: saving sessions doesn't need a folder
+`session: save` and `folder` are separate settings. Claude Code files a session under the folder it ran in and resumes it only from there, so a routine that saves its sessions without a folder works in an empty folder of its own (`<data>/session-folders/<name>/`) that's kept, not a temporary one. Each run records the folder it worked in (`folder` on `lastRun` and in history), so a frontend resumes or forks it from there. The trust surface is still the `folder` setting, so turning saving on or off doesn't ask for trust again.
+
+### Rejected
+- **`session: save` needs a `folder`**: two separate choices tied together; a routine that works on no project had to pick a folder only to keep its sessions
+- **Keeping the temporary folder while its session exists**: the app would have to track when Claude Code drops a session
+
 ## Decision: a paused routine is never unfinished setup
 Once a routine is trusted, it has been turned on once; pausing it after that is my choice. Its setup step only offers to resume it, and never counts as unfinished, so pausing or resuming a routine never turns the light red.
 

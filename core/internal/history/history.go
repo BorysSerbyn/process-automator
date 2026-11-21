@@ -43,6 +43,9 @@ type Entry struct {
 	For *time.Time `json:"for,omitempty"`
 	// SessionID is the run's saved agent CLI session, if it kept one.
 	SessionID string `json:"sessionId,omitempty"`
+	// Folder is the folder the run worked in (where its session resumes
+	// from), unless it was an empty temporary one.
+	Folder string `json:"folder,omitempty"`
 	// Slot is how records written before occurrences said For (schedule only).
 	Slot       *time.Time `json:"slot,omitempty"`
 	StartedAt  time.Time  `json:"startedAt"`
@@ -65,6 +68,7 @@ type Summary struct {
 	Trigger    string            `json:"trigger"`
 	For        *time.Time        `json:"for,omitempty"`
 	SessionID  string            `json:"sessionId,omitempty"`
+	Folder     string            `json:"folder,omitempty"`
 	StartedAt  time.Time         `json:"startedAt"`
 	FinishedAt *time.Time        `json:"finishedAt,omitempty"`
 	Outcome    runstatus.Outcome `json:"outcome"`
@@ -111,7 +115,7 @@ func List(dir string, f Filter) ([]Summary, error) {
 			continue
 		}
 		s := Summary{
-			ID: e.ID, Routine: e.Routine, Trigger: e.Trigger, For: e.For, SessionID: e.SessionID, StartedAt: e.StartedAt,
+			ID: e.ID, Routine: e.Routine, Trigger: e.Trigger, For: e.For, SessionID: e.SessionID, Folder: e.Folder, StartedAt: e.StartedAt,
 			FinishedAt: e.FinishedAt, Outcome: e.Outcome, Reason: e.Reason,
 		}
 		if e.Result != nil {

@@ -42,7 +42,11 @@ func Set(t *testing.T, cfg, key, value string, extra ...settings.Setting) {
 
 // Backend stands in for the model: each routine's run blocks until its gate
 // opens (or the run is cancelled), then reports done.
-type Backend struct{ Gates map[string]chan struct{} }
+type Backend struct {
+	Gates map[string]chan struct{}
+	// Jobs, if set, gets each job the backend runs.
+	Jobs chan<- agent.Job
+}
 
 // Name implements agent.Backend.
 func (*Backend) Name() string { return "fake" }
@@ -55,6 +59,9 @@ func (b *Backend) Run(ctx context.Context, j agent.Job) (*agent.Output, error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
+	}
+	if b.Jobs != nil {
+		b.Jobs <- j
 	}
 	for _, tool := range j.Tools { // report done, as a routine would
 		if tool.Name == "report_outcome" {

@@ -26,6 +26,10 @@
       "type": "string",
       "description": "SessionID is the run's saved agent CLI session, if it kept one."
     },
+    "folder": {
+      "type": "string",
+      "description": "Folder is the folder the run worked in (where its session resumes\nfrom), unless it was an empty temporary one."
+    },
     "slot": {
       "type": "string",
       "format": "date-time",

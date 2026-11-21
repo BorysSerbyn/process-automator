@@ -12,6 +12,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
+	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
@@ -158,5 +159,38 @@ func TestFailureNotification(t *testing.T) {
 	_, _ = a.Execute(context.Background(), set, r, engine.RunOptions{DryRun: true})
 	if f, _ := notifications.Load(a.Layout.Notifications()); len(f.Notifications) != 0 {
 		t.Fatal("a dry run notified")
+	}
+}
+
+// A routine that saves its sessions without a folder works in a folder of its
+// own that's kept, recorded with the run: its session resumes from there.
+// Turning saving off again doesn't change what it was trusted with.
+func TestSessionWithoutFolder(t *testing.T) {
+	a, set := enginetest.Fixture(t, map[string]string{"sweep": "queue"}, nil)
+	r, _ := set.Find("sweep")
+	before, _ := a.RoutineConfig(r)
+	enginetest.Set(t, a.Layout.Config(), "routines.sweep.session", "save", r.Settings()...)
+	jobs := make(chan agent.Job, 1)
+	enginetest.UseBackend(t, &enginetest.Backend{Jobs: jobs})
+	a = enginetest.Load(t, a.Layout.Config())
+	if err := <-enginetest.Start(t, a, set, "sweep"); err != nil {
+		t.Fatal(err)
+	}
+	want := a.Layout.SessionFolder("sweep")
+	if j := <-jobs; j.Folder != want || j.SessionID == "" {
+		t.Errorf("ran in %q with session %q, want %s", j.Folder, j.SessionID, want)
+	}
+	if info, err := os.Stat(want); err != nil || !info.IsDir() {
+		t.Errorf("its folder isn't kept: %v", err)
+	}
+	if run := enginetest.LastRun(a, "sweep"); run == nil || run.Folder != want || run.SessionID == "" {
+		t.Errorf("last run: %+v", run)
+	}
+	if list, _ := history.List(a.Layout.History(), history.Filter{}); len(list) != 1 || list[0].Folder != want {
+		t.Errorf("history: %+v", list)
+	}
+	after, _ := a.RoutineConfig(r)
+	if !engine.SurfaceOf(r, before).Equal(engine.SurfaceOf(r, after)) {
+		t.Error("saving its session changed what it's trusted with")
 	}
 }

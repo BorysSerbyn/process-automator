@@ -19,6 +19,9 @@
       "sessionId": {
         "type": "string"
       },
+      "folder": {
+        "type": "string"
+      },
       "startedAt": {
         "type": "string",
         "format": "date-time"

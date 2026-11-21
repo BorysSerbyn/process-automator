@@ -121,6 +121,11 @@ components:
         finishedAt:
           format: date-time
           type: string
+        folder:
+          description: |-
+            Folder is the folder the run worked in (where its session resumes
+            from), unless it was an empty temporary one.
+          type: string
         for:
           description: |-
             For is the time the run is for: the schedule slot, the backfilled day's
@@ -1008,6 +1013,11 @@ components:
         finishedAt:
           format: date-time
           type: string
+        folder:
+          description: |-
+            Folder is the folder the run worked in (where its session resumes
+            from), unless it was an empty temporary one.
+          type: string
         for:
           description: For is the time the run is for (the schedule slot, the backfilled day).
           format: date-time
@@ -1265,6 +1275,8 @@ components:
           type: number
         finishedAt:
           format: date-time
+          type: string
+        folder:
           type: string
         for:
           format: date-time

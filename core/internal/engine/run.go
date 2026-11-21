@@ -95,13 +95,13 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 	// finish records how it ended. Dry runs record nothing.
 	record := func(run runstatus.Run) {
 		if !o.DryRun {
-			run.SessionID, run.QueuedAt = sessionID, queuedAt
+			run.SessionID, run.Folder, run.QueuedAt = sessionID, cfg.WorkFolder, queuedAt
 			writeStatus(a.Layout.RunStatus(), r.Name, forOccurrence(run, occ))
 		}
 	}
 	finish := func(run runstatus.Run, res *agent.Result) {
 		if !o.DryRun {
-			run.SessionID, run.QueuedAt = sessionID, queuedAt
+			run.SessionID, run.Folder, run.QueuedAt = sessionID, cfg.WorkFolder, queuedAt
 			recordRun(a, r.Name, occ, inputs, run, res)
 		}
 	}
@@ -177,14 +177,19 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 		if err != nil {
 			return nil, err
 		}
+		if cfg.WorkFolder != cfg.Folder { // the routine's own: made on its first run
+			if err := os.MkdirAll(cfg.WorkFolder, 0o700); err != nil {
+				return nil, err
+			}
+		}
 		ag := &agent.Agent{Connector: a.Connector, Backend: backend, DryRun: o.DryRun, Log: o.Log}
 		res, err := ag.Run(runCtx, agent.Request{
 			Name: r.Name, Source: r.Source, Origin: r.Path,
 			Input: withParams(inputs, cfg.Params), Tools: r.Tools, Servers: r.Servers,
-			Run:      RunOf(r, cfg.Folder, history.RunID(r.Name, started)),
+			Run:      RunOf(r, cfg.WorkFolder, history.RunID(r.Name, started)),
 			Partials: set.PromptPartials(mem),
 			Effort:   cfg.Effort,
-			Folder:   cfg.Folder, SessionID: sessionID, BuiltinTools: cfg.BuiltinTools,
+			Folder:   cfg.WorkFolder, SessionID: sessionID, BuiltinTools: cfg.BuiltinTools,
 		})
 		if err != nil && ctx.Err() == nil && errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 			err = fmt.Errorf("timed out after %s (routines.%s.timeout): %w", settings.DurationText(cfg.Timeout), r.Name, err)
@@ -210,7 +215,7 @@ func recordRun(a *App, name string, occ trigger.Occurrence, inputs map[string]an
 	run = forOccurrence(run, occ)
 	writeStatus(a.Layout.RunStatus(), name, run)
 	saveHistory(a, history.Entry{
-		Routine: name, Trigger: occ.Trigger, TriggerID: occ.ID, For: run.For, SessionID: run.SessionID,
+		Routine: name, Trigger: occ.Trigger, TriggerID: occ.ID, For: run.For, SessionID: run.SessionID, Folder: run.Folder,
 		StartedAt: run.StartedAt, FinishedAt: run.FinishedAt,
 		Outcome: run.Outcome, Reason: run.Reason, Inputs: inputs, Result: res,
 	})
