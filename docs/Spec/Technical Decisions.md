@@ -344,3 +344,17 @@ Every local build is signed with the same self-signed certificate, with a stable
 
 ### Rejected
 - **Ad-hoc signing**: a new identity every build, so every grant and Keychain item would be asked for again
+
+## Decision: OpenAI-compatible servers through the api backend
+Local and other vendors' models (Ollama, llama.cpp's `llama-server`, vLLM, LM Studio; DeepSeek, Qwen, Kimi) all serve OpenAI's Chat Completions API, so the `api` backend runs them through Genkit's `compat_oai` plugin, pointed at one URL: one setting covers every such server, and the Genkit loop, gateway, dry runs and outcome rules stay the same. A routine picks it by its model's provider, `openai-compat/<model>`, Genkit's naming, so Anthropic models are untouched and one routine's choice doesn't change another's. The prefix says what the server speaks, not who runs it, and stays clear of `openai/`, which is Codex's. One server is enough for now: a second would be a named endpoint later, without changing this one's setting.
+
+Readiness checks what costs nothing (a key, a URL) wherever routines are judged, the scheduler's pass included; connecting to the server is left to `doctor`, `routines check` and the run itself, since the scheduler judges every routine every 30 seconds and setup runs in that pass too. A server that's down then shows in the run's failure and in `doctor`, not as a routine that can't be scheduled. The Anthropic key stops being required when every routine runs on the server, since a local-only setup has no use for one.
+
+Their runs aren't priced: a local model costs nothing, but a hosted one does at a price the app doesn't know, so they count as unknown rather than free, and never toward the Anthropic budgets. On this server, tool errors (bad input, a tool that doesn't exist) go back to the model, as on agent CLI backends: smaller models make these mistakes, and the outcome rules still fail a run whose write didn't happen. It's labelled experimental and untested wherever it's offered, as `codex` is: it has run only against a stand-in for the API.
+
+### Rejected
+- **Genkit's `ollama` plugin**: Ollama only; `compat_oai` covers Ollama through its OpenAI-compatible API, and every other server too
+- **A backend of its own** (`llm.backend: ollama`): it would duplicate `api`'s loop, and a routine's model already says where it runs
+- **Checking the server in the scheduler's pass**, with a short timeout and a cache: a slow or blackholed server would still stall a pass, and the run reports the same failure
+- **Counting its runs as free**: a hosted API's spend would vanish from the record
+

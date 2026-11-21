@@ -2,14 +2,12 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
-	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/sysenv"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
@@ -39,6 +37,15 @@ type BackendDef struct {
 	// Experimental is a backend not yet tried against the real service: its
 	// status says so wherever it's chosen (setup).
 	Experimental bool
+	// ModelProblem says what keeps a routine's model from running on the
+	// backend, without connecting to anything (nil when nothing does: the
+	// model's provider is set up); nil for a backend that checks nothing.
+	ModelProblem func(a *App, model string) *Problem
+	// ReachModel connects to the server that runs a routine's model and says
+	// why the model can't run there (nil when it can); nil for a backend
+	// with nothing to reach. It connects, so only doctor and routines check
+	// ask, never the scheduler.
+	ReachModel func(ctx context.Context, a *App, model string) *Problem
 }
 
 // Backends are the model Backends by llm.backend value. Adding one (another
@@ -47,20 +54,26 @@ type BackendDef struct {
 var Backends = map[string]BackendDef{
 	"api": {
 		New: func(a *App) (agent.Backend, error) {
-			key, err := a.Connector.Secrets.Get(AnthropicKey)
+			// Each provider's set-up is checked when a routine's model needs it.
+			key, _ := a.Connector.Secrets.Get(AnthropicKey)
+			compat, err := a.OpenAICompat()
 			if err != nil {
-				return nil, errors.New("no Anthropic API key: run `" + product.Command + " auth login anthropic`, " +
-					"or use your Claude subscription with `" + product.Command + " settings set llm.backend claude-code`")
+				return nil, err
 			}
-			return &agent.Genkit{APIKey: key}, nil
+			return &agent.Genkit{APIKey: key, OpenAICompat: compat}, nil
 		},
-		AgentModel: func(model string) (string, error) { return model, nil }, // Genkit takes the file's names
-		Priced:     true,
+		AgentModel: func(model string) (string, error) { // Genkit takes the file's names
+			_, err := agent.APIModel(model)
+			return model, err
+		},
+		Priced:       true,
+		ModelProblem: apiModelProblem,
+		ReachModel:   apiReachModel,
 		Ready: func(a *App) (string, string) {
-			if _, err := a.Connector.Secrets.Get(AnthropicKey); err != nil {
-				return "no Anthropic API key is stored", "anthropic"
+			if _, err := a.Connector.Secrets.Get(AnthropicKey); err == nil || onlyOpenAICompat(a) {
+				return "", ""
 			}
-			return "", ""
+			return "no Anthropic API key is stored", "anthropic"
 		},
 	},
 	"claude-code": {

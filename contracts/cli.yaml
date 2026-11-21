@@ -6,14 +6,14 @@ globalFlags:
     usage: 'config file (default: per-user config dir)'
 commands:
   - command: auth login
-    usage: procauto auth login <server|anthropic|claude-code> [flags]
-    summary: 'Sign in to a server (browser for remote servers; paste credentials for local ones; `anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional; codex keeps its own sign-in: `codex login`)'
+    usage: procauto auth login <server|anthropic|claude-code|openai-compat> [flags]
+    summary: 'Sign in to a server (browser for remote servers; paste credentials for local ones; `anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional; `openai-compat` stores the OpenAI-compatible server''s API key, for one that needs it (experimental, untested); codex keeps its own sign-in: `codex login`)'
     flags:
       - name: --browser
         type: bool
         usage: enter keys and tokens on a local page in the browser instead of the terminal
   - command: auth logout
-    usage: procauto auth logout <server|anthropic|claude-code>
+    usage: procauto auth logout <server|anthropic|claude-code|openai-compat>
     summary: Forget a server's stored credentials
   - command: auth status
     usage: procauto auth status [flags]

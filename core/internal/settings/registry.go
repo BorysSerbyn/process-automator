@@ -62,8 +62,16 @@ func ptr(f float64) *float64 { return &f }
 var Registry = []Setting{
 	{
 		Key: "llm.backend", Type: TypeEnum, Default: "api", Enum: []string{"api", "claude-code", "codex"},
-		Description: "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription; " +
+		Description: "What runs routines: api = Genkit with an Anthropic API key (pay per token), or, experimental and untested, " +
+			"models on an OpenAI-compatible server such as Ollama (see llm.openai-compat.base-url); claude-code = headless Claude Code on your Claude subscription; " +
 			"codex (experimental, untested) = headless OpenAI Codex CLI on your Codex sign-in (ChatGPT plan or OpenAI API key).",
+	},
+	{
+		Key: "llm.openai-compat.base-url", Type: TypeString, Default: "http://localhost:11434/v1", Backend: "api",
+		Description: "Experimental, untested: the OpenAI-compatible server that runs routines whose model is openai-compat/<model> " +
+			"(e.g. openai-compat/qwen3:8b). The default is Ollama on this machine; llama.cpp's llama-server, vLLM, LM Studio and hosted APIs " +
+			"such as DeepSeek, Qwen (DashScope) or Kimi (Moonshot) work too. A server that needs an API key gets it with `auth login openai-compat`. " +
+			"Its runs have no list price, so they don't count toward the llm.budget.* budgets.",
 	},
 	{
 		Key: "llm.usage-limit", Type: TypePercent, Default: 90.0, Min: ptr(0), Max: ptr(100), Unit: "%", Backend: "claude-code",
