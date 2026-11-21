@@ -41,7 +41,7 @@ Plain Dotprompt keys:
 | Key | |
 |---|---|
 | `description` | What it does |
-| `model` | e.g. `anthropic/claude-sonnet-5-5`; left out, the backend's default. The `claude-code` backend runs only Claude models |
+| `model` | e.g. `anthropic/claude-sonnet-5-5`, or `openai/gpt-5.5` on `codex`; left out, the backend's default. The `claude-code` backend runs only Claude models (`anthropic/…`), the `codex` backend only OpenAI ones (`openai/…`) |
 | `config` | Model settings, e.g. `max_tokens: 4000` (the `api` backend only) |
 | `tools` | The tool allowlist |
 | `output` | The shape of its result (see [[#Structured output]]) |
@@ -54,14 +54,14 @@ The app's own keys, written dotted (`automator.servers:`, not a nested `automato
 | `automator.schedule` | none | Cron, local time. Without one it runs only by hand |
 | `automator.staleness` | `1h` | How late a missed scheduled run may still start; later, it's recorded as missed |
 | `automator.timeout` | `20m` | How long a run may take before it's stopped and fails |
-| `automator.effort` | `default` | How hard the model thinks: `default`, `low`, `medium`, `high`, `xhigh`, `max` (the `api` backend takes only `default`) |
-| `automator.folder` | an empty temporary folder (one of its own that's kept, when it saves its session) | The folder it works in; its `CLAUDE.md` is added to the instructions |
-| `automator.builtinTools` | `[]` | Claude Code's own tools it may use, e.g. `[Read, Grep, Bash, Edit]` (`claude-code` backend only; file tools stay inside its folder; dry runs get only the read-only ones) |
-| `automator.session` | `discard` | `save` keeps the Claude Code session and records its ID and folder with the run, so you can resume it from that folder (without `automator.folder`, the routine gets a folder of its own for it) |
+| `automator.effort` | `default` | How hard the model thinks: `default`, `low`, `medium`, `high`, `xhigh`, `max` (the same names on `claude-code` and `codex`, if the model has them; the `api` backend takes only `default`) |
+| `automator.folder` | an empty temporary folder (one of its own that's kept, when it saves its session) | The folder it works in; its `CLAUDE.md` (`claude-code`) or `AGENTS.md` (`codex`) is added to the instructions |
+| `automator.builtinTools` | `[]` | The agent CLI's own tools it may use, in that backend's names (see [[#Built-in tools]]); not on the `api` backend |
+| `automator.session` | `discard` | `save` keeps the agent CLI session and records its ID, folder and backend with the run, so you can resume it from that folder (`claude --resume <id>`, `codex resume <id>`; without `automator.folder`, the routine gets a folder of its own for it) |
 | `automator.concurrency` | `queue` | `queue` waits for other runs (one at a time); `parallel` runs alongside them. A routine never overlaps itself |
 | `automator.parameters` | | Values set at install (see below) |
 | `automator.platforms` | all | `[macos]`, `[linux]` or both |
-| `automator.backends` | all | The backends it works with, e.g. `[claude-code]` for a routine using `builtinTools`, `folder`, `session` or `effort`; a template that doesn't list the selected `llm.backend` won't install |
+| `automator.backends` | all | The backends it works with, e.g. `[claude-code]` for a routine using Claude Code's `builtinTools`, or `[claude-code, codex]` for one using `folder`, `session` or `effort`; a template that doesn't list the selected `llm.backend` won't install |
 | `automator.plugins.<name>` | | A section for an in-process plugin that takes one (none ship with the app) |
 
 From `automator.schedule` to `automator.concurrency`, each key is also a per-routine setting, and so is each parameter: the file gives the default, and `procauto settings set` overrides it without editing the file, e.g. `settings set routines.digest.timeout 45m` or `settings set routines.digest.params.repo my-org/other-repo` (see [[Guides/Settings|Settings]]).
@@ -104,9 +104,15 @@ The run fails if the result doesn't match; a valid one is stored with the run an
 Add `notify` to `automator.servers` and `notify_me` to `tools`. The model can then send you a desktop notification: a `title`, a `body`, and `urgent` for something you must see now (it breaks through Focus). The plugin shows it itself, as the app: on macOS like the app's other notifications, on Linux through your desktop's notification service. Clicking it does nothing, so the prompt should say what to look at. It's a write, so dry runs intercept it, and the call is in the run's history.
 
 ## Working in a folder
-With `automator.folder` set, the run works in that folder instead of an empty one, and its `CLAUDE.md` is added to the routine's instructions (the folder's own Claude Code settings and hooks are never loaded). Combine it with `automator.builtinTools` to let the model read or change files there, e.g. a routine that checks a repository:
+With `automator.folder` set, the run works in that folder instead of an empty one, and its project instructions are added to the routine's: `CLAUDE.md` on `claude-code`, `AGENTS.md` on `codex` (the folder's own agent settings and hooks are never loaded). Combine it with `automator.builtinTools` to let the model read or change files there, e.g. a routine that checks a repository:
 
 ```yaml
 automator.folder: ~/code/my-repo
-automator.builtinTools: [Read, Grep, Glob]
+automator.builtinTools: [Read, Grep, Glob]    # on codex: [shell]
 ```
+
+## Built-in tools
+Besides its servers' tools, a routine on an agent CLI backend may use the CLI's own tools, each allowed by name in `automator.builtinTools` (none by default). Each backend has its own names, and a name the selected backend doesn't have is a problem `procauto doctor` shows:
+
+- **`claude-code`**: Claude Code's tool names, e.g. `[Read, Grep, Glob, Bash, Edit, WebSearch]`. File tools stay inside the run's folder. Dry runs get only `Read`, `Glob`, `Grep`, `WebSearch` and `WebFetch`
+- **`codex`**: `shell` (Codex runs commands), `write` (commands and Codex's file edits may change files in the run's folder; without it Codex's sandbox is read-only), `network` (with `write`: commands may reach the network), `web_search`, `view_image` (looking at image files). Codex always has its own file-editing tool, which the read-only sandbox stops from writing. Dry runs drop `write` and `network`, so they run in the read-only sandbox, without network

@@ -13,8 +13,8 @@ The core is Go: a scheduled CLI doing mostly HTTP and JSON, shipped as a single 
 - **LangGraph**: Python/JS only; its graph orchestration solves branching, stateful agents, while routines are linear (gather, decide, act)
 - **An existing agent runtime** (e.g. Hermes Agent): scheduling and MCP built in, but a Python runtime with its own always-on gateway, less control over the write path (guardrails in prompts rather than code), and a young dependency at the core. Revisit if routines ever outgrow fixed prompts
 
-## Decision: two model backends: an API key, or a headless agent CLI on my plan
-The model loop sits behind a `Backend` interface chosen by `llm.backend`. `api` runs it in Genkit against the Anthropic API, paid per token. `claude-code` runs headless Claude Code on my Claude plan: a plan's credentials are reserved for Anthropic's own apps, and scripting Claude Code is the sanctioned way to use a plan from another program. `claude-code` is the first of a family: another agent CLI (Codex, Gemini CLI, …) is one `CLITool` plus a backend name, and gets prompt rendering, the loopback tool server, dry runs and the working folder for free. Claude Code is isolated from my own setup (no settings, hooks, plugins, slash commands, sessions or memory, and no inherited API key) so a run does only what its routine says and can't silently bill an API key. The accepted cost on `claude-code`: only `model` applies from the frontmatter, the loop is Claude Code's (I control max turns), and only Claude models run.
+## Decision: model backends: an API key, or a headless agent CLI on my plan
+The model loop sits behind a `Backend` interface chosen by `llm.backend`. `api` runs it in Genkit against the Anthropic API, paid per token. `claude-code` runs headless Claude Code on my Claude plan: a plan's credentials are reserved for Anthropic's own apps, and scripting Claude Code is the sanctioned way to use a plan from another program. Agent CLIs are a family: each (Claude Code, Codex; Gemini CLI or another later) is one `CLITool` plus a backend name, and gets prompt rendering, the loopback tool server, dry runs and the working folder for free. Claude Code is isolated from my own setup (no settings, hooks, plugins, slash commands, sessions or memory, and no inherited API key) so a run does only what its routine says and can't silently bill an API key. The accepted cost on `claude-code`: only `model` applies from the frontmatter, the loop is Claude Code's (I control max turns), and only Claude models run.
 
 ### Rejected
 - **Passing plan credentials to Genkit or the API**: against Anthropic's terms, and blocked
@@ -164,16 +164,18 @@ A sign-in can need several pages, and from protocol 2026-07-28 a tool can't ask 
 - **Eliciting mid-call** (`ServerSession.Elicit`): the SDK refuses it on current protocol versions, so sign-in would only ever fall back to opening a browser on this machine
 
 ## Decision: dry runs withhold write-capable built-in tools
-Agent CLI built-in tools (Bash, Edit, Write, …) run inside the agent CLI, where the tool gateway can't see or intercept their calls. So a dry run gets only the read-only built-ins (Read, Glob, Grep, WebSearch, WebFetch), and the others are left out entirely.
+Agent CLI built-in tools (Bash, Edit, Write, …) run inside the agent CLI, where the tool gateway can't see or intercept their calls. So a dry run gets only the read-only built-ins (Read, Glob, Grep, WebSearch, WebFetch), and the others are left out entirely. On Codex, whose shell and file edits are bounded by its sandbox rather than by tool names, a dry run drops `write` and `network`: the shell stays, in the read-only sandbox without network, which the OS enforces.
 
 ### Rejected
 - **Intercepting them like MCP writes**: their calls never pass through the gateway
 
-## Decision: the core adds a routine folder's CLAUDE.md itself
-Claude Code loads a folder's `CLAUDE.md` only through its `project` setting source, which also loads that folder's settings and hooks, and only in folders the user has trusted. So runs keep every setting source off, and the core reads `<folder>/CLAUDE.md` and adds it to the system prompt: the same instructions, with no hooks or settings, in any folder.
+## Decision: the core adds a routine folder's CLAUDE.md (or AGENTS.md) itself
+Claude Code loads a folder's `CLAUDE.md` only through its `project` setting source, which also loads that folder's settings and hooks, and only in folders the user has trusted. So runs keep every setting source off, and the core reads `<folder>/CLAUDE.md` and adds it to the system prompt: the same instructions, with no hooks or settings, in any folder. Codex is handled the same way with its own file, `AGENTS.md`: Codex's loading (`project_doc_max_bytes`) is off and the core adds `<folder>/AGENTS.md` to `developer_instructions`. Codex's own loading would also take every `AGENTS.md` (or `AGENTS.override.md`) from the git root down, and depends on project trust, which runs don't read: the core's is the folder's one file, the same in every folder, as on Claude Code. Each CLI gets its own file, as a person using that CLI in the folder would.
 
 ### Rejected
 - **`--setting-sources project`**: a folder's hooks would run unattended commands, and its settings could widen permissions
+- **Codex's own AGENTS.md loading**: files above the folder join in, and whether any load depends on trust kept in the config runs ignore
+- **One file for every backend** (e.g. `CLAUDE.md` on Codex too): a folder set up for Codex keeps its instructions in `AGENTS.md`
 
 ## Decision: judgement over rules for routine output
 Output quality is left to the model: prompts stay lean, and recurring mistakes are fixed in the routine file or with memories. Checks in code would have to be declared per routine, and routines are just files.
@@ -200,6 +202,7 @@ Cost means different things on the two backends. On a Claude plan, runs are cove
 - **The status line as the main source**: it only gets readings while I use Claude Code interactively
 - **Asking me to edit my status line script**: the app can wrap the command itself
 - **The rate-limit event in a run's output**: its percentages are in an undocumented field, and it only updates when a routine runs
+- **A usage limit on Codex**: `codex exec` reports no plan usage, and Codex's own status is interactive only, so `codex` has none (`kind: none`); a run that hits Codex's limit fails and says so. Counting its runs against the API budgets would mix in an earlier backend's spend
 
 ## Decision: secrets through the OS's own command-line tools
 The Keychain is reached by shelling out to `/usr/bin/security` and the Secret Service by `secret-tool` (libsecret), values on stdin and base64-encoded, behind one `secrets.Store` interface. No cgo and no D-Bus library in the core; `secret-tool` is a package away on every desktop distribution.
@@ -238,6 +241,30 @@ A template can list the backends it works with (`automator.backends`), and insta
 ### Rejected
 - **Working it out from the fields a template uses**: implicit; a template author states it once instead
 - **Hiding them from `templates list`**: switching backends would make templates appear from nowhere
+
+## Decision: Codex runs through `codex exec`
+The `codex` backend drives OpenAI's Codex CLI headless with `codex exec`, like Claude Code's `claude -p`: one `CLITool`. `codex exec` has what a run needs: JSONL events (`--json`) with the thread ID, the final message, token usage and errors; isolation from my setup (`--ignore-user-config`, which still uses the sign-in in `CODEX_HOME`; `--ignore-rules`); MCP servers from `--config` with a bearer token read from an environment variable and `required`, so a run that can't reach its tools fails; developer instructions that add to Codex's own; an output schema file; ephemeral sessions; an approval policy that never asks. The routine's MCP server's tools are approved up front (`default_tools_approval_mode = "approve"`): under `never`, Codex refuses any tool not marked read-only that would need an approval, and the gateway already decides what runs. The accepted costs: Codex's global `AGENTS.md` in `CODEX_HOME` still loads (only another `CODEX_HOME` turns it off, and that would leave the sign-in behind); runs read the sign-in from `auth.json`, Codex's default store, since the config that could pick the keyring isn't read; only `model` applies from the frontmatter, and only OpenAI models; no turn limit (the timeout bounds a run); and no usage limit in the app.
+
+### Rejected
+- **An ACP adapter** (Agent Client Protocol): Zed's Rust `codex-acp` is archived, and its replacement is a TypeScript translation layer from npm: another runtime and package between the app and Codex, for what `codex exec` does directly
+- **The Codex TypeScript SDK**: it runs `codex exec` itself; the same interface behind a Node runtime
+- **`codex app-server`** (Codex's JSON-RPC server): a long-lived conversation protocol for IDEs; a run is one prompt to one result
+- **Loading my Codex config**: its MCP servers, profiles, hooks and project trust would change what a routine can do
+- **Another `CODEX_HOME` per run**: the sign-in lives there, and copying it would race Codex's token refreshes
+
+## Decision: Codex's built-in tools are named by what they allow
+Codex has no list of tools to allow by name: its shell is one tool whose reach is set by a sandbox (`read-only`, `workspace-write`, network on or off), and its file edits come with the model. So on `codex`, `builtinTools` names capabilities in Codex's terms (`shell`, `write`, `network`, `web_search`, `view_image`) that map to Codex's feature toggles and sandbox. Without any, a run gets only the app's tools as far as Codex allows: its shell is off and the sandbox read-only, which stops its file-editing tool from writing. Each backend checks its own names, at run time and in readiness, so a routine whose names don't fit the selected backend shows up in `doctor` instead of failing its next run.
+
+### Rejected
+- **One vocabulary for every backend** (mapping Claude Code's Read, Bash, Edit onto Codex): Codex can't allow reading without the shell, nor editing without commands writing too, so the mapping would promise what Codex doesn't enforce
+- **Codex's `danger-full-access` sandbox**: nothing would bound what a run's commands change
+
+## Decision: a session's ID comes from whichever side picks it
+Claude Code saves a session under an ID it's given (`--session-id`), so the app picks it before the run and it's on record while the run runs. Codex picks its own (the thread ID in its first event), so a CLI tool can say it picks its IDs (`SessionPicker`): the app gives it none, and records the one it reports when the run ends, failed runs included. The engine knows only which side picks, never which CLI. Each run also records its backend (`lastRun.backend`, history's `backend`), so a frontend knows which CLI resumes a session.
+
+### Rejected
+- **Resuming Codex sessions by `--last`**: another session in the same folder (mine, or another routine's) would be resumed instead
+- **Parsing the ID from Codex's session files**: Codex's files, not its interface
 
 ## Decision: commands bring run status up to date
 Run status is the scheduler's record, but a command that changes something also records each routine's state there when it succeeds, as the scheduler's pass would. Otherwise turning a routine on in the setup window left it showing as paused for up to a pass (30 seconds). Commands run read-only (`setup --json`, `run --dry-run`) don't write it, so frontends that poll them don't make it change.

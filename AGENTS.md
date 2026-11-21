@@ -3,7 +3,7 @@
 Follow this when someone asks you to install process-automator for them. (Working on the code instead? See `docs/Guides/Developing.md`.)
 
 ## What the app does
-Process Automator runs **routines**: prompt files that a model (Claude, through Claude Code or the API) runs on a schedule in the background, with tools from **plugins** (MCP servers: `notify`, which ships with the app, plus any MCP server they add). Out of the box it does nothing: anything a prompt plus tools can do, a routine can do. Around that it has:
+Process Automator runs **routines**: prompt files that a model (Claude, through Claude Code or the API; or OpenAI's, through the Codex CLI) runs on a schedule in the background, with tools from **plugins** (MCP servers: `notify`, which ships with the app, plus any MCP server they add). Out of the box it does nothing: anything a prompt plus tools can do, a routine can do. Around that it has:
 - **routines:** create, edit, run now or as a dry run (nothing posted), pause, stop, delete; schedules in plain words; run history with every tool call, output and cost;
 - **plugins:** add any MCP server (remote, local, or a folder they wrote), try it before it's installed, sign in;
 - **settings:** app-wide and per routine (schedule, model, effort, timeout, working folder, which tools it may use, ...);
@@ -23,7 +23,7 @@ Your job is to run the commands and to ask the person, never to choose for them.
 - **Linux only**: `secret-tool` (package `libsecret-tools`) for keeping sign-ins, and a systemd user session for starting the scheduler at login. Install the package only if they agree.
 - **Already installed?** If `procauto version --json` works, the app is there: offer `procauto update` instead, and go on to step 3.
 
-Don't install the model backend's tools or the apps behind MCP servers (Claude Code, local servers) yourself; setup says when one is needed, and you ask.
+Don't install the model backend's tools or the apps behind MCP servers (Claude Code, the Codex CLI, local servers) yourself; setup says when one is needed, and you ask.
 
 ## 2. Install
 From a checkout of the repository (clone it first if you haven't):
@@ -58,7 +58,7 @@ What each kind needs:
 - **`templates`** (optional): run `procauto templates list --json` (there may be none: then offer to write their first routine with them instead, or skip). Offer only templates with `supportsBackend`: the others need another backend, and installing them is refused.
   1. **Projects**, if any template has a `project`: ask, on its own, which of those projects they work on, naming every one, even when there's only one, plus "none of these". Show no templates yet, and don't assume the answer.
   2. **Templates**: list each template as its own choice, with its id, description and parameters: those of their projects, then those with no project. Never bundle templates into one choice. Templates with the same name install as the same routine, so they're alternatives: offer the one of their project. **None are picked by default**: install only the ones they name, asking for each parameter's value (or keeping its default if they say so): `procauto templates install <tags>/<name> [--set <param>=<value>]...`.
-- **`backend`**: ask which backend runs routines (the `ask` explains both: `claude-code` uses their Claude subscription through the Claude Code CLI; `api` uses an Anthropic API key), then `procauto settings set llm.backend <choice>`. If it then needs a key, `procauto auth login anthropic --browser` opens a page in their browser where *they* enter it.
+- **`backend`**: ask which backend runs routines (the `ask` explains each: `claude-code` uses their Claude subscription through the Claude Code CLI; `codex` uses their Codex sign-in (a ChatGPT plan or an OpenAI API key) through OpenAI's Codex CLI; `api` uses an Anthropic API key), then `procauto settings set llm.backend <choice>`. If it then needs a key, `procauto auth login anthropic --browser` opens a page in their browser where *they* enter it. On `codex`, if the step's `status` says Codex isn't installed or signed in, ask them to install it and run `codex login` themselves (it signs in in their browser), then check again.
 - **`mcp`** (`auto`, only on the `claude-code` backend): run `procauto mcp connect`, without asking. It registers the app's MCP server with Claude Code at user scope, so `/mcp` lists `procauto` in every folder. It's required: don't skip it. Tell them a Claude Code session that's already running (yours too) needs a restart to see it.
 - **`usage`** (only on the `claude-code` backend, when Claude Code's `/usage` can't be read): ask whether to read the plan's usage from their Claude Code status line instead; if yes, `procauto usage statusline install` (their status line keeps showing what it shows now).
 - **`routine`**: a routine that won't run; `procauto doctor --json` says why and how to fix it. Explain it; fix it only with their go-ahead.

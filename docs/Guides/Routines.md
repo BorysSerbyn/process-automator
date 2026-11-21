@@ -37,7 +37,7 @@ procauto run digest --dry-run      # a real run, except that nothing is posted o
 A dry run calls the model and every read-only tool for real, and intercepts every tool that writes: it prints what each write would have sent, then the routine's final reply. Dry runs need no trust and leave no run history. From the menu bar app, **Run Now** › **Dry Run** runs it in the background; its output goes to `start.log` in the data folder.
 
 ## Trust it
-A routine runs for real only once you've trusted it with what it can reach: its servers, the tools it may call (split into writes and reads), the Claude Code built-in tools it may use, its plugin sections and its folder.
+A routine runs for real only once you've trusted it with what it can reach: its servers, the tools it may call (split into writes and reads), the agent CLI's built-in tools it may use, its plugin sections and its folder.
 
 ```sh
 procauto routines trust digest     # shows what it can reach and what changed, then asks
