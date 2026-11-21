@@ -151,6 +151,13 @@ systemd's user manager reads units from its own `XDG_CONFIG_HOME` (usually none:
 - **The installing shell's `XDG_CONFIG_HOME` written into the unit**: an update run from the tray, whose session may not have it, would write the unit without it and move the scheduler to another config folder
 - **Enabling lingering**: `sudo` in an installer that otherwise never needs it
 
+## Decision: opening something doesn't wait for xdg-open to finish
+Outside GNOME, KDE and Xfce, `xdg-open` runs the browser itself and returns only when it's closed, so a sign-in waiting on it would wait for the browser. A failure (no handler, no display) shows in its first seconds, so it's given 5 and, still running, taken to have opened it.
+
+### Rejected
+- **Waiting for it**: a sign-in that finishes only once the browser is closed
+- **Not waiting at all**: a failure would never be seen, and the link never printed for me to open
+
 ## Decision: Claude manages routines through the core's own MCP server
 People make routines by talking to Claude, so Claude is another frontend: `procauto mcp serve` serves the same surface as the CLI. Every CLI command is a tool by default, derived from the command tree, and one override table holds the exceptions, so the server isn't edited when the CLI grows. The guardrail is my approval rather than missing tools: side-effecting tools are annotated so the client asks first, created routines start disabled and untrusted, and trust stays in my terminal.
 

@@ -190,7 +190,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **The app's own**, recorded by the core in `notifications.json` next to run status (schema in `contracts/notifications.schema.json`), by `kind`: runs that failed, needed a sign-in, were missed or skipped (`failure`, unless `runs.failure-notifications` is off) and update results (`app`). The newest 200 within 30 days are kept. Routines' notifications never come here (the notify plugin shows them itself); entries of the retired kind `routine` are dropped when the file is read
 - **Delivered by frontends**, which mark them delivered (`notifications delivered <id>...`); `notifications list [--pending]` lists them. automator-ui delivers only while macOS allows notifications, so none are lost before the permission prompt is answered; the tray marks only those the desktop's notification service took
 - **Clicking opens the app**: the frontend runs `notifications open <id>`, which says what to show and opens nothing: `show-run` (its `routine` and `run`) for one about a run, `show-app` for one about the app itself (an update). The frontend shows it in its own windows
-- **Opening** files and URLs uses `open` on macOS and `xdg-open` on Linux
+- **Opening** files and URLs uses `open` on macOS and `xdg-open` on Linux; `xdg-open` still running after 5 seconds has opened it (it may wait for the browser it started), one that fails before says so
 
 ## Usage limit
 - **Checked when a scheduled run gets its turn**: over the limit, it's recorded as `skipped` with the reason (and a failure notification); manual runs and backfills go ahead, warning in their log. `usage [--json]` reports the backend in use (`kind`: `plan`, `budget`, or `none`); `doctor` reports it when over
