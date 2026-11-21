@@ -118,11 +118,11 @@ import Testing
         {"schemaVersion":1,"notifications":[
           {"id":"a","at":"2026-11-19T09:21:03.5-05:00","kind":"failure","title":"scrum failed","body":"timed out",
            "routine":"scrum","run":"scrum/2026-11-19T092001","deliveredAt":"2026-11-19T09:21:05Z"},
-          {"id":"b","at":"2026-11-19T10:00:00Z","kind":"routine","title":"3 open threads","urgent":true}]}
+          {"id":"b","at":"2026-11-19T10:00:00Z","kind":"app","title":"Updated to 2.2.0"}]}
         """
     let file = try NotificationsFile.decode(Data(json.utf8))
     #expect(file.pending.map(\.id) == ["b"])
-    #expect(file.pending.first?.urgent == true)
+    #expect(file.pending.first?.kind == .app)
 }
 
 @Test func groupsSettingsTwoLevelsDeep() {

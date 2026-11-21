@@ -14,9 +14,6 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
-	notifyplugin "github.com/BorysSerbyn/process-automator/core/plugins/notify"
 )
 
 // Type is a setting's value type.
@@ -57,8 +54,6 @@ type Setting struct {
 	NotImplemented bool `json:"notImplemented,omitempty"`
 	// Backend is the llm.backend it applies to; empty: every backend.
 	Backend string `json:"backend,omitempty"`
-	// Check, if set, validates a value beyond its type (e.g. a click action).
-	Check func(string) error `json:"-"`
 }
 
 func ptr(f float64) *float64 { return &f }
@@ -113,14 +108,8 @@ var Registry = []Setting{
 // new keys, and the next change to the settings rewrites them so.
 var Retired = map[string]string{
 	"notifications.failures": "runs.failure-notifications",
-	// Routine notifications are each routine's (onNotificationClick); the
-	// app's own always show the run.
+	// Clicking the app's own notifications shows the run; notify's do nothing.
 	"notifications.on-click": "",
-}
-
-func checkAction(s string) error {
-	_, err := notify.ParseAction(s)
-	return err
 }
 
 // RoutineField is a per-routine setting. A routine file sets it in its
@@ -138,11 +127,6 @@ type RoutineField struct {
 	Min, Max    *float64
 	// ScheduledOnly fields exist only for routines with a schedule.
 	ScheduledOnly bool
-	// Server, if set, is the plugin the field is about: it exists only for
-	// routines that list it in automator.servers.
-	Server string
-	// Check validates a value beyond its type.
-	Check func(string) error
 }
 
 // RoutineFields are every per-routine setting.
@@ -179,11 +163,6 @@ var RoutineFields = []RoutineField{
 			"so it can be resumed; discard leaves nothing behind.",
 	},
 	{
-		Name: "onNotificationClick", Type: TypeString, Default: notify.ActionShowRun, Check: checkAction, Server: notifyplugin.Name,
-		Description: "What clicking a notification this routine sends (notify_me) does, unless it attached a file to open: " +
-			"show-run (the run that sent it), open <file, folder or URL>, run <shell command> or none.",
-	},
-	{
 		Name: "concurrency", Type: TypeEnum, Default: "queue", Enum: []string{"queue", "parallel"},
 		Description: "queue waits for other queued runs (one at a time on this device, tightest staleness first); " +
 			"parallel runs alongside them. A routine never overlaps itself either way.",
@@ -206,18 +185,17 @@ func RoutineFieldNames() []string {
 
 // RoutineSettings are the settings of one routine, with defaults taken from the
 // automator.* values in its file (fileValues; missing ones fall back to the
-// field's default). A routine without a schedule gets no scheduled-only fields,
-// and one gets a plugin's fields only if it uses that plugin (servers).
-func RoutineSettings(routine string, fileValues map[string]any, servers []string) []Setting {
+// field's default). A routine without a schedule gets no scheduled-only fields.
+func RoutineSettings(routine string, fileValues map[string]any) []Setting {
 	_, scheduled := fileValues["schedule"]
 	var out []Setting
 	for _, f := range RoutineFields {
-		if f.ScheduledOnly && !scheduled || f.Server != "" && !slices.Contains(servers, f.Server) {
+		if f.ScheduledOnly && !scheduled {
 			continue
 		}
 		st := Setting{
 			Key: "routines." + routine + "." + f.Name, Type: f.Type, Default: f.Default,
-			Description: f.Description, Unit: f.Unit, Enum: f.Enum, Min: f.Min, Max: f.Max, Check: f.Check,
+			Description: f.Description, Unit: f.Unit, Enum: f.Enum, Min: f.Min, Max: f.Max,
 		}
 		// The file's value is the routine's default, in canonical form (a YAML
 		// list arrives as []any). Routine parsing has already validated it.
@@ -247,16 +225,6 @@ func lookupIn(list []Setting, key string) (Setting, bool) {
 // Parse converts user input (as typed on the CLI) to the setting's canonical value,
 // validating it. Canonical values: bool, int, float64 (number/percent), string otherwise.
 func (s Setting) Parse(input string) (any, error) {
-	v, err := s.parse(input)
-	if err == nil && s.Check != nil {
-		if err := s.Check(fmt.Sprint(v)); err != nil {
-			return nil, fmt.Errorf("%s: %w", s.Key, err)
-		}
-	}
-	return v, err
-}
-
-func (s Setting) parse(input string) (any, error) {
 	in := strings.TrimSpace(input)
 	switch s.Type {
 	case TypeBool:

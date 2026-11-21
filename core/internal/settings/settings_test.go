@@ -63,7 +63,7 @@ func TestStorePreservesRestOfConfig(t *testing.T) {
 	if err := os.WriteFile(path, []byte(orig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s := Store{Path: path, Extra: RoutineSettings("scrum", map[string]any{"schedule": "15 9 * * 1-5"}, nil)}
+	s := Store{Path: path, Extra: RoutineSettings("scrum", map[string]any{"schedule": "15 9 * * 1-5"})}
 
 	if _, err := s.Set("llm.usage-limit", "40%"); err != nil {
 		t.Fatal(err)
@@ -117,19 +117,15 @@ func TestRoutineSettings(t *testing.T) {
 		}
 		return m
 	}
-	manual := keys(RoutineSettings("adhoc", nil, nil))
+	manual := keys(RoutineSettings("adhoc", nil))
 	if _, ok := manual["routines.adhoc.schedule"]; ok || manual["routines.adhoc.enabled"] != true ||
 		manual["routines.adhoc.timeout"] != "20m" || manual["routines.adhoc.effort"] != "default" {
 		t.Fatalf("manual-only routines get no schedule fields but the rest: %v", manual)
 	}
-	if _, ok := manual["routines.adhoc.onNotificationClick"]; ok {
-		t.Fatal("a routine that doesn't use notify gets its click setting")
-	}
-	s := RoutineSettings("scrum", map[string]any{"schedule": "15 9 * * 1-5", "timeout": "5m"}, []string{"notify"})
+	s := RoutineSettings("scrum", map[string]any{"schedule": "15 9 * * 1-5", "timeout": "5m"})
 	got := keys(s)
-	if got["routines.scrum.schedule"] != "15 9 * * 1-5" || got["routines.scrum.staleness"] != "1h" || got["routines.scrum.timeout"] != "5m" ||
-		got["routines.scrum.onNotificationClick"] != "show-run" {
-		t.Fatalf("scheduled, using notify, defaults from the file: %v", got)
+	if got["routines.scrum.schedule"] != "15 9 * * 1-5" || got["routines.scrum.staleness"] != "1h" || got["routines.scrum.timeout"] != "5m" {
+		t.Fatalf("scheduled, defaults from the file: %v", got)
 	}
 	for _, def := range s {
 		if def.Default == nil {
@@ -197,20 +193,11 @@ func TestListAndPathTypes(t *testing.T) {
 
 // A routine file's values become canonical defaults (a YAML list is []any).
 func TestRoutineSettingsNormalizeFileValues(t *testing.T) {
-	for _, s := range RoutineSettings("r", map[string]any{"builtinTools": []any{"Read", "Grep"}, "timeout": "5m"}, nil) {
+	for _, s := range RoutineSettings("r", map[string]any{"builtinTools": []any{"Read", "Grep"}, "timeout": "5m"}) {
 		if s.Key == "routines.r.builtinTools" {
 			if got, ok := s.Default.([]string); !ok || len(got) != 2 || got[0] != "Read" {
 				t.Fatalf("builtinTools default %#v", s.Default)
 			}
-		}
-	}
-}
-
-func TestClickActionChecked(t *testing.T) {
-	st := Store{Path: filepath.Join(t.TempDir(), "c.yaml"), Extra: RoutineSettings("r", nil, []string{"notify"})}
-	for in, ok := range map[string]bool{"show-run": true, "open ~/notes.md": true, "run say done": true, "none": true, "open": false, "launch x": false, "show-run now": false} {
-		if _, err := st.Set("routines.r.onNotificationClick", in); (err == nil) != ok {
-			t.Errorf("%q: %v", in, err)
 		}
 	}
 }
@@ -260,7 +247,7 @@ func TestValues(t *testing.T) {
 	if err := os.WriteFile(path, []byte("settings:\n  history.retention-days: 30\n  llm.budget.window: 2h\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	extra := RoutineSettings("r", map[string]any{"builtinTools": []any{"Read"}}, nil)
+	extra := RoutineSettings("r", map[string]any{"builtinTools": []any{"Read"}})
 	v, err := (Store{Path: path, Extra: extra}).Values()
 	if err != nil {
 		t.Fatal(err)

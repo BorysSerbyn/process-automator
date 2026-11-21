@@ -1,10 +1,9 @@
-// Package notify keeps the notifications the core records for frontends to
-// deliver: the app's own (runs that failed, updates) and what routines ask
-// through the notify plugin (notify_me). The core only records them; frontends
-// show them (automator-ui as desktop notifications), mark them delivered, and
-// on a click run `procauto notifications open <id>`, which carries out the
-// click action: the app's own show the run they're about; a routine's are
-// governed by its routine alone.
+// Package notify keeps the app's own notifications (runs that failed, needed
+// a sign-in, were skipped or missed; updates) for frontends to deliver. The
+// core only records them; frontends show them (automator-ui as desktop
+// notifications), mark them delivered, and on a click run `procauto
+// notifications open <id>`, which shows the run it's about. What routines
+// send (the notify plugin) never comes here: the plugin shows it itself.
 package notify
 
 import (
@@ -15,7 +14,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
@@ -26,12 +24,9 @@ const SchemaVersion = 1
 
 // Kinds of notification.
 const (
-	// KindRoutine is what a routine asked to tell me (the notify plugin's notify_me).
-	KindRoutine = "routine"
-	// KindFailure is the app's own: a run that failed, needs a sign-in, or
-	// was skipped or missed.
+	// KindFailure is a run that failed, needs a sign-in, or was skipped or missed.
 	KindFailure = "failure"
-	// KindApp is the app's own, about the app itself (an update installed, or failed).
+	// KindApp is about the app itself (an update installed, or failed).
 	KindApp = "app"
 )
 
@@ -51,21 +46,14 @@ type File struct {
 type Notification struct {
 	ID string    `json:"id"`
 	At time.Time `json:"at"`
-	// Kind is "routine" (a routine's notify_me), or the app's own: "failure" (a
-	// run that failed, needs a sign-in, or was skipped or missed) or "app"
-	// (about the app, e.g. an update).
-	Kind  string `json:"kind" jsonschema:"enum=routine,enum=failure,enum=app"`
+	// Kind is "failure" (a run that failed, needs a sign-in, or was skipped
+	// or missed) or "app" (about the app, e.g. an update).
+	Kind  string `json:"kind" jsonschema:"enum=failure,enum=app"`
 	Title string `json:"title"`
 	Body  string `json:"body,omitempty"`
-	// Urgent asks frontends to break through focus modes where the OS allows
-	// (macOS time-sensitive, Linux critical urgency).
-	Urgent bool `json:"urgent,omitempty"`
 	// Routine and Run (a run ID, as in `runs show`) are what it's about, if any.
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
-	// Open is a file the routine asked to open on click (instead of its
-	// routine's click action).
-	Open string `json:"open,omitempty"`
 	// DeliveredAt is when a frontend showed it; absent until then.
 	DeliveredAt *time.Time `json:"deliveredAt,omitempty"`
 }
@@ -121,9 +109,15 @@ func Load(path string) (*File, error) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if f.Notifications == nil {
-		f.Notifications = []Notification{}
+	// Older versions also kept routines' notifications here (kind
+	// "routine"); they're dropped, and gone from the file at the next write.
+	kept := []Notification{}
+	for _, n := range f.Notifications {
+		if n.Kind == KindFailure || n.Kind == KindApp {
+			kept = append(kept, n)
+		}
 	}
+	f.Notifications = kept
 	return &f, nil
 }
 
@@ -148,44 +142,4 @@ func update(path string, fn func(*File)) error {
 		f.SchemaVersion = SchemaVersion
 		return nil
 	})
-}
-
-// Click actions: what clicking a notification does.
-const (
-	// ActionShowRun shows the run the notification is about (a frontend's
-	// routines page; without one, a readable report of the run).
-	ActionShowRun = "show-run"
-	// ActionOpen opens a file, folder or URL with its default app: "open <target>".
-	ActionOpen = "open"
-	// ActionRun runs a shell command: "run <command line>".
-	ActionRun = "run"
-	// ActionNone does nothing.
-	ActionNone = "none"
-)
-
-// Action is a parsed click action.
-type Action struct {
-	Kind   string // one of the Action* constants
-	Target string // what to open, or the command line to run
-}
-
-// ParseAction parses a click action: "show-run", "open <file, folder or URL>",
-// "run <shell command>" or "none".
-func ParseAction(s string) (Action, error) {
-	s = strings.TrimSpace(s)
-	kind, rest, _ := strings.Cut(s, " ")
-	rest = strings.TrimSpace(rest)
-	switch kind {
-	case ActionShowRun, ActionNone:
-		if rest != "" {
-			return Action{}, fmt.Errorf("click action %q takes nothing after %s", s, kind)
-		}
-		return Action{Kind: kind}, nil
-	case ActionOpen, ActionRun:
-		if rest == "" {
-			return Action{}, fmt.Errorf("click action %q: say what to %s", s, kind)
-		}
-		return Action{Kind: kind, Target: rest}, nil
-	}
-	return Action{}, fmt.Errorf("click action %q: want show-run, open <file or URL>, run <command> or none", s)
 }

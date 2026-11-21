@@ -51,7 +51,7 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 	// Callers may pass an app's plugins back in (the daemon reloads that way),
 	// so notify is added to the given plugins without one already there.
 	plugins = slices.DeleteFunc(slices.Clone(plugins), func(p pluginapi.Plugin) bool { return p.Name == notify.Name })
-	plugins = append(plugins, notify.Plugin(files.Notifications()))
+	plugins = append(plugins, notify.Plugin())
 	if err := pluginapi.Validate(plugins); err != nil {
 		return nil, err
 	}

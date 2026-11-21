@@ -17,6 +17,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
+	notifyplugin "github.com/BorysSerbyn/process-automator/core/plugins/notify"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -164,45 +165,35 @@ func TestFailureNotification(t *testing.T) {
 	}
 }
 
-// notify_me records what the routine asked, tied to its run; opening on
-// click is only for documents and folders.
+// notify_me shows the notification through the OS (stubbed here), never
+// through the app's own notifications.
 func TestNotifyMe(t *testing.T) {
+	var shown []notifyplugin.Note
+	orig := notifyplugin.Deliver
+	notifyplugin.Deliver = func(n notifyplugin.Note) error { shown = append(shown, n); return nil }
+	t.Cleanup(func() { notifyplugin.Deliver = orig })
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	a, err := engine.Load(cfg, nil, enginetest.Secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
-	folder := t.TempDir()
-	_ = os.WriteFile(filepath.Join(folder, "report.md"), []byte("# hi"), 0o600)
-	_ = os.WriteFile(filepath.Join(folder, "evil.sh"), []byte("rm -rf ~"), 0o600)
-	_ = os.WriteFile(filepath.Join(folder, "run.bin"), []byte("x"), 0o755)
 	ctx := context.Background()
-	cs, err := a.Connector.ConnectFor(ctx, "notify", engine.RunOf(routines.Routine{Name: "scout"}, folder, "scout/2026-11-19T092000"))
+	cs, err := a.Connector.ConnectFor(ctx, "notify", engine.RunOf(routines.Routine{Name: "scout"}, "", "scout/2026-11-19T092000"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cs.Close()
-	call := func(args map[string]any) *sdk.CallToolResult {
-		res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me", Arguments: args})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return res
+	res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me", Arguments: map[string]any{"title": "3 open threads", "body": "see the thread", "urgent": true}})
+	if err != nil || res.IsError {
+		t.Fatalf("notify_me: %v %+v", err, res)
 	}
-	if res := call(map[string]any{"title": "3 open threads", "body": "see report", "open": "report.md", "urgent": true}); res.IsError {
-		t.Fatalf("notify_me: %+v", res.Content)
+	if len(shown) != 1 || shown[0] != (notifyplugin.Note{Title: "3 open threads", Body: "see the thread", Urgent: true}) {
+		t.Fatalf("shown %+v", shown)
 	}
-	for _, bad := range []string{"evil.sh", "run.bin", "missing.md"} {
-		if res := call(map[string]any{"title": "x", "open": bad}); !res.IsError {
-			t.Errorf("open %s accepted", bad)
-		}
+	if f, _ := notify.Load(a.Layout.Notifications()); len(f.Notifications) != 0 {
+		t.Fatalf("recorded as the app's: %+v", f.Notifications)
 	}
-	f, _ := notify.Load(a.Layout.Notifications())
-	if len(f.Notifications) != 1 {
-		t.Fatalf("notifications: %+v", f.Notifications)
-	}
-	n := f.Notifications[0]
-	if n.Routine != "scout" || n.Run != "scout/2026-11-19T092000" || !n.Urgent || n.Open != filepath.Join(folder, "report.md") || n.Kind != notify.KindRoutine {
-		t.Fatalf("recorded %+v", n)
+	if res, _ := cs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me", Arguments: map[string]any{"title": " "}}); !res.IsError {
+		t.Error("an empty title was shown")
 	}
 }

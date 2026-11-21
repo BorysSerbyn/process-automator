@@ -18,6 +18,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
+	notifyplugin "github.com/BorysSerbyn/process-automator/core/plugins/notify"
 )
 
 // The test binary doubles as the procauto CLI, so the MCP server's tools
@@ -46,6 +47,8 @@ func TestMain(m *testing.M) {
 	runClaudeMCP = fakeClaudeMCP
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
+	// Nor show desktop notifications.
+	notifyplugin.Deliver = func(notifyplugin.Note) error { return errors.New("tests don't show notifications") }
 	if mode := os.Getenv(pluginEnv); mode != "" {
 		servePluginFixture(mode)
 		os.Exit(0)

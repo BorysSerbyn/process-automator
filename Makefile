@@ -96,9 +96,10 @@ version: ## Print the build version
 
 build: build-core build-ui ## Build the core and automator-ui
 
+# macOS 14 like automator-ui, cgo included (the notify plugin's UserNotifications part)
 build-core:
 	@mkdir -p "$(BUILD)"
-	cd "$(GO_DIR)" && go build -trimpath -ldflags '$(LDFLAGS)' -o "$(CORE_BIN)" $(MAIN)
+	cd "$(GO_DIR)" && MACOSX_DEPLOYMENT_TARGET=14.0 CGO_CFLAGS="-O2 -g -mmacosx-version-min=14.0" go build -trimpath -ldflags '$(LDFLAGS)' -o "$(CORE_BIN)" $(MAIN)
 
 build-ui:
 	cd automator-ui && swift build -c release

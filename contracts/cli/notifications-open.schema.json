@@ -7,17 +7,20 @@
     },
     "action": {
       "type": "string",
-      "description": "Action is the click action carried out: show-run, open, run or none."
-    },
-    "target": {
-      "type": "string",
-      "description": "Target is what was opened, or the command run."
+      "enum": [
+        "show-run",
+        "none"
+      ],
+      "description": "Action is what clicking did: show-run (the notification is about a\nrun) or none."
     },
     "routine": {
       "type": "string",
-      "description": "Routine and Run, for show-run: with --frontend-shows-runs the frontend\nshows them itself; otherwise a report of the run was opened (Target)."
+      "description": "Routine and Run, for show-run: with --frontend-shows-runs the frontend\nshows them itself; otherwise a report of the run was opened (Report)."
     },
     "run": {
+      "type": "string"
+    },
+    "report": {
       "type": "string"
     }
   },

@@ -57,19 +57,23 @@ components:
       description: 'ClickOutput is `notifications open --json`: what clicking did.'
       properties:
         action:
-          description: 'Action is the click action carried out: show-run, open, run or none.'
+          description: |-
+            Action is what clicking did: show-run (the notification is about a
+            run) or none.
+          enum:
+            - show-run
+            - none
           type: string
         notification:
+          type: string
+        report:
           type: string
         routine:
           description: |-
             Routine and Run, for show-run: with --frontend-shows-runs the frontend
-            shows them itself; otherwise a report of the run was opened (Target).
+            shows them itself; otherwise a report of the run was opened (Report).
           type: string
         run:
-          type: string
-        target:
-          description: Target is what was opened, or the command run.
           type: string
       required:
         - notification
@@ -350,18 +354,11 @@ components:
           type: string
         kind:
           description: |-
-            Kind is "routine" (a routine's notify_me), or the app's own: "failure" (a
-            run that failed, needs a sign-in, or was skipped or missed) or "app"
-            (about the app, e.g. an update).
+            Kind is "failure" (a run that failed, needs a sign-in, or was skipped
+            or missed) or "app" (about the app, e.g. an update).
           enum:
-            - routine
             - failure
             - app
-          type: string
-        open:
-          description: |-
-            Open is a file the routine asked to open on click (instead of its
-            routine's click action).
           type: string
         routine:
           description: Routine and Run (a run ID, as in `runs show`) are what it's about, if any.
@@ -370,11 +367,6 @@ components:
           type: string
         title:
           type: string
-        urgent:
-          description: |-
-            Urgent asks frontends to break through focus modes where the OS allows
-            (macOS time-sensitive, Linux critical urgency).
-          type: boolean
       required:
         - id
         - at

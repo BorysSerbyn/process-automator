@@ -59,12 +59,11 @@ The app's own keys, written dotted (`automator.servers:`, not a nested `automato
 | `automator.builtinTools` | `[]` | Claude Code's own tools it may use, e.g. `[Read, Grep, Bash, Edit]` (`claude-code` backend only; file tools stay inside its folder; dry runs get only the read-only ones) |
 | `automator.session` | `discard` | `save` keeps the Claude Code session in its folder and records its ID with the run, so you can resume it |
 | `automator.concurrency` | `queue` | `queue` waits for other runs (one at a time); `parallel` runs alongside them. A routine never overlaps itself |
-| `automator.onNotificationClick` | `show-run` | What clicking a notification it sends does (only with `notify` in its servers; see [[#Notifying you]]) |
 | `automator.parameters` | | Values set at install (see below) |
 | `automator.platforms` | all | `[macos]`, `[linux]` or both |
 | `automator.plugins.<name>` | | A section for an in-process plugin that takes one (none ship with the app) |
 
-From `automator.schedule` to `automator.onNotificationClick`, each key is also a per-routine setting, and so is each parameter: the file gives the default, and `procauto settings set` overrides it without editing the file, e.g. `settings set routines.digest.timeout 45m` or `settings set routines.digest.params.repo my-org/other-repo` (see [[Guides/Settings|Settings]]).
+From `automator.schedule` to `automator.concurrency`, each key is also a per-routine setting, and so is each parameter: the file gives the default, and `procauto settings set` overrides it without editing the file, e.g. `settings set routines.digest.timeout 45m` or `settings set routines.digest.params.repo my-org/other-repo` (see [[Guides/Settings|Settings]]).
 
 ## The prompt
 Handlebars text. `{{role "system"}}` starts the instructions. Write it for an agent working alone: no one answers questions during a run.
@@ -101,7 +100,7 @@ output:
 The run fails if the result doesn't match; a valid one is stored with the run and counts as done.
 
 ## Notifying you
-Add `notify` to `automator.servers` and `notify_me` to `tools`. The model can then send you a desktop notification: a `title`, a `body`, a file or folder to `open` when you click it (relative paths are in the routine's folder; never an app or script), and `urgent` for something you must see now. It's a write, so dry runs intercept it. Clicking one shows the run that sent it, or the file it attached; `automator.onNotificationClick` changes that for this routine: `show-run`, `open <file, folder or URL>`, `run <shell command>` or `none`. The app's own notifications (a failed run, an update) aren't the routine's and ignore it.
+Add `notify` to `automator.servers` and `notify_me` to `tools`. The model can then send you a desktop notification: a `title`, a `body`, and `urgent` for something you must see now (it breaks through Focus). The plugin shows it itself, as the app: on macOS like the app's other notifications, on Linux through your desktop's notification service. Clicking it does nothing, so the prompt should say what to look at. It's a write, so dry runs intercept it, and the call is in the run's history.
 
 ## Working in a folder
 With `automator.folder` set, the run works in that folder instead of an empty one, and its `CLAUDE.md` is added to the routine's instructions (the folder's own Claude Code settings and hooks are never loaded). Combine it with `automator.builtinTools` to let the model read or change files there, e.g. a routine that checks a repository:

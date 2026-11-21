@@ -2,9 +2,10 @@ import AppKit
 import AutomatorUICore
 import UserNotifications
 
-/// Desktop notifications for what the core records: shows the ones no
-/// frontend delivered yet, tells the core which were delivered, and has the
-/// core carry out a click.
+/// Desktop notifications for the app's own notifications the core records
+/// (runs that failed, updates): shows the ones no frontend delivered yet,
+/// tells the core which were delivered, and has the core carry out a click.
+/// What routines send (the notify plugin) the core shows itself.
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private var cli: CLI?
@@ -42,8 +43,6 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 content.title = note.title
                 content.body = note.body ?? ""
                 content.sound = .default
-                // Without the time-sensitive entitlement macOS shows it as active.
-                if note.urgent == true { content.interruptionLevel = .timeSensitive }
                 content.userInfo = ["id": note.id]
                 do {
                     try await center.add(UNNotificationRequest(identifier: note.id, content: content, trigger: nil))

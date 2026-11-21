@@ -1,7 +1,7 @@
 import Foundation
 
 /// The notifications file (contracts/notifications.schema.json), generated from
-/// the Go core's types. The core records notifications; automator-ui shows the
+/// the Go core's types. The core records the app's own notifications; automator-ui shows the
 /// ones not delivered yet, marks them delivered, and on a click asks the core
 /// to do the click action (`notifications open <id>`).
 public typealias NotificationsFile = Components.Schemas.NotificationsFile

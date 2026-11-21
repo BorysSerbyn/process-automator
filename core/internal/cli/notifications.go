@@ -13,23 +13,21 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/notify"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
-	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
 
-// The core records notifications; frontends deliver them (see package notify).
+// The core records the app's own notifications; frontends deliver them (see package notify).
 
 // ClickOutput is `notifications open --json`: what clicking did.
 type ClickOutput struct {
 	Notification string `json:"notification"`
-	// Action is the click action carried out: show-run, open, run or none.
-	Action string `json:"action"`
-	// Target is what was opened, or the command run.
-	Target string `json:"target,omitempty"`
+	// Action is what clicking did: show-run (the notification is about a
+	// run) or none.
+	Action string `json:"action" jsonschema:"enum=show-run,enum=none"`
 	// Routine and Run, for show-run: with --frontend-shows-runs the frontend
-	// shows them itself; otherwise a report of the run was opened (Target).
+	// shows them itself; otherwise a report of the run was opened (Report).
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
+	Report  string `json:"report,omitempty"`
 }
 
 func newNotificationsCmd() *cobra.Command {
@@ -104,10 +102,8 @@ func newNotificationsOpenCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "open <id>",
 		Short: "Do what clicking a notification does (frontends call this on a click)",
-		Long: "Carries out the notification's click action. The app's own notifications (a run that failed, " +
-			"an update) show the run they're about, if any. One a routine sent (notify_me) opens the file it " +
-			"attached, else does its routine's onNotificationClick (default show-run). show-run opens a readable " +
-			"report of the run, or with --frontend-shows-runs leaves showing it to the frontend.",
+		Long: "Shows the run the notification is about (show-run): a readable report of it, or with " +
+			"--frontend-shows-runs leaves showing it to the frontend. One about no run (an update) does nothing.",
 		Annotations: map[string]string{annNotReadOnly: "clicking is mine"},
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -119,71 +115,21 @@ func newNotificationsOpenCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			act, err := clickAction(a, n)
-			if err != nil {
-				return err
-			}
-			out := ClickOutput{Notification: n.ID, Action: act.Kind, Target: act.Target}
-			switch act.Kind {
-			case notify.ActionShowRun:
-				out.Routine, out.Run = n.Routine, n.Run
-				if !frontendShowsRuns && n.Run != "" {
-					if out.Target, err = openRunReport(a, n.Run); err != nil {
+			out := ClickOutput{Notification: n.ID, Action: "none"}
+			if n.Run != "" {
+				out.Action, out.Routine, out.Run = "show-run", n.Routine, n.Run
+				if !frontendShowsRuns {
+					if out.Report, err = openRunReport(a, n.Run); err != nil {
 						return err
 					}
 				}
-			case notify.ActionOpen:
-				target, err := settings.ExpandPath(act.Target)
-				if err != nil {
-					return err
-				}
-				out.Target = target
-				if err := openExternal(target); err != nil {
-					return err
-				}
-			case notify.ActionRun:
-				if err := startShell(act.Target, clickEnv(n)); err != nil {
-					return err
-				}
 			}
-			return emit(cmd, out, fmt.Sprintf("%s %s", out.Action, out.Target))
+			return emit(cmd, out, strings.TrimSpace(out.Action+" "+out.Report))
 		},
 	}
 	cmd.Flags().BoolVar(&frontendShowsRuns, "frontend-shows-runs", false, "the frontend shows the run itself (show-run opens nothing)")
 	jsonFlag(cmd.Flags(), &asJSON, ClickOutput{})
 	return cmd
-}
-
-// clickAction is what clicking n does. The app's own notifications show the
-// run they're about, if any; no setting changes that. One a routine sent
-// (notify_me) opens the file it attached, else does its routine's
-// onNotificationClick (show-run when the routine is gone or broken).
-func clickAction(a *engine.App, n notify.Notification) (notify.Action, error) {
-	if n.Kind != notify.KindRoutine {
-		if n.Run == "" {
-			return notify.Action{Kind: notify.ActionNone}, nil
-		}
-		return notify.Action{Kind: notify.ActionShowRun}, nil
-	}
-	if n.Open != "" {
-		return notify.Action{Kind: notify.ActionOpen, Target: n.Open}, nil
-	}
-	if set, err := routines.Load(a.Layout.Routines()); err == nil {
-		if r, err := set.Find(n.Routine); err == nil {
-			if c, err := a.RoutineConfig(r); err == nil && c.OnClick != "" {
-				return notify.ParseAction(c.OnClick)
-			}
-		}
-	}
-	return notify.Action{Kind: notify.ActionShowRun}, nil
-}
-
-// clickEnv tells a click command what was clicked.
-func clickEnv(n notify.Notification) []string {
-	return []string{
-		"PROCAUTO_NOTIFICATION_ID=" + n.ID, "PROCAUTO_NOTIFICATION_TITLE=" + n.Title,
-		"PROCAUTO_NOTIFICATION_BODY=" + n.Body, "PROCAUTO_ROUTINE=" + n.Routine, "PROCAUTO_RUN=" + n.Run,
-	}
 }
 
 // reportsKept is how long a run report written for opening is kept.
