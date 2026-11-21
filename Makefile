@@ -155,6 +155,7 @@ ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, a
 	cd core && GOOS=linux go build ./... && GOOS=windows go build ./...
 	@if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/*.sh; \
 	  else echo "shellcheck skipped: not installed (make deps)"; fi
+	scripts/test-launch-agents.sh
 	rm -rf "$(BUILD)/ci"
 	$(MAKE) package SIGN_IDENTITY=- BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
 	scripts/test-install.sh "$(BUILD)"/ci/*-macos.zip
