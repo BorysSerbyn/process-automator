@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
+	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 )
 
 // On api, setup offers the OpenAI-compatible server as experimental and
@@ -88,3 +90,30 @@ func TestOpenAICompatSetup(t *testing.T) {
 		t.Error("logout kept the key")
 	}
 }
+
+// auth status tells a secret that can't be read (a locked Keychain or
+// keyring) from one that isn't stored.
+func TestAuthStatusUnreadable(t *testing.T) {
+	a, err := engine.Load(filepath.Join(t.TempDir(), "config.yaml"), nil, lockedSecrets{secrets.NewMemory()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := authStatuses(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]AuthStatus{}
+	for _, r := range rows {
+		got[r.Server] = r
+	}
+	for _, name := range []string{"anthropic", "claude-code", "openai-compat"} {
+		if r, ok := got[name]; !ok || r.SignedIn || !strings.Contains(r.Problem, "can't be read: the keychain is locked") {
+			t.Errorf("%s: %+v (listed %v)", name, r, ok)
+		}
+	}
+}
+
+// lockedSecrets can't be read, like a locked Keychain or keyring.
+type lockedSecrets struct{ *secrets.Memory }
+
+func (lockedSecrets) Get(string) (string, error) { return "", errors.New("the keychain is locked") }

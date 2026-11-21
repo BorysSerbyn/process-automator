@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
+	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/sysenv"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
@@ -55,7 +56,10 @@ var Backends = map[string]BackendDef{
 	"api": {
 		New: func(a *App) (agent.Backend, error) {
 			// Each provider's set-up is checked when a routine's model needs it.
-			key, _ := a.Connector.Secrets.Get(AnthropicKey)
+			key, _, err := secrets.Lookup(a.Connector.Secrets, AnthropicKey)
+			if err != nil {
+				return nil, fmt.Errorf("can't read the Anthropic API key: %w", err)
+			}
 			compat, err := a.OpenAICompat()
 			if err != nil {
 				return nil, err
@@ -70,7 +74,11 @@ var Backends = map[string]BackendDef{
 		ModelProblem: apiModelProblem,
 		ReachModel:   apiReachModel,
 		Ready: func(a *App) (string, string) {
-			if _, err := a.Connector.Secrets.Get(AnthropicKey); err == nil || onlyOpenAICompat(a) {
+			_, stored, err := secrets.Lookup(a.Connector.Secrets, AnthropicKey)
+			switch {
+			case err != nil:
+				return "the Anthropic API key can't be read: " + err.Error(), ""
+			case stored || onlyOpenAICompat(a):
 				return "", ""
 			}
 			return "no Anthropic API key is stored", "anthropic"
@@ -82,7 +90,10 @@ var Backends = map[string]BackendDef{
 			if err != nil {
 				return nil, err
 			}
-			token, _ := a.Connector.Secrets.Get(ClaudeCodeTokenKey) // optional
+			token, _, err := secrets.Lookup(a.Connector.Secrets, ClaudeCodeTokenKey) // optional
+			if err != nil {
+				return nil, fmt.Errorf("can't read the Claude Code token: %w", err)
+			}
 			return &agent.CLI{Tool: &agent.ClaudeCode{Path: path, OAuthToken: token}}, nil
 		},
 		AgentModel:        agent.ClaudeModel,
@@ -92,7 +103,10 @@ var Backends = map[string]BackendDef{
 			if err != nil {
 				return nil, err
 			}
-			token, _ := a.Connector.Secrets.Get(ClaudeCodeTokenKey)
+			token, _, err := secrets.Lookup(a.Connector.Secrets, ClaudeCodeTokenKey)
+			if err != nil {
+				return nil, fmt.Errorf("can't read the Claude Code token: %w", err)
+			}
 			return (&agent.ClaudeCode{Path: path, OAuthToken: token}).PlanUsage(ctx)
 		},
 		Ready: func(a *App) (string, string) {

@@ -109,7 +109,9 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 	}
 	missing := func(keys ...string) bool {
 		for _, k := range keys {
-			if _, err := a.Connector.Secrets.Get(k); k != "" && err != nil {
+			// Only a secret that isn't stored is missing: one that can't be
+			// read (locked) is asked for again by nothing.
+			if _, stored, err := secrets.Lookup(a.Connector.Secrets, k); k != "" && err == nil && !stored {
 				return true
 			}
 		}
@@ -314,6 +316,9 @@ type AuthStatus struct {
 	Server   string `json:"server"`
 	Kind     string `json:"kind"`
 	SignedIn bool   `json:"signedIn"`
+	// Problem says why it can't be told: a secret that can't be read (a
+	// locked Keychain or keyring), which isn't the same as not signed in.
+	Problem string `json:"problem,omitempty"`
 }
 
 func newAuthStatusCmd() *cobra.Command {
@@ -365,9 +370,7 @@ func authStatuses(a *engine.App) ([]AuthStatus, error) {
 			row.SignedIn = signedIn
 		}
 		for _, key := range srv.SecretKeys() {
-			if _, err := a.Connector.Secrets.Get(key); err != nil {
-				row.SignedIn = false
-			}
+			row.check(a, key)
 		}
 		rows = append(rows, row)
 	}
@@ -377,24 +380,37 @@ func authStatuses(a *engine.App) ([]AuthStatus, error) {
 		}
 		row := AuthStatus{Server: p.Name, Kind: "in-process", SignedIn: true}
 		for _, s := range p.Secrets {
-			if _, err := a.Connector.Secrets.Get(pluginapi.SecretKey(p.Name, s.Name)); err != nil {
-				row.SignedIn = false
-			}
+			row.check(a, pluginapi.SecretKey(p.Name, s.Name))
 		}
 		rows = append(rows, row)
 	}
-	_, keyErr := a.Connector.Secrets.Get(engine.AnthropicKey)
-	rows = append(rows, AuthStatus{Server: "anthropic", Kind: "api-key", SignedIn: keyErr == nil})
-	// The token is optional: without it Claude Code uses its own login.
-	if _, err := a.Connector.Secrets.Get(engine.ClaudeCodeTokenKey); err == nil {
-		rows = append(rows, AuthStatus{Server: "claude-code", Kind: "token", SignedIn: true})
-	}
-	// So is this key: local servers need none.
-	if _, err := a.Connector.Secrets.Get(engine.OpenAICompatKey); err == nil {
-		rows = append(rows, AuthStatus{Server: "openai-compat", Kind: "api-key", SignedIn: true})
+	anthropic := AuthStatus{Server: "anthropic", Kind: "api-key", SignedIn: true}
+	anthropic.check(a, engine.AnthropicKey)
+	rows = append(rows, anthropic)
+	// The token is optional (without it Claude Code uses its own login), and so
+	// is this key (local servers need none): listed when stored, or unreadable.
+	for _, o := range []AuthStatus{{Server: "claude-code", Kind: "token"}, {Server: "openai-compat", Kind: "api-key"}} {
+		key := map[string]string{"claude-code": engine.ClaudeCodeTokenKey, "openai-compat": engine.OpenAICompatKey}[o.Server]
+		_, stored, err := secrets.Lookup(a.Connector.Secrets, key)
+		if stored || err != nil {
+			o.SignedIn = true
+			o.check(a, key)
+			rows = append(rows, o)
+		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Server < rows[j].Server })
 	return rows, nil
+}
+
+// check marks the row signed out when key isn't stored, and with a problem
+// when it can't be read.
+func (r *AuthStatus) check(a *engine.App, key string) {
+	switch _, stored, err := secrets.Lookup(a.Connector.Secrets, key); {
+	case err != nil:
+		r.SignedIn, r.Problem = false, "a secret can't be read: "+err.Error()
+	case !stored:
+		r.SignedIn = false
+	}
 }
 
 // signInNames is everything `auth login` accepts.

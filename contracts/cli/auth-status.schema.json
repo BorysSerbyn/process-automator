@@ -11,6 +11,10 @@
       },
       "signedIn": {
         "type": "boolean"
+      },
+      "problem": {
+        "type": "string",
+        "description": "Problem says why it can't be told: a secret that can't be read (a\nlocked Keychain or keyring), which isn't the same as not signed in."
       }
     },
     "additionalProperties": false,

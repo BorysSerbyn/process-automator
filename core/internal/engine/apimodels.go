@@ -2,11 +2,13 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
+	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 )
 
 // OpenAICompatKey is the secret-store key of the OpenAI-compatible server's
@@ -24,7 +26,10 @@ func (a *App) OpenAICompat() (agent.OpenAICompat, error) {
 	if err != nil {
 		return agent.OpenAICompat{}, err
 	}
-	key, _ := a.Connector.Secrets.Get(OpenAICompatKey)
+	key, _, err := secrets.Lookup(a.Connector.Secrets, OpenAICompatKey)
+	if err != nil {
+		return agent.OpenAICompat{}, fmt.Errorf("can't read the OpenAI-compatible server's API key: %w", err)
+	}
 	return agent.OpenAICompat{BaseURL: vals.String(OpenAICompatURLSetting), APIKey: key}, nil
 }
 
@@ -40,7 +45,10 @@ func apiModelProblem(a *App, model string) *Problem {
 	}
 	switch provider {
 	case agent.AnthropicProvider:
-		if _, err := a.Connector.Secrets.Get(AnthropicKey); err != nil {
+		switch _, stored, err := secrets.Lookup(a.Connector.Secrets, AnthropicKey); {
+		case err != nil:
+			return &Problem{Text: "its model " + model + " needs the Anthropic API key, which can't be read: " + err.Error()}
+		case !stored:
 			return &Problem{Text: "its model " + model + " needs an Anthropic API key, and none is stored", Fix: product.Command + " auth login anthropic"}
 		}
 	case agent.OpenAICompatProvider:

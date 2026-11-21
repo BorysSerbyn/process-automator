@@ -15,6 +15,20 @@ const encodedPrefix = "b64:"
 // ErrNotFound is returned when a secret does not exist.
 var ErrNotFound = errors.New("secret not found")
 
+// Lookup reads an optional secret: stored is false when there's none, and err
+// is only for a store that can't be read (a locked Keychain or keyring, no
+// Secret Service), which must never look like "not stored".
+func Lookup(s Store, key string) (value string, stored bool, err error) {
+	v, err := s.Get(key)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return "", false, nil
+	case err != nil:
+		return "", false, err
+	}
+	return v, true, nil
+}
+
 // Store reads and writes secrets by key.
 type Store interface {
 	Get(key string) (string, error)

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
+	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
 
@@ -224,5 +226,30 @@ func TestOpenAICompatRunsArentPriced(t *testing.T) {
 		if w.SpentUSD == nil || *w.SpentUSD != 1.5 {
 			t.Errorf("%s window spent %v, want 1.5 (the Anthropic run only)", w.Name, w.SpentUSD)
 		}
+	}
+}
+
+// lockedStore can't be read, like a locked Keychain or keyring.
+type lockedStore struct{ *secrets.Memory }
+
+func (lockedStore) Get(string) (string, error) { return "", errors.New("the keychain is locked") }
+
+// A secret that can't be read (a locked Keychain or keyring) is never taken
+// for one that isn't stored: readiness, a routine's model, and runs say so.
+func TestUnreadableSecrets(t *testing.T) {
+	a := testApp(t)
+	claude := writeRoutine(t, a, "claude", "anthropic/claude-sonnet-5-5")
+	a.Connector.Secrets = lockedStore{secrets.NewMemory()}
+	if b, _ := a.BackendReady(); !strings.HasPrefix(b.Problem, "the Anthropic API key can't be read: the keychain is locked") || b.SignIn != "" {
+		t.Errorf("api readiness: %+v", b)
+	}
+	if p := problemsOf(a, claude); !strings.Contains(p, "needs the Anthropic API key, which can't be read: the keychain is locked") {
+		t.Errorf("claude's model: %s", p)
+	}
+	if _, err := Backends["api"].New(a); err == nil || !strings.Contains(err.Error(), "can't read the Anthropic API key") {
+		t.Errorf("api run: %v", err)
+	}
+	if _, err := a.OpenAICompat(); err == nil || !strings.Contains(err.Error(), "can't read the OpenAI-compatible server's API key") {
+		t.Errorf("openai-compat: %v", err)
 	}
 }
