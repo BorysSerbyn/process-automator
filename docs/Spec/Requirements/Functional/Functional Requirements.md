@@ -37,7 +37,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
 
 ## Model backend
-- **Three backends**: Claude Code on my Claude plan (`claude-code`), OpenAI's Codex CLI on my Codex sign-in (`codex`), or an Anthropic API key (`api`), chosen by a setting
+- **Three backends**: Claude Code on my Claude plan (`claude-code`), OpenAI's Codex CLI on my Codex sign-in (`codex`, experimental and untested, and said so where it's chosen), or an Anthropic API key (`api`), chosen by a setting
 - **Usage limit, by backend**: on my Claude plan, scheduled runs don't start while the plan's 5-hour or weekly usage is above a share I set; with an API key, they don't start once API spend in a short rolling window or the last 7 days passes the budgets I set; on Codex there's none (a run that hits Codex's own limit fails, saying so). A run that doesn't start is recorded as skipped with the reason (red indicator, failure notification); runs I start by hand still run, with a warning. `usage` shows where I stand
 - **No cost for plan runs**: on Claude Code or Codex the app never works out a dollar cost
 

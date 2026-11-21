@@ -67,7 +67,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 
 | Setting | Default | |
 |---|---|---|
-| `llm.backend` | `api` | `api`, `claude-code` or `codex` |
+| `llm.backend` | `api` | `api`, `claude-code` or `codex` (experimental, untested) |
 | `llm.usage-limit` | `90` (%) | `claude-code` only |
 | `llm.budget.window` | `5h` | `api` only |
 | `llm.budget.window-usd` | `2` | `api` only; 0 is no limit |
@@ -117,7 +117,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **`llm.backend`** picks the loop behind one `Backend` interface:
   - `api`: Genkit runs the loop against the Anthropic API with the key stored by `auth login anthropic`
   - `claude-code`: headless Claude Code (`claude -p`) on the user's Claude plan, signed in through Claude Code itself or a `claude setup-token` token stored by `auth login claude-code`
-  - `codex`: headless OpenAI Codex CLI (`codex exec`) on the user's Codex sign-in (`codex login`: a ChatGPT plan or an OpenAI API key), read from `$CODEX_HOME/auth.json`. Ready when `codex` is found (on the login-shell PATH) and `codex login status` (no network) says it's signed in, checked at most once a minute; `auth login codex` says to run `codex login`
+  - `codex` (experimental, untested: its description and setup's status say so): headless OpenAI Codex CLI (`codex exec`) on the user's Codex sign-in (`codex login`: a ChatGPT plan or an OpenAI API key), read from `$CODEX_HOME/auth.json`. Ready when `codex` is found (on the login-shell PATH) and `codex login status` (no network) says it's signed in, checked at most once a minute; `auth login codex` says to run `codex login`
 - **Agent CLI backends** are one generic `CLI` backend plus a small `CLITool` per CLI (how to start it headless and isolated, its MCP config, environment and model naming, and how to read its result); a test keeps them in step with the CLI's backend list and the `llm.backend` values
 - **Shared by both**: Dotprompt rendering through Genkit (inputs, partials, memories) and the tool gateway (allowlist, call log, dry-run interception). For agent CLIs, the gateway's tools are served over a loopback MCP server guarded by a random bearer token, named `procauto`
 - **Claude Code is isolated** from the user's own setup: `--tools` limited to the routine's built-in tools (none by default), `--strict-mcp-config`, `--permission-mode dontAsk`, `--setting-sources ""`, `--restricted`, `--disable-slash-commands`, `--no-chrome`, a replaced system prompt, a capped number of turns, and `--no-session-persistence` unless the session is saved. `ANTHROPIC_API_KEY` and other inherited credentials are stripped; `CLAUDE_CODE_DISABLE_AUTO_MEMORY` and `CLAUDE_CODE_DISABLE_ORG_MEMORY` are set

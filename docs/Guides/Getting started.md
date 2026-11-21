@@ -5,7 +5,7 @@ Process Automator runs **routines**: prompt files that a model (Claude) runs on 
 
 - **Routines** are `.prompt` files in a routines folder on your machine. You write them ([[Guides/Writing a routine|Writing a routine]]), install them from templates your team shares, or ask Claude to write them
 - **Plugins** are MCP servers that give routines their tools: any server you add ([[Guides/Adding a plugin|Adding a plugin]]), plus `notify` (desktop notifications), which ships with the app ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
-- **The model backend** runs routines: `claude-code` (Claude Code on your Claude plan), `codex` (OpenAI's Codex CLI on your Codex sign-in) or `api` (an Anthropic API key, paid per token)
+- **The model backend** runs routines: `claude-code` (Claude Code on your Claude plan), `codex` (OpenAI's Codex CLI on your Codex sign-in; experimental, untested) or `api` (an Anthropic API key, paid per token)
 - **The scheduler** starts at login and runs enabled routines on their schedules
 - **The `procauto` CLI** does everything; every command has `--help`
 - **The menu bar app** (macOS) shows whether all is well and lets you manage routines without a terminal ([[Guides/The menu bar app|The menu bar app]])

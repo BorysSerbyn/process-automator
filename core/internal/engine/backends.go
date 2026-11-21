@@ -36,6 +36,9 @@ type BackendDef struct {
 	// backend's agent CLI takes; nil for a backend that takes none (its runs
 	// refuse any).
 	CheckBuiltinTools func(names []string) error
+	// Experimental is a backend not yet tried against the real service: its
+	// status says so wherever it's chosen (setup).
+	Experimental bool
 }
 
 // Backends are the model Backends by llm.backend value. Adding one (another
@@ -97,6 +100,7 @@ var Backends = map[string]BackendDef{
 		},
 		AgentModel:        agent.CodexModel,
 		CheckBuiltinTools: agent.CheckCodexBuiltins,
+		Experimental:      true, // tried only with a fake model provider
 		Ready: func(a *App) (string, string) {
 			path, err := find(a, agent.FindCodex)
 			if err != nil {
@@ -177,21 +181,26 @@ func (a *App) BackendDef() (BackendDef, error) {
 // (problem "" when nothing does), with the sign-in that fixes it.
 type BackendState struct {
 	Name, Problem, SignIn string
+	Experimental          bool
 }
 
 // State says whether the backend can run routines now.
 func (d BackendDef) State(a *App) BackendState {
-	b := BackendState{Name: d.Name}
+	b := BackendState{Name: d.Name, Experimental: d.Experimental}
 	b.Problem, b.SignIn = d.Ready(a)
 	return b
 }
 
 // Status is the backend and its state in words.
 func (b BackendState) Status() string {
-	if b.Problem != "" {
-		return "Runs with " + b.Name + ", but " + b.Problem
+	name := b.Name
+	if b.Experimental {
+		name += " (experimental, untested)"
 	}
-	return "Runs with " + b.Name + ", ready"
+	if b.Problem != "" {
+		return "Runs with " + name + ", but " + b.Problem
+	}
+	return "Runs with " + name + ", ready"
 }
 
 // NewBackend builds the model backend chosen by the llm.backend setting.

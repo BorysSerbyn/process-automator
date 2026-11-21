@@ -54,7 +54,7 @@ func TestCodexReady(t *testing.T) {
 		t.Errorf("not signed in: %+v", b)
 	}
 	codexOnPath(t, "")
-	if b, _ := a.BackendReady(); b.Problem != "" || b.Status() != "Runs with codex, ready" {
+	if b, _ := a.BackendReady(); b.Problem != "" || b.Status() != "Runs with codex (experimental, untested), ready" {
 		t.Errorf("ready: %+v", b)
 	}
 	if _, err := a.NewBackend(); err != nil {

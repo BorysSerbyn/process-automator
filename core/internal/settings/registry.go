@@ -63,7 +63,7 @@ var Registry = []Setting{
 	{
 		Key: "llm.backend", Type: TypeEnum, Default: "api", Enum: []string{"api", "claude-code", "codex"},
 		Description: "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription; " +
-			"codex = headless OpenAI Codex CLI on your Codex sign-in (ChatGPT plan or OpenAI API key).",
+			"codex (experimental, untested) = headless OpenAI Codex CLI on your Codex sign-in (ChatGPT plan or OpenAI API key).",
 	},
 	{
 		Key: "llm.usage-limit", Type: TypePercent, Default: 90.0, Min: ptr(0), Max: ptr(100), Unit: "%", Backend: "claude-code",
