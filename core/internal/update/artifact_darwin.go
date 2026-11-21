@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"runtime"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
-// AssetName is the release artifact for this platform: the macOS app,
-// universal (Apple silicon and Intel), zipped with ditto.
+// AssetName is the release artifact for this platform: the macOS app, for
+// Apple silicon, zipped with ditto. Intel Macs have none.
 func AssetName(version string) (string, error) {
+	if runtime.GOARCH != "arm64" {
+		return "", fmt.Errorf("releases are for Macs with Apple silicon, not %s", runtime.GOARCH)
+	}
 	return product.Folder + "-" + version + "-macos.zip", nil
 }
 

@@ -58,6 +58,7 @@ main() {
     arm64|aarch64) arch=arm64 ;;
     *) die "no release for $(uname -m) processors" ;;
   esac
+  [ "$os/$arch" != macos/amd64 ] || die "$NAME needs a Mac with Apple silicon: there's no release for Intel Macs"
   prerequisites "$os" "$from"
 
   tmp=$(mktemp -d)
