@@ -138,7 +138,7 @@ New routines start paused and untrusted, and a routine is only useful once both 
 - **A new command for both**: one more name for a review that's the trust command's; a flag on it keeps one review and one prompt
 
 ## Decision: the app's MCP server is its interface, not a plugin
-`mcp serve` is how Claude and other MCP clients use the app, as the CLI is in a terminal. Routines don't get it: none needs the app now, and one that did would get a plugin that talks to the MCP server, like any other service.
+`mcp serve` is how Claude and other MCP clients use the app, as the CLI is in a terminal. Routines don't get it: none needs the app now, and one that did would use a plugin that talks to the MCP server, like any other service. A plugin that needs the app's routines or runs (e.g. to tell a routine's saved sessions from mine) opens a read-only session to it with `Host.ConnectApp`: one way in, the same tools Claude sees, and never the core's files.
 
 ### Rejected
 - **Serving it to routines as a built-in `automator` server**: a plugin in name only, special-cased in the core for no routine that needs it
