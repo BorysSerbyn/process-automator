@@ -14,7 +14,7 @@ procauto settings reset llm.backend         # back to the default
 ## App-wide
 | Setting | Default | |
 |---|---|---|
-| `llm.backend` | `api` | What runs routines: `claude-code` (your Claude plan), `codex` (your Codex sign-in) or `api` (an Anthropic API key). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
+| `llm.backend` | `api` | What runs routines: `claude-code` (your Claude plan), `codex` (your Codex sign-in; experimental, untested) or `api` (an Anthropic API key). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
 | `llm.usage-limit` | `90%` | With `claude-code`: see [[#Usage limit]] |
 | `llm.budget.window`, `llm.budget.window-usd`, `llm.budget.weekly-usd` | `5h`, `2`, `20` | With `api`: see [[#Usage limit]] |
 | `history.retention-days` | `90` | How long run history and logs are kept |

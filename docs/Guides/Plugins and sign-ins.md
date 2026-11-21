@@ -18,7 +18,7 @@ procauto mcp call <server> <tool> '<json args>'   # call one tool by hand (write
 Routines run on one of three backends, set with `procauto settings set llm.backend <name>`:
 
 - **`claude-code`**: Claude Code on your Claude plan. Install [Claude Code](https://claude.com/claude-code) and sign in to it (run `claude` once). If scheduled runs say Claude Code isn't logged in, run `claude setup-token` and store its token with `procauto auth login claude-code`
-- **`codex`**: OpenAI's [Codex CLI](https://developers.openai.com/codex/cli) on your Codex sign-in (a ChatGPT plan or an OpenAI API key). Install it and run `codex login` once; the app uses that sign-in and keeps none of its own. Runs don't load your Codex `config.toml`, and read the sign-in from `~/.codex/auth.json` (Codex's default), not from the system keyring
+- **`codex`** (experimental, untested: it has run only against a stand-in for OpenAI's API, never OpenAI itself; prefer `claude-code` or `api`): OpenAI's [Codex CLI](https://developers.openai.com/codex/cli) on your Codex sign-in (a ChatGPT plan or an OpenAI API key). Install it and run `codex login` once; the app uses that sign-in and keeps none of its own. Runs don't load your Codex `config.toml`, and read the sign-in from `~/.codex/auth.json` (Codex's default), not from the system keyring
 - **`api`** (the default): an Anthropic API key, paid per token. Store it with `procauto auth login anthropic`
 
 Claude Code and the API each have their own usage limit ([[Guides/Settings#Usage limit|Usage limit]]).

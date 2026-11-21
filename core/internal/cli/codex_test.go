@@ -32,8 +32,8 @@ func TestCodexBackend(t *testing.T) {
 	for _, s := range got.Steps {
 		switch s.Step {
 		case stepBackend:
-			if s.Done || !strings.Contains(s.Status, "Runs with codex, but Codex isn't installed") || s.SignIn != "" ||
-				!strings.Contains(s.Ask, "codex = headless OpenAI Codex CLI") {
+			if s.Done || !strings.Contains(s.Status, "Runs with codex (experimental, untested), but Codex isn't installed") || s.SignIn != "" ||
+				!strings.Contains(s.Ask, "codex (experimental, untested) = headless OpenAI Codex CLI") {
 				t.Errorf("backend step: %+v", s)
 			}
 		case stepUsage, stepMCP:
