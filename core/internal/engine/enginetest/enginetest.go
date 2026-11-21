@@ -49,6 +49,9 @@ type Backend struct {
 	// SessionID, if set, makes it a backend that picks a kept session's ID
 	// itself (agent.SessionPicker), and reports this one.
 	SessionID string
+	// KilledErr, if set, is what a cancelled run returns instead of the
+	// context's error, as an agent CLI killed with it does ("signal: killed").
+	KilledErr error
 }
 
 // Name implements agent.Backend.
@@ -63,6 +66,9 @@ func (b *Backend) Run(ctx context.Context, j agent.Job) (*agent.Output, error) {
 		select {
 		case <-g:
 		case <-ctx.Done():
+			if b.KilledErr != nil {
+				return nil, b.KilledErr
+			}
 			return nil, ctx.Err()
 		}
 	}

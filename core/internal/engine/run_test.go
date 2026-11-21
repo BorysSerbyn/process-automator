@@ -104,6 +104,29 @@ func TestInterruptedReason(t *testing.T) {
 	}
 }
 
+// A cancelled run whose backend ends with an error of its own (an agent CLI
+// killed with it: "signal: killed") is interrupted too, not a failure in the
+// backend's words.
+func TestInterruptedWhateverTheBackendSays(t *testing.T) {
+	gate := make(chan struct{})
+	defer close(gate)
+	a, set := enginetest.Fixture(t, map[string]string{"long": "queue"}, nil)
+	enginetest.UseBackend(t, &enginetest.Backend{Gates: map[string]chan struct{}{"long": gate}, KilledErr: errors.New("claude: signal: killed")})
+	r, _ := set.Find("long")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := a.Execute(ctx, set, r, engine.RunOptions{})
+		done <- err
+	}()
+	enginetest.WaitOutcome(t, a, "long", runstatus.OutcomeRunning)
+	cancel()
+	<-done
+	if run := enginetest.LastRun(a, "long"); !strings.Contains(run.Reason, "interrupted") {
+		t.Fatalf("recorded %+v", run)
+	}
+}
+
 // The llm.backend setting offers exactly the registered engine.Backends, and each
 // is complete.
 func TestBackendSettingMatchesRegistry(t *testing.T) {

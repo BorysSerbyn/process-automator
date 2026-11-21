@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -101,5 +102,29 @@ func TestEffortReachesClaudeCode(t *testing.T) {
 	}
 	if _, err := (&Genkit{}).Run(context.Background(), Job{Effort: "high"}); err == nil || !strings.Contains(err.Error(), "effort") {
 		t.Fatalf("api backend must reject effort: %v", err)
+	}
+}
+
+// hangingCLI is an agent CLI that leaves a process holding its output.
+type hangingCLI struct{ fakeCLI }
+
+func (*hangingCLI) Command(ctx context.Context, _ CLIRun) (*exec.Cmd, error) {
+	return exec.CommandContext(ctx, "/bin/sh", "-c", "sleep 60 & wait"), nil
+}
+
+// A run that's stopped ends once its CLI is killed, even with something it
+// started still holding its output (an MCP server, a tool's command).
+func TestAStoppedCLIRunEndsDespiteWhatItStarted(t *testing.T) {
+	orig := cliWaitDelay
+	cliWaitDelay = 200 * time.Millisecond
+	t.Cleanup(func() { cliWaitDelay = orig })
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := (&CLI{Tool: &hangingCLI{}}).Run(ctx, Job{Name: "t", Source: "Say hi."}); err == nil {
+		t.Error("a killed CLI ran fine")
+	}
+	if took := time.Since(start); took > 10*time.Second {
+		t.Fatalf("took %s", took)
 	}
 }

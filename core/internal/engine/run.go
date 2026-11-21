@@ -125,7 +125,9 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 		case errors.Is(context.Cause(ctx), ErrStopped):
 			err = ErrStopped
 			run.Outcome, run.Reason = runstatus.OutcomeStopped, "stopped on request ("+product.Command+" stop)"
-		case errors.Is(err, context.Canceled):
+		case errors.Is(err, context.Canceled), err != nil && ctx.Err() != nil:
+			// However the backend says it ended: an agent CLI killed with
+			// the run says "signal: killed", not that it was cancelled.
 			run.Reason = "interrupted before it finished (the scheduler stopped, or the run was cancelled)"
 		}
 		finish(run, res)

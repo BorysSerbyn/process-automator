@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
@@ -109,6 +110,9 @@ const defaultSystemPrompt = "You carry out an automation routine for the user, u
 	"nobody will answer questions, so finish the task with the tools provided, then reply as the routine asks."
 
 // Name implements Backend.
+// cliWaitDelay is how long a killed agent CLI's output is waited for.
+var cliWaitDelay = 5 * time.Second
+
 func (b *CLI) Name() string { return b.Tool.Name() }
 
 // PicksSessionID implements SessionPicker: its tool's CLI picks the ID.
@@ -176,6 +180,10 @@ func (b *CLI) Run(ctx context.Context, j Job) (*Output, error) {
 	cmd.Stdin = strings.NewReader(user)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	// Stopped (the run cancelled, the scheduler stopping), the CLI is killed;
+	// what it started that still holds its output (MCP servers, a tool's
+	// command) mustn't keep the run from ending.
+	cmd.WaitDelay = cliWaitDelay
 	runErr := cmd.Run()
 	out, err := b.Tool.Result(run, stdout.Bytes(), stderr.Bytes(), runErr)
 	if out != nil {

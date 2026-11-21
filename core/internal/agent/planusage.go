@@ -31,6 +31,7 @@ func (b *ClaudeCode) PlanUsage(ctx context.Context) ([]usage.Limit, error) {
 		"--output-format", "stream-json", "--verbose", "--no-session-persistence",
 		"--setting-sources", "", "--strict-mcp-config", "--tools", "", "--restricted")
 	cmd.Dir, cmd.Env = dir, b.env()
+	cmd.WaitDelay = cliWaitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
