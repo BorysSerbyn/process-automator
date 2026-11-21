@@ -12,7 +12,7 @@ Process Automator runs **routines**: prompt files that a model (Claude) runs on 
 - **The MCP server** gives Claude everything the CLI does ([[Guides/Using it from Claude|Using it from Claude]])
 
 ## Requirements
-- macOS 14 or later, or Linux (x86-64 or ARM64)
+- macOS 14 or later on a Mac with Apple silicon (Intel Macs aren't supported), or Linux (x86-64 or ARM64)
 - A GitHub account that can read the private `process-automator` repository, signed in with the GitHub CLI (`gh auth login`) or a token in `GH_TOKEN`
 - Linux only: `secret-tool` (package `libsecret-tools`) to keep sign-ins, and a systemd user session to start the scheduler at login
 

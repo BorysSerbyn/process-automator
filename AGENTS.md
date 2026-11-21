@@ -18,7 +18,7 @@ Tools that change things are marked so the client asks first, and sign-ins happe
 Your job is to run the commands and to ask the person, never to choose for them. Everything below runs without an interactive terminal: read `--json` output, and pass `--yes` only after they've answered. Ask one question at a time, in plain words, quoting what the app says (each setup step's `ask` and `status`).
 
 ## 1. Check the prerequisites
-- **OS**: macOS 14 or later, or Linux (x86-64 or ARM64). Nothing else is supported; stop and say so.
+- **OS**: macOS 14 or later on Apple silicon (not Intel Macs), or Linux (x86-64 or ARM64). Nothing else is supported; stop and say so.
 - **GitHub access**: the repository is private. `gh auth status` must show a GitHub account that can read it; otherwise ask them to run `gh auth login` (or set `GH_TOKEN`). Check with `gh repo view BorysSerbyn/process-automator`.
 - **Linux only**: `secret-tool` (package `libsecret-tools`) for keeping sign-ins, and a systemd user session for starting the scheduler at login. Install the package only if they agree.
 - **Already installed?** If `procauto version --json` works, the app is there: offer `procauto update` instead, and go on to step 3.

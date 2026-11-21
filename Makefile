@@ -24,8 +24,6 @@ BIN_DIR       ?= $(HOME)/.local/bin
 SOURCE_DIR    ?= $(CURDIR)
 # Extra codesign flags (releases: --options runtime --timestamp, for notarization)
 SIGN_FLAGS    ?=
-# UNIVERSAL=1 builds the macOS app for Apple silicon and Intel (releases)
-UNIVERSAL     ?=
 # CPU architecture of the Linux package (amd64, arm64)
 LINUX_ARCH    ?= amd64
 # The GitHub API releases are read from (empty: api.github.com)
@@ -51,13 +49,8 @@ LINUX_SCHED_LABEL := $(CLI)-scheduler.service
 CORE_BIN  := $(BUILD)/$(CLI)
 APP_BUILD := $(BUILD)/$(APP_NAME).app
 DIST      := $(BUILD)/dist
-# Where swift build puts automator-ui (asked when bundling: it depends on the toolchain). A universal
-# build makes each arch on its own (one build of both can't run the OpenAPI generator plugin) and joins them.
-ifdef UNIVERSAL
-UI_BIN     := $(BUILD)/AutomatorUI
-else
+# Where swift build puts automator-ui (asked when bundling: it depends on the toolchain)
 UI_BIN     = $(shell cd automator-ui && swift build -c release --show-bin-path)/AutomatorUI
-endif
 # The build's values, set in the automator package (the binary's names are its automator.App)
 AUTOMATOR := github.com/BorysSerbyn/process-automator/core/automator
 COMMON_LDFLAGS := -s -w -X "$(AUTOMATOR).version=$(VERSION)" -X "$(AUTOMATOR).sourceDir=$(SOURCE_DIR)" \
@@ -105,24 +98,10 @@ build: build-core build-ui ## Build the core and automator-ui
 
 build-core:
 	@mkdir -p "$(BUILD)"
-ifdef UNIVERSAL
-	cd "$(GO_DIR)" && GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o "$(CORE_BIN)-arm64" $(MAIN)
-	cd "$(GO_DIR)" && GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o "$(CORE_BIN)-amd64" $(MAIN)
-	lipo -create -output "$(CORE_BIN)" "$(CORE_BIN)-arm64" "$(CORE_BIN)-amd64"
-else
 	cd "$(GO_DIR)" && go build -trimpath -ldflags '$(LDFLAGS)' -o "$(CORE_BIN)" $(MAIN)
-endif
 
 build-ui:
-ifdef UNIVERSAL
-	@mkdir -p "$(BUILD)"
-	for arch in arm64 x86_64; do (cd automator-ui && swift build -c release --arch $$arch --scratch-path .build/$$arch) || exit 1; done
-	lipo -create -output "$(UI_BIN)" \
-	  "$$(cd automator-ui && swift build -c release --arch arm64 --scratch-path .build/arm64 --show-bin-path)/AutomatorUI" \
-	  "$$(cd automator-ui && swift build -c release --arch x86_64 --scratch-path .build/x86_64 --show-bin-path)/AutomatorUI"
-else
 	cd automator-ui && swift build -c release
-endif
 
 bundle: build check-identity ## Assemble and sign the .app
 	@printf '%s\n' "$$MACOS_INSTALL_ENV" > "$(BUILD)/install.env"

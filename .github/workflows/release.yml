@@ -71,8 +71,8 @@ jobs:
             [ -n "$identity" ] || { echo "::error::no code-signing identity in SIGNING_CERT_P12_BASE64"; exit 1; }
             echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
           fi
-      - name: Build and sign the app (universal)
-        run: make bundle UNIVERSAL=1 SOURCE_DIR= SIGN_IDENTITY="${SIGN_IDENTITY:--}" SIGN_FLAGS="${SIGN_FLAGS:-}"
+      - name: Build and sign the app (Apple silicon)
+        run: make bundle SOURCE_DIR= SIGN_IDENTITY="${SIGN_IDENTITY:--}" SIGN_FLAGS="${SIGN_FLAGS:-}"
       - name: Notarize
         if: env.NOTARIZE == 'true'
         env:
