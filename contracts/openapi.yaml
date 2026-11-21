@@ -54,24 +54,21 @@ components:
       type: object
     ClickOutput:
       additionalProperties: false
-      description: 'ClickOutput is `notifications open --json`: what clicking did.'
+      description: 'ClickOutput is `notifications open --json`: what clicking a notification shows.'
       properties:
         action:
           description: |-
-            Action is what clicking did: show-run (the notification is about a
-            run) or none.
+            Action is what to show: show-run (the notification is about a run: its
+            routine's window, on that run) or show-app (about the app itself, e.g.
+            an update: the app).
           enum:
             - show-run
-            - none
+            - show-app
           type: string
         notification:
           type: string
-        report:
-          type: string
         routine:
-          description: |-
-            Routine and Run, for show-run: with --frontend-shows-runs the frontend
-            shows them itself; otherwise a report of the run was opened (Report).
+          description: Routine and Run, for show-run.
           type: string
         run:
           type: string
@@ -1445,6 +1442,43 @@ components:
         - updateAvailable
         - updated
         - inProgress
+      type: object
+    UpdateProgress:
+      additionalProperties: false
+      description: 'UpdateProgress is `update progress --json`: the latest update, as it goes.'
+      properties:
+        detail:
+          description: Detail is the latest line of the step's output (a build's), if any.
+          type: string
+        error:
+          description: Error is why it failed.
+          type: string
+        finishedAt:
+          format: date-time
+          type: string
+        log:
+          description: Log is the file a detached update writes its whole output to.
+          type: string
+        startedAt:
+          format: date-time
+          type: string
+        state:
+          description: State is none (no update has run), installing, done or failed.
+          enum:
+            - none
+            - installing
+            - done
+            - failed
+          type: string
+        step:
+          description: Step is what it's doing (or last did), in words.
+          type: string
+        tag:
+          description: Tag is the release being installed, once known.
+          type: string
+      required:
+        - state
+        - log
       type: object
     VersionOutput:
       additionalProperties: false

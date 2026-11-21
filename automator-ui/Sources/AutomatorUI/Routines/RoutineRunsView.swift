@@ -33,7 +33,9 @@ struct RoutineRunsView: View {
                     RunRow(
                         run: run, open: model.openRuns.contains(run.id), entry: model.runEntries[run.id],
                         error: model.runErrors[run.id], toggle: { model.toggleRun(run.id) },
-                        openReport: { model.openReport(run.id) })
+                        openReport: { model.openReport(run.id) }
+                    )
+                    .id(run.id)
                 }
             } else {
                 ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(16)

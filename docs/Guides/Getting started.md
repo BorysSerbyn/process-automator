@@ -67,7 +67,7 @@ Setup takes you through what the app needs, in order:
 Run it in a terminal with `procauto setup`, which asks before each step and skips what's done, or on macOS open **Finish Setup…** from the menu bar (or **Setup** in the Routines window), which shows every step with a button for each. Run it again any time, e.g. after adding a routine. Until the required steps are done, the menu bar dot is red with "Setup isn't finished".
 
 ## Update
-`procauto update` installs the latest release if it's newer (`--check` only reports). It verifies the download like the installer, replaces the app where it is and restarts it. On macOS the menu offers it too (**Update to X…**, or **Check for Updates**). Your routines, settings and sign-ins are kept.
+`procauto update` installs the latest release if it's newer (`--check` only reports; `update progress` says what one installing is doing). It verifies the download like the installer, replaces the app where it is and restarts it. On macOS the menu offers it too (**Update to X…**, or **Check for Updates**), and shows its progress. Your routines, settings and sign-ins are kept. If `gh` is signed in to several GitHub accounts, it uses the first that can read the releases, so the active one needn't be.
 
 ## Uninstall
 `procauto uninstall` removes the app, its `procauto` link and its login items. Your config, routines, history, logs and secrets stay, unless you add `--purge`.

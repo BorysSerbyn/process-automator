@@ -3,7 +3,8 @@
 // to deliver. The core only records them; frontends ask for the pending ones
 // (`procauto notifications list --pending --json`), show them (automator-ui
 // as desktop notifications), mark them delivered, and on a click run
-// `procauto notifications open <id>`, which shows the run it's about.
+// `procauto notifications open <id>`, which says what to show: the run it's
+// about, in its routine's window, or the app.
 package notifications
 
 import (

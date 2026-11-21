@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name) },
             openRun: { [weak self] id in self?.openRun(id) },
             openSetup: { [weak self] in self?.setupWindow?.show() })
-        notifier.setUp(cli: cli)
+        notifier.setUp(cli: cli) { [weak self] click in self?.show(click) }
         followStatus()
         updates.start()
     }
@@ -80,6 +80,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             guard self.settingsWindow?.isVisible == false else { return }  // reopened meanwhile
             self.settingsWindow = nil
             self.settingsModel = nil
+        }
+    }
+
+    /// A click on one of the app's notifications: the run it's about, in
+    /// its routine's window, or the app (the Routines window).
+    private func show(_ click: Components.Schemas.ClickOutput) {
+        if click.action == .show_hyphen_run, let routine = click.routine {
+            routineWindows?.showRoutine(routine, run: click.run)
+        } else {
+            routineWindows?.showList()
         }
     }
 

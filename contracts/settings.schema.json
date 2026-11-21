@@ -142,7 +142,7 @@
     },
     "runs.failure-notifications": {
       "default": true,
-      "description": "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one shows the run).",
+      "description": "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one opens the app on the run).",
       "type": "boolean",
       "x-type": "bool"
     },

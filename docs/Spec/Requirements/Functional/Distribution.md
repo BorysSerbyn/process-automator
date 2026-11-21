@@ -8,6 +8,8 @@ Back to [[Home]]. See also [[Spec/Requirements/Technical/Distribution|Technical:
 - **One command each** to install, update and uninstall, on both
 - **Verified**: installing and updating only ever install a release verified as the one published, and nothing from it runs before that check passes
 - **Updates move only to published releases**, never to unreleased commits; a development build newer than the latest release is left alone. `update --check` only reports
+- **Updates say what's wrong**: when the releases can't be read (no GitHub access, no network), updating says why and changes nothing
+- **Updates show their progress**: while one installs, what it's doing (downloading, verifying, installing, or building, which takes minutes), so it never looks stuck; and how it ended if it failed
 - **Updates keep everything**: my routines, settings, sign-ins and whether the app starts at login
 - **Uninstalling keeps my data**: config, routines, history, logs and secrets stay unless I ask for them to go too
 - **Starts at login**: install sets the scheduler (and on macOS the menu bar app) to start at login and starts them now

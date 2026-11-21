@@ -2,32 +2,28 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 )
 
 // The core records the app's own notifications; frontends deliver them (see package notifications).
 
-// ClickOutput is `notifications open --json`: what clicking did.
+// ClickOutput is `notifications open --json`: what clicking a notification
+// shows. The frontend shows it; the core opens nothing.
 type ClickOutput struct {
 	Notification string `json:"notification"`
-	// Action is what clicking did: show-run (the notification is about a
-	// run) or none.
-	Action string `json:"action" jsonschema:"enum=show-run,enum=none"`
-	// Routine and Run, for show-run: with --frontend-shows-runs the frontend
-	// shows them itself; otherwise a report of the run was opened (Report).
+	// Action is what to show: show-run (the notification is about a run: its
+	// routine's window, on that run) or show-app (about the app itself, e.g.
+	// an update: the app).
+	Action string `json:"action" jsonschema:"enum=show-run,enum=show-app"`
+	// Routine and Run, for show-run.
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
-	Report  string `json:"report,omitempty"`
 }
 
 func newNotificationsCmd() *cobra.Command {
@@ -98,13 +94,14 @@ func newNotificationsDeliveredCmd() *cobra.Command {
 }
 
 func newNotificationsOpenCmd() *cobra.Command {
-	var frontendShowsRuns, asJSON bool
+	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "open <id>",
-		Short: "Do what clicking a notification does (frontends call this on a click)",
-		Long: "Shows the run the notification is about (show-run): a readable report of it, or with " +
-			"--frontend-shows-runs leaves showing it to the frontend. One about no run (an update) does nothing.",
-		Annotations: map[string]string{annNotReadOnly: "clicking is mine"},
+		Short: "Say what clicking a notification shows (frontends call this on a click)",
+		Long: "Clicking one of the app's notifications opens the app: one about a run shows the run in its " +
+			"routine's window (show-run), one about the app itself (an update) shows the app (show-app). " +
+			"The frontend shows it; this opens nothing.",
+		Annotations: readOnly(),
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)
@@ -115,57 +112,13 @@ func newNotificationsOpenCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := ClickOutput{Notification: n.ID, Action: "none"}
+			out := ClickOutput{Notification: n.ID, Action: "show-app"}
 			if n.Run != "" {
 				out.Action, out.Routine, out.Run = "show-run", n.Routine, n.Run
-				if !frontendShowsRuns {
-					if out.Report, err = openRunReport(a, n.Run); err != nil {
-						return err
-					}
-				}
 			}
-			return emit(cmd, out, strings.TrimSpace(out.Action+" "+out.Report))
+			return emit(cmd, out, strings.TrimSpace(out.Action+" "+out.Run))
 		},
 	}
-	cmd.Flags().BoolVar(&frontendShowsRuns, "frontend-shows-runs", false, "the frontend shows the run itself (show-run opens nothing)")
 	jsonFlag(cmd.Flags(), &asJSON, ClickOutput{})
 	return cmd
-}
-
-// reportsKept is how long a run report written for opening is kept.
-const reportsKept = 7 * 24 * time.Hour
-
-// pruneReports removes reports written more than reportsKept ago: they're
-// only for opening, and the run history holds the runs.
-func pruneReports(dir string, now time.Time) {
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > reportsKept {
-			_ = os.Remove(filepath.Join(dir, e.Name()))
-		}
-	}
-}
-
-// openRunReport writes a readable report of a run (as `runs show` prints it)
-// and opens it: show-run until a frontend can show runs itself.
-func openRunReport(a *engine.App, runID string) (string, error) {
-	e, err := history.Get(a.Layout.History(), runID)
-	if err != nil {
-		return "", err
-	}
-	dir := a.Layout.Reports()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	pruneReports(dir, time.Now())
-	path := filepath.Join(dir, strings.ReplaceAll(runID, "/", "_")+".txt")
-	f, err := os.Create(path)
-	if err != nil {
-		return "", err
-	}
-	printRun(f, e)
-	if err := f.Close(); err != nil {
-		return "", err
-	}
-	return path, openExternal(path)
 }

@@ -51,8 +51,11 @@ type Source struct {
 	// Repo is owner/name.
 	Repo string
 	// Token authorizes requests (a private repository needs one); empty for none.
-	Token  string
-	Client *http.Client
+	Token string
+	// Accounts are the GitHub CLI accounts Token tried when none could read
+	// Repo (for saying so).
+	Accounts []string
+	Client   *http.Client
 }
 
 // Release is a published release.
@@ -110,6 +113,10 @@ func (s Source) get(ctx context.Context, url, accept string) (*http.Response, er
 		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusUnauthorized {
 			if s.Token == "" {
 				return nil, fmt.Errorf("%s: %s (a private repository needs a GitHub sign-in: `gh auth login`, or set GH_TOKEN)", url, resp.Status)
+			}
+			if len(s.Accounts) > 0 {
+				return nil, fmt.Errorf("%s: %s (none of the GitHub accounts gh is signed in to can read %s: %s; sign in to one that can with `gh auth login`, or set GH_TOKEN)",
+					url, resp.Status, s.Repo, strings.Join(s.Accounts, ", "))
 			}
 			return nil, fmt.Errorf("%s: %s (does your GitHub account have access to %s?)", url, resp.Status, s.Repo)
 		}
@@ -243,8 +250,9 @@ func sumFor(sumsPath, name string) (string, error) {
 
 // Install downloads and verifies the release's artifact for this platform,
 // then runs its installer to replace the app at appRoot (the installed .app,
-// or the installed Linux tree). out gets the installer's output.
-func (s Source) Install(ctx context.Context, r Release, appRoot, teamID string, out io.Writer) error {
+// or the installed Linux tree). step is told each step as it starts, in
+// words; out gets the installer's output.
+func (s Source) Install(ctx context.Context, r Release, appRoot, teamID string, step func(string), out io.Writer) error {
 	name, err := AssetName(r.Version())
 	if err != nil {
 		return err
@@ -254,6 +262,7 @@ func (s Source) Install(ctx context.Context, r Release, appRoot, teamID string, 
 		return err
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
+	step("Downloading " + r.Tag)
 	archive, err := s.Fetch(ctx, r, name, tmp)
 	if err != nil {
 		return err
@@ -266,9 +275,11 @@ func (s Source) Install(ctx context.Context, r Release, appRoot, teamID string, 
 	if err != nil {
 		return err
 	}
+	step("Checking " + r.Tag + " is genuine")
 	if err := verifyApp(ctx, app, teamID); err != nil {
 		return err
 	}
+	step("Installing " + r.Tag)
 	cmd := exec.CommandContext(ctx, "bash", script, "install", "--to", appRoot)
 	cmd.Stdout, cmd.Stderr = out, out
 	if err := cmd.Run(); err != nil {
@@ -299,22 +310,107 @@ func findInstaller(dir string) (app, script string, err error) {
 	return filepath.Dir(filepath.Dir(filepath.Dir(script))), script, nil
 }
 
-// Token is a GitHub token for reading releases: GH_TOKEN or GITHUB_TOKEN,
-// else the GitHub CLI's sign-in (`gh auth token`), else none (enough for a
-// public repository).
-func Token(ctx context.Context) string {
+// gh runs the GitHub CLI and returns what it printed (tests replace it).
+var gh = func(ctx context.Context, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, "gh", args...).Output()
+}
+
+// Token is a GitHub token that can read repo's releases: GH_TOKEN or
+// GITHUB_TOKEN when set (used as is), else one of the GitHub CLI's sign-ins
+// for github.com: the active account if it can read repo, else the first
+// other account signed in that can. When none can, it's the active
+// account's (or "" when gh isn't signed in: enough for a public repository),
+// and accounts lists those tried, for saying so. A token is never printed.
+func Token(ctx context.Context, api, repo string) (token string, accounts []string) {
 	for _, env := range []string{"GH_TOKEN", "GITHUB_TOKEN"} {
 		if t := strings.TrimSpace(os.Getenv(env)); t != "" {
-			return t
+			return t, nil
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "gh", "auth", "token", "--hostname", "github.com").Output()
+	active := ghToken(ctx, "")
+	logins := ghAccounts(ctx)
+	if repo == "" || (active == "" && len(logins) == 0) {
+		return active, nil
+	}
+	probe := Source{API: api, Repo: repo, Client: &http.Client{Timeout: 15 * time.Second}}
+	tried := map[string]bool{}
+	if active != "" {
+		probe.Token = active
+		if probe.canRead(ctx) {
+			return active, nil
+		}
+		tried[active] = true
+	}
+	for _, login := range logins {
+		t := ghToken(ctx, login)
+		if t == "" || tried[t] {
+			continue
+		}
+		tried[t] = true
+		probe.Token = t
+		if probe.canRead(ctx) {
+			return t, nil
+		}
+	}
+	return active, logins
+}
+
+// ghToken is a GitHub CLI account's token for github.com (the active
+// account's for ""), or "" when there's none.
+func ghToken(ctx context.Context, login string) string {
+	args := []string{"auth", "token", "--hostname", "github.com"}
+	if login != "" {
+		args = append(args, "--user", login)
+	}
+	out, err := gh(ctx, args...)
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// ghAccounts are the accounts the GitHub CLI is signed in to for
+// github.com, the active one first; none when gh can't say (not
+// installed, or too old for `auth status --json`).
+func ghAccounts(ctx context.Context) []string {
+	out, err := gh(ctx, "auth", "status", "--hostname", "github.com", "--json", "hosts")
+	if err != nil {
+		return nil
+	}
+	var status struct {
+		Hosts map[string][]struct {
+			Login  string `json:"login"`
+			Active bool   `json:"active"`
+			State  string `json:"state"`
+		} `json:"hosts"`
+	}
+	if json.Unmarshal(out, &status) != nil {
+		return nil
+	}
+	var logins []string
+	for _, a := range status.Hosts["github.com"] {
+		if a.Login == "" || (a.State != "" && a.State != "success") {
+			continue
+		}
+		if a.Active {
+			logins = append([]string{a.Login}, logins...)
+		} else {
+			logins = append(logins, a.Login)
+		}
+	}
+	return logins
+}
+
+// canRead reports whether the token can read the repository.
+func (s Source) canRead(ctx context.Context) bool {
+	resp, err := s.get(ctx, strings.TrimSuffix(s.API, "/")+"/repos/"+s.Repo, "application/vnd.github+json")
+	if err != nil {
+		return false
+	}
+	_ = resp.Body.Close()
+	return true
 }
 
 // untarGz unpacks a .tar.gz into dir: regular files and folders only, all inside dir.

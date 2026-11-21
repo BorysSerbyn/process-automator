@@ -41,7 +41,8 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
         bringToFront(list?.window)
     }
 
-    func showRoutine(_ name: String) {
+    /// Shows a routine's window, on one of its runs if given.
+    func showRoutine(_ name: String, run: String? = nil) {
         if details[name] == nil {
             let model = RoutineModel(name: name, cli: cli, status: status)
             model.onDeleted = { [weak self] in
@@ -57,6 +58,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
             }
         }
         details[name]?.model.load()
+        if let run { details[name]?.model.showRun(run) }
         bringToFront(details[name]?.window)
     }
 

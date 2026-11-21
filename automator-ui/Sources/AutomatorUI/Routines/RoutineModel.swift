@@ -32,6 +32,8 @@ final class RoutineModel: ObservableObject {
     @Published var runEntries: [String: RunEntry] = [:]
     @Published var runErrors: [String: String] = [:]
     @Published var openRuns: Set<String> = []
+    /// A run to bring into view in the Runs tab (from a notification), until it is.
+    @Published var shownRun: String?
     @Published var memories: [Memory]?
     @Published var memoryError: String?
     @Published var trustReview: TrustReview?
@@ -134,6 +136,13 @@ final class RoutineModel: ObservableObject {
         withAnimation(.easeInOut(duration: 0.18)) {
             if openRuns.remove(id) == nil { openRun(id) }
         }
+    }
+
+    /// Shows one run: the Runs tab, with that run open and in view.
+    func showRun(_ id: String) {
+        tab = .runs
+        openRun(id)
+        shownRun = id
     }
 
     private func openRun(_ id: String) {

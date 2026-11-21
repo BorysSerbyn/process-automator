@@ -7,13 +7,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewer(t *testing.T) {
@@ -235,4 +238,128 @@ func TestSourceLatest(t *testing.T) {
 	if got, err := SourceLatest(context.Background(), clone); err != nil || got != "v1.10.0" {
 		t.Errorf("SourceLatest = %q, %v; want v1.10.0", got, err)
 	}
+}
+
+// fakeGH replaces the GitHub CLI: accounts signed in for github.com (the
+// first active) and their tokens. ok is false to act like a gh too old for
+// `auth status --json`.
+func fakeGH(t *testing.T, accounts [][2]string, statusJSON bool) {
+	t.Helper()
+	orig := gh
+	t.Cleanup(func() { gh = orig })
+	gh = func(_ context.Context, args ...string) ([]byte, error) {
+		cmd := strings.Join(args, " ")
+		switch {
+		case strings.HasPrefix(cmd, "auth status"):
+			if !statusJSON {
+				return nil, errors.New("unknown flag: --json")
+			}
+			var hosts []map[string]any
+			for i, a := range accounts {
+				hosts = append(hosts, map[string]any{"login": a[0], "active": i == 0, "state": "success", "host": "github.com"})
+			}
+			return json.Marshal(map[string]any{"hosts": map[string]any{"github.com": hosts}})
+		case strings.HasPrefix(cmd, "auth token"):
+			user := ""
+			if i := slices.Index(args, "--user"); i >= 0 {
+				user = args[i+1]
+			}
+			for i, a := range accounts {
+				if a[0] == user || (user == "" && i == 0) {
+					return []byte(a[1] + "\n"), nil
+				}
+			}
+			return nil, errors.New("not logged in")
+		}
+		return nil, errors.New("unexpected gh " + cmd)
+	}
+}
+
+// Without GH_TOKEN, the token is that of the first account gh is signed in
+// to that can read the release repository: the active one first.
+func TestTokenFindsAnAccountThatCanRead(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	srv := fakeGitHub(t, "work-token", nil, nil)
+	srv.Config.Handler = withRepo(srv.Config.Handler)
+	ctx := context.Background()
+
+	fakeGH(t, [][2]string{{"me", "me-token"}, {"other", "other-token"}, {"work", "work-token"}}, true)
+	if got, tried := Token(ctx, srv.URL, "o/r"); got != "work-token" || tried != nil {
+		t.Fatalf("Token = %q %v, want work's", got, tried)
+	}
+	fakeGH(t, [][2]string{{"work", "work-token"}, {"me", "me-token"}}, true)
+	if got, _ := Token(ctx, srv.URL, "o/r"); got != "work-token" {
+		t.Fatalf("Token = %q, want the active account's when it can read", got)
+	}
+	// None can: the active account's, and the accounts tried, which the error names.
+	fakeGH(t, [][2]string{{"me", "me-token"}, {"other", "other-token"}}, true)
+	got, tried := Token(ctx, srv.URL, "o/r")
+	if got != "me-token" || !slices.Equal(tried, []string{"me", "other"}) {
+		t.Fatalf("Token = %q %v, want the active account's and both tried", got, tried)
+	}
+	_, err := Source{API: srv.URL, Repo: "o/r", Token: got, Accounts: tried}.Latest(ctx)
+	if err == nil || !strings.Contains(err.Error(), "me, other") || strings.Contains(err.Error(), "me-token") {
+		t.Fatalf("error %v: want the accounts named, no token", err)
+	}
+	// A gh too old to list its accounts: the active one's.
+	fakeGH(t, [][2]string{{"me", "me-token"}, {"work", "work-token"}}, false)
+	if got, _ := Token(ctx, srv.URL, "o/r"); got != "me-token" {
+		t.Fatalf("Token = %q, want the active account's", got)
+	}
+	// GH_TOKEN wins, unchecked; gh isn't asked.
+	t.Setenv("GH_TOKEN", "env-token")
+	fakeGH(t, nil, true)
+	gh = func(context.Context, ...string) ([]byte, error) { t.Fatal("gh asked"); return nil, nil }
+	if got, _ := Token(ctx, srv.URL, "o/r"); got != "env-token" {
+		t.Fatalf("Token = %q, want GH_TOKEN", got)
+	}
+}
+
+// withRepo also serves /repos/o/r (the repository itself) to whoever the
+// releases list is served to.
+func withRepo(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/o/r" {
+			r2 := r.Clone(r.Context())
+			r2.URL.Path = "/repos/o/r/releases"
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, r2)
+			if rec.Code != http.StatusOK {
+				http.NotFound(w, r)
+				return
+			}
+			_, _ = w.Write([]byte(`{"full_name":"o/r"}`))
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// An update's progress: its steps, the latest line a step printed, and how it ended.
+func TestReporter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "update-progress.json")
+	r := NewReporter(path, "Checking for the latest release")
+	r.Tag("v1.2.0")
+	r.Step("Building v1.2.0")
+	clock := time.Now()
+	r.now = func() time.Time { clock = clock.Add(time.Minute); return clock } // past the throttle each write
+	_, _ = r.Write([]byte("go build ./...\n\ncompiling Swift"))
+	p, ok, err := ReadProgress(path)
+	if err != nil || !ok || p.Tag != "v1.2.0" || p.Step != "Building v1.2.0" || p.Detail != "go build ./..." || p.FinishedAt != nil {
+		t.Fatalf("%+v %v %v", p, ok, err)
+	}
+	_, _ = r.Write([]byte(" module\r\n"))
+	if p, _, _ = ReadProgress(path); p.Detail != "compiling Swift module" {
+		t.Fatalf("detail %q", p.Detail)
+	}
+	r.Finish("", errors.New("make: *** [install] Error 1"))
+	if p, _, _ = ReadProgress(path); p.FinishedAt == nil || p.Error == "" || p.Step != "Building v1.2.0" {
+		t.Fatalf("finished: %+v", p)
+	}
+	// No file: none yet. No path: nothing written.
+	if _, ok, err := ReadProgress(filepath.Join(t.TempDir(), "none.json")); ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	NewReporter("", "x").Finish("done", nil)
 }

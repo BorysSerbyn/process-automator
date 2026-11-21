@@ -2,7 +2,7 @@ package cli
 
 import (
 	"context"
-	"os"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +12,9 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 )
 
-// Clicking one of the app's notifications shows the run it's about (a
-// readable report, or the frontend shows it); one about no run does nothing.
+// Clicking one of the app's notifications opens the app: one about a run
+// shows that run in its routine's window, one about the app shows the app.
+// The core opens nothing.
 func TestNotificationClick(t *testing.T) {
 	var opened []string
 	orig := openExternal
@@ -34,22 +35,26 @@ func TestNotificationClick(t *testing.T) {
 		return n.ID
 	}
 	cfg := a.Layout.Config()
+	click := func(id string) ClickOutput {
+		t.Helper()
+		out, err := cli(t, cfg, "notifications", "open", id, "--json")
+		var got ClickOutput
+		if err != nil || json.Unmarshal([]byte(out), &got) != nil {
+			t.Fatalf("open %s: %s %v", id, out, err)
+		}
+		return got
+	}
 
 	id := add(notifications.Notification{Kind: notifications.KindFailure, Title: "r failed", Routine: "r", Run: runID})
-	if out, err := cli(t, cfg, "notifications", "open", id); err != nil || len(opened) != 1 || !strings.HasSuffix(opened[0], ".txt") {
-		t.Fatalf("show-run: %s %v %v", out, err, opened)
+	if got := click(id); got != (ClickOutput{Notification: id, Action: "show-run", Routine: "r", Run: runID}) {
+		t.Fatalf("run click: %+v", got)
 	}
-	if b, _ := os.ReadFile(opened[0]); !strings.Contains(string(b), runID) {
-		t.Fatalf("report: %s", b)
-	}
-	// A frontend that shows runs gets them back instead.
-	if out, _ := cli(t, cfg, "notifications", "open", id, "--frontend-shows-runs", "--json"); !strings.Contains(out, `"run": "`+runID) || len(opened) != 1 {
-		t.Fatalf("frontend-shows-runs: %s %v", out, opened)
-	}
-	// One about no run (an update) does nothing.
 	upd := add(notifications.Notification{Kind: notifications.KindApp, Title: "Updated"})
-	if out, err := cli(t, cfg, "notifications", "open", upd, "--json"); err != nil || !strings.Contains(out, `"action": "none"`) || len(opened) != 1 {
-		t.Fatalf("app click: %s %v %v", out, err, opened)
+	if got := click(upd); got != (ClickOutput{Notification: upd, Action: "show-app"}) {
+		t.Fatalf("app click: %+v", got)
+	}
+	if len(opened) != 0 {
+		t.Fatalf("a click opened %v", opened)
 	}
 	// Delivered marking.
 	if _, err := cli(t, cfg, "notifications", "delivered", id); err != nil {

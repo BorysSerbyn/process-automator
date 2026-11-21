@@ -35,6 +35,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `login-path` | The login shell's PATH, saved by the scheduler |
 | `mcp-changes.jsonl` | Side-effecting MCP calls |
 | `start.log`, `update.log` | Background runs and updates |
+| `update-progress.json` | How the latest update went, or is going (`update progress`) |
 | `reports/` | Readable run reports |
 | `locks/`, `run.lock`, `edit.lock`, `daemon.lock`, `stop/` | Cross-process locks and stop requests |
 
@@ -182,7 +183,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 ## Notifications
 - **The app's own**, recorded by the core in `notifications.json` next to run status (schema in `contracts/notifications.schema.json`), by `kind`: runs that failed, needed a sign-in, were missed or skipped (`failure`, unless `runs.failure-notifications` is off) and update results (`app`). The newest 200 within 30 days are kept. Routines' notifications never come here (the notify plugin shows them itself); entries of the retired kind `routine` are dropped when the file is read
 - **Delivered by frontends**, which mark them delivered (`notifications delivered <id>...`); `notifications list [--pending]` lists them. automator-ui delivers only while macOS allows notifications, so none are lost before the permission prompt is answered
-- **Clicking is the core's**: the frontend runs `notifications open <id>`, which shows the run the notification is about (`show-run`: a frontend's routine window with `--frontend-shows-runs`, otherwise a readable report), or does nothing (`none`) for one about no run
+- **Clicking opens the app**: the frontend runs `notifications open <id>`, which says what to show and opens nothing: `show-run` (its `routine` and `run`) for one about a run, `show-app` for one about the app itself (an update). The frontend shows it in its own windows
 - **Opening** files and URLs uses `open` on macOS and `xdg-open` on Linux
 
 ## Usage limit
@@ -225,14 +226,15 @@ automator-ui (SwiftUI, macOS 14+; `automator-ui/`, executable `AutomatorUI`, lib
 - **Every action is a CLI command** with `--json`, run off the main thread
 - **Follows run status** through `status --watch` (started again 5s after it ends); none yet, unreadable, or past `validUntil` (checked every 15s, so a stream that stopped goes red too) shows red, "Not responding". It reads no file and knows no path
 - **Logo**: its icon and the indicator's glyph come from one source (`automator-ui/Resources/Logo/`): an hourglass drawn as one stroke whose head runs into the status dot
-- **Menu**: one fixed width; text lines wrap or end in an ellipsis to fit (the full text on hover). The version; the status in the core's words (`reasons`, each opening its run with `runs show <id> --open`, else `summary`); Finish Setup… while `setupLeft` isn't empty; **Routines ›** (All Routines…, then each routine with its `health` and `summary`, opening its window); the update item; Settings; Quit
+- **Menu**: one fixed width; text lines wrap or end in an ellipsis to fit (the full text on hover). The version; the status in the core's words (`reasons`, each opening its run with `runs show <id> --open`, else `summary`); Finish Setup… while `setupLeft` isn't empty; **Routines ›** (All Routines…, then each routine with its `health` and `summary`, opening its window); the update item (Updating to X… while one installs, opening the Updating window); Settings; Quit
 - **Settings window**: Start at login, the LLM usage card (`usage --json`), then the app-wide settings (`settings list --scope app`) as a collapsible tree from their dotted keys, one control per setting type (toggle, picker, text field, file chooser), shown and sent as text (`valueText`, `defaultText`); a text field saves on Return and when it loses focus; the core's message shows when it refuses a value; Reset; settings declared ahead of their feature are tagged and disabled. It re-reads everything each time it opens
 - **Setup window**: `setup --json`'s steps grouped by kind, each with its button, and Check Again. A routine's turn-on step shows its review (`routines trust <name> --check --json`) and one **Turn On** (`routines trust <name> --yes --resume`); an `auto` step runs once as soon as the window reads it, its button left for trying again
 - **Routines window**: each routine with its health, schedule in words, last run and summary, leading to its window
 - **A routine's window**: Run Now / Dry Run (`start <routine> [--dry-run]`), Stop while it runs or waits (`stop`), Pause / Resume (`routines pause|resume`), Delete… (`routines delete`, confirmed); a Not trusted banner with Review… (`routines trust <name> --check --json`, then `--yes`); its status, schedule with a days-and-time picker or custom cron (`schedule describe`/`build`, applied with `settings set` on Save), and what it can reach; its runs (`runs show`); its memories; its own settings (`settings list --routine <name>`)
-- **Updates**: `update --check` on launch and daily; "Update to X…" installs with `update --detach`, which runs in the background so it survives automator-ui restarting, logs to `update.log`, and reports its result as a notification. An install holds `locks/update.lock`, so a second one refuses and the menu shows one in progress
+- **Updates**: `update --check` on launch and daily; "Update to X…" confirms with the core's `note`, then installs with `update --detach`, which runs in the background so it survives automator-ui restarting, logs to `update.log`, and reports its result as a notification. An install holds `locks/update.lock`, so a second one refuses and the menu shows one in progress
+- **Update progress**: while one installs (started here, or reported by `update --check`), `update progress --json` every 2 seconds until its `state` isn't `installing`. The Updating window (opened on starting one, and from the menu's Updating item) shows its release, `step` and `detail` with an indeterminate progress bar, then the error if it failed; closing it leaves the update running
 - **Start at login**: `login-items status|enable|disable` over the build's login items (`ui` and `scheduler` on macOS, `scheduler` on Linux); launchd's enable/disable override on the installed LaunchAgents, or enabling the systemd user unit. It never starts or stops what's running; `installed` is false before the app is installed
-- **Notifications** (the app's own): `notifications list --pending --json` when run status changes and every minute; each is shown, then marked delivered (`notifications delivered`); a click runs `notifications open <id>`
+- **Notifications** (the app's own): `notifications list --pending --json` when run status changes and every minute; each is shown, then marked delivered (`notifications delivered`); a click runs `notifications open <id> --json` and opens the app there: `show-run`, the routine's window on its Runs tab with that run open and in view; `show-app`, the Routines window
 - Each window and its data are freed when it closes
 
 ## Linux

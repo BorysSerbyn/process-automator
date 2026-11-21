@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "update-progress.schema.json",
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": [
+        "none",
+        "installing",
+        "done",
+        "failed"
+      ],
+      "description": "State is none (no update has run), installing, done or failed."
+    },
+    "tag": {
+      "type": "string",
+      "description": "Tag is the release being installed, once known."
+    },
+    "step": {
+      "type": "string",
+      "description": "Step is what it's doing (or last did), in words."
+    },
+    "detail": {
+      "type": "string",
+      "description": "Detail is the latest line of the step's output (a build's), if any."
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "error": {
+      "type": "string",
+      "description": "Error is why it failed."
+    },
+    "log": {
+      "type": "string",
+      "description": "Log is the file a detached update writes its whole output to."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "state",
+    "log"
+  ],
+  "title": "procauto update progress --json",
+  "description": "UpdateProgress is `update progress --json`: the latest update, as it goes."
+}

@@ -72,6 +72,9 @@ func (l Layout) StartLog() string { return l.in("start.log") }
 // UpdateLog is where a detached update logs.
 func (l Layout) UpdateLog() string { return l.in("update.log") }
 
+// UpdateProgress is how the latest update went, or is going.
+func (l Layout) UpdateProgress() string { return l.in("update-progress.json") }
+
 // StopRequests holds the stop requests `stop` writes, one file per routine.
 func (l Layout) StopRequests() string { return l.in("stop") }
 
