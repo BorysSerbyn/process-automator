@@ -379,7 +379,9 @@ uninstall_app() {
   fi
   if [ -n "$purge" ]; then
     local data
-    data=$("$core" ${config:+--config "$config"} paths --json | sed -n 's/^  "data": "\(.*\)",*$/\1/p')
+    # JSON's escapes undone: Go's encoder writes & < > as \u0026 \u003c \u003e.
+    data=$("$core" ${config:+--config "$config"} paths --json | sed -n 's/^  "data": "\(.*\)",*$/\1/p' |
+      sed -e 's/\\u0026/\&/g; s/\\u003c/</g; s/\\u003e/>/g; s/\\"/"/g; s/\\\\/\\/g')
     if [ -n "$data" ] && [ -d "$data" ]; then echo "Removing $data"; rm -rf "$data"; fi
     if [ "$OS" = macos ]; then
       rm -rf "$HOME/Library/Logs/$FOLDER"
@@ -389,8 +391,14 @@ uninstall_app() {
         echo "Removed $n Keychain items ($KEYCHAIN_SERVICE)"
       fi
     elif system && command -v secret-tool >/dev/null; then
+      # clear fails both when nothing matched and when the keyring can't be
+      # reached (locked, none): what's left says which.
       secret-tool clear service "$KEYCHAIN_SERVICE" 2>/dev/null || true
-      echo "Removed the keyring items ($KEYCHAIN_SERVICE)"
+      if [ -n "$(secret-tool search service "$KEYCHAIN_SERVICE" 2>/dev/null)" ]; then
+        echo "Couldn't remove the keyring items ($KEYCHAIN_SERVICE): is the keyring locked? Remove them with \`secret-tool clear service $KEYCHAIN_SERVICE\`." >&2
+      else
+        echo "Removed the keyring items ($KEYCHAIN_SERVICE)"
+      fi
     fi
   fi
   # The CLI link, only if it's ours (compared resolved: /var is /private/var on macOS).
