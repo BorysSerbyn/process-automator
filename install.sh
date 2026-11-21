@@ -115,7 +115,7 @@ main() {
     *":$(dirname "$cli"):"*) ;;
     *) say "Note: $(dirname "$cli") isn't on your PATH; add it to use \`$COMMAND\` by name." ;;
   esac
-  if [ -z "$yes" ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+  if [ -z "$yes" ] && have_tty; then
     printf 'Set it up now (templates, model backend, sign-ins)? [Y/n] ' > /dev/tty
     local answer
     read -r answer < /dev/tty || answer=n
@@ -136,6 +136,12 @@ no_release() {
   die "$1. Build it from a checkout of the repository instead: \`make install\` (docs/Guides/Getting started.md, 'Building it from the checkout', says what it needs)"
 }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# have_tty: there's a terminal to ask in. /dev/tty can be readable and
+# writable (its permissions) yet not open, with no controlling terminal
+# (piped from curl over ssh without -t, an agent's shell, cron): only
+# opening it says.
+have_tty() { { : < /dev/tty > /dev/tty; } 2>/dev/null; }
 
 prerequisites() {
   local os=$1 from=$2 missing=()

@@ -89,6 +89,11 @@ if [ "$(uname -s)" = Linux ]; then
   "$cli" login-items status | grep -q "^ui .*doesn't start at login" || fail "login-items doesn't see the tray turned off"
   "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only >/dev/null
   grep -qx "Hidden=true" "$entry" || fail "reinstalling turned the tray back on at login"
+  # Without --yes and with no terminal at all (no controlling one: piped from
+  # curl over ssh, an agent's shell), it installs, asks nothing, and succeeds.
+  out=$(setsid -w "$installer" --from "$sandbox/$(basename "$artifact")" --files-only 2>&1 </dev/null) ||
+    fail "installing without a terminal failed: $out"
+  case $out in *"$command setup"*) ;; *) fail "installing without a terminal didn't point to setup: $out" ;; esac
 fi
 expect "uninstall without a terminal didn't ask for --yes" "--yes" "$cli" uninstall
 "$cli" settings set history.retention-days 30 >/dev/null
