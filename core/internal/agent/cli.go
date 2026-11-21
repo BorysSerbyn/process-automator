@@ -15,7 +15,7 @@ import (
 )
 
 // CLI runs the model loop with a headless coding-agent CLI on the user's
-// own subscription (Claude Code today; Codex, Gemini CLI or similar by adding a
+// own subscription (Claude Code, Codex; another such CLI by adding a
 // CLITool). What every such CLI shares lives here:
 //
 //   - the prompt is rendered with Genkit/Dotprompt, so routine files mean the
@@ -23,7 +23,10 @@ import (
 //   - the allowed tools are served to the CLI from this process over a loopback
 //     MCP server, so the gateway (allowlist, call log, dry-run) still applies;
 //   - the CLI runs in the routine's folder, or an empty temporary one, and gets
-//     the user prompt on stdin.
+//     the user prompt on stdin;
+//   - a saved session's ID is recorded whichever side picks it: the caller
+//     (a CLI that saves under an ID it's given) or the CLI (a SessionPicker,
+//     which reports it in Output.SessionID).
 //
 // A CLITool only says how to start its CLI headless and isolated from the
 // user's own setup, and how to read its result.
@@ -38,9 +41,23 @@ type CLITool interface {
 	// Command builds the command for one run. It must not give the CLI any tools
 	// besides the MCP server in r.MCP, nor load the user's own settings.
 	Command(ctx context.Context, r CLIRun) (*exec.Cmd, error)
-	// Result reads the finished command's output into a result. runErr is the
-	// command's exit error, if any.
-	Result(stdout, stderr []byte, runErr error) (*Output, error)
+	// Result reads the finished command's output into a result. r is the run
+	// it was started for; runErr is the command's exit error, if any.
+	Result(r CLIRun, stdout, stderr []byte, runErr error) (*Output, error)
+}
+
+// SessionPicker is a Backend (or a CLITool) whose CLI picks the ID of a session
+// it saves, and reports it in Output.SessionID, instead of saving it under an
+// ID it's given (Job.SessionID).
+type SessionPicker interface {
+	PicksSessionID() bool
+}
+
+// PicksSessionID says whether b picks a saved session's ID itself (otherwise
+// the caller gives it one in Job.SessionID).
+func PicksSessionID(b Backend) bool {
+	p, ok := b.(SessionPicker)
+	return ok && p.PicksSessionID()
 }
 
 // CLIRun is what a CLITool gets for one run.
@@ -58,9 +75,11 @@ type CLIRun struct {
 	// Folder is the run's working directory when the routine sets one ("" for
 	// an empty temporary folder); a tool may read its project instructions.
 	Folder string
-	// SessionID, when set, keeps the session under this ID; otherwise nothing
-	// of the session may be saved.
-	SessionID string
+	// SaveSession keeps the session; otherwise nothing of it may be saved.
+	// SessionID is the ID to keep it under, for a tool that takes one (empty
+	// for a SessionPicker, which reports the ID its CLI picked).
+	SaveSession bool
+	SessionID   string
 	// BuiltinTools are the CLI's own tools to allow, explicitly. In a dry run
 	// (DryRun) the tool must give only those that can't change anything.
 	BuiltinTools []string
@@ -68,6 +87,9 @@ type CLIRun struct {
 	// OutputSchema is the routine's output schema, if any: the tool asks the
 	// CLI for a result in that shape and returns it as Output.Structured.
 	OutputSchema map[string]any
+	// TempDir is a private folder for this run only, removed after it (e.g.
+	// for files the CLI reads its options from). It isn't the working folder.
+	TempDir string
 }
 
 // MCPEndpoint is the loopback MCP server holding the run's allowed tools.
@@ -88,6 +110,12 @@ const defaultSystemPrompt = "You carry out an automation routine for the user, u
 
 // Name implements Backend.
 func (b *CLI) Name() string { return b.Tool.Name() }
+
+// PicksSessionID implements SessionPicker: its tool's CLI picks the ID.
+func (b *CLI) PicksSessionID() bool {
+	p, ok := b.Tool.(SessionPicker)
+	return ok && p.PicksSessionID()
+}
 
 // Run implements Backend.
 func (b *CLI) Run(ctx context.Context, j Job) (*Output, error) {
@@ -117,12 +145,18 @@ func (b *CLI) Run(ctx context.Context, j Job) (*Output, error) {
 	}
 	defer stop()
 
-	cmd, err := b.Tool.Command(ctx, CLIRun{
+	tmp, err := os.MkdirTemp("", product.Command+"-cli-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	run := CLIRun{
 		System: system, User: user, Model: rendered.Model, Effort: j.Effort, MaxTurns: j.MaxTurns,
 		MCP:    MCPEndpoint{Name: CLIServer(), URL: url, Token: token},
-		Folder: j.Folder, SessionID: j.SessionID, BuiltinTools: j.BuiltinTools, DryRun: j.DryRun,
-		OutputSchema: outputSchema(rendered),
-	})
+		Folder: j.Folder, SaveSession: j.SaveSession, SessionID: j.SessionID, BuiltinTools: j.BuiltinTools, DryRun: j.DryRun,
+		OutputSchema: outputSchema(rendered), TempDir: tmp,
+	}
+	cmd, err := b.Tool.Command(ctx, run)
 	if err != nil {
 		return nil, err
 	}
@@ -143,9 +177,15 @@ func (b *CLI) Run(ctx context.Context, j Job) (*Output, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	runErr := cmd.Run()
-	out, err := b.Tool.Result(stdout.Bytes(), stderr.Bytes(), runErr)
+	out, err := b.Tool.Result(run, stdout.Bytes(), stderr.Bytes(), runErr)
 	if out != nil {
 		out.Schema = outputSchema(rendered)
+		switch {
+		case !j.SaveSession:
+			out.SessionID = "" // nothing was kept
+		case out.SessionID == "":
+			out.SessionID = j.SessionID
+		}
 	}
 	return out, err
 }

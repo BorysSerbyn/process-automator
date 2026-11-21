@@ -125,7 +125,7 @@ func TestClaudeCodeEnvironment(t *testing.T) {
 	base := CLIRun{System: "sys", MCP: MCPEndpoint{Name: "procauto", URL: "http://x", Token: "t"}, MaxTurns: 3}
 
 	r := base
-	r.Folder, r.SessionID, r.BuiltinTools = folder, "6f1c2d6e-0000-4000-8000-000000000001", []string{"Read", "Bash"}
+	r.Folder, r.SaveSession, r.SessionID, r.BuiltinTools = folder, true, "6f1c2d6e-0000-4000-8000-000000000001", []string{"Read", "Bash"}
 	cmd, err := cc.Command(context.Background(), r)
 	if err != nil {
 		t.Fatal(err)

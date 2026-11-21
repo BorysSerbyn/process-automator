@@ -133,7 +133,7 @@
         },
         "costUsd": {
           "type": "number",
-          "description": "CostUSD is the run's cost at API list prices: api runs only (claude-code\nruns are on a Claude plan, and the app never works out a cost for them)."
+          "description": "CostUSD is the run's cost at API list prices: api runs only (agent CLI\nruns are on the CLI's own plan, and the app never works out a cost for them)."
         },
         "promptSource": {
           "type": "string",

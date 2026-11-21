@@ -131,11 +131,20 @@ func TestEffectiveConfig(t *testing.T) {
 }
 
 func TestBackendModelMapping(t *testing.T) {
-	for name, want := range map[string]string{"api": "anthropic/claude-haiku-5-5", "claude-code": "claude-haiku-5-5"} {
+	for name, want := range map[string]string{"api": "anthropic/claude-haiku-5-5", "claude-code": "claude-haiku-5-5", "codex": ""} {
+		if name == "codex" {
+			if _, err := Backends[name].AgentModel("anthropic/claude-haiku-5-5"); err == nil {
+				t.Error("codex took a Claude model")
+			}
+			continue
+		}
 		got, err := Backends[name].AgentModel("anthropic/claude-haiku-5-5")
 		if err != nil || got != want {
 			t.Errorf("%s: %q %v", name, got, err)
 		}
+	}
+	if got, err := Backends["codex"].AgentModel("openai/gpt-5.5"); err != nil || got != "gpt-5.5" {
+		t.Errorf("codex: %q %v", got, err)
 	}
 	if got, _ := Backends["claude-code"].AgentModel(""); got != "" {
 		t.Errorf("no model means the CLI's default, got %q", got)

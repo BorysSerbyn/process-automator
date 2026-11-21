@@ -76,7 +76,11 @@
               },
               "sessionId": {
                 "type": "string",
-                "description": "SessionID is the run's saved agent CLI session (routines with\nsession: save), set when the run starts."
+                "description": "SessionID is the run's saved agent CLI session (routines with\nsession: save): set when the run starts if the app picks its ID, when\nit ends if the CLI does (Backend says which CLI resumes it)."
+              },
+              "backend": {
+                "type": "string",
+                "description": "Backend is the model backend running it, or that ran it (llm.backend's\nvalue), once it got as far as the model."
               },
               "folder": {
                 "type": "string",

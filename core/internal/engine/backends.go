@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
@@ -24,14 +25,22 @@ type BackendDef struct {
 	// Ready says what keeps it from running routines, in plain words ("" when
 	// nothing does), and the sign-in that fixes it, when one does (setup).
 	Ready func(a *App) (problem, signIn string)
-	// PlanUsage reads the plan's usage limits, for a backend on a plan
-	// (claude-code); nil for one that's paid per token (api).
+	// PlanUsage reads the plan's usage limits, for a backend whose plan's
+	// usage the app can read (claude-code); nil for others.
 	PlanUsage func(ctx context.Context, a *App) ([]usage.Limit, error)
+	// Priced is a backend paid per token (api): its runs have a cost, and
+	// the llm.budget.* budgets apply. A backend neither priced nor with
+	// PlanUsage has no usage limit in the app.
+	Priced bool
+	// CheckBuiltinTools says whether a routine's builtinTools are names the
+	// backend's agent CLI takes; nil for a backend that takes none (its runs
+	// refuse any).
+	CheckBuiltinTools func(names []string) error
 }
 
-// Backends are the model Backends by llm.backend value. Adding one (e.g.
-// another agent CLI such as Codex, as an agent.CLITool) is one entry here plus
-// its value in the setting's enum (a test keeps the two in sync).
+// Backends are the model Backends by llm.backend value. Adding one (another
+// agent CLI, as an agent.CLITool) is one entry here plus its value in the
+// setting's enum (a test keeps the two in sync).
 var Backends = map[string]BackendDef{
 	"api": {
 		New: func(a *App) (agent.Backend, error) {
@@ -43,6 +52,7 @@ var Backends = map[string]BackendDef{
 			return &agent.Genkit{APIKey: key}, nil
 		},
 		AgentModel: func(model string) (string, error) { return model, nil }, // Genkit takes the file's names
+		Priced:     true,
 		Ready: func(a *App) (string, string) {
 			if _, err := a.Connector.Secrets.Get(AnthropicKey); err != nil {
 				return "no Anthropic API key is stored", "anthropic"
@@ -59,7 +69,8 @@ var Backends = map[string]BackendDef{
 			token, _ := a.Connector.Secrets.Get(ClaudeCodeTokenKey) // optional
 			return &agent.CLI{Tool: &agent.ClaudeCode{Path: path, OAuthToken: token}}, nil
 		},
-		AgentModel: agent.ClaudeModel,
+		AgentModel:        agent.ClaudeModel,
+		CheckBuiltinTools: agent.CheckClaudeBuiltins,
 		PlanUsage: func(ctx context.Context, a *App) ([]usage.Limit, error) {
 			path, err := agent.FindClaude()
 			if err != nil {
@@ -69,22 +80,82 @@ var Backends = map[string]BackendDef{
 			return (&agent.ClaudeCode{Path: path, OAuthToken: token}).PlanUsage(ctx)
 		},
 		Ready: func(a *App) (string, string) {
-			if _, err := agent.FindClaude(); err == nil {
-				return "", ""
-			}
-			// Maybe installed since the login PATH was saved: look again, at
-			// most once a minute (the scheduler asks every pass).
-			cache := a.Layout.LoginPath()
-			if info, err := os.Stat(cache); err != nil || time.Since(info.ModTime()) > time.Minute {
-				_ = sysenv.SaveLoginShellPath(cache)
-			}
-			if _, err := agent.FindClaude(); err != nil {
+			if _, err := find(a, agent.FindClaude); err != nil {
 				return "Claude Code isn't installed (no claude command found): install it from " +
 					"https://claude.com/claude-code and sign in to it", ""
 			}
 			return "", ""
 		},
 	},
+	"codex": {
+		New: func(*App) (agent.Backend, error) {
+			path, err := agent.FindCodex()
+			if err != nil {
+				return nil, err
+			}
+			return &agent.CLI{Tool: &agent.Codex{Path: path}}, nil
+		},
+		AgentModel:        agent.CodexModel,
+		CheckBuiltinTools: agent.CheckCodexBuiltins,
+		Ready: func(a *App) (string, string) {
+			path, err := find(a, agent.FindCodex)
+			if err != nil {
+				return "Codex isn't installed (no codex command found): install it from " +
+					"https://developers.openai.com/codex/cli and sign in to it with `codex login`", ""
+			}
+			if problem := codexLogin.check(path); problem != "" {
+				return "Codex isn't signed in (" + problem + "): run `codex login` in a terminal", ""
+			}
+			return "", ""
+		},
+	},
+}
+
+// find looks for an agent CLI's binary; when it isn't on PATH it may have
+// been installed since the login PATH was saved, so that's saved again (at
+// most once a minute: the scheduler asks every pass) and it's looked for again.
+func find(a *App, look func() (string, error)) (string, error) {
+	if p, err := look(); err == nil {
+		return p, nil
+	}
+	cache := a.Layout.LoginPath()
+	if info, err := os.Stat(cache); err != nil || time.Since(info.ModTime()) > time.Minute {
+		_ = sysenv.SaveLoginShellPath(cache)
+	}
+	return look()
+}
+
+// CodexLoginStatus is how Codex's sign-in is checked (`codex login status`);
+// tests replace it.
+var CodexLoginStatus = agent.CodexLoginStatus
+
+// codexLogin remembers Codex's sign-in for a minute: the scheduler asks every
+// pass, and each check runs codex.
+var codexLogin loginCache
+
+type loginCache struct {
+	mu      sync.Mutex
+	path    string
+	at      time.Time
+	problem string
+}
+
+// check is why the CLI at path isn't signed in ("" when it is, or when that
+// can't be told).
+func (c *loginCache) check(path string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.path == path && time.Since(c.at) < time.Minute {
+		return c.problem
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	problem, err := CodexLoginStatus(ctx, path)
+	if err != nil {
+		problem = "" // can't tell: a run says so if it isn't
+	}
+	c.path, c.at, c.problem = path, time.Now(), problem
+	return problem
 }
 
 // BackendDef is the backend chosen by the llm.backend setting.

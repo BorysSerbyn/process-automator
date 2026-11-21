@@ -30,7 +30,7 @@ const MaxTurns = 30
 // Agent runs prompts.
 type Agent struct {
 	Connector *mcp.Connector
-	// Backend runs the model loop (Genkit + API key, or Claude Code).
+	// Backend runs the model loop (Genkit + API key, or an agent CLI).
 	Backend Backend
 	// DryRun intercepts every tool not declared read-only by its server.
 	DryRun bool
@@ -56,10 +56,12 @@ type Request struct {
 	// it to the backend.
 	Effort string
 	// Environment, for agent CLI backends (others reject them): Folder is
-	// where the run works ("" for a temporary folder); SessionID, when set,
-	// keeps the session under that ID; BuiltinTools are the CLI's own tools
-	// allowed (in a dry run only the read-only ones are given).
+	// where the run works ("" for a temporary folder); SaveSession keeps the
+	// session, under SessionID for a backend that takes one (see
+	// SessionPicker); BuiltinTools are the CLI's own tools allowed (in a dry
+	// run only those that can't change anything are given).
 	Folder       string
+	SaveSession  bool
 	SessionID    string
 	BuiltinTools []string
 }
@@ -89,15 +91,18 @@ type Result struct {
 	Writes []Write `json:"writes"`
 	// Calls are every tool call, in order (absent in records from before
 	// they were kept).
-	Calls        []Call `json:"calls,omitempty"`
-	DryRun       bool   `json:"dryRun"`
-	Backend      string `json:"backend"`
+	Calls   []Call `json:"calls,omitempty"`
+	DryRun  bool   `json:"dryRun"`
+	Backend string `json:"backend"`
+	// SessionID is the session the run kept (session save), as the backend
+	// reports it; the caller records it with the run.
+	SessionID    string `json:"-"`
 	ToolCalls    int    `json:"toolCalls"`
 	InputTokens  int    `json:"inputTokens"`
 	OutputTokens int    `json:"outputTokens"`
 	CachedTokens int    `json:"cachedTokens"`
-	// CostUSD is the run's cost at API list prices: api runs only (claude-code
-	// runs are on a Claude plan, and the app never works out a cost for them).
+	// CostUSD is the run's cost at API list prices: api runs only (agent CLI
+	// runs are on the CLI's own plan, and the app never works out a cost for them).
 	CostUSD      float64 `json:"costUsd,omitempty"`
 	PromptSource string  `json:"promptSource"` // the routine file
 	// Output is the result in the shape the routine declared (Dotprompt
@@ -112,7 +117,7 @@ type Result struct {
 	reauth   error     // a sign-in that failed during the run
 
 	// mu guards what tool calls record: a backend may run them concurrently
-	// (claude-code serves them over HTTP, each in its own goroutine).
+	// (agent CLI backends serve them over HTTP, each in its own goroutine).
 	mu sync.Mutex
 }
 
@@ -172,9 +177,10 @@ type Job struct {
 	Instructions string
 	// Effort is the routine's effort, "" when left to the backend.
 	Effort string
-	// Folder, SessionID and BuiltinTools are the run's environment (see
-	// Request); DryRun says built-ins that write must be withheld.
+	// Folder, SaveSession, SessionID and BuiltinTools are the run's
+	// environment (see Request); DryRun says built-ins that write must be withheld.
 	Folder       string
+	SaveSession  bool
 	SessionID    string
 	BuiltinTools []string
 	DryRun       bool
@@ -193,6 +199,8 @@ type Output struct {
 	// declares one; Structured is the result in that shape (validated by the agent).
 	Schema     map[string]any
 	Structured any
+	// SessionID is the session the run kept (Job.SaveSession), "" when none.
+	SessionID string
 }
 
 // Tool is an allowed MCP tool behind the gateway.
@@ -225,10 +233,10 @@ func (a *Agent) Run(ctx context.Context, req Request) (*Result, error) {
 		Name: req.Name, Source: req.Source, Input: req.Input,
 		Partials: req.Partials, Tools: append(tools, outcomeTool(res)), MaxTurns: MaxTurns,
 		Instructions: outcomeInstructions, Effort: effort(req.Effort),
-		Folder: req.Folder, SessionID: req.SessionID, BuiltinTools: req.BuiltinTools, DryRun: a.DryRun,
+		Folder: req.Folder, SaveSession: req.SaveSession, SessionID: req.SessionID, BuiltinTools: req.BuiltinTools, DryRun: a.DryRun,
 	})
 	if out != nil {
-		res.Text = out.Text
+		res.Text, res.SessionID = out.Text, out.SessionID
 		res.InputTokens, res.OutputTokens, res.CachedTokens = out.InputTokens, out.OutputTokens, out.CachedTokens
 		res.CostUSD = out.CostUSD
 		if out.Model != "" && !out.Priced {

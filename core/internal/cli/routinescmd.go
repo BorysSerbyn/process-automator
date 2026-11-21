@@ -45,8 +45,9 @@ type RoutineInfo struct {
 	Trusted   bool   `json:"trusted"`
 	Untrusted string `json:"untrusted,omitempty"`
 	// AgentModel and AgentEffort are the model and effort as the configured
-	// backend's agent CLI takes them (e.g. claude --model/--effort), worked out
-	// by the core so frontends never translate; empty means the CLI's default.
+	// backend's agent CLI takes them (claude --model/--effort; codex --model and
+	// model_reasoning_effort), worked out by the core so frontends never
+	// translate; empty means the CLI's default.
 	AgentModel  string `json:"agentModel,omitempty"`
 	AgentEffort string `json:"agentEffort,omitempty"`
 	// Next is the next scheduled run (absent when disabled or manual-only).

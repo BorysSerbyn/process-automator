@@ -55,7 +55,7 @@ func TestClaudeCodeStructuredOutput(t *testing.T) {
 	if v, ok := argValue(cmd.Args, "--json-schema"); !ok || !strings.Contains(v, `"letters"`) {
 		t.Fatalf("--json-schema missing: %v", cmd.Args)
 	}
-	out, err := cc.Result([]byte(`{"result":"{}","structured_output":{"fruit":"fig","letters":3},"usage":{}}`), nil, nil)
+	out, err := cc.Result(CLIRun{}, []byte(`{"result":"{}","structured_output":{"fruit":"fig","letters":3},"usage":{}}`), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

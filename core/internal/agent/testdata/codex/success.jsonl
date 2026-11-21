@@ -1,0 +1,8 @@
+{"type":"thread.started","thread_id":"019a7c3e-5d1b-7f20-9c11-3a5e2b8d4f60"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"**Calling the tool**"}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"procauto","tool":"secret_word","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"procauto","tool":"secret_word","arguments":{},"result":{"content":[{"type":"text","text":"pineapple"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Checking the word."}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"pineapple"}}
+{"type":"turn.completed","usage":{"input_tokens":12034,"cached_input_tokens":9984,"cache_write_input_tokens":0,"output_tokens":187,"reasoning_output_tokens":64}}

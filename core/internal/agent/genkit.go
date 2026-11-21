@@ -24,10 +24,10 @@ func (*Genkit) Name() string { return "api" }
 // Run implements Backend.
 func (b *Genkit) Run(ctx context.Context, j Job) (*Output, error) {
 	if j.Effort != "" {
-		return nil, fmt.Errorf("effort %q isn't supported by the api backend yet; leave it at default or use the claude-code backend", j.Effort)
+		return nil, fmt.Errorf("effort %q isn't supported by the api backend yet; leave it at default or use an agent CLI backend (claude-code or codex)", j.Effort)
 	}
-	if j.Folder != "" || j.SessionID != "" || len(j.BuiltinTools) > 0 {
-		return nil, errors.New("folder, session and builtinTools need an agent CLI backend (llm.backend claude-code)")
+	if j.Folder != "" || j.SaveSession || j.SessionID != "" || len(j.BuiltinTools) > 0 {
+		return nil, errors.New("folder, session and builtinTools need an agent CLI backend (llm.backend claude-code or codex)")
 	}
 	g := newGenkit(ctx, j, genkit.WithPlugins(&anthropic.Anthropic{APIKey: b.APIKey}))
 	for _, t := range j.Tools {

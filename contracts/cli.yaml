@@ -7,7 +7,7 @@ globalFlags:
 commands:
   - command: auth login
     usage: procauto auth login <server|anthropic|claude-code> [flags]
-    summary: Sign in to a server (browser for remote servers; paste credentials for local ones; `anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional)
+    summary: 'Sign in to a server (browser for remote servers; paste credentials for local ones; `anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional; codex keeps its own sign-in: `codex login`)'
     flags:
       - name: --browser
         type: bool
@@ -545,7 +545,7 @@ commands:
     jsonOutput: cli/update-progress.schema.json
   - command: usage
     usage: procauto usage [flags]
-    summary: 'LLM usage against its limit: the Claude plan''s usage (claude-code) or API spend (api)'
+    summary: 'LLM usage against its limit: the Claude plan''s usage (claude-code) or API spend (api); none on codex'
     flags:
       - name: --json
         type: bool

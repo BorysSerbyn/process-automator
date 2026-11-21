@@ -5,8 +5,9 @@ import SwiftUI
 /// on a Claude plan (`plan`), the plan's usage in each window against
 /// llm.usage-limit, with when it resets, as the core last read it from
 /// Claude Code; with an API key (`budget`), spend
-/// against each budget. The core decides what's over; the bars only draw its
-/// numbers, and the app never works out a cost itself.
+/// against each budget; on a backend with no limit in the app (`none`), that.
+/// The core decides what's over; the bars only draw its numbers, and the app
+/// never works out a cost itself.
 struct UsageView: View {
     let report: Components.Schemas.Report?
     let error: String?
@@ -27,6 +28,11 @@ struct UsageView: View {
                 ForEach(report.windows, id: \.name) { window in
                     BudgetUsageRow(window: window)
                 }
+            case .none:
+                Text("No usage limit with this backend: its usage can't be read, and its runs have no cost.")
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, SettingsMetrics.rowInset)
+                    .padding(.vertical, 12)
             }
             if report.over, let reason = report.reason, !reason.isEmpty {
                 RowError(message: reason)

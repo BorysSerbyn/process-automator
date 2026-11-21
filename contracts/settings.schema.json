@@ -6,7 +6,7 @@
   "patternProperties": {
     "^routines\\.[a-z0-9][a-z0-9-]*\\.builtinTools$": {
       "default": [],
-      "description": "Agent CLI built-in tools the run may use (e.g. Read, Grep, Bash, Edit), allowed explicitly. Dry runs get only the read-only ones. Defaults to `automator.builtinTools` in the routine's file.",
+      "description": "Agent CLI built-in tools the run may use, allowed explicitly, in the backend's own names: claude-code's tools (e.g. Read, Grep, Bash, Edit); on codex shell, write (the sandbox may write in the run's folder), network (with write), web_search, view_image. Dry runs get only those that can't change anything. Defaults to `automator.builtinTools` in the routine's file.",
       "items": {
         "type": "string"
       },
@@ -44,7 +44,7 @@
       "x-type": "bool"
     },
     "^routines\\.[a-z0-9][a-z0-9-]*\\.folder$": {
-      "description": "Folder the run works in (agent CLI backends), with its CLAUDE.md added to the instructions. Without one, runs work in an empty temporary folder, or, with session save, in an empty folder of the routine's own that's kept. Defaults to `automator.folder` in the routine's file.",
+      "description": "Folder the run works in (agent CLI backends), with its project instructions added to the routine's (CLAUDE.md on claude-code, AGENTS.md on codex). Without one, runs work in an empty temporary folder, or, with session save, in an empty folder of the routine's own that's kept. Defaults to `automator.folder` in the routine's file.",
       "type": "string",
       "x-type": "path"
     },
@@ -60,7 +60,7 @@
     },
     "^routines\\.[a-z0-9][a-z0-9-]*\\.session$": {
       "default": "discard",
-      "description": "save keeps the agent CLI session and records its ID and folder with the run, so it can be resumed from that folder (the routine's folder, or one of its own when it has none); discard leaves nothing behind. Defaults to `automator.session` in the routine's file.",
+      "description": "save keeps the agent CLI session and records its ID, folder and backend with the run, so it can be resumed from that folder with that backend's CLI (the routine's folder, or one of its own when it has none); discard leaves nothing behind. Defaults to `automator.session` in the routine's file.",
       "enum": [
         "discard",
         "save"
@@ -93,10 +93,11 @@
     },
     "llm.backend": {
       "default": "api",
-      "description": "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription.",
+      "description": "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription; codex = headless OpenAI Codex CLI on your Codex sign-in (ChatGPT plan or OpenAI API key).",
       "enum": [
         "api",
-        "claude-code"
+        "claude-code",
+        "codex"
       ],
       "type": "string",
       "x-type": "enum"
