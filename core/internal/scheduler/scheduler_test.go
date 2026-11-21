@@ -58,8 +58,8 @@ func (h *harness) tick(t *testing.T, now string) string {
 }
 
 var (
-	standup      = Job{Name: "standup", Schedule: "20 9 * * 1-5", Staleness: 10 * time.Minute, Enabled: true}
-	digest = Job{Name: "digest", Schedule: "20 9 * * 1-5", Staleness: 12 * time.Hour, Enabled: true}
+	standup = Job{Name: "standup", Schedule: "20 9 * * 1-5", Staleness: 10 * time.Minute, Enabled: true}
+	digest  = Job{Name: "digest", Schedule: "20 9 * * 1-5", Staleness: 12 * time.Hour, Enabled: true}
 )
 
 func TestRunsOnceAtSlot(t *testing.T) {

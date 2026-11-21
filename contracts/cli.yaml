@@ -337,7 +337,7 @@ commands:
     example: |-
       procauto run standup --dry-run   # everything except posting
       procauto run standup
-      procauto run digest --date 2026-11-16   # as of Mon Nov 16: fills Fri Nov 13
+      procauto run weekly-report --date 2026-11-16   # as if it were Mon Nov 16
     flags:
       - name: --date
         type: string

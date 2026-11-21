@@ -26,11 +26,11 @@ func newRunCmd() *cobra.Command {
 		Short: "Run a routine from the routines folder now (ignores its schedule and enabled flag)",
 		Long: "Runs a routine now. With --date it runs as of that day (a backfill): its today, since and now " +
 			"inputs are computed for the date, at the routine's first scheduled time that day (or the current " +
-			"time of day if it has none). A routine covering the previous workday (digest) is backfilled " +
-			"with the day after the one to cover: Friday's digest is --date of the following Monday.",
+			"time of day if it has none). A routine covering the previous workday is backfilled with the day " +
+			"after the one to cover: for a Friday, --date is the following Monday.",
 		Example: "  " + product.Command + " run standup --dry-run   # everything except posting\n" +
 			"  " + product.Command + " run standup\n" +
-			"  " + product.Command + " run digest --date 2026-11-16   # as of Mon Nov 16: fills Fri Nov 13",
+			"  " + product.Command + " run weekly-report --date 2026-11-16   # as if it were Mon Nov 16",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, err := loadApp(cmd)
