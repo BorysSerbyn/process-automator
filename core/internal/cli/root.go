@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -115,6 +116,15 @@ func adoptLoginPath(cmd *cobra.Command) {
 func refreshSetupStatus(cmd *cobra.Command) {
 	path := strings.TrimPrefix(cmd.CommandPath(), cmd.Root().Name()+" ")
 	if isReadOnly(cmd) && path != "usage" {
+		return
+	}
+	// No data folder (none yet, or `uninstall --purge` just removed it):
+	// nothing to record, and recording would make it again.
+	cfg, err := configPath(cmd)
+	if err != nil {
+		return
+	}
+	if _, err := os.Stat(filepath.Dir(cfg)); err != nil {
 		return
 	}
 	a, err := loadApp(cmd)

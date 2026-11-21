@@ -396,3 +396,21 @@ func TestSetupStatusRefreshes(t *testing.T) {
 		t.Errorf("still left after turning it on: %v", left())
 	}
 }
+
+// Recording what setup has left never makes the data folder again: after
+// `uninstall --purge` it's gone, and stays gone.
+func TestSetupStatusNotWithoutData(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "purged", "config.yaml")
+	cmd, _, err := NewRoot(nil).Find([]string{"uninstall"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.ParseFlags([]string{"--config", cfg}); err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetContext(context.Background())
+	refreshSetupStatus(cmd)
+	if _, err := os.Stat(filepath.Dir(cfg)); err == nil {
+		t.Error("the data folder was made again")
+	}
+}
