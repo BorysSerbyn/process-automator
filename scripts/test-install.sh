@@ -21,8 +21,9 @@ name=$(install_var NAME) command=$(install_var COMMAND) folder=$(install_var FOL
 sandbox=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/$command-install-test.XXXXXX")" && pwd -P)
 server=""
 trap '[ -z "$server" ] || kill "$server" 2>/dev/null; rm -rf "$sandbox"' EXIT
-# A home with a space in its path, as paths in login items must survive.
-export HOME="$sandbox/home dir" XDG_CONFIG_HOME="$sandbox/home dir/.config" PROCAUTO_INSTALL_FILES_ONLY=1
+# A home with a space and an & in its path, as paths in login items must
+# survive (quoting for systemd and desktop entries, XML for plists, and sed).
+export HOME="$sandbox/home & dir" XDG_CONFIG_HOME="$sandbox/home & dir/.config" PROCAUTO_INSTALL_FILES_ONLY=1
 # Local builds carry an ad-hoc signature, not the release's Developer ID.
 export PROCAUTO_INSTALL_UNSIGNED=${PROCAUTO_INSTALL_UNSIGNED-1}
 unset INSTALL_DIR BIN_DIR
@@ -45,8 +46,13 @@ case $(uname -s) in
     codesign --verify --deep --strict "$app" || fail "the installed app's signature doesn't verify"
     ls "$HOME"/Library/LaunchAgents/*."$command".ui.plist "$HOME"/Library/LaunchAgents/*."$command".scheduler.plist >/dev/null ||
       fail "no LaunchAgents"
-    grep -q "$app/Contents/MacOS/$command" "$HOME"/Library/LaunchAgents/*."$command".scheduler.plist ||
+    plist=$(ls "$HOME"/Library/LaunchAgents/*."$command".scheduler.plist)
+    plutil -lint -s "$plist" || fail "the scheduler's LaunchAgent isn't a valid plist"
+    [ "$(plutil -extract ProgramArguments.0 raw -o - "$plist")" = "$app/Contents/MacOS/$command" ] ||
       fail "the scheduler's LaunchAgent doesn't run the installed app"
+    [ "$(plutil -extract StandardOutPath raw -o - "$plist")" = "$HOME/Library/Logs/$folder/scheduler.log" ] ||
+      fail "the scheduler's LaunchAgent doesn't log to the app's log"
+    plutil -lint -s "$HOME"/Library/LaunchAgents/*."$command".ui.plist || fail "the UI's LaunchAgent isn't a valid plist"
     ;;
   Linux)
     app="$HOME/.local/lib/$folder"
@@ -66,7 +72,9 @@ esac
 echo "--- use"
 "$cli" version
 "$cli" paths
-case $("$cli" paths --json) in *"$HOME"*) ;; *) fail "paths outside the sandbox home" ;; esac
+# path <name>: one of `paths`' (its text, not JSON, which escapes & as \u0026).
+path() { "$cli" paths | sed -n "s/^$1  *//p"; }
+case $(path data) in "$HOME"/*) ;; *) fail "paths outside the sandbox home" ;; esac
 expect() { # expect <what> <text> <command>...: the command's output contains text
   local what=$1 text=$2 out
   shift 2
@@ -74,7 +82,7 @@ expect() { # expect <what> <text> <command>...: the command's output contains te
   case $out in *"$text"*) ;; *) fail "$what: $out" ;; esac
 }
 # The templates the artifact ships list (or, when it ships none, it says so).
-tmpl=$("$cli" paths --json | sed -n 's/^  "templates": "\(.*\)",*$/\1/p')
+tmpl=$(path templates)
 [ -d "$tmpl" ] || fail "no templates folder at $tmpl"
 shipped=$(find "$tmpl" -name '*.prompt' ! -name '_*' | wc -l | tr -d ' ')
 if [ "$shipped" -eq 0 ]; then
@@ -93,12 +101,22 @@ if [ "$(uname -s)" = Linux ]; then
   "$cli" login-items status | grep -q "^ui .*doesn't start at login" || fail "login-items doesn't see the tray turned off"
   "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only >/dev/null
   grep -qx "Hidden=true" "$entry" || fail "reinstalling turned the tray back on at login"
-  # Without --yes and with no terminal at all (no controlling one: piped from
-  # curl over ssh, an agent's shell), it installs, asks nothing, and succeeds.
-  out=$(setsid -w "$installer" --from "$sandbox/$(basename "$artifact")" --files-only 2>&1 </dev/null) ||
-    fail "installing without a terminal failed: $out"
-  case $out in *"$command setup"*) ;; *) fail "installing without a terminal didn't point to setup: $out" ;; esac
 fi
+# Without --yes and with no terminal at all (no controlling one: piped from
+# curl over ssh, an agent's shell), it installs, asks nothing, and succeeds.
+# no_tty runs a command in a new session, so /dev/tty can't be opened (macOS
+# has no setsid command).
+no_tty() {
+  python3 -c 'import os, sys
+pid = os.fork()
+if pid == 0:
+    os.setsid()
+    os.execvp(sys.argv[1], sys.argv[1:])
+sys.exit(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]))' "$@"
+}
+out=$(no_tty "$installer" --from "$sandbox/$(basename "$artifact")" --files-only 2>&1 </dev/null) ||
+  fail "installing without a terminal failed: $out"
+case $out in *"$command setup"*) ;; *) fail "installing without a terminal didn't point to setup: $out" ;; esac
 # A copy that fails halfway (a full disk) leaves the installed app as it
 # was, and says so.
 mkdir -p "$sandbox/failbin"
@@ -116,7 +134,7 @@ case $out in *"left as it was"*) ;; *) fail "a failed copy didn't say the app wa
 [ ! -e "$app.new" ] && [ ! -e "$app.old" ] || fail "a failed copy left $app.new or $app.old"
 expect "uninstall without a terminal didn't ask for --yes" "--yes" "$cli" uninstall
 "$cli" settings set history.retention-days 30 >/dev/null
-data=$("$cli" paths --json | sed -n 's/^  "data": "\(.*\)",*$/\1/p')
+data=$(path data)
 [ -d "$data" ] || fail "no data folder at $data"
 
 echo "--- uninstall"
