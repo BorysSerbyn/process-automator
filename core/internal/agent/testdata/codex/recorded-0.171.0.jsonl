@@ -1,0 +1,8 @@
+{"type":"thread.started","thread_id":"01a1ff87-7bc8-7563-ac62-d49ae02c5096"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"mcp_tool_call","server":"procauto","tool":"secret_word","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"procauto","tool":"secret_word","arguments":{},"result":{"content":[{"type":"text","text":"pineapple"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"procauto","tool":"report_outcome","arguments":{"outcome":"done","reason":"ok"},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"procauto","tool":"report_outcome","arguments":{"outcome":"done","reason":"ok"},"result":{"content":[{"type":"text","text":"Recorded."}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"pineapple"}}
+{"type":"turn.completed","usage":{"input_tokens":3003,"cached_input_tokens":1800,"cache_write_input_tokens":0,"output_tokens":153,"reasoning_output_tokens":30}}
