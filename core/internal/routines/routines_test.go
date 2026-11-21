@@ -230,6 +230,17 @@ func TestPluginSections(t *testing.T) {
 	}
 }
 
+// A plugin's routine fields (onNotificationClick, notify's) are only for
+// routines that use the plugin.
+func TestPluginFieldsNeedTheirServer(t *testing.T) {
+	if _, err := Parse("n", "---\nautomator.servers: [notify]\nautomator.onNotificationClick: none\n---\nGo."); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse("n", "---\nautomator.onNotificationClick: none\n---\nGo."); err == nil || !strings.Contains(err.Error(), "notify") {
+		t.Fatalf("onNotificationClick without notify: %v", err)
+	}
+}
+
 // A parameter's required and defaultText are worked out, never written.
 func TestParamsComputedFields(t *testing.T) {
 	src := "---\nautomator.parameters:\n  - name: channel\n    type: string\n  - name: title\n    type: string\n    default: Daily\n---\nHi.\n"

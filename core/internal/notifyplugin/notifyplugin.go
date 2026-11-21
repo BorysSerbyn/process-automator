@@ -1,4 +1,9 @@
-package engine
+// Package notifyplugin is the notify plugin: routines that list it in
+// automator.servers can notify me (notify_me). It's a plugin like any other,
+// built in because what it records is delivered by the app's frontends. Its
+// settings are each routine's (routines.<name>.onNotificationClick); the app's
+// own notifications (runs that failed, updates) never go through it.
+package notifyplugin
 
 import (
 	"context"
@@ -9,26 +14,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/history"
-	"github.com/BorysSerbyn/process-automator/core/internal/notify"
-	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
-	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
-// NotifyServer is the core's notify plugin, for routines.
-const NotifyServer = "notify"
+// Name is the plugin's name, as routines list it in automator.servers.
+const Name = "notify"
 
-// notifyPlugin is the core's own plugin routines use to tell me things
-// (notify_me). It's the core's because it writes the core's notifications.
-func notifyPlugin(l Layout) pluginapi.Plugin {
+// New is the plugin; it records what routines ask in the notifications file
+// at path, for the app's frontends to deliver.
+func New(path string) pluginapi.Plugin {
 	return pluginapi.Plugin{
-		Name:        NotifyServer,
+		Name:        Name,
 		Description: "Lets routines notify me (notify_me), delivered by automator-ui",
 		Serve: func(h pluginapi.Host) (*sdk.Server, error) {
 			run := h.Run()
-			path := l.Notifications()
-			s := sdk.NewServer(&sdk.Implementation{Name: NotifyServer, Version: "1"}, nil)
+			s := sdk.NewServer(&sdk.Implementation{Name: Name, Version: "1"}, nil)
 			type in struct {
 				Title  string `json:"title" jsonschema:"short, like a headline"`
 				Body   string `json:"body,omitempty" jsonschema:"a sentence or two"`
@@ -83,39 +86,4 @@ func openable(path, folder string) (string, error) {
 		return "", fmt.Errorf("open: opening %s would run something; give a document or folder", filepath.Base(path))
 	}
 	return path, nil
-}
-
-// notifyFailure records a notification for a run that failed, needs a
-// sign-in, or was skipped or missed (unless notifications.failures is off).
-func notifyFailure(a *App, routine string, run runstatus.Run) {
-	var title string
-	switch run.Outcome {
-	case runstatus.OutcomeFailed:
-		title = routine + " failed"
-	case runstatus.OutcomeNeedsReauth:
-		title = routine + " needs you to sign in again"
-	case runstatus.OutcomeSkipped:
-		title = routine + " was skipped"
-	case runstatus.OutcomeMissed:
-		title = routine + " missed its run"
-		if run.For != nil {
-			title = fmt.Sprintf("%s missed its %s run", routine, run.For.Local().Format("15:04"))
-		}
-	default:
-		return
-	}
-	if vals, err := a.Settings(); err == nil && !vals.Bool("notifications.failures") {
-		return
-	}
-	body := run.Reason
-	if r := []rune(body); len(r) > 240 {
-		body = string(r[:240]) + "…"
-	}
-	_, err := notify.Add(a.Layout.Notifications(), notify.Notification{
-		Kind: notify.KindFailure, Title: title, Body: body,
-		Routine: routine, Run: history.RunID(routine, run.StartedAt),
-	}, time.Now())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "warning: could not record a notification:", err)
-	}
 }

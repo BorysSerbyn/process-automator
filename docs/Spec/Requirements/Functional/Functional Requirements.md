@@ -21,7 +21,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
   - **Built-in tools**: which of the agent CLI's own tools the routine gets (e.g. Read, Bash, Edit); none by default
   - **Save session**: keep the run's agent session and record its ID with the run, so I can resume it
   - **Concurrency**: wait its turn (default: one run at a time, manual runs included) or run alongside other runs. A routine never overlaps itself; a run waiting its turn shows as queued
-  - **Notification click**: what clicking this routine's notifications does
+  - **Notification click**: for a routine that sends notifications, what clicking one does
   - **Parameters**: values that make a shared routine mine (a channel, a team), asked for at install and changeable later
   - **Platforms**: the operating systems it runs on
 
@@ -52,8 +52,8 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## Notifications
 - **From routines**: a routine can send me a short desktop notification: a title, a message, and optionally a file or folder to open when I click it. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade
-- **Failures**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why; can be turned off
-- **Clicking** shows the run it's about by default; a routine or I can change it to open a file, folder or URL, run a shell command, or do nothing
+- **The app's own**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why (can be turned off), and when an update installs or fails. They don't depend on the notify plugin, and no routine's settings change them; clicking one shows the run it's about
+- **Clicking a routine's** shows the run that sent it, or the file it attached; per routine I can change it to open a file, folder or URL, run a shell command, or do nothing. There's no app-wide notification setting
 - **On Linux** notifications are recorded and listed by the CLI; nothing shows them on screen
 
 ## Status indicator

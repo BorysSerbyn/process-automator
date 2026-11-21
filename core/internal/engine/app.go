@@ -18,6 +18,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/memory"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifyplugin"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
@@ -42,14 +43,14 @@ const AnthropicKey = "anthropic-api-key"
 const ClaudeCodeTokenKey = "claude-code-oauth-token"
 
 // Load loads the config at path over the plugins' defaults and wires the
-// plugins, adding the core's own notify plugin; secrets is where secrets are
+// plugins, adding the built-in notify plugin; secrets is where secrets are
 // kept.
 func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App, error) {
 	files := LayoutOf(path)
 	// Callers may pass an app's plugins back in (the daemon reloads that way),
 	// so notify is added to the given plugins without one already there.
-	plugins = slices.DeleteFunc(slices.Clone(plugins), func(p pluginapi.Plugin) bool { return p.Name == NotifyServer })
-	plugins = append(plugins, notifyPlugin(files))
+	plugins = slices.DeleteFunc(slices.Clone(plugins), func(p pluginapi.Plugin) bool { return p.Name == notifyplugin.Name })
+	plugins = append(plugins, notifyplugin.New(files.Notifications()))
 	if err := pluginapi.Validate(plugins); err != nil {
 		return nil, err
 	}

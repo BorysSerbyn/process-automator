@@ -151,12 +151,35 @@ func (s Store) read() (map[string]any, error) {
 	if file.Settings == nil {
 		file.Settings = map[string]any{}
 	}
+	for old, key := range Retired {
+		v, ok := file.Settings[old]
+		if !ok {
+			continue
+		}
+		delete(file.Settings, old)
+		if _, set := file.Settings[key]; key != "" && !set {
+			file.Settings[key] = v
+		}
+	}
 	return file.Settings, nil
 }
 
-// edit applies fn to the settings section of the config file, in place.
+// edit applies fn to the settings section of the config file, in place,
+// rewriting retired settings first (see Retired).
 func (s Store) edit(fn func(section *yaml.Node) error) error {
-	return yamlfile.EditSection(s.Path, sectionKey, fn)
+	return yamlfile.EditSection(s.Path, sectionKey, func(section *yaml.Node) error {
+		for old, key := range Retired {
+			v := yamlfile.Get(section, old)
+			if v == nil {
+				continue
+			}
+			yamlfile.Delete(section, old)
+			if key != "" && yamlfile.Get(section, key) == nil {
+				yamlfile.Set(section, key, v)
+			}
+		}
+		return fn(section)
+	})
 }
 
 // ResetPrefix removes every override whose key starts with prefix (e.g. a

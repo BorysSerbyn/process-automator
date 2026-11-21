@@ -62,6 +62,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Types**: bool, int, number, percent, duration, cron, enum, string, path (`~/` expands), list of strings (a YAML list; comma-separated on the CLI; items optionally limited to an enum)
 - **Live**: the scheduler re-reads config and settings every pass, so changes apply without a restart
 - `settings list --scope app|routines`, `--routine <name>`; settings for the other backend show as `inactive`
+- **Retired settings** (`settings.Retired`): a renamed or removed key in the config file reads as its new key (one already set wins) or not at all, and the next `settings set`/`reset` rewrites the file so. Retired: `notifications.failures` (now `runs.failure-notifications`), `notifications.on-click` (removed)
 
 | Setting | Default | |
 |---|---|---|
@@ -71,17 +72,16 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `llm.budget.window-usd` | `2` | `api` only; 0 is no limit |
 | `llm.budget.weekly-usd` | `20` | `api` only; 0 is no limit |
 | `history.retention-days` | `90` | |
-| `notifications.failures` | `true` | |
-| `notifications.on-click` | `show-run` | |
+| `runs.failure-notifications` | `true` | The app's own notifications for runs |
 | `memories.max-chars` | `4000` | |
 | `update.source-dir` | empty | The checkout `update` builds from when no release has a download for this machine |
 
 ## Routines
 - **One Dotprompt file per routine**: `<data>/routines/<name>.prompt`; the file name is the routine name (lowercase letters, digits and dashes). Parsed with Dotprompt's own parser
 - **Dotprompt's directory conventions**: `_<name>.prompt` files are partials (`{{> name}}`); `memories` is reserved for the app
-- **Frontmatter**: plain Dotprompt (`description`, `model`, `config`, `tools` = the allowlist, `output`) plus the app's fields as Dotprompt extension fields in the `automator` namespace, written dotted (`automator.servers:`). A nested `automator:` block, an unknown `automator.*` field, invalid YAML and an empty file are rejected; `tools` without `automator.servers`, and `automator.staleness` without `automator.schedule`, are errors
+- **Frontmatter**: plain Dotprompt (`description`, `model`, `config`, `tools` = the allowlist, `output`) plus the app's fields as Dotprompt extension fields in the `automator` namespace, written dotted (`automator.servers:`). A nested `automator:` block, an unknown `automator.*` field, invalid YAML and an empty file are rejected; `tools` without `automator.servers`, `automator.staleness` without `automator.schedule`, and a plugin's field without that plugin in `automator.servers`, are errors
 - **Each file loads independently**: a broken file is reported (`routines list`, warnings) and skipped, never taking down the others
-- **Per-routine fields are declared once** (`settings.RoutineFields`: name, type, default, description, scheduled-only); parsing, validation, `settings`, the settings schema (`routines.<name>.<field>`) and `routines list --json` derive from it. Each is a frontmatter key `automator.<field>`, overridable by the setting `routines.<name>.<field>`; absent means the default
+- **Per-routine fields are declared once** (`settings.RoutineFields`: name, type, default, description, scheduled-only, the plugin it's about); parsing, validation, `settings`, the settings schema (`routines.<name>.<field>`) and `routines list --json` derive from it. Each is a frontmatter key `automator.<field>`, overridable by the setting `routines.<name>.<field>`; absent means the default
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -94,7 +94,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `session` | `discard` | `save` keeps the agent CLI session: the core picks its ID (`--session-id`) and records it in `lastRun.sessionId` and history. Needs a `folder`; dry runs never keep one |
 | `builtinTools` | `[]` | Agent CLI built-in tools by name, allowed explicitly, never by permission bypass; file tools stay inside the working folder. Agent CLI backends only |
 | `concurrency` | `queue` | `queue` or `parallel` |
-| `onNotificationClick` | | Overrides `notifications.on-click` for this routine's notifications |
+| `onNotificationClick` | `show-run` | What clicking a notification the routine sent (`notify_me`) does. Only for routines with `notify` in `automator.servers` |
 
 - **Servers and tools**: `automator.servers` lists the servers the routine uses; every tool in `tools` must be offered by exactly one of them, and only those tools are registered with the model
 - **Parameters** (`automator.parameters`: name, setting type, default, description, enum): values are per-routine settings `routines.<name>.params.<param>`, passed to the prompt as inputs; a name is lowercase letters, digits and underscores and can't shadow a built-in input; a required one without a value makes the routine unschedulable
@@ -169,7 +169,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 
 ## Built-in servers
 - **`automator`**: the CLI's read-only tools (routines, runs with their session IDs, settings, templates, plugins), served in-process to routines; plugins reach it through `Host.Connect("automator")` rather than reading core files
-- **`notify`**: `notify_me(title, body?, open?, urgent?)`, a write tool, recorded with the routine and its run. `open` is an existing file or folder (relative to the routine's folder), never an app, script or executable; `urgent` maps to macOS time-sensitive or Linux `critical`
+- **`notify`** (`core/internal/notifyplugin`): `notify_me(title, body?, open?, urgent?)`, a write tool, recorded with the routine and its run. Its only setting is each routine's `onNotificationClick`; it has no app-wide one. `open` is an existing file or folder (relative to the routine's folder), never an app, script or executable; `urgent` maps to macOS time-sensitive or Linux `critical`
 
 ## Sign-ins and secrets
 - **`auth login <server|anthropic|claude-code>`**: OAuth in the browser for remote servers (dynamic client registration or the server's `oauthClient`, PKCE, rotating refresh tokens persisted); keys and tokens typed in the terminal, or on a short-lived local page with `--browser`. A plugin with `Prepare` steps shows them and waits for me to say they're done before asking for anything. Web addresses and Markdown links (`[text](https://…)`) in the steps are links on the secret page and in the Setup window; the terminal shows a Markdown link as its text and address. `auth logout` forgets a server's credentials; `auth status` shows which are stored
@@ -178,9 +178,9 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Never in config**: secrets live only in the store
 
 ## Notifications
-- **Recorded by the core** in `notifications.json` next to run status (schema in `contracts/notifications.schema.json`): what routines asked (`notify_me`), update results, and, unless `notifications.failures` is off, runs that failed, needed a sign-in, were missed or skipped. The newest 200 within 30 days are kept
+- **Recorded by the core** in `notifications.json` next to run status (schema in `contracts/notifications.schema.json`), by `kind`: what routines asked through the notify plugin (`routine`), and the app's own, written by the core directly, never through the plugin: runs that failed, needed a sign-in, were missed or skipped (`failure`, unless `runs.failure-notifications` is off) and update results (`app`). The newest 200 within 30 days are kept
 - **Delivered by frontends**, which mark them delivered (`notifications delivered <id>...`); `notifications list [--pending]` lists them. automator-ui delivers only while macOS allows notifications, so none are lost before the permission prompt is answered
-- **Clicking is the core's**: the frontend runs `notifications open <id>` and the core carries out the first of: the file the notification asked to open; the routine's `onNotificationClick`; `notifications.on-click`. Actions: `show-run` (the run it's about: a frontend's routine window with `--frontend-shows-runs`, otherwise a readable report), `open <file, folder or URL>`, `run <shell command>` (detached, with `PROCAUTO_NOTIFICATION_ID`, `PROCAUTO_NOTIFICATION_TITLE`, `PROCAUTO_NOTIFICATION_BODY`, `PROCAUTO_ROUTINE` and `PROCAUTO_RUN` set) or `none`. Actions are validated when set
+- **Clicking is the core's**: the frontend runs `notifications open <id>`. The app's own show the run they're about (`show-run`; `none` for one about no run), whatever any routine's settings say. A routine's opens the file it attached, else does its routine's `onNotificationClick` (`show-run` if the routine is gone). Actions: `show-run` (the run it's about: a frontend's routine window with `--frontend-shows-runs`, otherwise a readable report), `open <file, folder or URL>`, `run <shell command>` (detached, with `PROCAUTO_NOTIFICATION_ID`, `PROCAUTO_NOTIFICATION_TITLE`, `PROCAUTO_NOTIFICATION_BODY`, `PROCAUTO_ROUTINE` and `PROCAUTO_RUN` set) or `none`. Actions are validated when set
 - **Opening** files and URLs uses `open` on macOS and `xdg-open` on Linux
 
 ## Usage limit

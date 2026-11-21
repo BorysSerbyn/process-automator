@@ -350,8 +350,9 @@ components:
           type: string
         kind:
           description: |-
-            Kind is "routine" (a routine's notify_me), "failure" (a run that failed,
-            needs a sign-in, or was missed) or "app" (about the app, e.g. an update).
+            Kind is "routine" (a routine's notify_me), or the app's own: "failure" (a
+            run that failed, needs a sign-in, or was skipped or missed) or "app"
+            (about the app, e.g. an update).
           enum:
             - routine
             - failure
@@ -359,8 +360,8 @@ components:
           type: string
         open:
           description: |-
-            Open is a file the routine asked to open on click (instead of the
-            configured click action).
+            Open is a file the routine asked to open on click (instead of its
+            routine's click action).
           type: string
         routine:
           description: Routine and Run (a run ID, as in `runs show`) are what it's about, if any.

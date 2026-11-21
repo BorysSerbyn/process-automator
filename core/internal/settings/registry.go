@@ -16,6 +16,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/notify"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifyplugin"
 )
 
 // Type is a setting's value type.
@@ -91,9 +92,9 @@ var Registry = []Setting{
 		Description: "How long run history and logs are kept.",
 	},
 	{
-		Key: "notifications.on-click", Type: TypeString, Default: notify.ActionShowRun, Check: checkAction,
-		Description: "What clicking a notification does: show-run (the run it's about), open <file, folder or URL>, " +
-			"run <shell command> or none. Routines can override it (routines.<name>.onNotificationClick).",
+		Key: "runs.failure-notifications", Type: TypeBool, Default: true,
+		Description: "Notify me when a run fails, needs a sign-in, or is skipped or missed. These are the app's own " +
+			"notifications (clicking one shows the run), not those routines send.",
 	},
 	{
 		Key: "update.source-dir", Type: TypeString, Default: "",
@@ -105,10 +106,16 @@ var Registry = []Setting{
 		Description: "How much each memories file may hold (every routine's, and each routine's own): " +
 			"what a run's prompt gets, kept small. Past it, `memory add` asks to compact first.",
 	},
-	{
-		Key: "notifications.failures", Type: TypeBool, Default: true,
-		Description: "Notify me when a run fails, needs a sign-in, or is missed.",
-	},
+}
+
+// Retired are settings that are no more: renamed (to their new key) or
+// removed (""). A config file an older version wrote reads as if it used the
+// new keys, and the next change to the settings rewrites them so.
+var Retired = map[string]string{
+	"notifications.failures": "runs.failure-notifications",
+	// Routine notifications are each routine's (onNotificationClick); the
+	// app's own always show the run.
+	"notifications.on-click": "",
 }
 
 func checkAction(s string) error {
@@ -131,6 +138,9 @@ type RoutineField struct {
 	Min, Max    *float64
 	// ScheduledOnly fields exist only for routines with a schedule.
 	ScheduledOnly bool
+	// Server, if set, is the plugin the field is about: it exists only for
+	// routines that list it in automator.servers.
+	Server string
 	// Check validates a value beyond its type.
 	Check func(string) error
 }
@@ -169,9 +179,9 @@ var RoutineFields = []RoutineField{
 			"so it can be resumed; discard leaves nothing behind.",
 	},
 	{
-		Name: "onNotificationClick", Type: TypeString, Check: checkAction,
-		Description: "What clicking this routine's notifications does (overrides notifications.on-click): " +
-			"show-run, open <file, folder or URL>, run <shell command> or none.",
+		Name: "onNotificationClick", Type: TypeString, Default: notify.ActionShowRun, Check: checkAction, Server: notifyplugin.Name,
+		Description: "What clicking a notification this routine sends (notify_me) does, unless it attached a file to open: " +
+			"show-run (the run that sent it), open <file, folder or URL>, run <shell command> or none.",
 	},
 	{
 		Name: "concurrency", Type: TypeEnum, Default: "queue", Enum: []string{"queue", "parallel"},
@@ -196,12 +206,13 @@ func RoutineFieldNames() []string {
 
 // RoutineSettings are the settings of one routine, with defaults taken from the
 // automator.* values in its file (fileValues; missing ones fall back to the
-// field's default). A routine without a schedule gets no scheduled-only fields.
-func RoutineSettings(routine string, fileValues map[string]any) []Setting {
+// field's default). A routine without a schedule gets no scheduled-only fields,
+// and one gets a plugin's fields only if it uses that plugin (servers).
+func RoutineSettings(routine string, fileValues map[string]any, servers []string) []Setting {
 	_, scheduled := fileValues["schedule"]
 	var out []Setting
 	for _, f := range RoutineFields {
-		if f.ScheduledOnly && !scheduled {
+		if f.ScheduledOnly && !scheduled || f.Server != "" && !slices.Contains(servers, f.Server) {
 			continue
 		}
 		st := Setting{

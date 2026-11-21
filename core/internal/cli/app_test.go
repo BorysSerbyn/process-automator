@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifyplugin"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -76,7 +76,7 @@ func TestReloadWithAppPlugins(t *testing.T) {
 	for _, p := range b.Plugins {
 		n[p.Name]++
 	}
-	if n[automatorServerName] != 1 || n[engine.NotifyServer] != 1 {
+	if n[automatorServerName] != 1 || n[notifyplugin.Name] != 1 {
 		t.Fatalf("the core's own plugins registered %v times", n)
 	}
 }

@@ -49,8 +49,10 @@
       "x-type": "path"
     },
     "^routines\\.[a-z0-9][a-z0-9-]*\\.onNotificationClick$": {
-      "description": "What clicking this routine's notifications does (overrides notifications.on-click): show-run, open <file, folder or URL>, run <shell command> or none. Defaults to `automator.onNotificationClick` in the routine's file.",
+      "default": "show-run",
+      "description": "What clicking a notification this routine sends (notify_me) does, unless it attached a file to open: show-run (the run that sent it), open <file, folder or URL>, run <shell command> or none. Defaults to `automator.onNotificationClick` in the routine's file.",
       "type": "string",
+      "x-server": "notify",
       "x-type": "string"
     },
     "^routines\\.[a-z0-9][a-z0-9-]*\\.params\\.[a-z][a-z0-9_]*$": {
@@ -145,17 +147,11 @@
       "x-type": "int",
       "x-unit": "characters"
     },
-    "notifications.failures": {
+    "runs.failure-notifications": {
       "default": true,
-      "description": "Notify me when a run fails, needs a sign-in, or is missed.",
+      "description": "Notify me when a run fails, needs a sign-in, or is skipped or missed. These are the app's own notifications (clicking one shows the run), not those routines send.",
       "type": "boolean",
       "x-type": "bool"
-    },
-    "notifications.on-click": {
-      "default": "show-run",
-      "description": "What clicking a notification does: show-run (the run it's about), open <file, folder or URL>, run <shell command> or none. Routines can override it (routines.<name>.onNotificationClick).",
-      "type": "string",
-      "x-type": "string"
     },
     "update.source-dir": {
       "default": "",
@@ -173,9 +169,8 @@
     "llm.budget.window-usd",
     "llm.budget.weekly-usd",
     "history.retention-days",
-    "notifications.on-click",
+    "runs.failure-notifications",
     "update.source-dir",
-    "memories.max-chars",
-    "notifications.failures"
+    "memories.max-chars"
   ]
 }
