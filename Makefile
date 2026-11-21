@@ -83,7 +83,7 @@ KEYCHAIN_SERVICE=$(BUNDLE_ID)
 endef
 export MACOS_INSTALL_ENV LINUX_INSTALL_ENV
 
-.PHONY: contracts help deps build build-core build-ui bundle package package-linux test lint fmt install uninstall release version clean check-identity
+.PHONY: contracts help deps build build-core build-ui bundle package package-linux test lint fmt install uninstall release publish ci version clean check-identity
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -143,6 +143,18 @@ uninstall: ## Remove the app, CLI link and login items; PURGE=1 also removes con
 
 release: ## Tag a release: make release PART=major|minor|patch
 	scripts/release.sh $(PART)
+
+publish: ## Build, sign, test and publish the release tagged at HEAD (SIGN_IDENTITY or SIGN_P12): see scripts/publish.sh
+	scripts/publish.sh
+
+ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, and the macOS artifact's install test
+	$(MAKE) test lint
+	cd core && GOOS=linux go build ./... && GOOS=windows go build ./...
+	@if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/*.sh; \
+	  else echo "shellcheck skipped: not installed (make deps)"; fi
+	rm -rf "$(BUILD)/ci"
+	$(MAKE) package SIGN_IDENTITY=- BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
+	scripts/test-install.sh "$(BUILD)"/ci/*-macos.zip
 
 clean: ## Remove build output
 	rm -rf "$(BUILD)" automator-ui/.build
