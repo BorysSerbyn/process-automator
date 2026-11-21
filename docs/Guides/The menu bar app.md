@@ -38,8 +38,7 @@ Setup's steps, grouped: **Templates** (tick templates, fill in their parameters,
 
 ## Notifications
 The app shows desktop notifications for:
-- runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `notifications.failures`)
-- what routines tell you with `notify_me` (see [[Guides/Writing a routine#Notifying you|Notifying you]]); an **urgent** one breaks through Focus and stays until dismissed
-- update results
+- its own: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), and update results. Clicking one shows the run it's about
+- what routines tell you with `notify_me` (see [[Guides/Writing a routine#Notifying you|Notifying you]]); an **urgent** one breaks through Focus and stays until dismissed. Clicking one shows the run that sent it, unless the routine attached a file to open, or you changed that routine's click action (`routines.<name>.onNotificationClick`: `show-run`, `open <file, folder or URL>`, `run <shell command>` or `none`)
 
-macOS asks once whether the app may show notifications; until you allow it, they wait. Clicking one shows the run it's about, unless the routine attached a file to open, or you changed the click action (`notifications.on-click`, or per routine `routines.<name>.onNotificationClick`: `show-run`, `open <file, folder or URL>`, `run <shell command>` or `none`). A `run` command gets `PROCAUTO_NOTIFICATION_ID`, `PROCAUTO_NOTIFICATION_TITLE`, `PROCAUTO_NOTIFICATION_BODY`, `PROCAUTO_ROUTINE` and `PROCAUTO_RUN` in its environment.
+macOS asks once whether the app may show notifications; until you allow it, they wait. A `run` command gets `PROCAUTO_NOTIFICATION_ID`, `PROCAUTO_NOTIFICATION_TITLE`, `PROCAUTO_NOTIFICATION_BODY`, `PROCAUTO_ROUTINE` and `PROCAUTO_RUN` in its environment.

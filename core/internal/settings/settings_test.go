@@ -63,7 +63,7 @@ func TestStorePreservesRestOfConfig(t *testing.T) {
 	if err := os.WriteFile(path, []byte(orig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s := Store{Path: path, Extra: RoutineSettings("standup", map[string]any{"schedule": "15 9 * * 1-5"})}
+	s := Store{Path: path, Extra: RoutineSettings("standup", map[string]any{"schedule": "15 9 * * 1-5"}, nil)}
 
 	if _, err := s.Set("llm.usage-limit", "40%"); err != nil {
 		t.Fatal(err)
@@ -117,15 +117,19 @@ func TestRoutineSettings(t *testing.T) {
 		}
 		return m
 	}
-	manual := keys(RoutineSettings("adhoc", nil))
+	manual := keys(RoutineSettings("adhoc", nil, nil))
 	if _, ok := manual["routines.adhoc.schedule"]; ok || manual["routines.adhoc.enabled"] != true ||
 		manual["routines.adhoc.timeout"] != "20m" || manual["routines.adhoc.effort"] != "default" {
 		t.Fatalf("manual-only routines get no schedule fields but the rest: %v", manual)
 	}
-	s := RoutineSettings("standup", map[string]any{"schedule": "15 9 * * 1-5", "timeout": "5m"})
+	if _, ok := manual["routines.adhoc.onNotificationClick"]; ok {
+		t.Fatal("a routine that doesn't use notify gets its click setting")
+	}
+	s := RoutineSettings("standup", map[string]any{"schedule": "15 9 * * 1-5", "timeout": "5m"}, []string{"notify"})
 	got := keys(s)
-	if got["routines.standup.schedule"] != "15 9 * * 1-5" || got["routines.standup.staleness"] != "1h" || got["routines.standup.timeout"] != "5m" {
-		t.Fatalf("scheduled, defaults from the file: %v", got)
+	if got["routines.standup.schedule"] != "15 9 * * 1-5" || got["routines.standup.staleness"] != "1h" || got["routines.standup.timeout"] != "5m" ||
+		got["routines.standup.onNotificationClick"] != "show-run" {
+		t.Fatalf("scheduled, using notify, defaults from the file: %v", got)
 	}
 	for _, def := range s {
 		if def.Default == nil {
@@ -193,7 +197,7 @@ func TestListAndPathTypes(t *testing.T) {
 
 // A routine file's values become canonical defaults (a YAML list is []any).
 func TestRoutineSettingsNormalizeFileValues(t *testing.T) {
-	for _, s := range RoutineSettings("r", map[string]any{"builtinTools": []any{"Read", "Grep"}, "timeout": "5m"}) {
+	for _, s := range RoutineSettings("r", map[string]any{"builtinTools": []any{"Read", "Grep"}, "timeout": "5m"}, nil) {
 		if s.Key == "routines.r.builtinTools" {
 			if got, ok := s.Default.([]string); !ok || len(got) != 2 || got[0] != "Read" {
 				t.Fatalf("builtinTools default %#v", s.Default)
@@ -203,10 +207,50 @@ func TestRoutineSettingsNormalizeFileValues(t *testing.T) {
 }
 
 func TestClickActionChecked(t *testing.T) {
-	st := Store{Path: filepath.Join(t.TempDir(), "c.yaml")}
+	st := Store{Path: filepath.Join(t.TempDir(), "c.yaml"), Extra: RoutineSettings("r", nil, []string{"notify"})}
 	for in, ok := range map[string]bool{"show-run": true, "open ~/notes.md": true, "run say done": true, "none": true, "open": false, "launch x": false, "show-run now": false} {
-		if _, err := st.Set("notifications.on-click", in); (err == nil) != ok {
+		if _, err := st.Set("routines.r.onNotificationClick", in); (err == nil) != ok {
 			t.Errorf("%q: %v", in, err)
+		}
+	}
+}
+
+// A config an older version wrote reads with the new keys, and the next
+// change rewrites it so; a retired setting doesn't come back through a reset.
+func TestRetiredSettings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	old := "settings:\n  notifications.failures: false\n  notifications.on-click: none\n  history.retention-days: 30\n"
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Store{Path: path}
+	if v, err := s.Values(); err != nil || v.Bool("runs.failure-notifications") {
+		t.Fatalf("renamed setting not read: %v", err)
+	}
+	if _, err := s.Set("history.retention-days", "60"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(path)
+	if strings.Contains(string(raw), "notifications.") || !strings.Contains(string(raw), "runs.failure-notifications: false") {
+		t.Fatalf("not rewritten:\n%s", raw)
+	}
+	if _, err := s.Reset("runs.failure-notifications"); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.Values(); !v.Bool("runs.failure-notifications") {
+		t.Fatal("reset didn't restore the default")
+	}
+	// A new key already set wins over the old one.
+	_ = os.WriteFile(path, []byte("settings:\n  notifications.failures: false\n  runs.failure-notifications: true\n"), 0o600)
+	if v, _ := s.Values(); !v.Bool("runs.failure-notifications") {
+		t.Fatal("old key overrode the new one")
+	}
+	for old, key := range Retired {
+		if _, ok := Lookup(old); ok {
+			t.Errorf("%s is retired but still declared", old)
+		}
+		if _, ok := Lookup(key); key != "" && !ok {
+			t.Errorf("%s retires to undeclared %s", old, key)
 		}
 	}
 }
@@ -216,12 +260,12 @@ func TestValues(t *testing.T) {
 	if err := os.WriteFile(path, []byte("settings:\n  history.retention-days: 30\n  llm.budget.window: 2h\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	extra := RoutineSettings("r", map[string]any{"builtinTools": []any{"Read"}})
+	extra := RoutineSettings("r", map[string]any{"builtinTools": []any{"Read"}}, nil)
 	v, err := (Store{Path: path, Extra: extra}).Values()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Int("history.retention-days") != 30 || v.String("llm.backend") != "api" || !v.Bool("notifications.failures") ||
+	if v.Int("history.retention-days") != 30 || v.String("llm.backend") != "api" || !v.Bool("runs.failure-notifications") ||
 		v.Float("llm.budget.weekly-usd") != 20 || !slices.Equal(v.List("routines.r.builtinTools"), []string{"Read"}) {
 		t.Fatalf("values: %+v", v)
 	}

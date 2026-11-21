@@ -150,14 +150,14 @@ func TestFailureNotification(t *testing.T) {
 		!strings.Contains(f.Notifications[0].Body, "fell over") || f.Notifications[0].Run == "" {
 		t.Fatalf("failure notification: %+v", f.Notifications)
 	}
-	enginetest.Set(t, a.Layout.Config(), "notifications.failures", "false")
+	enginetest.Set(t, a.Layout.Config(), "runs.failure-notifications", "false")
 	_, _ = a.Execute(context.Background(), set, r, engine.RunOptions{})
 	if f, _ := notify.Load(a.Layout.Notifications()); len(f.Notifications) != 1 {
-		t.Fatal("notified with notifications.failures off")
+		t.Fatal("notified with runs.failure-notifications off")
 	}
 	// Dry runs record nothing, notifications included.
 	_ = os.Remove(a.Layout.Notifications())
-	enginetest.Set(t, a.Layout.Config(), "notifications.failures", "true")
+	enginetest.Set(t, a.Layout.Config(), "runs.failure-notifications", "true")
 	_, _ = a.Execute(context.Background(), set, r, engine.RunOptions{DryRun: true})
 	if f, _ := notify.Load(a.Layout.Notifications()); len(f.Notifications) != 0 {
 		t.Fatal("a dry run notified")

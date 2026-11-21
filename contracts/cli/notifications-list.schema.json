@@ -17,7 +17,7 @@
           "failure",
           "app"
         ],
-        "description": "Kind is \"routine\" (a routine's notify_me), \"failure\" (a run that failed,\nneeds a sign-in, or was missed) or \"app\" (about the app, e.g. an update)."
+        "description": "Kind is \"routine\" (a routine's notify_me), or the app's own: \"failure\" (a\nrun that failed, needs a sign-in, or was skipped or missed) or \"app\"\n(about the app, e.g. an update)."
       },
       "title": {
         "type": "string"
@@ -38,7 +38,7 @@
       },
       "open": {
         "type": "string",
-        "description": "Open is a file the routine asked to open on click (instead of the\nconfigured click action)."
+        "description": "Open is a file the routine asked to open on click (instead of its\nroutine's click action)."
       },
       "deliveredAt": {
         "type": "string",

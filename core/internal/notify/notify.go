@@ -1,8 +1,10 @@
 // Package notify keeps the notifications the core records for frontends to
-// deliver: what routines ask to tell me (notify_me) and runs that failed. The
-// core only records them; frontends show them (automator-ui as desktop
-// notifications), mark them delivered, and on a click run `procauto
-// notifications open <id>`, which carries out the click action.
+// deliver: the app's own (runs that failed, updates) and what routines ask
+// through the notify plugin (notify_me). The core only records them; frontends
+// show them (automator-ui as desktop notifications), mark them delivered, and
+// on a click run `procauto notifications open <id>`, which carries out the
+// click action: the app's own show the run they're about; a routine's are
+// governed by its routine alone.
 package notify
 
 import (
@@ -24,11 +26,12 @@ const SchemaVersion = 1
 
 // Kinds of notification.
 const (
-	// KindRoutine is what a routine asked to tell me (notify_me).
+	// KindRoutine is what a routine asked to tell me (the notify plugin's notify_me).
 	KindRoutine = "routine"
-	// KindFailure is a run that failed, needs a sign-in, or was missed.
+	// KindFailure is the app's own: a run that failed, needs a sign-in, or
+	// was skipped or missed.
 	KindFailure = "failure"
-	// KindApp is about the app itself (an update installed, or failed).
+	// KindApp is the app's own, about the app itself (an update installed, or failed).
 	KindApp = "app"
 )
 
@@ -48,8 +51,9 @@ type File struct {
 type Notification struct {
 	ID string    `json:"id"`
 	At time.Time `json:"at"`
-	// Kind is "routine" (a routine's notify_me), "failure" (a run that failed,
-	// needs a sign-in, or was missed) or "app" (about the app, e.g. an update).
+	// Kind is "routine" (a routine's notify_me), or the app's own: "failure" (a
+	// run that failed, needs a sign-in, or was skipped or missed) or "app"
+	// (about the app, e.g. an update).
 	Kind  string `json:"kind" jsonschema:"enum=routine,enum=failure,enum=app"`
 	Title string `json:"title"`
 	Body  string `json:"body,omitempty"`
@@ -59,8 +63,8 @@ type Notification struct {
 	// Routine and Run (a run ID, as in `runs show`) are what it's about, if any.
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
-	// Open is a file the routine asked to open on click (instead of the
-	// configured click action).
+	// Open is a file the routine asked to open on click (instead of its
+	// routine's click action).
 	Open string `json:"open,omitempty"`
 	// DeliveredAt is when a frontend showed it; absent until then.
 	DeliveredAt *time.Time `json:"deliveredAt,omitempty"`

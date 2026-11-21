@@ -17,14 +17,13 @@ procauto settings reset llm.backend         # back to the default
 | `llm.backend` | `api` | What runs routines: `claude-code` (your Claude plan) or `api` (an Anthropic API key). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
 | `llm.usage-limit` | `90%` | With `claude-code`: see [[#Usage limit]] |
 | `llm.budget.window`, `llm.budget.window-usd`, `llm.budget.weekly-usd` | `5h`, `2`, `20` | With `api`: see [[#Usage limit]] |
-| `notifications.failures` | `true` | Notify you when a run fails, needs a sign-in, is missed or skipped |
-| `notifications.on-click` | `show-run` | What clicking a notification does: `show-run`, `open <file, folder or URL>`, `run <shell command>` or `none` |
 | `history.retention-days` | `90` | How long run history and logs are kept |
+| `runs.failure-notifications` | `true` | The app's own notification when a run fails, needs a sign-in, is missed or skipped |
 | `memories.max-chars` | `4000` | How much each memories file may hold |
 | `update.source-dir` | | The checkout `update` builds from when no release has a download for this machine (empty: the one this build came from) |
 
 ## Per routine
-Each routine has settings `routines.<name>.<field>`: `enabled`, `schedule`, `staleness`, `timeout`, `effort`, `folder`, `session`, `concurrency`, `builtinTools`, `onNotificationClick`, and `params.<param>` for each parameter. The routine's file gives the defaults; a setting overrides the file without editing it. What each one means is in [[Guides/Writing a routine#Frontmatter|Writing a routine]].
+Each routine has settings `routines.<name>.<field>`: `enabled`, `schedule`, `staleness`, `timeout`, `effort`, `folder`, `session`, `concurrency`, `builtinTools`, `onNotificationClick` (only routines that use `notify`), and `params.<param>` for each parameter. The routine's file gives the defaults; a setting overrides the file without editing it. What each one means is in [[Guides/Writing a routine#Frontmatter|Writing a routine]].
 
 ```sh
 procauto settings set routines.digest.timeout 30m

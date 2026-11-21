@@ -34,7 +34,7 @@ The model loop sits behind a `Backend` interface chosen by `llm.backend`. `api` 
 - **Treating an unreadable source as empty**: "no data" and "couldn't read" would look the same
 
 ## Decision: a blank-slate engine; integrations are MCP servers
-The engine knows no specific service, and the app ships with no integrations: a plugin is an MCP server registered in config, written in any language, so routines reach every service the same way and any server built for other MCP clients works as is. The core keeps only what it owns: `automator` (its own read-only tools) and `notify` (it writes the core's notifications). The in-process plugin API stays, for Go plugins compiled into a build.
+The engine knows no specific service, and the app ships with no integrations: a plugin is an MCP server registered in config, written in any language, so routines reach every service the same way and any server built for other MCP clients works as is. The core keeps only what it owns: `automator` (its own read-only tools) and `notify` (routines' notifications, which the app's frontends deliver). The in-process plugin API stays, for Go plugins compiled into a build.
 
 ### Rejected
 - **Bundled presets for particular services**: each needs upkeep and ties the app to services I may not use; `plugins add` covers them with no code
@@ -83,6 +83,14 @@ A **template** is a routine file tracked in the repository's `templates/` so any
 ### Rejected
 - **"Recipe"** (Goose's name): a second name for a routine
 - **Compiling templates into the binary**: sharing one would need a release
+
+## Decision: the app's own notifications don't go through the notify plugin
+`notify` is a plugin routines choose to use, so its one setting, what a click does, is each routine's (`onNotificationClick`), offered only to routines that use it. The app's own notifications (a run that failed, needs a sign-in, was skipped or missed; an update) are the core's: written directly, never through the plugin, and clicking one shows the run; their only setting is an on/off for the run ones (`runs.failure-notifications`). Both are kept in the one notifications file, told apart by `kind`, so a frontend delivers them the same way, and nothing a routine sets reaches the app's own.
+
+### Rejected
+- **An app-wide click action with per-routine overrides**: it governed the app's notifications too, so a routine's setting changed what clicking "<routine> failed" did, and it was an app-wide setting for a plugin many routines don't use
+- **A file and a delivery path per sender**: the same notification shape twice over for the frontend; `kind` already tells them apart
+- **The app notifying through `notify_me`**: the app's alerts would depend on a plugin, its trust and dry runs
 
 ## Decision: frontends talk to the core through the CLI and the run-status file
 The CLI is the API: a frontend runs commands with `--json` to read state and make changes, and watches the run-status file the core writes (file events, with a slow poll as fallback). The core never needs to know a frontend exists, either side restarts independently, and the same works on any OS. Frontends hold no logic: the core decides health, and the one thing a frontend judges is whether the core is responding (the scheduler's heartbeat).

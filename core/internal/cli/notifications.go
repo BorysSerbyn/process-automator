@@ -104,8 +104,9 @@ func newNotificationsOpenCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "open <id>",
 		Short: "Do what clicking a notification does (frontends call this on a click)",
-		Long: "Carries out the notification's click action: the file it asked to open, else the routine's " +
-			"onNotificationClick, else notifications.on-click (default show-run). show-run opens a readable " +
+		Long: "Carries out the notification's click action. The app's own notifications (a run that failed, " +
+			"an update) show the run they're about, if any. One a routine sent (notify_me) opens the file it " +
+			"attached, else does its routine's onNotificationClick (default show-run). show-run opens a readable " +
 			"report of the run, or with --frontend-shows-runs leaves showing it to the frontend.",
 		Annotations: map[string]string{annNotForRoutines: "clicking is mine"},
 		Args:        cobra.ExactArgs(1),
@@ -153,26 +154,28 @@ func newNotificationsOpenCmd() *cobra.Command {
 	return cmd
 }
 
-// clickAction is what clicking n does: the file it asked to open, else its
-// routine's onNotificationClick, else notifications.on-click.
+// clickAction is what clicking n does. The app's own notifications show the
+// run they're about, if any; no setting changes that. One a routine sent
+// (notify_me) opens the file it attached, else does its routine's
+// onNotificationClick (show-run when the routine is gone or broken).
 func clickAction(a *engine.App, n notify.Notification) (notify.Action, error) {
+	if n.Kind != notify.KindRoutine {
+		if n.Run == "" {
+			return notify.Action{Kind: notify.ActionNone}, nil
+		}
+		return notify.Action{Kind: notify.ActionShowRun}, nil
+	}
 	if n.Open != "" {
 		return notify.Action{Kind: notify.ActionOpen, Target: n.Open}, nil
 	}
-	if n.Routine != "" {
-		if set, err := routines.Load(a.Layout.Routines()); err == nil {
-			if r, err := set.Find(n.Routine); err == nil {
-				if c, err := a.RoutineConfig(r); err == nil && c.OnClick != "" {
-					return notify.ParseAction(c.OnClick)
-				}
+	if set, err := routines.Load(a.Layout.Routines()); err == nil {
+		if r, err := set.Find(n.Routine); err == nil {
+			if c, err := a.RoutineConfig(r); err == nil && c.OnClick != "" {
+				return notify.ParseAction(c.OnClick)
 			}
 		}
 	}
-	vals, err := a.Settings()
-	if err != nil {
-		return notify.Action{}, err
-	}
-	return notify.ParseAction(vals.String("notifications.on-click"))
+	return notify.Action{Kind: notify.ActionShowRun}, nil
 }
 
 // clickEnv tells a click command what was clicked.
