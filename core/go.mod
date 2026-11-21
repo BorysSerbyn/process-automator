@@ -13,7 +13,7 @@ require (
 	github.com/openai/openai-go v1.8.2
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.9
+	github.com/spf13/pflag v1.1.0
 	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/mod v0.38.0
 	golang.org/x/oauth2 v0.38.0
