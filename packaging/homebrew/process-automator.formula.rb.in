@@ -30,13 +30,15 @@ class ProcessAutomator < Formula
 
   def caveats
     <<~EOS
-      Start the scheduler now and at login (a systemd user unit, __SCHED_LABEL__):
+      Start the scheduler now and at login (a systemd user unit, __SCHED_LABEL__),
+      and the tray in desktop sessions (an autostart entry, __UI_LABEL__):
         #{opt_libexec}/share/process-automator/install-app.sh login-items
       Then set it up (templates, the model backend, sign-ins):
         procauto setup
       Secrets go to the Secret Service keyring through secret-tool (libsecret-tools).
       Update with `brew upgrade process-automator`. Before `brew uninstall`:
         systemctl --user disable --now __SCHED_LABEL__
+        rm ~/.config/autostart/__UI_LABEL__   # and Quit the tray
     EOS
   end
 

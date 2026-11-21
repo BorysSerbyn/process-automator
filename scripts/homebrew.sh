@@ -44,7 +44,7 @@ sed -e "s|__TAG__|$tag|g" -e "s|__VERSION__|$v|g" -e "s|__REPO__|$repo|g" \
 sed -e "s|__TAG__|$tag|g" -e "s|__VERSION__|$v|g" -e "s|__REPO__|$repo|g" \
   -e "s|__AMD64_URL__|$(url_of "$amd64_tar")|g" -e "s|__AMD64_SHA256__|$(sha_of "$amd64_tar")|g" \
   -e "s|__ARM64_URL__|$(url_of "$arm64_tar")|g" -e "s|__ARM64_SHA256__|$(sha_of "$arm64_tar")|g" \
-  -e "s|__SCHED_LABEL__|$(env_val "$linux_env" SCHED_LABEL)|g" \
+  -e "s|__SCHED_LABEL__|$(env_val "$linux_env" SCHED_LABEL)|g" -e "s|__UI_LABEL__|$(env_val "$linux_env" UI_LABEL)|g" \
   "$here/../packaging/homebrew/process-automator.formula.rb.in" > "$tap/Formula/process-automator.rb"
 echo "$tap/Casks/process-automator.rb"
 echo "$tap/Formula/process-automator.rb"

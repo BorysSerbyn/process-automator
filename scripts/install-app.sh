@@ -26,6 +26,13 @@
 # to load a disabled agent, so it's enabled for the load and disabled again,
 # even when the load fails. It reads `launchctl print-disabled` as
 # core/internal/cli/loginitems_darwin.go does; keep the two in step.
+#
+# On Linux the tray (bin/automator-tray) starts at login from an XDG autostart
+# entry, in graphical sessions only; it's turned off at login by hiding the
+# entry (Hidden=true), as core/internal/cli/autostart.go reads and writes it.
+# A running tray is stopped (and waited for) before its files are replaced,
+# and started again in the session it ran in; with none running, it's started
+# only when this runs in a graphical session. A headless machine never starts it.
 set -euo pipefail
 
 main() {
@@ -78,7 +85,7 @@ install_app() {
   fi
   mkdir -p "$(dirname "$dest")"
   if [ "$root" != "$dest" ]; then
-    stop_items
+    stop_items "$dest"
     # Copy beside it, then swap, so a failed copy leaves the installed app whole.
     rm -rf "$dest.new" "$dest.old"
     if [ "$OS" = macos ]; then ditto "$root" "$dest.new"; else cp -R "$root" "$dest.new"; fi
@@ -117,22 +124,105 @@ login_items() {
     fi
     echo "Login items: $UI_LABEL, $SCHED_LABEL (scheduler log: $logs/scheduler.log)"
   else
-    local units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user existed=""
-    mkdir -p "$units"
-    [ -f "$units/$SCHED_LABEL" ] && existed=1
-    sed -e "s|__PROGRAM__|$app/$core_rel|" -e "s|__PATH__|$(sched_path)|" \
-      "$here/scheduler.service.in" > "$units/$SCHED_LABEL"
-    if system; then
-      if ! systemctl --user show-environment >/dev/null 2>&1; then
-        echo "No systemd user session here: start the scheduler yourself with \`$COMMAND daemon\`." >&2
-        return 0
-      fi
-      systemctl --user daemon-reload
-      # A first install starts at login; a reinstall keeps the choice.
-      [ -z "$existed" ] && systemctl --user enable "$SCHED_LABEL"
-      systemctl --user restart "$SCHED_LABEL"
+    install_tray "$app"
+    install_scheduler "$app"
+  fi
+}
+
+install_scheduler() {
+  local app=$1 units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user existed=""
+  mkdir -p "$units"
+  [ -f "$units/$SCHED_LABEL" ] && existed=1
+  sed -e "s|__PROGRAM__|$app/$core_rel|" -e "s|__PATH__|$(sched_path)|" \
+    "$here/scheduler.service.in" > "$units/$SCHED_LABEL"
+  if system; then
+    if ! systemctl --user show-environment >/dev/null 2>&1; then
+      echo "No systemd user session here: start the scheduler yourself with \`$COMMAND daemon\`." >&2
+      return 0
     fi
-    echo "Login item: $SCHED_LABEL (log: journalctl --user -u $SCHED_LABEL)"
+    systemctl --user daemon-reload
+    # A first install starts at login; a reinstall keeps the choice.
+    [ -z "$existed" ] && systemctl --user enable "$SCHED_LABEL"
+    systemctl --user restart "$SCHED_LABEL"
+  fi
+  echo "Login item: $SCHED_LABEL (log: journalctl --user -u $SCHED_LABEL)"
+}
+
+# --- The Linux tray ---------------------------------------------------------
+
+autostart_entry() { echo "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/$UI_LABEL"; }
+
+# install_tray <app>: the tray's autostart entry, and the tray (re)started.
+install_tray() {
+  local app=$1 exe entry hidden=""
+  exe="$app/bin/automator-tray" entry=$(autostart_entry)
+  [ -n "$UI_LABEL" ] && [ -x "$exe" ] || return 0
+  mkdir -p "$(dirname "$entry")"
+  # A reinstall keeps the choice (`login-items disable` hides the entry).
+  if [ -f "$entry" ] && grep -Eq '^[[:space:]]*(Hidden[[:space:]]*=[[:space:]]*true|X-GNOME-Autostart-enabled[[:space:]]*=[[:space:]]*false)' "$entry"; then
+    hidden=1
+  fi
+  sed -e "s|__NAME__|$NAME|g" -e "s|__PROGRAM__|$exe|" -e "s|__ICON__|$app/share/$FOLDER/tray/app.png|" \
+    "$here/tray.desktop.in" > "$entry"
+  [ -z "$hidden" ] || echo "Hidden=true" >> "$entry"
+  local started=""
+  if system; then
+    stop_tray "$exe"
+    start_tray "$exe" && started=1
+  fi
+  echo "Login item: $UI_LABEL (the tray, in desktop sessions${started:+; started})"
+}
+
+# tray_pids <exe>: this user's processes running the tray at <exe> (others'
+# /proc/<pid>/exe can't be read).
+tray_pids() {
+  local exe p target
+  exe="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)/$(basename "$1")"
+  for p in /proc/[0-9]*; do
+    target=$(readlink "$p/exe" 2>/dev/null) || continue
+    [ "${target% (deleted)}" = "$exe" ] && echo "${p#/proc/}"
+  done
+  return 0
+}
+
+# The environment the tray last stopped ran in (its session's display and bus).
+tray_env=()
+
+# stop_tray <exe>: stops the tray running at <exe> and waits (up to 10s, then
+# kills it) until it has exited, so the next one doesn't start beside it.
+stop_tray() {
+  local exe=$1 pid pids
+  pids=$(tray_pids "$exe")
+  [ -n "$pids" ] || return 0
+  for pid in $pids; do
+    if [ ${#tray_env[@]} -eq 0 ]; then
+      mapfile -d '' tray_env < "/proc/$pid/environ" 2>/dev/null || tray_env=()
+    fi
+    kill "$pid" 2>/dev/null || true
+  done
+  for _ in $(seq 1 20); do
+    [ -n "$(tray_pids "$exe")" ] || return 0
+    sleep 0.5
+  done
+  for pid in $(tray_pids "$exe"); do kill -9 "$pid" 2>/dev/null || true; done
+}
+
+# graphical_session: this runs in a desktop session (a display and a session bus).
+graphical_session() {
+  [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ] &&
+    { [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || [ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus" ]; }
+}
+
+# start_tray <exe>: starts the tray in the session the one stopped ran in,
+# else in this one if it's graphical; fails when there's none.
+start_tray() {
+  local exe=$1
+  if [ ${#tray_env[@]} -gt 0 ]; then
+    setsid env -i "${tray_env[@]}" "$exe" </dev/null >/dev/null 2>&1 &
+  elif graphical_session; then
+    setsid "$exe" </dev/null >/dev/null 2>&1 &
+  else
+    return 1
   fi
 }
 
@@ -182,12 +272,14 @@ load_agent() {
   bootstrap "$domain" "$plist"
 }
 
+# stop_items <app>: stops the login items running the app at <app>.
 stop_items() {
   system || return 0
   if [ "$OS" = macos ]; then
     stop_agent "$UI_LABEL"
     stop_agent "$SCHED_LABEL"
   else
+    stop_tray "$1/bin/automator-tray"
     systemctl --user stop "$SCHED_LABEL" 2>/dev/null || true
   fi
 }
@@ -195,13 +287,14 @@ stop_items() {
 uninstall_app() {
   local core="$root/$core_rel"
   [ -x "$core" ] || die "$root isn't an installed $NAME (no $core_rel): nothing removed"
-  stop_items
+  stop_items "$root"
   if [ "$OS" = macos ]; then
     rm -f "$HOME/Library/LaunchAgents/$UI_LABEL.plist" "$HOME/Library/LaunchAgents/$SCHED_LABEL.plist"
   else
     local units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
     if system; then systemctl --user disable "$SCHED_LABEL" 2>/dev/null || true; fi
     rm -f "$units/$SCHED_LABEL"
+    [ -z "$UI_LABEL" ] || rm -f "$(autostart_entry)"
     if system; then systemctl --user daemon-reload 2>/dev/null || true; fi
   fi
   if [ -n "$purge" ]; then

@@ -15,6 +15,8 @@ MAIN          ?= ./cmd/procauto
 # The routine templates the app ships, and its logo (AppIcon.icns, glyph.svg, dot.svg)
 TEMPLATES     ?= $(CURDIR)/templates
 LOGO          ?= $(CURDIR)/automator-ui/Resources/Logo
+# The Linux tray's Go module (any app's: its names and icons come from the package)
+TRAY_DIR      ?= $(CURDIR)/automator-tray
 # Reverse-DNS prefix of the app's identifiers: the bundle ID is $(BUNDLE_PREFIX).$(CLI),
 # the login items $(BUNDLE_PREFIX).$(CLI).ui and .scheduler, the Keychain service $(BUNDLE_PREFIX).$(CLI)
 BUNDLE_PREFIX ?= dev
@@ -46,7 +48,8 @@ BUNDLE_ID := $(BUNDLE_PREFIX).$(CLI)
 APP       := $(INSTALL_DIR)/$(APP_NAME).app
 UI_LABEL  := $(BUNDLE_ID).ui
 SCHED_LABEL := $(BUNDLE_ID).scheduler
-# The Linux scheduler's systemd user unit (Linux has no automator-ui)
+# The Linux login items: the tray's XDG autostart entry and the scheduler's systemd user unit
+LINUX_UI_LABEL := $(CLI)-tray.desktop
 LINUX_SCHED_LABEL := $(CLI)-scheduler.service
 CORE_BIN  := $(BUILD)/$(CLI)
 APP_BUILD := $(BUILD)/$(APP_NAME).app
@@ -80,7 +83,7 @@ COMMAND=$(CLI)
 FOLDER=$(FOLDER)
 VERSION=$(VERSION)
 BUNDLE_ID=$(BUNDLE_ID)
-UI_LABEL=
+UI_LABEL=$(LINUX_UI_LABEL)
 SCHED_LABEL=$(LINUX_SCHED_LABEL)
 KEYCHAIN_SERVICE=$(BUNDLE_ID)
 endef
@@ -115,27 +118,34 @@ bundle: build check-identity ## Assemble and sign the .app
 package: bundle ## Release artifact for macOS (build/dist): the signed .app, zipped
 	scripts/package.sh macos "$(APP_BUILD)" "$(DIST)"
 
-package-linux: ## Release artifact for Linux (build/dist), for LINUX_ARCH=amd64|arm64: the core, templates, installer
+package-linux: ## Release artifact for Linux (build/dist), for LINUX_ARCH=amd64|arm64: the core, the tray, templates, installer
 	@mkdir -p "$(BUILD)/linux-$(LINUX_ARCH)"
 	cd "$(GO_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=$(LINUX_ARCH) go build -trimpath -ldflags '$(LINUX_LDFLAGS)' \
 	  -o "$(BUILD)/linux-$(LINUX_ARCH)/$(CLI)" $(MAIN)
+	cd "$(TRAY_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=$(LINUX_ARCH) go build -trimpath -ldflags '-s -w' \
+	  -o "$(BUILD)/linux-$(LINUX_ARCH)/automator-tray" .
+	rm -rf "$(BUILD)/linux-$(LINUX_ARCH)/tray"
+	cd "$(TRAY_DIR)" && go run ./cmd/trayicons "$(LOGO)" "$(BUILD)/linux-$(LINUX_ARCH)/tray"
 	@printf '%s\n' "$$LINUX_INSTALL_ENV" > "$(BUILD)/linux-$(LINUX_ARCH)/install.env"
 	TEMPLATES="$(TEMPLATES)" scripts/package.sh linux "$(BUILD)/linux-$(LINUX_ARCH)/$(CLI)" "$(DIST)" $(LINUX_ARCH) \
-	  "$(BUILD)/linux-$(LINUX_ARCH)/install.env"
+	  "$(BUILD)/linux-$(LINUX_ARCH)/install.env" "$(BUILD)/linux-$(LINUX_ARCH)/automator-tray" "$(BUILD)/linux-$(LINUX_ARCH)/tray"
 
 contracts: ## Regenerate contracts/ (CLI reference, output schemas, settings schema) from code
 	cd core && go run ./cmd/gencontracts ../contracts
 
 test: ## Run all tests
 	cd core && go test -race ./...
+	cd automator-tray && go test -race ./...
 	cd automator-ui && swift test
 
-lint: ## Lint Go and Swift
+lint: ## Lint Go and Swift (the tray as built for Linux, too)
 	cd core && golangci-lint run
+	cd automator-tray && golangci-lint run && GOOS=linux golangci-lint run
 	cd automator-ui && swift format lint --recursive --strict Sources Tests
 
 fmt: ## Format Go and Swift
 	cd core && gofmt -w .
+	cd automator-tray && gofmt -w .
 	cd automator-ui && swift format --in-place --recursive Sources Tests
 
 install: bundle ## Build, install and (re)start in place (the installer every install runs)
@@ -150,12 +160,17 @@ release: ## Tag a release: make release PART=major|minor|patch
 publish: ## Build, sign, test and publish the release tagged at HEAD (SIGN_IDENTITY or SIGN_P12): see scripts/publish.sh
 	scripts/publish.sh
 
-ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, and the macOS artifact's install test
+ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, the Linux package, and the macOS artifact's install test
 	$(MAKE) test lint
 	cd core && GOOS=linux go build ./... && GOOS=windows go build ./...
+	cd automator-tray && for arch in amd64 arm64; do CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build ./... || exit 1; done
 	@if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/*.sh; \
 	  else echo "shellcheck skipped: not installed (make deps)"; fi
 	rm -rf "$(BUILD)/ci"
+	$(MAKE) package-linux BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
+	@tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/bin/automator-tray$$' && \
+	  tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/share/[^/]+/tray/status-green-dim\.png$$' || \
+	  { echo "the Linux package lacks the tray or its icons"; exit 1; }
 	$(MAKE) package SIGN_IDENTITY=- BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
 	scripts/test-install.sh "$(BUILD)"/ci/*-macos.zip
 

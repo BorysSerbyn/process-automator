@@ -52,6 +52,10 @@ case $(uname -s) in
     [ -x "$app/bin/$command" ] || fail "no app at $app"
     unit="$XDG_CONFIG_HOME/systemd/user/$command-scheduler.service"
     grep -q "^ExecStart=$app/bin/$command daemon$" "$unit" || fail "the scheduler unit doesn't run the installed app"
+    [ -x "$app/bin/automator-tray" ] || fail "no tray beside the CLI"
+    entry="$XDG_CONFIG_HOME/autostart/$command-tray.desktop"
+    grep -qx "Exec=\"$app/bin/automator-tray\"" "$entry" || fail "the tray's autostart entry doesn't run the installed tray"
+    grep -qx "Name=$name" "$entry" || fail "the tray's autostart entry doesn't name the app"
     ;;
 esac
 
@@ -76,6 +80,16 @@ else
 fi
 expect "setup --json lists no backend step" '"step": "backend"' "$cli" setup --json
 expect "login-items doesn't see the installed login items" '"installed": true' "$cli" login-items status --json
+if [ "$(uname -s)" = Linux ]; then
+  # The tray turned off at login (its entry hidden, as `login-items disable`
+  # does; not run here, as it would turn off the real scheduler) stays off
+  # through a reinstall.
+  "$cli" login-items status | grep -q "^ui .* starts at login" || fail "login-items doesn't see the tray start at login"
+  echo "Hidden=true" >> "$entry"
+  "$cli" login-items status | grep -q "^ui .*doesn't start at login" || fail "login-items doesn't see the tray turned off"
+  "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only >/dev/null
+  grep -qx "Hidden=true" "$entry" || fail "reinstalling turned the tray back on at login"
+fi
 expect "uninstall without a terminal didn't ask for --yes" "--yes" "$cli" uninstall
 "$cli" settings set history.retention-days 30 >/dev/null
 data=$("$cli" paths --json | sed -n 's/^  "data": "\(.*\)",*$/\1/p')

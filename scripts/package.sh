@@ -4,9 +4,11 @@
 # Usage:
 #   package.sh macos <app> <out-dir>
 #       → <out-dir>/<FOLDER>-<version>-macos.zip (the signed .app, zipped with ditto)
-#   package.sh linux <core-binary> <out-dir> <arch> <install.env>
-#       → <out-dir>/<FOLDER>-<version>-linux-<arch>.tar.gz, holding
-#         bin/<COMMAND> and share/<FOLDER>/ (templates, installer, systemd unit template)
+#   package.sh linux <core-binary> <out-dir> <arch> <install.env> <tray-binary> <tray-icons>
+#       → <out-dir>/<FOLDER>-<version>-linux-<arch>.tar.gz, holding bin/<COMMAND>,
+#         bin/automator-tray (the tray, beside the core) and share/<FOLDER>/
+#         (templates, installer, systemd unit and autostart entry templates,
+#         the tray's icons in tray/)
 # TEMPLATES is the templates folder the Linux tree ships (default: the repo's templates/).
 set -euo pipefail
 scripts="$(cd "$(dirname "$0")" && pwd)"
@@ -27,7 +29,7 @@ case $kind in
     echo "$zip"
     ;;
   linux)
-    core=$1 out=$2 arch=$3 env=$4
+    core=$1 out=$2 arch=$3 env=$4 tray=$5 icons=$6
     version=$(env_var "$env" VERSION) folder=$(env_var "$env" FOLDER) command=$(env_var "$env" COMMAND)
     templates=${TEMPLATES:-$scripts/../templates}
     name="$folder-$version-linux-$arch"
@@ -36,9 +38,11 @@ case $kind in
     tree="$stage/$name"
     mkdir -p "$tree/bin" "$tree/share/$folder"
     cp "$core" "$tree/bin/$command"
-    chmod 755 "$tree/bin/$command"
+    cp "$tray" "$tree/bin/automator-tray"
+    chmod 755 "$tree/bin/$command" "$tree/bin/automator-tray"
+    cp -R "$icons" "$tree/share/$folder/tray"
     if [ -d "$templates" ]; then cp -R "$templates" "$tree/share/$folder/templates"; else mkdir "$tree/share/$folder/templates"; fi
-    cp "$scripts/install-app.sh" "$scripts/scheduler.service.in" "$tree/share/$folder/"
+    cp "$scripts/install-app.sh" "$scripts/scheduler.service.in" "$scripts/tray.desktop.in" "$tree/share/$folder/"
     cp "$env" "$tree/share/$folder/install.env"
     mkdir -p "$out"
     out=$(cd "$out" && pwd)
