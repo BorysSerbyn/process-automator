@@ -166,6 +166,7 @@ ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, t
 	cd automator-tray && for arch in amd64 arm64; do CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build ./... || exit 1; done
 	@if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/*.sh; \
 	  else echo "shellcheck skipped: not installed (make deps)"; fi
+	scripts/test-launch-agents.sh
 	rm -rf "$(BUILD)/ci"
 	$(MAKE) package-linux BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
 	@tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/bin/automator-tray$$' && \

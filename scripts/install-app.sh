@@ -308,16 +308,26 @@ start_tray() {
 }
 
 launchd_domain() { echo "gui/$(id -u)"; }
-disabled() { launchctl print-disabled "$(launchd_domain)" | grep -Eq "\"$1\" => (disabled|true)"; }
+# disabled <label>: whether the agent is turned off at login. The list is read
+# first: grep -q stopping early would fail launchctl's write (pipefail).
+disabled() {
+  local list
+  list=$(launchctl print-disabled "$(launchd_domain)" 2>/dev/null) || list=""
+  grep -Eq "\"$1\" => (disabled|true)" <<<"$list"
+}
 
 # stop_agent <label>: boots the agent out and waits (up to a minute) for its
 # process to exit. bootout returns while it's still stopping (the scheduler
 # waits up to 30s for its runs), and loading the agent again before it has
 # exited fails ("Bootstrap failed: 5: Input/output error").
 stop_agent() {
-  local job pid
+  local job pid out
   job="$(launchd_domain)/$1"
-  pid=$(launchctl print "$job" 2>/dev/null | sed -n 's/^[[:space:]]*pid = \([0-9][0-9]*\)$/\1/p' | head -n 1)
+  # An agent that isn't loaded makes launchctl print fail (113): no process to
+  # wait for. Not in a pipeline, so set -e and pipefail can't end the script.
+  out=$(launchctl print "$job" 2>/dev/null) || out=""
+  pid=$(sed -n 's/^[[:space:]]*pid = \([0-9][0-9]*\)$/\1/p' <<<"$out")
+  pid=${pid%%$'\n'*}
   launchctl bootout "$job" 2>/dev/null || true
   [ -n "$pid" ] || return 0
   for _ in $(seq 1 60); do
@@ -413,4 +423,5 @@ uninstall_app() {
   echo "Uninstalled $NAME $VERSION."
 }
 
-main "$@"
+# Run, unless sourced (scripts/test-launch-agents.sh loads the functions).
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
