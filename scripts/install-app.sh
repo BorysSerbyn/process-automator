@@ -131,10 +131,13 @@ login_items() {
   if [ "$OS" = macos ]; then
     local agents="$HOME/Library/LaunchAgents" logs="$HOME/Library/Logs/$FOLDER"
     mkdir -p "$agents" "$logs"
-    sed -e "s|__LABEL__|$UI_LABEL|" -e "s|__PROGRAM__|$app/Contents/MacOS/AutomatorUI|" \
+    # Each value escaped for the plist's XML, then for sed, as the Linux unit
+    # and autostart entry are for theirs: a home with & or | stays whole.
+    sed -e "s|__LABEL__|$(plist_value "$UI_LABEL")|" \
+      -e "s|__PROGRAM__|$(plist_value "$app/Contents/MacOS/AutomatorUI")|" \
       "$here/launchagent.plist.in" > "$agents/$UI_LABEL.plist"
-    sed -e "s|__LABEL__|$SCHED_LABEL|" -e "s|__PROGRAM__|$app/$core_rel|" \
-      -e "s|__PATH__|$(sched_path)|" -e "s|__LOG__|$logs/scheduler.log|" \
+    sed -e "s|__LABEL__|$(plist_value "$SCHED_LABEL")|" -e "s|__PROGRAM__|$(plist_value "$app/$core_rel")|" \
+      -e "s|__PATH__|$(plist_value "$(sched_path)")|" -e "s|__LOG__|$(plist_value "$logs/scheduler.log")|" \
       "$here/scheduler.plist.in" > "$agents/$SCHED_LABEL.plist"
     if system; then
       load_agent "$agents/$UI_LABEL.plist" "$UI_LABEL"
@@ -149,6 +152,14 @@ login_items() {
 
 # sed_value <text>: text as a sed replacement (delimiter |).
 sed_value() { printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'; }
+
+# plist_value <text>: text as a plist <string>'s content (XML-escaped), then
+# as a sed replacement.
+plist_value() {
+  local v=${1//&/&amp;}
+  v=${v//</&lt;} v=${v//>/&gt;}
+  sed_value "$v"
+}
 
 # unit_quoted <text> [exec]: text as one double-quoted word of a systemd unit
 # setting (spaces and quotes kept, % not a specifier; in ExecStart, $ not a
@@ -393,23 +404,8 @@ uninstall_app() {
     data=$("$core" ${config:+--config "$config"} paths --json | sed -n 's/^  "data": "\(.*\)",*$/\1/p' |
       sed -e 's/\\u0026/\&/g; s/\\u003c/</g; s/\\u003e/>/g; s/\\"/"/g; s/\\\\/\\/g')
     if [ -n "$data" ] && [ -d "$data" ]; then echo "Removing $data"; rm -rf "$data"; fi
-    if [ "$OS" = macos ]; then
-      rm -rf "$HOME/Library/Logs/$FOLDER"
-      if system; then
-        local n=0
-        while security delete-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1; do n=$((n + 1)); done
-        echo "Removed $n Keychain items ($KEYCHAIN_SERVICE)"
-      fi
-    elif system && command -v secret-tool >/dev/null; then
-      # clear fails both when nothing matched and when the keyring can't be
-      # reached (locked, none): what's left says which.
-      secret-tool clear service "$KEYCHAIN_SERVICE" 2>/dev/null || true
-      if [ -n "$(secret-tool search service "$KEYCHAIN_SERVICE" 2>/dev/null)" ]; then
-        echo "Couldn't remove the keyring items ($KEYCHAIN_SERVICE): is the keyring locked? Remove them with \`secret-tool clear service $KEYCHAIN_SERVICE\`." >&2
-      else
-        echo "Removed the keyring items ($KEYCHAIN_SERVICE)"
-      fi
-    fi
+    if [ "$OS" = macos ]; then rm -rf "$HOME/Library/Logs/$FOLDER"; fi
+    if system; then purge_secrets; fi
   fi
   # The CLI link, only if it's ours (compared resolved: /var is /private/var on macOS).
   local link="$BIN_DIR/$COMMAND" target
@@ -423,5 +419,31 @@ uninstall_app() {
   echo "Uninstalled $NAME $VERSION."
 }
 
-# Run, unless sourced (scripts/test-launch-agents.sh loads the functions).
+# purge_secrets: removes the app's secrets from the OS's store (the login
+# Keychain, or the Secret Service keyring through secret-tool), and says when
+# some are left: the store can refuse (locked), and its tools then fail the
+# same way as when nothing matched. Both OSes say the same.
+purge_secrets() {
+  local left="" n=0
+  if [ "$OS" = macos ]; then
+    while security delete-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1; do n=$((n + 1)); done
+    if security find-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1; then
+      left="is the Keychain locked? Remove them in Keychain Access, or with \`security delete-generic-password -s $KEYCHAIN_SERVICE\`"
+    fi
+  elif command -v secret-tool >/dev/null; then
+    secret-tool clear service "$KEYCHAIN_SERVICE" 2>/dev/null || true
+    if [ -n "$(secret-tool search service "$KEYCHAIN_SERVICE" 2>/dev/null)" ]; then
+      left="is the keyring locked? Remove them with \`secret-tool clear service $KEYCHAIN_SERVICE\`"
+    fi
+  else
+    return 0
+  fi
+  if [ -n "$left" ]; then
+    echo "Some of the app's secrets ($KEYCHAIN_SERVICE) couldn't be removed: $left." >&2
+  else
+    echo "Removed the app's secrets ($KEYCHAIN_SERVICE)"
+  fi
+}
+
+# Run, unless sourced (scripts/test-install-app.sh loads the functions).
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
