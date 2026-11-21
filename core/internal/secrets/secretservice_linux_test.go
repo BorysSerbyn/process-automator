@@ -1,15 +1,19 @@
 package secrets
 
 import (
+	"errors"
 	"os/exec"
 	"slices"
+	"strings"
 	"testing"
 )
 
 // fakeSecretTool keeps items like secret-tool does, keyed by the attributes.
-func fakeSecretTool(t *testing.T) map[string]string {
+// Keys in locked are in a locked keyring: lookup finds nothing, as
+// secret-tool's does when no prompt can unlock it; search still lists them.
+func fakeSecretTool(t *testing.T) (items map[string]string, locked map[string]bool) {
 	t.Helper()
-	items := map[string]string{}
+	items, locked = map[string]string{}, map[string]bool{}
 	orig := secretTool
 	t.Cleanup(func() { secretTool = orig })
 	secretTool = func(stdin string, args ...string) ([]byte, error) {
@@ -21,10 +25,15 @@ func fakeSecretTool(t *testing.T) map[string]string {
 			return nil, nil
 		case "lookup":
 			v, ok := items[args[2]+"/"+args[4]]
-			if !ok {
+			if !ok || locked[args[4]] {
 				return nil, notFound
 			}
 			return []byte(v), nil
+		case "search":
+			if _, ok := items[args[2]+"/"+args[4]]; ok {
+				return []byte("[/1]\nlabel = x\nattribute.account = " + args[4] + "\n"), nil
+			}
+			return nil, nil
 		case "clear":
 			k := args[2] + "/" + args[4]
 			if _, ok := items[k]; !ok {
@@ -36,11 +45,11 @@ func fakeSecretTool(t *testing.T) map[string]string {
 		t.Fatalf("unexpected secret-tool %v", args)
 		return nil, nil
 	}
-	return items
+	return items, locked
 }
 
 func TestSecretServiceRoundTrip(t *testing.T) {
-	items := fakeSecretTool(t)
+	items, _ := fakeSecretTool(t)
 	s := SecretService{Service: "test.procauto"}
 	if _, err := s.Get("k"); err != ErrNotFound {
 		t.Fatalf("missing: %v", err)
@@ -64,5 +73,23 @@ func TestSecretServiceRoundTrip(t *testing.T) {
 	}
 	if err := s.Delete("k"); err != nil {
 		t.Fatalf("deleting a missing key: %v", err)
+	}
+}
+
+// A secret in a locked keyring isn't "not found" (which would read as never
+// signed in): it says the keyring is locked.
+func TestSecretServiceLockedKeyring(t *testing.T) {
+	_, locked := fakeSecretTool(t)
+	s := SecretService{Service: "test.procauto"}
+	if err := s.Set("k", "v"); err != nil {
+		t.Fatal(err)
+	}
+	locked["k"] = true
+	_, err := s.Get("k")
+	if err == nil || errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "locked") {
+		t.Fatalf("Get from a locked keyring: %v", err)
+	}
+	if _, err := s.Get("missing"); err != ErrNotFound {
+		t.Fatalf("a missing key while locked: %v", err)
 	}
 }

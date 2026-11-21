@@ -236,6 +236,8 @@ The Keychain is reached by shelling out to `/usr/bin/security` and the Secret Se
 - **A Go Secret Service client** (godbus, go-keyring): a new dependency tree for four calls
 - **An encrypted file**: its key would sit next to it, or need a password at every run
 
+`secret-tool lookup` prints nothing both when there's no such item and when its keyring is locked and can't be unlocked (no prompt can be shown), so an empty lookup is checked with `secret-tool search`, which lists locked items: a locked keyring then says so, instead of looking like a sign-in never made
+
 ## Decision: one installer script, inside every artifact
 Installing is one bash script, `install-app.sh`, shipped inside the artifact it installs, with an `install.env` the build writes. `make install`, `install.sh`, `procauto update`, `procauto uninstall` and the Homebrew cask all run it, so a fix to installing reaches every path, and each version installs itself with its own rules (an update runs the new version's script, after verifying it). launchd, systemd and the secrets stores stay in the script and the per-OS files, out of the core.
 

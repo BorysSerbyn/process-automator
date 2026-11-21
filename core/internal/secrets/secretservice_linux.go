@@ -37,22 +37,39 @@ var secretTool = func(stdin string, args ...string) (stdout []byte, err error) {
 		// A message means it failed (no keyring, D-Bus); a bare non-zero
 		// exit means nothing matched (lookup, clear).
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return out, fmt.Errorf("%v: %s", err, msg)
+			return out, fmt.Errorf("%v: %s (%s)", err, msg, keyringHint)
 		}
 	}
 	return out, err
 }
 
+// keyringHint says what secret-tool needs, for its errors.
+const keyringHint = "secrets are kept in the Secret Service keyring (GNOME Keyring, KWallet), which must be running " +
+	"and unlocked: a desktop session unlocks it at login; without one, start and unlock it yourself"
+
+// errLocked: the item is there, but the keyring holding it is locked (or its
+// unlock prompt was dismissed or couldn't be shown).
+var errLocked = errors.New("it's in the keyring, but the keyring is locked: unlock it (" + keyringHint + ")")
+
 func (s SecretService) attrs(key string) []string {
 	return []string{"service", s.Service, "account", key}
 }
 
-// Get implements Store. secret-tool lookup fails, printing nothing, when there's no such item.
+// Get implements Store. secret-tool lookup fails, printing nothing, both
+// when there's no such item and when its keyring is locked (and isn't
+// unlocked: no prompt can be shown, or it's dismissed); search, which lists
+// locked items too, tells the two apart.
 func (s SecretService) Get(key string) (string, error) {
 	out, err := secretTool("", append([]string{"lookup"}, s.attrs(key)...)...)
 	if err != nil {
 		var exit *exec.ExitError
-		if errors.Is(err, errNoSecretTool) || errors.As(err, &exit) && len(out) == 0 {
+		if errors.Is(err, errNoSecretTool) {
+			return "", ErrNotFound
+		}
+		if errors.As(err, &exit) && len(out) == 0 {
+			if found, _ := secretTool("", append([]string{"search"}, s.attrs(key)...)...); len(bytes.TrimSpace(found)) > 0 {
+				return "", fmt.Errorf("secret service get %q: %w", key, errLocked)
+			}
 			return "", ErrNotFound
 		}
 		return "", fmt.Errorf("secret service get %q: %w", key, err)
