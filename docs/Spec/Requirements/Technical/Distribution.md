@@ -66,7 +66,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 - **Progress**: the process installing records its progress in `update-progress.json` as it goes: the release, the step in words (checking, downloading, checking it's genuine, installing, or building from the checkout), the latest line the step printed, and how it ended. `update progress [--json]` reports it: `state` `installing` (the lock is held, or an update started in the last 30 seconds), `done`, `failed` (with the error; one that stopped without finishing is failed too) or `none`
 
 ## First-run setup
-- **`setup`** in a terminal walks through the steps in order, asking before each (except `auto` ones) and running the same commands as below; done steps are skipped, and it can run again any time
+- **`setup`** in a terminal walks through the steps in order, asking before each (except `auto` ones) and running the same commands as below; done steps are skipped, and it can run again any time. A choice is a numbered list, one value per line with its `enumHelp` line (the backend: recommended first), answered by number or name; anything else is asked again. `setup --json`'s `ask` lists the same lines
 - **`setup --json`** changes nothing: it lists the steps by kind, each with `done`, `optional`, `auto`, `status`, `ask` and the `commands` that do it (placeholders for my answers), for an LLM or automator-ui guiding me. An `auto` step is done without asking: whoever guides me runs its commands as soon as it comes to it
 
 | Kind | Step |

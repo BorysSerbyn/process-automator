@@ -33,6 +33,13 @@ struct SettingRow: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // A choice's own line (e.g. the backend's), for the one selected.
+                if let help = setting.enumHelp?.additionalProperties[setting.valueText], !help.isEmpty {
+                    Text(help)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let error { RowError(message: error) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

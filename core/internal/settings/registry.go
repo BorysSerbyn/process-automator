@@ -47,8 +47,11 @@ type Setting struct {
 	Description string   `json:"description"`
 	Unit        string   `json:"unit,omitempty"`
 	Enum        []string `json:"enum,omitempty"`
-	Min         *float64 `json:"min,omitempty"`
-	Max         *float64 `json:"max,omitempty"`
+	// EnumHelp says in a line what each enum value means, for choosing one:
+	// setup lists them, the Settings window shows the selected one's.
+	EnumHelp map[string]string `json:"enumHelp,omitempty"`
+	Min      *float64          `json:"min,omitempty"`
+	Max      *float64          `json:"max,omitempty"`
 	// NotImplemented marks a setting declared ahead of the feature that uses it:
 	// it can be set, but has no effect yet.
 	NotImplemented bool `json:"notImplemented,omitempty"`
@@ -61,10 +64,13 @@ func ptr(f float64) *float64 { return &f }
 // Registry lists every setting. Keys are dotted, lowercase, kebab-case segments.
 var Registry = []Setting{
 	{
-		Key: "llm.backend", Type: TypeEnum, Default: "api", Enum: []string{"api", "claude-code", "codex"},
-		Description: "What runs routines: api = Genkit with an Anthropic API key (pay per token), or, experimental and untested, " +
-			"models on an OpenAI-compatible server such as Ollama (see llm.openai-compat.base-url); claude-code = headless Claude Code on your Claude subscription; " +
-			"codex (experimental, untested) = headless OpenAI Codex CLI on your Codex sign-in (ChatGPT plan or OpenAI API key).",
+		Key: "llm.backend", Type: TypeEnum, Default: "api", Enum: []string{"claude-code", "api", "codex"},
+		Description: "What runs your routines.",
+		EnumHelp: map[string]string{
+			"claude-code": "Claude Code on your Claude subscription (recommended)",
+			"api":         "Claude through Anthropic's API, paid per token: needs an API key. Can also run local models such as Ollama (experimental, untested)",
+			"codex":       "OpenAI's Codex CLI on your ChatGPT plan or OpenAI API key (experimental, untested)",
+		},
 	},
 	{
 		Key: "llm.openai-compat.base-url", Type: TypeString, Default: "http://localhost:11434/v1", Backend: "api",

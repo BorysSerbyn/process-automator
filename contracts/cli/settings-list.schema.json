@@ -34,6 +34,13 @@
         },
         "type": "array"
       },
+      "enumHelp": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object",
+        "description": "EnumHelp says in a line what each enum value means, for choosing one:\nsetup lists them, the Settings window shows the selected one's."
+      },
       "min": {
         "type": "number"
       },

@@ -41,7 +41,7 @@ func TestOpenAICompatSetup(t *testing.T) {
 		return SetupStep{}
 	}
 	s := backend()
-	if s.Done || s.SignIn != "anthropic" || !strings.Contains(s.Ask, "experimental and untested, models on an OpenAI-compatible server") {
+	if s.Done || s.SignIn != "anthropic" || !strings.Contains(s.Ask, "Can also run local models such as Ollama (experimental, untested)") {
 		t.Errorf("no routines: %+v", s)
 	}
 	var offered int

@@ -1200,6 +1200,13 @@ components:
           items:
             type: string
           type: array
+        enumHelp:
+          additionalProperties:
+            type: string
+          description: |-
+            EnumHelp says in a line what each enum value means, for choosing one:
+            setup lists them, the Settings window shows the selected one's.
+          type: object
         inactive:
           description: |-
             Inactive says why the setting has no effect now: it's for another

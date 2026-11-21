@@ -455,3 +455,39 @@ func TestSetupStatusNotWithoutData(t *testing.T) {
 		t.Error("the data folder was made again")
 	}
 }
+
+// Interactive setup lists the backends one per line with what each means,
+// takes a number or a name, and asks again for anything else.
+func TestSetupInteractiveBackend(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	a := enginetest.Load(t, cfg)
+	cmd, _, err := NewRoot(nil).Find([]string{"setup"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.ParseFlags([]string{"--config", cfg}); err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetContext(context.Background())
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("9\n3\n\n\n\n\n\n"))
+	if err := setupInteractive(cmd, a); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	got := out.String()
+	for _, want := range []string{
+		"    1. claude-code  Claude Code on your Claude subscription (recommended)\n",
+		"    2. api          Claude through Anthropic's API",
+		"    3. codex        OpenAI's Codex CLI",
+		`"9" isn't one of them: a number from 1 to 3, or a name`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if v, _ := cli(t, cfg, "settings", "get", "llm.backend"); !strings.Contains(v, "codex") {
+		t.Errorf("backend after choosing 3: %s", v)
+	}
+}

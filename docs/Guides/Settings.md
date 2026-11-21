@@ -14,7 +14,7 @@ procauto settings reset llm.backend         # back to the default
 ## App-wide
 | Setting | Default | |
 |---|---|---|
-| `llm.backend` | `api` | What runs routines: `claude-code` (your Claude plan), `codex` (your Codex sign-in; experimental, untested) or `api` (an Anthropic API key, or models on an OpenAI-compatible server; experimental, untested). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
+| `llm.backend` | `api` | What runs your routines: `claude-code`, Claude Code on your Claude subscription (recommended); `api`, Claude through Anthropic's API, paid per token (it can also run local models such as Ollama: experimental, untested); `codex`, OpenAI's Codex CLI (experimental, untested). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
 | `llm.openai-compat.base-url` | `http://localhost:11434/v1` | With `api` (experimental, untested): the OpenAI-compatible server `openai-compat/…` models run on. See [[Guides/Plugins and sign-ins#OpenAI-compatible servers (experimental, untested)\|OpenAI-compatible servers]] |
 | `llm.usage-limit` | `90%` | With `claude-code`: see [[#Usage limit]] |
 | `llm.budget.window`, `llm.budget.window-usd`, `llm.budget.weekly-usd` | `5h`, `2`, `20` | With `api`: see [[#Usage limit]] |

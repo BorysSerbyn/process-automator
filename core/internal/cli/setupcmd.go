@@ -223,7 +223,7 @@ func backendStep(a *engine.App) (SetupStep, error) {
 	def, _ := settings.Lookup("llm.backend")
 	st := SetupStep{Step: stepBackend, Title: "Model backend", Done: b.Problem == "", Status: b.Status(), SignIn: b.SignIn,
 		Setting:  def.Key,
-		Ask:      "Which backend should run routines? " + def.Description,
+		Ask:      "Which backend should run your routines?\n" + strings.Join(choiceLines(def, "- ", ": "), "\n"),
 		Commands: []string{product.Command + " settings set " + def.Key + " <" + strings.Join(def.Enum, "|") + ">"}}
 	if b.SignIn != "" {
 		st.Commands = append(st.Commands, product.Command+" auth login "+b.SignIn+" --browser")
@@ -410,6 +410,28 @@ func turnOnSteps(a *engine.App, loaded []loadedRoutine) ([]SetupStep, error) {
 	return steps, nil
 }
 
+// choiceLines are an enum setting's values, each with its help, aligned:
+// "<prefix><value><sep><help>" ("- claude-code: …", or "claude-code  …").
+func choiceLines(def settings.Setting, prefix, sep string) []string {
+	width := 0
+	for _, v := range def.Enum {
+		width = max(width, len(v))
+	}
+	lines := make([]string, 0, len(def.Enum))
+	for _, v := range def.Enum {
+		help := def.EnumHelp[v]
+		switch {
+		case help == "":
+			lines = append(lines, prefix+v)
+		case sep == "  ":
+			lines = append(lines, fmt.Sprintf("%s%-*s%s%s", prefix, width, v, sep, help))
+		default:
+			lines = append(lines, prefix+v+sep+help)
+		}
+	}
+	return lines
+}
+
 // capitalize starts a status with a capital, as every status does.
 func capitalize(s string) string {
 	if s == "" {
@@ -459,14 +481,25 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(w, "  "+b.Status())
+	fmt.Fprintln(w, "  Now: "+b.Status())
 	def, _ := settings.Lookup("llm.backend")
-	fmt.Fprintln(w, "  "+def.Description)
-	choice := strings.ToLower(ask("  Which backend (" + strings.Join(def.Enum, " or ") + ")? [Enter keeps " + b.Name + "]"))
-	if choice != "" && choice != b.Name {
-		if _, err := (settings.Store{Path: a.Layout.Config()}).Set("llm.backend", choice); err != nil {
-			fmt.Fprintln(w, "  ", err)
+	fmt.Fprintln(w, "  Which backend should run your routines?")
+	for i, line := range choiceLines(def, "", "  ") {
+		fmt.Fprintf(w, "    %d. %s\n", i+1, line)
+	}
+	for {
+		choice := strings.ToLower(ask("  Number or name [Enter keeps " + b.Name + "]:"))
+		if n, err := strconv.Atoi(choice); err == nil && n >= 1 && n <= len(def.Enum) {
+			choice = def.Enum[n-1]
 		}
+		if choice == "" || choice == b.Name {
+			break
+		}
+		if _, err := (settings.Store{Path: a.Layout.Config()}).Set("llm.backend", choice); err != nil {
+			fmt.Fprintf(w, "  %q isn't one of them: a number from 1 to %d, or a name\n", choice, len(def.Enum))
+			continue
+		}
+		break
 	}
 	if b, err = a.BackendReady(); err != nil {
 		return err

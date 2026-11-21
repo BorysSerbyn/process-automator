@@ -33,7 +33,7 @@ func TestCodexBackend(t *testing.T) {
 		switch s.Step {
 		case stepBackend:
 			if s.Done || !strings.Contains(s.Status, "Runs with codex (experimental, untested), but Codex isn't installed") || s.SignIn != "" ||
-				!strings.Contains(s.Ask, "codex (experimental, untested) = headless OpenAI Codex CLI") {
+				!strings.Contains(s.Ask, "- codex: OpenAI's Codex CLI on your ChatGPT plan or OpenAI API key (experimental, untested)") {
 				t.Errorf("backend step: %+v", s)
 			}
 		case stepUsage, stepMCP:

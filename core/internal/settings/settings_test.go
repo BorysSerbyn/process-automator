@@ -263,3 +263,20 @@ func TestValues(t *testing.T) {
 		t.Fatal("an undeclared key has a value")
 	}
 }
+
+// A setting that explains its choices explains each of them, and nothing else.
+func TestEnumHelpCoversTheChoices(t *testing.T) {
+	for _, s := range Registry {
+		if s.EnumHelp == nil {
+			continue
+		}
+		for _, v := range s.Enum {
+			if s.EnumHelp[v] == "" {
+				t.Errorf("%s: no help for %q", s.Key, v)
+			}
+		}
+		if len(s.EnumHelp) != len(s.Enum) {
+			t.Errorf("%s: help for values it doesn't have: %v", s.Key, s.EnumHelp)
+		}
+	}
+}
