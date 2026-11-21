@@ -99,6 +99,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Servers and tools**: `automator.servers` lists the servers the routine uses; every tool in `tools` must be offered by exactly one of them, and only those tools are registered with the model
 - **Parameters** (`automator.parameters`: name, setting type, default, description, enum): values are per-routine settings `routines.<name>.params.<param>`, passed to the prompt as inputs; a name is lowercase letters, digits and underscores and can't shadow a built-in input; a required one without a value makes the routine unschedulable
 - **Platforms** (`automator.platforms: [macos, linux]`): empty means all
+- **Backends** (`automator.backends: [claude-code, api]`, `llm.backend`'s values): the backends it works with; empty means any
 - **Plugin sections** (`automator.plugins.<name>`, dotted or nested) may only name in-process plugins in the routine's servers that declare they take one
 - **Inputs** every routine gets: `today`, `now`, `since` (the start of the previous workday) and `trigger`, plus its parameters
 - **Commands**: `routines list/show/create/update/delete/check/pause/resume/trust`. Create never overwrites; update replaces only an existing file; both validate like loading, from `--from <file|->` or `--source`. A created routine's disabled setting is written before its file, so the scheduler never sees it enabled
@@ -110,7 +111,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Files shipped with the app**, never compiled in: `Contents/Resources/templates` in the `.app`, `share/<Folder>/templates` in the Linux tree, the checkout's `templates/` in development builds; `paths` shows the folder. An empty or missing folder lists none; the repository's `templates/` holds only a README
 - **Checked like the app's own**: every template loads as a routine, includes `{{> memories}}`, and renders with the standard inputs, anchored in `today` or `since`, with no template syntax left (`automator.CheckTemplates`, run by the tests on the shipped folder)
 - **Tags are folders**, general to specific; `projects/<project>/…` makes a template that project's (`project` in `templates list`). Installing copies a template flat into the routines folder
-- `templates list [--all]` shows the ones for this OS (tags, project, parameters, platforms, installed or not); `templates install <tags>/<name> [--as <name>] [--set param=value]` validates every value first, never overwrites a routine, stores values as `routines.<name>.params.<param>`, prints the template's description, and leaves the routine disabled and untrusted
+- `templates list [--all]` shows the ones for this OS (tags, project, parameters, platforms, backends, whether it supports the selected backend (`supportsBackend`), installed or not); `templates install <tags>/<name> [--as <name>] [--set param=value]` refuses a template that doesn't support the selected `llm.backend` (saying how to switch), validates every value first, never overwrites a routine, stores values as `routines.<name>.params.<param>`, prints the template's description, and leaves the routine disabled and untrusted
 
 ## Model backends
 - **`llm.backend`** picks the loop behind one `Backend` interface:

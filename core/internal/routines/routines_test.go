@@ -129,6 +129,8 @@ func TestParameters(t *testing.T) {
 	write("badname", "automator.parameters:\n  - {name: Look-Back, type: string}\n")
 	write("noenum", "automator.parameters:\n  - {name: x, type: enum}\n")
 	write("badplatform", "automator.platforms: [windows]\n")
+	write("badbackend", "automator.backends: [gpt]\n")
+	write("clionly", "automator.backends: [claude-code]\n")
 	set, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +146,13 @@ func TestParameters(t *testing.T) {
 	if keys["routines.ok.params.lookback"] != "72h" || keys["routines.ok.params.tone"] != nil {
 		t.Fatalf("parameter settings: %v", keys)
 	}
-	for _, bad := range []string{"badtype", "baddefault", "reserved", "badname", "noenum", "badplatform"} {
+	if r, err := set.Find("clionly"); err != nil || !r.Supports("claude-code") || r.Supports("api") {
+		t.Errorf("backends: %+v %v", r.Backends, err)
+	}
+	if !r.Supports("api") {
+		t.Error("a routine without backends doesn't support api")
+	}
+	for _, bad := range []string{"badtype", "baddefault", "reserved", "badname", "noenum", "badplatform", "badbackend"} {
 		if _, err := set.Find(bad); err == nil {
 			t.Errorf("%s accepted", bad)
 		}

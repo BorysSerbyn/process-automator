@@ -1333,6 +1333,11 @@ components:
       additionalProperties: false
       description: TemplateInfo is one row of `templates list --json`.
       properties:
+        backends:
+          description: 'Backends it works with (llm.backend values); none: any.'
+          items:
+            type: string
+          type: array
         description:
           type: string
         id:
@@ -1359,6 +1364,11 @@ components:
         runsHere:
           description: RunsHere is false for templates for another OS (listed with --all).
           type: boolean
+        supportsBackend:
+          description: |-
+            SupportsBackend is false for a template that doesn't work with the
+            selected backend (llm.backend): installing it is refused.
+          type: boolean
         tags:
           items:
             type: string
@@ -1368,6 +1378,7 @@ components:
         - name
         - tags
         - runsHere
+        - supportsBackend
         - installed
       type: object
     ToolInfo:

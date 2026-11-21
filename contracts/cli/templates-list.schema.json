@@ -29,6 +29,13 @@
         },
         "type": "array"
       },
+      "backends": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "description": "Backends it works with (llm.backend values); none: any."
+      },
       "params": {
         "items": {
           "properties": {
@@ -71,6 +78,10 @@
         "type": "boolean",
         "description": "RunsHere is false for templates for another OS (listed with --all)."
       },
+      "supportsBackend": {
+        "type": "boolean",
+        "description": "SupportsBackend is false for a template that doesn't work with the\nselected backend (llm.backend): installing it is refused."
+      },
       "installed": {
         "type": "boolean",
         "description": "Installed is true when a routine with the template's name exists."
@@ -83,6 +94,7 @@
       "name",
       "tags",
       "runsHere",
+      "supportsBackend",
       "installed"
     ],
     "description": "TemplateInfo is one row of `templates list --json`."
