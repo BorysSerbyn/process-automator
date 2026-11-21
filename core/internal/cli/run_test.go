@@ -192,15 +192,15 @@ func TestUsageLimitPlan(t *testing.T) {
 	if _, err := a.Execute(context.Background(), set, r, scheduled); err != nil {
 		t.Fatalf("nothing known of the plan, yet the run was stopped: %v", err)
 	}
-	enginetest.UsePlanUsage(usage.Limit{Kind: "session", Percent: 62, ResetsAt: time.Now().Add(time.Hour)},
+	enginetest.UsePlanUsage(usage.Limit{Kind: "session", Percent: 95, ResetsAt: time.Now().Add(time.Hour)},
 		usage.Limit{Kind: "weekly_all", Percent: 20, ResetsAt: time.Now().Add(72 * time.Hour)},
 		usage.Limit{Kind: "weekly_scoped", Model: "Fable", Percent: 99, ResetsAt: time.Now().Add(72 * time.Hour)})
 	_ = os.Remove(a.Layout.PlanUsage()) // the reading from the first run said nothing; read again
-	if out, _ := cli(t, cfg, "usage"); !strings.Contains(out, "62%") || !strings.Contains(out, "Scheduled runs don't start") {
+	if out, _ := cli(t, cfg, "usage"); !strings.Contains(out, "95%") || !strings.Contains(out, "Scheduled runs don't start") {
 		t.Fatalf("usage:\n%s", out)
 	}
 	_, err := a.Execute(context.Background(), set, r, scheduled)
-	if err == nil || !strings.Contains(err.Error(), "skipped: the Claude plan's 5-hour usage is at 62%") {
+	if err == nil || !strings.Contains(err.Error(), "skipped: the Claude plan's 5-hour usage is at 95%") {
 		t.Fatalf("scheduled run past the limit: %v", err)
 	}
 	if _, err := a.Execute(context.Background(), set, r, engine.RunOptions{}); err != nil {

@@ -69,7 +69,7 @@ var Registry = []Setting{
 		Description: "What runs routines: api = Genkit with an Anthropic API key (pay per token); claude-code = headless Claude Code on your Claude subscription.",
 	},
 	{
-		Key: "llm.usage-limit", Type: TypePercent, Default: 50.0, Min: ptr(0), Max: ptr(100), Unit: "%", Backend: "claude-code",
+		Key: "llm.usage-limit", Type: TypePercent, Default: 90.0, Min: ptr(0), Max: ptr(100), Unit: "%", Backend: "claude-code",
 		Description: "Scheduled runs don't start while the Claude plan's 5-hour or weekly usage is above this share " +
 			"(they're recorded as skipped); runs started by hand still run. A run that hits the plan's limit stops " +
 			"scheduled runs until it resets.",
