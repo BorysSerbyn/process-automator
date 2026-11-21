@@ -41,7 +41,7 @@ Plain Dotprompt keys:
 | Key | |
 |---|---|
 | `description` | What it does |
-| `model` | e.g. `anthropic/claude-sonnet-5-5`, or `openai/gpt-5.5` on `codex`; left out, the backend's default. The `claude-code` backend runs only Claude models (`anthropic/…`), the `codex` backend only OpenAI ones (`openai/…`) |
+| `model` | e.g. `anthropic/claude-sonnet-5-5`, `openai/gpt-5.5` on `codex`, or `openai-compat/qwen3:8b` on `api` for an [[Guides/Plugins and sign-ins#OpenAI-compatible servers (experimental, untested)\|OpenAI-compatible server]] (experimental, untested); left out, the backend's default (the `api` backend has none: name one). The `claude-code` backend runs only Claude models (`anthropic/…`), the `codex` backend only OpenAI ones (`openai/…`), the `api` backend `anthropic/…` and `openai-compat/…` ones |
 | `config` | Model settings, e.g. `max_tokens: 4000` (the `api` backend only) |
 | `tools` | The tool allowlist |
 | `output` | The shape of its result (see [[#Structured output]]) |

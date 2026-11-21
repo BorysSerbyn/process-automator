@@ -261,8 +261,9 @@ func newRoutinesCheckCmd() *cobra.Command {
 		Short: "Check routines would run: file, settings, servers connect, allowlisted tools exist",
 		Long: "Without calling the model or any tool: parses each routine file, resolves its settings (required " +
 			"parameters set, folder exists), checks every server it uses is provided, connects to its servers and " +
-			"confirms each allowlisted tool is offered by exactly one of them, as a run would, and checks the servers " +
-			"its plugins reach are signed in. Fails if any routine has a problem.",
+			"confirms each allowlisted tool is offered by exactly one of them, as a run would, checks the servers " +
+			"its plugins reach are signed in, and checks its model's provider is set up (on the api backend, an " +
+			"OpenAI-compatible server is asked for its models). Fails if any routine has a problem.",
 		Annotations: readOnly(),
 		Args:        cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -280,6 +281,7 @@ func newRoutinesCheckCmd() *cobra.Command {
 				row := RoutineCheck{Routine: r.Name}
 				rd := a.Assess(r)
 				rd.CheckTools(cmd.Context(), a, r, signIns)
+				rd.CheckModel(cmd.Context(), a, r)
 				switch {
 				case rd.ConfigErr != nil:
 					row.Problem = rd.ConfigErr.Error()

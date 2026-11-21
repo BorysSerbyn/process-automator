@@ -36,7 +36,8 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Explain a red indicator: check the scheduler, enabled routines, their plugins and last runs",
 		Long: "Checks what can make the status red, without calling the model or any tool: the scheduler is " +
 			"running; each enabled routine loads, its settings resolve, its folder exists, it's trusted, its " +
-			"servers connect (signed in) and offer its tools; and its last run didn't fail. Each problem comes " +
+			"servers connect (signed in) and offer its tools, its model's provider is set up (an OpenAI-compatible " +
+			"server answers and has the model); and its last run didn't fail. Each problem comes " +
 			"with what fixes it. Fails if there are any.",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
@@ -129,6 +130,7 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 			add("routine", r.Name, rd.Untrusted, product.Command+" routines trust "+r.Name)
 		}
 		rd.CheckTools(cmd.Context(), a, r, signIns)
+		rd.CheckModel(cmd.Context(), a, r)
 		for _, p := range rd.Problems {
 			add("routine", r.Name, p.Text, p.Fix)
 		}

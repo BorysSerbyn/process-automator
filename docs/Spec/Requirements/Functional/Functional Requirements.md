@@ -37,8 +37,8 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
 
 ## Model backend
-- **Three backends**: Claude Code on my Claude plan (`claude-code`), OpenAI's Codex CLI on my Codex sign-in (`codex`, experimental and untested, and said so where it's chosen), or an Anthropic API key (`api`), chosen by a setting
-- **Usage limit, by backend**: on my Claude plan, scheduled runs don't start while the plan's 5-hour or weekly usage is above a share I set; with an API key, they don't start once API spend in a short rolling window or the last 7 days passes the budgets I set; on Codex there's none (a run that hits Codex's own limit fails, saying so). A run that doesn't start is recorded as skipped with the reason (red indicator, failure notification); runs I start by hand still run, with a warning. `usage` shows where I stand
+- **Three backends**: Claude Code on my Claude plan (`claude-code`), OpenAI's Codex CLI on my Codex sign-in (`codex`, experimental and untested, and said so where it's chosen), or an Anthropic API key (`api`), chosen by a setting. `api` also runs models on one OpenAI-compatible server I set (Ollama on my machine by default, or another local or hosted one, with an API key if it needs one), experimental and untested, and said so where it's offered; routines that only use it need no Anthropic key
+- **Usage limit, by backend**: on my Claude plan, scheduled runs don't start while the plan's 5-hour or weekly usage is above a share I set; with an API key, they don't start once API spend in a short rolling window or the last 7 days passes the budgets I set (runs on an OpenAI-compatible server have no price and don't count); on Codex there's none (a run that hits Codex's own limit fails, saying so). A run that doesn't start is recorded as skipped with the reason (red indicator, failure notification); runs I start by hand still run, with a warning. `usage` shows where I stand
 - **No cost for plan runs**: on Claude Code or Codex the app never works out a dollar cost
 
 ## Runs
@@ -47,7 +47,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Outcomes**: success, failed, needs a sign-in, missed, skipped (over the usage limit) and stopped
 - **Structured results**: a routine can declare the shape of its result, so history and the UI show clean results instead of prose
 - **Health check** (`doctor`): explains a red indicator, with a fix for each problem
-- **Routine check**: whether a routine would run (its file, settings, servers connecting and every allowed tool existing), without calling the model
+- **Routine check**: whether a routine would run (its file, settings, servers connecting, every allowed tool existing, and its model's provider set up and, for an OpenAI-compatible server, answering with the model), without calling the model
 
 ## Notifications
 - **From routines** (the notify plugin): a routine can send me a short desktop notification, a title and a message, shown by the plugin itself through the OS (macOS, as the app; Linux, through the desktop's notification service), not by the menu bar app. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade. Clicking one does nothing. It has no settings, app-wide or per routine

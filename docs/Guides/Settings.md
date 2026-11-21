@@ -14,7 +14,8 @@ procauto settings reset llm.backend         # back to the default
 ## App-wide
 | Setting | Default | |
 |---|---|---|
-| `llm.backend` | `api` | What runs routines: `claude-code` (your Claude plan), `codex` (your Codex sign-in; experimental, untested) or `api` (an Anthropic API key). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
+| `llm.backend` | `api` | What runs routines: `claude-code` (your Claude plan), `codex` (your Codex sign-in; experimental, untested) or `api` (an Anthropic API key, or models on an OpenAI-compatible server; experimental, untested). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
+| `llm.openai-compat.base-url` | `http://localhost:11434/v1` | With `api` (experimental, untested): the OpenAI-compatible server `openai-compat/…` models run on. See [[Guides/Plugins and sign-ins#OpenAI-compatible servers (experimental, untested)\|OpenAI-compatible servers]] |
 | `llm.usage-limit` | `90%` | With `claude-code`: see [[#Usage limit]] |
 | `llm.budget.window`, `llm.budget.window-usd`, `llm.budget.weekly-usd` | `5h`, `2`, `20` | With `api`: see [[#Usage limit]] |
 | `history.retention-days` | `90` | How long run history and logs are kept |
@@ -35,7 +36,7 @@ procauto settings set routines.digest.builtinTools Read,Grep    # lists are comm
 Keeps scheduled runs from using too much, depending on the backend:
 
 - **`claude-code`**: `llm.usage-limit` is a share of your Claude plan's 5-hour and weekly usage. While either is above it, scheduled runs don't start. A run that hits the plan's own limit stops scheduled runs until the limit resets. The app reads your plan's usage from Claude Code itself, with nothing to set up. If it ever can't, setup asks to read it from your Claude Code status line instead (`procauto usage statusline install`): your status line keeps showing what it shows now, and `procauto usage statusline uninstall` puts it back as it was
-- **`api`**: a dollar budget. Scheduled runs don't start once API spend in the rolling window (`llm.budget.window`, e.g. `5h`) passes `llm.budget.window-usd`, or spend over 7 days passes `llm.budget.weekly-usd`. `0` means no limit
+- **`api`**: a dollar budget. Scheduled runs don't start once API spend in the rolling window (`llm.budget.window`, e.g. `5h`) passes `llm.budget.window-usd`, or spend over 7 days passes `llm.budget.weekly-usd`. `0` means no limit. Runs on an OpenAI-compatible server have no price and don't count
 - **`codex`**: none. The app can't read Codex's usage, so neither setting applies; a run that hits Codex's own limit fails and says so
 
 A run that doesn't start is recorded as skipped, with the reason, and the dot turns red. Runs you start by hand still run, with a warning. `procauto usage` shows where you stand; so does the **LLM usage** card in the Settings window.

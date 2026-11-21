@@ -26,9 +26,10 @@ func newAuthCmd() *cobra.Command {
 func newAuthLoginCmd() *cobra.Command {
 	var browser bool
 	cmd := &cobra.Command{
-		Use: "login <server|anthropic|claude-code>",
+		Use: "login <server|anthropic|claude-code|openai-compat>",
 		Short: "Sign in to a server (browser for remote servers; paste credentials for local ones; " +
 			"`anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional; " +
+			"`openai-compat` stores the OpenAI-compatible server's API key, for one that needs it (experimental, untested); " +
 			"codex keeps its own sign-in: `codex login`)",
 		Long: "Signs in to a server. OAuth servers open the browser. Keys and tokens are pasted into the terminal " +
 			"(or read from stdin), or with --browser entered on a local page that stores them straight in the " +
@@ -88,6 +89,12 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 			return err
 		}
 		ui.Say("Saved the Claude Code token.")
+		return nil
+	case "openai-compat":
+		if err := ask(engine.OpenAICompatKey, "the OpenAI-compatible server's API key"); err != nil {
+			return err
+		}
+		ui.Say("Saved the OpenAI-compatible server's API key.")
 		return nil
 	case "codex":
 		return errors.New("the codex backend uses Codex's own sign-in: run `codex login` in a terminal")
@@ -231,7 +238,7 @@ func (t *terminalUI) Say(format string, args ...any) { fmt.Fprintf(t.out, format
 
 func newAuthLogoutCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "logout <server|anthropic|claude-code>",
+		Use:   "logout <server|anthropic|claude-code|openai-compat>",
 		Short: "Forget a server's stored credentials",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -251,6 +258,8 @@ func logout(a *engine.App, name string) error {
 		return a.Connector.Secrets.Delete(engine.AnthropicKey)
 	case "claude-code":
 		return a.Connector.Secrets.Delete(engine.ClaudeCodeTokenKey)
+	case "openai-compat":
+		return a.Connector.Secrets.Delete(engine.OpenAICompatKey)
 	}
 	if p, ok := a.FindPlugin(name); ok && p.Serve != nil {
 		for _, s := range p.Secrets {
@@ -380,13 +389,17 @@ func authStatuses(a *engine.App) ([]AuthStatus, error) {
 	if _, err := a.Connector.Secrets.Get(engine.ClaudeCodeTokenKey); err == nil {
 		rows = append(rows, AuthStatus{Server: "claude-code", Kind: "token", SignedIn: true})
 	}
+	// So is this key: local servers need none.
+	if _, err := a.Connector.Secrets.Get(engine.OpenAICompatKey); err == nil {
+		rows = append(rows, AuthStatus{Server: "openai-compat", Kind: "api-key", SignedIn: true})
+	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Server < rows[j].Server })
 	return rows, nil
 }
 
 // signInNames is everything `auth login` accepts.
 func signInNames(a *engine.App) []string {
-	names := []string{"anthropic", "claude-code"}
+	names := []string{"anthropic", "claude-code", "openai-compat"}
 	for name := range a.Config.MCPServers {
 		names = append(names, name)
 	}

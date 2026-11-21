@@ -26,8 +26,9 @@ type Readiness struct {
 	Untrusted string
 	TrustErr  error
 	// Problems keep it from running whether trusted or not: a missing
-	// folder, built-in tools its backend doesn't have, a server nothing provides and, once CheckTools has run, its
-	// tools or a sign-in.
+	// folder, built-in tools its backend doesn't have, a model whose
+	// provider isn't set up, a server nothing provides and, once CheckTools
+	// and CheckModel have run, its tools, a sign-in or its model's server.
 	Problems []Problem
 	// Tools are its allowlisted tools as a run gets them (CheckTools).
 	Tools []agent.CheckedTool
@@ -41,8 +42,8 @@ type Problem struct {
 
 // Assess checks what can be checked without connecting to anything:
 // its settings resolve, its folder exists, its built-in tools are the
-// backend's, every server it uses (directly or
-// through its plugins) is provided, and whether it's trusted.
+// backend's, its model's provider is set up, every server it uses (directly
+// or through its plugins) is provided, and whether it's trusted.
 func (a *App) Assess(r routines.Routine) Readiness {
 	var rd Readiness
 	if rd.Config, rd.ConfigErr = a.RoutineConfig(r); rd.ConfigErr != nil {
@@ -56,13 +57,20 @@ func (a *App) Assess(r routines.Routine) Readiness {
 			})
 		}
 	}
-	// Each agent CLI names its own built-in tools.
-	if def, err := a.BackendDef(); err == nil && def.CheckBuiltinTools != nil && len(rd.Config.BuiltinTools) > 0 {
-		if err := def.CheckBuiltinTools(rd.Config.BuiltinTools); err != nil {
-			rd.Problems = append(rd.Problems, Problem{
-				Text: fmt.Sprintf("on the %s backend, %v", def.Name, err),
-				Fix:  fmt.Sprintf("`"+product.Command+" settings set routines.%s.builtinTools <tools>`, or another llm.backend", r.Name),
-			})
+	if def, err := a.BackendDef(); err == nil {
+		// Each agent CLI names its own built-in tools.
+		if def.CheckBuiltinTools != nil && len(rd.Config.BuiltinTools) > 0 {
+			if err := def.CheckBuiltinTools(rd.Config.BuiltinTools); err != nil {
+				rd.Problems = append(rd.Problems, Problem{
+					Text: fmt.Sprintf("on the %s backend, %v", def.Name, err),
+					Fix:  fmt.Sprintf("`"+product.Command+" settings set routines.%s.builtinTools <tools>`, or another llm.backend", r.Name),
+				})
+			}
+		}
+		if def.ModelProblem != nil {
+			if p := def.ModelProblem(a, r.Model); p != nil {
+				rd.Problems = append(rd.Problems, *p)
+			}
 		}
 	}
 	for _, s := range a.Servers(r) {
@@ -98,5 +106,22 @@ func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine,
 		if in, signs := signedIn[s]; signs && !in && !slices.Contains(r.Servers, s) {
 			rd.Problems = append(rd.Problems, Problem{Text: s + " (which it uses through a plugin) isn't signed in", Fix: product.Command + " auth login " + s})
 		}
+	}
+}
+
+// CheckModel connects to the server that runs the routine's model, on a
+// backend that has one to reach (the api backend's OpenAI-compatible server),
+// and adds why the model can't run there. It's skipped when Assess found its
+// provider isn't set up.
+func (rd *Readiness) CheckModel(ctx context.Context, a *App, r routines.Routine) {
+	def, err := a.BackendDef()
+	if rd.ConfigErr != nil || err != nil || def.ReachModel == nil {
+		return
+	}
+	if def.ModelProblem != nil && def.ModelProblem(a, r.Model) != nil {
+		return
+	}
+	if p := def.ReachModel(ctx, a, r.Model); p != nil {
+		rd.Problems = append(rd.Problems, *p)
 	}
 }

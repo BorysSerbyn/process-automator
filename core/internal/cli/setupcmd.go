@@ -228,6 +228,12 @@ func backendStep(a *engine.App) (SetupStep, error) {
 	if b.SignIn != "" {
 		st.Commands = append(st.Commands, product.Command+" auth login "+b.SignIn+" --browser")
 	}
+	// The api backend's other provider, offered for the routines that name it.
+	compat, _ := settings.Lookup(engine.OpenAICompatURLSetting)
+	st.Commands = append(st.Commands,
+		fmt.Sprintf("%s settings set %s <url>   # api only, experimental and untested: for routines whose model is openai-compat/<model>, on an OpenAI-compatible server other than the default (%v, Ollama on this machine)",
+			product.Command, compat.Key, compat.Default),
+		product.Command+" auth login openai-compat --browser   # api only, experimental and untested: when that OpenAI-compatible server needs an API key (hosted ones do; Ollama doesn't)")
 	return st, nil
 }
 

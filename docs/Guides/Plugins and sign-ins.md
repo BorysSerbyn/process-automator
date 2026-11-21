@@ -19,9 +19,17 @@ Routines run on one of three backends, set with `procauto settings set llm.backe
 
 - **`claude-code`**: Claude Code on your Claude plan. Install [Claude Code](https://claude.com/claude-code) and sign in to it (run `claude` once). If scheduled runs say Claude Code isn't logged in, run `claude setup-token` and store its token with `procauto auth login claude-code`
 - **`codex`** (experimental, untested: it has run only against a stand-in for OpenAI's API, never OpenAI itself; prefer `claude-code` or `api`): OpenAI's [Codex CLI](https://developers.openai.com/codex/cli) on your Codex sign-in (a ChatGPT plan or an OpenAI API key). Install it and run `codex login` once; the app uses that sign-in and keeps none of its own. Runs don't load your Codex `config.toml`, and read the sign-in from `~/.codex/auth.json` (Codex's default), not from the system keyring
-- **`api`** (the default): an Anthropic API key, paid per token. Store it with `procauto auth login anthropic`
+- **`api`** (the default): an Anthropic API key, paid per token. Store it with `procauto auth login anthropic`. It also runs models on an OpenAI-compatible server (below)
 
 Claude Code and the API each have their own usage limit ([[Guides/Settings#Usage limit|Usage limit]]).
+
+### OpenAI-compatible servers (experimental, untested)
+On the `api` backend, a routine whose model is `openai-compat/<model>` runs on an OpenAI-compatible server instead of Anthropic's API: a local one (Ollama, llama.cpp's `llama-server`, vLLM, LM Studio) or a hosted one (DeepSeek, Qwen on DashScope, Kimi on Moonshot, ...). It has run only against a stand-in for the API, never a real server: prefer `claude-code`, or `api` with Anthropic models.
+- **The server**: `llm.openai-compat.base-url`, by default Ollama on this machine (`http://localhost:11434/v1`). There's one: every `openai-compat/…` model runs on it
+- **Its API key**, for a server that needs one (hosted ones do; Ollama doesn't): `procauto auth login openai-compat`
+- **The model** is the server's own name for it, after the prefix: `openai-compat/qwen3:8b` on Ollama (pull it first: `ollama pull qwen3:8b`), `openai-compat/deepseek-chat` on DeepSeek. Pick one that calls tools: routines need it to, and small models often don't, or call them wrong
+- **No Anthropic key needed** when every routine runs on the server. Its runs have no list price, so they don't count toward the API budgets
+- `procauto doctor` asks the server whether it answers and has each routine's model
 
 ## The plugin that ships with the app
 The app ships with no integrations; one plugin comes with it and needs no sign-in:
