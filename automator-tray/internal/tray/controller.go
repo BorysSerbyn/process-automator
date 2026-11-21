@@ -84,14 +84,29 @@ func (t *Tray) Run(ctx context.Context) {
 	}
 }
 
-// Show shows a run status (nil: the core's status couldn't be read) and
-// delivers new notifications (a run's end changes it).
+// Show shows a run status (nil: the core's status couldn't be read) and,
+// when it changed, delivers new notifications (a run's end changes it). A
+// heartbeat (the same status, valid for longer) asks for none: Run's tick
+// does every minute.
 func (t *Tray) Show(s *cli.RunStatus) {
 	t.mu.Lock()
+	changed := !sameStatus(t.status, s)
 	t.status = s
 	t.mu.Unlock()
 	t.render()
-	t.notifier.Deliver()
+	if changed {
+		t.notifier.Deliver()
+	}
+}
+
+// sameStatus is whether a and b say the same, whatever their validUntil.
+func sameStatus(a, b *cli.RunStatus) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	x, y := *a, *b
+	x.ValidUntil, y.ValidUntil = nil, nil
+	return reflect.DeepEqual(x, y)
 }
 
 // MenuOpened is the menu being opened.
@@ -100,9 +115,11 @@ func (t *Tray) MenuOpened() { t.updates.MenuOpened() }
 // render shows the icon and menu for the last status, changing only what
 // changed.
 func (t *Tray) render() {
-	update := t.updates.MenuItem()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	// Read under t.mu, so a render can't show an older update item after a
+	// newer one (Updates never calls in while holding its own lock).
+	update := t.updates.MenuItem()
 	now := t.now()
 	t.setPulsingLocked(Pulsing(t.status, now))
 	frame := FrameFor(t.status, now, t.pulse)

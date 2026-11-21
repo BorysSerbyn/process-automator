@@ -35,6 +35,22 @@ func TestPendingNotificationsAreDeliveredOnce(t *testing.T) {
 	}
 }
 
+// What was shown is forgotten once the core no longer lists it as pending:
+// a long-running tray doesn't keep every notification it ever showed.
+func TestShownNotificationsAreForgottenOnceDelivered(t *testing.T) {
+	f := newFakeCLI(t)
+	f.answer("notifications list --pending --json", pending)
+	tr, _, _, _ := newTray(t, f)
+	tr.notifier.deliver()
+	f.answer("notifications list --pending --json", "[]")
+	tr.notifier.deliver()
+	tr.notifier.mu.Lock()
+	defer tr.notifier.mu.Unlock()
+	if len(tr.notifier.posted) != 0 {
+		t.Fatalf("still remembered: %v", tr.notifier.posted)
+	}
+}
+
 // A note the desktop doesn't take stays pending, and is posted next time.
 func TestUnshownNotificationsStayPending(t *testing.T) {
 	f := newFakeCLI(t)

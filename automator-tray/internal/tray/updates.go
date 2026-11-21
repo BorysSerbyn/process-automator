@@ -9,9 +9,12 @@ import (
 
 // How often Updates asks: whether there's a release (as automator-ui, on
 // launch and daily), and what an update installing is doing.
+// ProgressFailures is how many asks for the progress may fail in a row
+// before it's no longer followed (the CLI can't say: a broken config).
 var (
-	CheckEvery    = 24 * time.Hour
-	ProgressEvery = 2 * time.Second
+	CheckEvery       = 24 * time.Hour
+	ProgressEvery    = 2 * time.Second
+	ProgressFailures = 30
 )
 
 // Updates are updates as the core reports them, as automator-ui's: `update
@@ -133,26 +136,31 @@ func (u *Updates) show(answer cli.UpdateOutput) {
 }
 
 // follow asks the core what the update is doing every ProgressEvery, until
-// it says it's over; then checks again (the menu: up to date, or the update
-// again).
+// it says it's over, or it can't say for ProgressFailures asks in a row;
+// then checks again (the menu: up to date, or the update again).
 func (u *Updates) follow() {
-	for {
-		if p, err := u.cli.UpdateProgress(); err == nil {
-			u.mu.Lock()
-			u.progress = &p
-			over := !u.installing()
-			if over {
-				u.following = false
-			}
-			u.mu.Unlock()
-			u.changed()
-			if over {
-				u.Check(true)
-				return
-			}
+	for failures := 0; failures < ProgressFailures; {
+		p, err := u.cli.UpdateProgress()
+		if err != nil {
+			failures++
+			time.Sleep(ProgressEvery)
+			continue
+		}
+		failures = 0
+		u.mu.Lock()
+		u.progress = &p
+		over := !u.installing()
+		u.mu.Unlock()
+		u.changed()
+		if over {
+			break
 		}
 		time.Sleep(ProgressEvery)
 	}
+	u.mu.Lock()
+	u.following = false
+	u.mu.Unlock()
+	u.Check(true)
 }
 
 // ShowProgress opens the update window: what the update is doing, or how it

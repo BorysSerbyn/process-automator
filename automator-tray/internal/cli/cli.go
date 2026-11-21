@@ -6,11 +6,19 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+// Timeout bounds every command Exec runs: one that hangs (a keyring prompt
+// no one answers, a network that never replies) mustn't hold up what waits
+// for it (notifications, update checks) for good.
+var Timeout = 2 * time.Minute
 
 // CLI runs the app's CLI at Path.
 type CLI struct {
@@ -28,10 +36,17 @@ func (f *Failure) Error() string { return f.Message }
 // core's error object (commands given --json print one), else what it wrote
 // to stderr.
 func (c CLI) Exec(args ...string) ([]byte, error) {
-	cmd := exec.Command(c.Path, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, c.Path, args...)
+	// What it started that keeps its output open isn't waited for long.
+	cmd.WaitDelay = 5 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, &Failure{Message: fmt.Sprintf("%s %s didn't answer in %s", c.Command, strings.Join(args, " "), Timeout)}
+		}
 		if _, ok := err.(*exec.ExitError); !ok {
 			return nil, &Failure{Message: "couldn't start " + c.Command}
 		}

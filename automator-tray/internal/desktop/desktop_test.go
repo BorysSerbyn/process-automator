@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"bytes"
+	"context"
 	"image/png"
 	"reflect"
 	"testing"
@@ -16,6 +17,8 @@ import (
 type fakeObject struct {
 	calls []fakeCall
 	caps  []string
+	// down: the service isn't there (yet)
+	down bool
 }
 
 type fakeCall struct {
@@ -23,8 +26,14 @@ type fakeCall struct {
 	args   []any
 }
 
-func (o *fakeObject) Call(method string, _ dbus.Flags, args ...any) *dbus.Call {
+func (o *fakeObject) CallWithContext(ctx context.Context, method string, _ dbus.Flags, args ...any) *dbus.Call {
 	o.calls = append(o.calls, fakeCall{method, args})
+	if _, ok := ctx.Deadline(); !ok {
+		return &dbus.Call{Err: dbus.ErrMsgInvalidArg} // every call is bounded
+	}
+	if o.down {
+		return &dbus.Call{Err: dbus.Error{Name: "org.freedesktop.DBus.Error.ServiceUnknown"}}
+	}
 	switch method {
 	case notificationsIface + ".Notify":
 		return &dbus.Call{Body: []any{uint32(len(o.calls))}}
@@ -63,6 +72,21 @@ func TestCanAskIsTheActionsCapability(t *testing.T) {
 		if first != want || second != want || len(o.calls) != 1 {
 			t.Errorf("%s: %v %v (asked %d times)", caps, first, second, len(o.calls))
 		}
+	}
+}
+
+// A server that didn't answer (not up yet) is asked again, not taken to have
+// no actions for the tray's whole life.
+func TestCanAskAsksAgainUntilTheServerAnswers(t *testing.T) {
+	o := &fakeObject{caps: []string{"actions"}, down: true}
+	n := &Notifications{obj: o}
+	if n.CanAsk() {
+		t.Fatal("no server, yet it can ask")
+	}
+	o.down = false
+	first, second := n.CanAsk(), n.CanAsk() // the second from what it remembers
+	if !first || !second || len(o.calls) != 2 {
+		t.Fatalf("asked %d times", len(o.calls))
 	}
 }
 

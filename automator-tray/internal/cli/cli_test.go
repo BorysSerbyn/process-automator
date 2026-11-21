@@ -40,6 +40,23 @@ esac`)
 	}
 }
 
+// A command that hangs is given up on, saying so, so whatever waits for it
+// (the next notifications, the next update check) isn't held up for good.
+func TestAHungCommandTimesOut(t *testing.T) {
+	orig := Timeout
+	Timeout = 200 * time.Millisecond
+	t.Cleanup(func() { Timeout = orig })
+	c := fake(t, "exec sleep 30\n")
+	start := time.Now()
+	_, err := c.PendingNotifications()
+	if err == nil || !strings.Contains(err.Error(), "didn't answer") {
+		t.Errorf("err = %v", err)
+	}
+	if took := time.Since(start); took > 10*time.Second {
+		t.Errorf("waited %s", took)
+	}
+}
+
 func TestCallsRunTheCommandsAutomatorUIRuns(t *testing.T) {
 	log := filepath.Join(t.TempDir(), "log")
 	c := fake(t, `echo "$*" >> '`+log+`'

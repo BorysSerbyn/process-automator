@@ -58,9 +58,6 @@ func run(dir string) error {
 	if err != nil {
 		return err
 	}
-	if err := session.Claim(desktop.BusName(info.BundleID)); err != nil {
-		return err
-	}
 	icon := url.URL{Scheme: "file", Path: filepath.Join(info.Icons, AppIcon)}
 	notifications := desktop.NewNotifications(session.Conn, info.Name, icon.String())
 
@@ -73,6 +70,11 @@ func run(dir string) error {
 	t := tray.New(info, v, notifications, tray.OpenWindow, systray.Quit)
 	v.choose = t.Choose
 	if err := session.Listen(desktop.Events{Invoked: t.Desk().Invoked, Closed: t.Desk().Closed, Lost: systray.Quit, Gone: systray.Quit}); err != nil {
+		return err
+	}
+	// Claimed once listening, so losing the name to a tray started right
+	// after this one isn't missed.
+	if err := session.Claim(desktop.BusName(info.BundleID)); err != nil {
 		return err
 	}
 	go func() {

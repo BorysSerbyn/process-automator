@@ -19,8 +19,8 @@ type Notifier struct {
 	alert func(title, text string)
 
 	mu sync.Mutex
-	// posted are the notifications already shown, until the core marks
-	// them delivered.
+	// posted are the notifications already shown, until the core no longer
+	// lists them as pending (they were marked delivered).
 	posted map[string]bool
 	// asking is whether the core is being asked for pending ones (one ask
 	// at a time).
@@ -51,6 +51,19 @@ func (n *Notifier) deliver() {
 	n.mu.Lock()
 	n.asking = false
 	var fresh []cli.Notification
+	if err == nil {
+		// Those no longer pending were marked delivered: forget them, so
+		// posted holds only what's still pending.
+		still := map[string]bool{}
+		for _, note := range pending {
+			still[note.ID] = true
+		}
+		for id := range n.posted {
+			if !still[id] {
+				delete(n.posted, id)
+			}
+		}
+	}
 	for _, note := range pending {
 		if err == nil && !n.posted[note.ID] {
 			n.posted[note.ID] = true // claimed: the next delivery won't post it again

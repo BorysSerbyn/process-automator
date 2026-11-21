@@ -59,6 +59,35 @@ func TestAStatusShowsAndDelivers(t *testing.T) {
 	}
 }
 
+// A heartbeat (the same status, valid for longer) doesn't ask for
+// notifications; a change does.
+func TestAHeartbeatDoesntAskForNotifications(t *testing.T) {
+	f := newFakeCLI(t)
+	f.answer("notifications list --pending --json", "[]")
+	tr, _, _, _ := newTray(t, f)
+	asks := func() int {
+		n := 0
+		for _, c := range f.ran() {
+			if c == "notifications list --pending --json" {
+				n++
+			}
+		}
+		return n
+	}
+	tr.Show(status(t, lineOK))
+	eventually(t, "the first ask", func() bool { return asks() == 1 })
+	beat := status(t, lineOK)
+	later := beat.ValidUntil.Add(time.Minute)
+	beat.ValidUntil = &later
+	tr.Show(beat)
+	time.Sleep(50 * time.Millisecond)
+	if asks() != 1 {
+		t.Fatalf("a heartbeat asked: %q", f.ran())
+	}
+	tr.Show(nil)
+	eventually(t, "an ask on a change", func() bool { return asks() == 2 })
+}
+
 // While busy the dot pulses: dimmed and bright in turn; it stops when the
 // core says it's done.
 func TestBusyPulses(t *testing.T) {
@@ -199,5 +228,27 @@ func TestCheckingForUpdatesSaysWhatItFound(t *testing.T) {
 	tr.updates.Check(false)
 	if id := n.find("You're up to date"); id == 0 || n.note(id).Body != "This is 2.1.0." {
 		t.Fatalf("%+v", n.notes)
+	}
+}
+
+// When the core can't say how the update is going (it keeps failing), the
+// tray stops asking after a while, and checks again.
+func TestFollowingAnUpdateStopsWhenTheCoreCantSay(t *testing.T) {
+	savedEvery, savedFailures := ProgressEvery, ProgressFailures
+	ProgressEvery, ProgressFailures = time.Millisecond, 3
+	t.Cleanup(func() { ProgressEvery, ProgressFailures = savedEvery, savedFailures })
+	f := newFakeCLI(t)
+	f.fail("update progress --json", "config doesn't load")
+	tr, _, _, _ := newTray(t, f)
+	tr.updates.following = true
+	tr.updates.follow() // returns
+	asked := 0
+	for _, c := range f.ran() {
+		if c == "update progress --json" {
+			asked++
+		}
+	}
+	if asked != 3 || tr.updates.following || !f.hasRun("update --check --json") {
+		t.Fatalf("asked %d times, following %v: %q", asked, tr.updates.following, f.ran())
 	}
 }

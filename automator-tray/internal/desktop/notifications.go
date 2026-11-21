@@ -4,7 +4,9 @@
 package desktop
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 
@@ -18,9 +20,20 @@ const (
 	notificationsIface = "org.freedesktop.Notifications"
 )
 
+// callTimeout bounds each call to the notifications service: one that's
+// hung, or that D-Bus is starting and that never comes up (the bus allows
+// that minutes), mustn't hold up the tray (Desk holds its lock across Notify).
+const callTimeout = 10 * time.Second
+
 // caller is the part of a D-Bus object Notifications calls (*dbus.Object).
 type caller interface {
-	Call(method string, flags dbus.Flags, args ...any) *dbus.Call
+	CallWithContext(ctx context.Context, method string, flags dbus.Flags, args ...any) *dbus.Call
+}
+
+func (n *Notifications) call(method string, args ...any) *dbus.Call {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return n.obj.CallWithContext(ctx, notificationsIface+"."+method, 0, args...)
 }
 
 // Notifications posts notes as the app: its name, and its icon (a PNG's path).
@@ -29,8 +42,9 @@ type Notifications struct {
 	appName string
 	appIcon string
 
-	once    sync.Once
-	actions bool
+	mu sync.Mutex
+	// actions is the server's answer about actions, once it gave one.
+	actions *bool
 }
 
 // NewNotifications posts on conn's notifications service.
@@ -50,21 +64,25 @@ func (n *Notifications) Notify(note tray.Note) (uint32, error) {
 	}
 	hints := map[string]dbus.Variant{"urgency": dbus.MakeVariant(byte(1))}
 	var id uint32
-	err := n.obj.Call(notificationsIface+".Notify", 0,
-		n.appName, uint32(0), n.appIcon, note.Summary, note.Body, actions, hints, timeout).Store(&id)
+	err := n.call("Notify", n.appName, uint32(0), n.appIcon, note.Summary, note.Body, actions, hints, timeout).Store(&id)
 	return id, err
 }
 
-// CanAsk is whether the server shows actions (the "actions" capability);
-// asked once.
+// CanAsk is whether the server shows actions (the "actions" capability):
+// asked until it answers (it may not be up yet), then remembered.
 func (n *Notifications) CanAsk() bool {
-	n.once.Do(func() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.actions == nil {
 		var caps []string
-		if n.obj.Call(notificationsIface+".GetCapabilities", 0).Store(&caps) == nil {
-			for _, c := range caps {
-				n.actions = n.actions || c == "actions"
-			}
+		if n.call("GetCapabilities").Store(&caps) != nil {
+			return false
 		}
-	})
-	return n.actions
+		actions := false
+		for _, c := range caps {
+			actions = actions || c == "actions"
+		}
+		n.actions = &actions
+	}
+	return *n.actions
 }
