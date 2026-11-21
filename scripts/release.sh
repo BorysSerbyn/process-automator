@@ -17,4 +17,4 @@ else
   new="v0.1.0"
 fi
 git tag -a "$new" -m "Release $new"
-echo "$new (push with: git push origin $new)"
+echo "$new (publish it with: make publish, which pushes the tag once it has built and tested the release)"
