@@ -1,0 +1,4 @@
+{"routine": "brief", "surface": {"servers": [], "tools": [], "builtinTools": ["Bash"]}, "changes": [], "trusted": false,
+ "hook": true, "trigger": {"watcher": "cal", "type": "meeting.started", "batch": true},
+ "watcher": {"name": "cal", "trusted": false, "untrusted": "not trusted yet"},
+ "warnings": ["it can write (Bash) and acts on outside event data: an event from cal could try to steer what it writes"]}

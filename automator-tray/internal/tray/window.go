@@ -23,6 +23,11 @@ const (
 	RoutinesWindow WindowKind = "routines"
 	// RoutineWindow is one routine's (Window.Routine).
 	RoutineWindow WindowKind = "routine"
+	// HooksWindow is every hook and watcher; HookWindow one hook's and
+	// WatcherWindow one watcher's (Window.Routine names it).
+	HooksWindow   WindowKind = "hooks"
+	HookWindow    WindowKind = "hook"
+	WatcherWindow WindowKind = "watcher"
 	// UpdateWindow follows the update installing.
 	UpdateWindow WindowKind = "update"
 	// ConfirmUpdateWindow asks before installing an update (only where
@@ -32,8 +37,14 @@ const (
 
 // Window is a window to open, and what it's about.
 type Window struct {
-	Kind    WindowKind
+	Kind WindowKind
+	// Routine names the routine, hook or watcher it's about.
 	Routine string
+}
+
+// Named is whether the window is about one routine, hook or watcher.
+func (w Window) Named() bool {
+	return w.Kind == RoutineWindow || w.Kind == HookWindow || w.Kind == WatcherWindow
 }
 
 // Command is the CLI command that does in a terminal what the window does.
@@ -45,6 +56,12 @@ func (w Window) Command() []string {
 		return []string{"settings", "list", "--scope", "app"}
 	case RoutineWindow:
 		return []string{"routines", "show", w.Routine}
+	case HooksWindow:
+		return []string{"hooks", "list"}
+	case HookWindow:
+		return []string{"hooks", "show", w.Routine}
+	case WatcherWindow:
+		return []string{"watchers", "show", w.Routine}
 	case UpdateWindow:
 		return []string{"update", "progress"}
 	case ConfirmUpdateWindow:
@@ -110,7 +127,7 @@ func openWindow(getenv func(string) string, cliPath string, w Window, terminal f
 }
 
 // WindowsCommand is the command line that opens w in the windows app
-// (`automator-windows <kind> [<routine>]`), or nil when it isn't installed
+// (`automator-windows <kind> [<name>]`), or nil when it isn't installed
 // beside the CLI, or there's no display to show it on.
 func WindowsCommand(getenv func(string) string, cliPath string, w Window) []string {
 	if getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "" {
@@ -122,7 +139,7 @@ func WindowsCommand(getenv func(string) string, cliPath string, w Window) []stri
 		log.Printf("the %s window: no windows app at %s; opening it in a terminal", w.Kind, exe)
 		return nil
 	}
-	if w.Kind == RoutineWindow {
+	if w.Named() {
 		return []string{exe, string(w.Kind), w.Routine}
 	}
 	return []string{exe, string(w.Kind)}

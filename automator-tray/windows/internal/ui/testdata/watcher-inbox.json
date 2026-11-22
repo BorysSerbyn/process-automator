@@ -1,0 +1,5 @@
+{"name": "inbox", "path": "/home/me/.config/acme/watchers/inbox/watcher.yaml", "description": "New mail", "mode": "stream",
+ "executable": "/home/me/.config/acme/watchers/inbox/watch", "checksum": "1234567890abcdef1234", "args": ["--all"],
+ "secrets": [{"name": "mail-token", "env": "MAIL_TOKEN", "stored": false}], "enabled": false, "trusted": false,
+ "untrusted": "not trusted yet", "hooks": ["triage"], "startedAt": "2026-11-21T07:00:00Z", "error": "exit 1: no token",
+ "errorAt": "2026-11-21T08:00:00Z", "source": "description: New mail\nexecutable: ./watch\nmode: stream\n"}

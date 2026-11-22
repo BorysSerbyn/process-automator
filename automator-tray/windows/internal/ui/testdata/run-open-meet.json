@@ -1,0 +1,5 @@
+{"id": "open-meet/2026-11-21T093000", "routine": "open-meet", "hook": true, "kind": "program", "trigger": "event",
+ "startedAt": "2026-11-21T09:30:00Z", "finishedAt": "2026-11-21T09:30:01Z", "outcome": "success", "reason": "Opened Meet",
+ "events": [{"id": "m1", "type": "meeting.started", "at": "2026-11-21T09:29:58Z", "watcher": "cal",
+   "data": {"title": "**Standup** <b>now</b>", "link": "https://meet.google.com/abc"}}],
+ "program": {"exitCode": 0, "output": "opening https://meet.google.com/abc\n", "dryRun": false}}

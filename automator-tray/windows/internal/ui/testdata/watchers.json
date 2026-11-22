@@ -1,0 +1,7 @@
+[{"name": "cal", "path": "/home/me/.config/acme/watchers/cal/watcher.yaml", "description": "My calendar", "mode": "poll",
+  "interval": "30s", "timeout": "30s", "executable": "/home/me/.config/acme/watchers/cal/watch", "checksum": "9ab8fabc8c72bfa0416414",
+  "args": [], "secrets": [], "enabled": true, "trusted": true, "hooks": ["brief", "open-meet"], "lastPollAt": "2026-11-21T11:59:00Z"},
+ {"name": "inbox", "path": "/home/me/.config/acme/watchers/inbox/watcher.yaml", "mode": "stream",
+  "executable": "/home/me/.config/acme/watchers/inbox/watch", "checksum": "1234", "args": ["--all"],
+  "secrets": [{"name": "mail-token", "env": "MAIL_TOKEN", "stored": false}], "enabled": false, "trusted": false,
+  "untrusted": "not trusted yet", "hooks": [], "error": "exit 1: no token", "errorAt": "2026-11-21T08:00:00Z"}]

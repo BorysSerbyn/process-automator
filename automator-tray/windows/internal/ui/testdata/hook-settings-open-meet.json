@@ -1,0 +1,3 @@
+[{"key": "hooks.open-meet.enabled", "type": "bool", "description": "Whether the hook runs when its events come.", "valueText": "true", "defaultText": "true", "isDefault": true},
+ {"key": "hooks.open-meet.staleness", "type": "duration", "description": "How old an event may be when the hook would run.", "valueText": "2m", "defaultText": "2m", "isDefault": true},
+ {"key": "hooks.open-meet.rate", "type": "int", "description": "At most this many runs in any hour.", "unit": "runs an hour", "valueText": "20", "defaultText": "20", "isDefault": true}]

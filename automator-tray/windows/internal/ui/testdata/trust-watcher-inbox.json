@@ -1,0 +1,3 @@
+{"watcher": "inbox", "mode": "stream", "program": {"executable": "/home/me/.config/acme/watchers/inbox/watch", "checksum": "1234567890abcdef1234",
+ "args": ["--all"], "writes": false, "secrets": [{"name": "mail-token", "env": "MAIL_TOKEN", "stored": false}]},
+ "changes": ["its executable changed"], "trusted": false}

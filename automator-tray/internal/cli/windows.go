@@ -174,6 +174,29 @@ type TrustOutput struct {
 	Program *ProgramInfo  `json:"program,omitempty"`
 	Changes []string      `json:"changes"`
 	Tools   []CheckedTool `json:"tools,omitempty"`
+	// ToolsError says why its tools couldn't be checked.
+	ToolsError string `json:"toolsError,omitempty"`
+	// Hook is true for a hook: Trigger is what it acts on (trusting it
+	// covers that too), Watcher whether its watcher is trusted, and
+	// Warnings what to weigh first.
+	Hook     bool          `json:"hook,omitempty"`
+	Trigger  *Trigger      `json:"trigger,omitempty"`
+	Watcher  *WatcherTrust `json:"watcher,omitempty"`
+	Warnings []string      `json:"warnings,omitempty"`
+}
+
+// Trigger is what a hook is trusted to act on.
+type Trigger struct {
+	Watcher string `json:"watcher"`
+	Type    string `json:"type,omitempty"`
+	Batch   bool   `json:"batch,omitempty"`
+}
+
+// WatcherTrust is whether a hook's watcher is trusted.
+type WatcherTrust struct {
+	Name      string `json:"name"`
+	Trusted   bool   `json:"trusted"`
+	Untrusted string `json:"untrusted,omitempty"`
 }
 
 // Surface is what a routine can reach.

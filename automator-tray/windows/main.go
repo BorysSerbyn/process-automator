@@ -1,6 +1,7 @@
 // automator-windows is the windows of an app built on process-automator on
 // Linux, automator-ui's windows' counterpart: the tray starts it for one
-// window (`automator-windows setup`, `automator-windows routine standup`),
+// window (`automator-windows setup`, `automator-windows routine standup`,
+// `automator-windows hook open-meet`),
 // and it exits when that window closes.
 // Like the tray, it acts only through the app's CLI, and its names come
 // from the package's install.env. It's a program of its own so that the
@@ -36,7 +37,7 @@ func main() {
 	log.SetPrefix("automator-windows: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env (default: found beside this program)")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name>|update|confirm-update")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name>|hooks|hook <name>|watcher <name>|update|confirm-update")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -67,29 +68,30 @@ func window(args []string) (tray.Window, error) {
 	}
 	w := tray.Window{Kind: tray.WindowKind(args[0])}
 	switch w.Kind {
-	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.UpdateWindow, tray.ConfirmUpdateWindow:
+	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.HooksWindow, tray.UpdateWindow, tray.ConfirmUpdateWindow:
 		if len(args) == 1 {
 			return w, nil
 		}
-	case tray.RoutineWindow:
+	case tray.RoutineWindow, tray.HookWindow, tray.WatcherWindow:
 		if len(args) == 2 && args[1] != "" {
 			w.Routine = args[1]
 			return w, nil
 		}
-		return w, errors.New("which routine?")
+		return w, fmt.Errorf("which %s?", w.Kind)
 	default:
 		return w, fmt.Errorf("no %q window", args[0])
 	}
 	return w, fmt.Errorf("the %s window takes no arguments", w.Kind)
 }
 
-// lockName is the window's lock: one window of each kind, one per routine.
+// lockName is the window's lock: one window of each kind, one per routine,
+// hook or watcher.
 func lockName(w tray.Window) string {
-	if w.Kind != tray.RoutineWindow {
+	if !w.Named() {
 		return "window-" + string(w.Kind)
 	}
 	sum := sha256.Sum256([]byte(w.Routine)) // a socket's path is short
-	return "window-routine-" + hex.EncodeToString(sum[:8])
+	return "window-" + string(w.Kind) + "-" + hex.EncodeToString(sum[:8])
 }
 
 // statusFollower is a window that shows run status as it changes.
@@ -155,6 +157,22 @@ func run(dir string, which tray.Window) error {
 		w = a.NewWindow(which.Routine)
 		size = fyne.NewSize(680, 760)
 		view = ui.NewRoutine(c, w, ui.Background, which.Routine, func() { w.Close() })
+	case tray.HooksWindow:
+		w = a.NewWindow("Hooks")
+		size = fyne.NewSize(620, 520)
+		view = ui.NewHooks(c, ui.Background,
+			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) },
+			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
+	case tray.HookWindow:
+		w = a.NewWindow(which.Routine)
+		size = fyne.NewSize(680, 760)
+		view = ui.NewHook(c, w, ui.Background, which.Routine, func() { w.Close() },
+			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
+	case tray.WatcherWindow:
+		w = a.NewWindow(which.Routine)
+		size = fyne.NewSize(640, 680)
+		view = ui.NewWatcher(c, w, ui.Background, which.Routine, func() { w.Close() },
+			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) })
 	case tray.UpdateWindow, tray.ConfirmUpdateWindow:
 		w = a.NewWindow("Updating")
 		if kind == tray.ConfirmUpdateWindow {
@@ -163,7 +181,8 @@ func run(dir string, which tray.Window) error {
 		size = fyne.NewSize(460, 240)
 		view = ui.NewUpdate(c, ui.Background, kind == tray.ConfirmUpdateWindow, func() { w.Close() })
 	}
-	// The Routines and a routine's windows show run status as it changes.
+	// The Routines and Hooks windows, and a routine's, hook's or watcher's,
+	// show run status as it changes.
 	if f, ok := view.(statusFollower); ok {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

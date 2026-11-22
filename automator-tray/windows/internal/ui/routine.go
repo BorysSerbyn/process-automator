@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -54,18 +53,8 @@ type Routine struct {
 	settings []cli.Setting
 	errors   map[string]string
 
-	runs         []cli.RunSummary
-	runsLoaded   bool
-	runsError    string
-	entries      map[string]cli.RunEntry
-	runErrors    map[string]string
-	openRuns     map[string]bool
-	openedLatest bool
-
-	memories       []cli.Memory
-	memoriesLoaded bool
-	memoryError    string
-	memoryDraft    string
+	history  *runHistory
+	memories *memoryList
 
 	review     *cli.TrustOutput
 	trustError string
@@ -87,8 +76,10 @@ type Routine struct {
 // it run status.
 func NewRoutine(c cli.CLI, win fyne.Window, async Async, name string, deleted func()) *Routine {
 	r := &Routine{cli: c, win: win, async: async, name: name, now: time.Now, deleted: deleted, tab: OverviewTab,
-		errors: map[string]string{}, entries: map[string]cli.RunEntry{}, runErrors: map[string]string{},
-		openRuns: map[string]bool{}}
+		errors: map[string]string{}}
+	r.history = newRunHistory(c, async, name, func() time.Time { return r.now() }, r.refresh,
+		func(msg string) { r.actionError = msg; r.refresh() })
+	r.memories = newMemoryList(c, async, name, r.refresh)
 	r.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -121,7 +112,7 @@ func (r *Routine) running() bool {
 func (r *Routine) Load() {
 	r.loadDetail()
 	r.loadSettings()
-	r.loadRuns()
+	r.history.load()
 }
 
 // isProgram is whether it's a program, not an LLM routine.
@@ -149,7 +140,7 @@ func (r *Routine) Update(s *cli.RunStatus) {
 	r.refresh()
 	if !sameRun(before, after) {
 		r.loadDetail()
-		r.loadRuns()
+		r.history.load()
 	}
 }
 
@@ -174,8 +165,8 @@ func (r *Routine) loadDetail() {
 				r.loadError = err.Error()
 			} else {
 				r.detail, r.loadError = &d, ""
-				if !d.IsProgram() && !r.memoriesLoaded {
-					r.loadMemories()
+				if !d.IsProgram() && !r.memories.loaded {
+					r.memories.load()
 				}
 				if !d.Trusted {
 					r.accessOpen = true
@@ -203,91 +194,13 @@ func (r *Routine) loadSettings() {
 	})
 }
 
-func (r *Routine) loadRuns() {
-	r.async(func() func() {
-		list, err := r.cli.Runs(r.name, RunsShown)
-		return func() {
-			if err != nil {
-				r.runsError = err.Error()
-			} else {
-				r.runs, r.runsError = list, ""
-				// The latest run starts open: its output is what's usually wanted.
-				if !r.openedLatest && len(list) > 0 {
-					r.openedLatest = true
-					r.openRun(list[0].ID)
-				}
-			}
-			r.runsLoaded = true
-			r.refresh()
-		}
-	})
-}
-
-func (r *Routine) loadMemories() {
-	r.async(func() func() {
-		list, err := r.cli.Memories(r.name)
-		return func() {
-			if err != nil {
-				r.memoryError = err.Error()
-			} else {
-				r.memories = list
-			}
-			r.memoriesLoaded = true
-			r.refresh()
-		}
-	})
-}
-
 // The runs
-
-func (r *Routine) toggleRun(id string) {
-	if r.openRuns[id] {
-		delete(r.openRuns, id)
-		r.refresh()
-		return
-	}
-	r.openRun(id)
-	r.refresh()
-}
-
-// openRun opens a run, reading it in full the first time.
-func (r *Routine) openRun(id string) {
-	r.openRuns[id] = true
-	if _, ok := r.entries[id]; ok {
-		return
-	}
-	r.async(func() func() {
-		e, err := r.cli.Run(id)
-		return func() {
-			if err != nil {
-				r.runErrors[id] = err.Error()
-			} else {
-				r.entries[id] = e
-				delete(r.runErrors, id)
-			}
-			r.refresh()
-		}
-	})
-}
 
 // showRun shows one run: the Runs tab, with it open.
 func (r *Routine) showRun(id string) {
 	r.tab = RunsTab
-	r.openRun(id)
+	r.history.open(id)
 	r.refresh()
-}
-
-// openReport opens a readable report of a run (the core writes and opens it).
-func (r *Routine) openReport(id string) {
-	r.async(func() func() {
-		err := r.cli.OpenRun(id)
-		return func() {
-			if err != nil {
-				r.actionError = err.Error()
-				r.refresh()
-			}
-		}
-	})
 }
 
 // The controls
@@ -365,36 +278,6 @@ func (r *Routine) apply(key string, change func() error) {
 
 // Memories
 
-func (r *Routine) addMemory(text string) {
-	if strings.TrimSpace(text) == "" {
-		return
-	}
-	r.async(func() func() {
-		err := r.cli.AddMemory(r.name, text)
-		return func() {
-			if err != nil {
-				r.memoryError = err.Error()
-			} else {
-				r.memoryError, r.memoryDraft = "", ""
-			}
-			r.loadMemories()
-		}
-	})
-}
-
-func (r *Routine) removeMemory(id string) {
-	r.async(func() func() {
-		err := r.cli.RemoveMemory(id)
-		return func() {
-			r.memoryError = ""
-			if err != nil {
-				r.memoryError = err.Error()
-			}
-			r.loadMemories()
-		}
-	})
-}
-
 // Trust
 
 func (r *Routine) toggleAccess() {
@@ -455,18 +338,25 @@ func (r *Routine) signIn() {
 // signInRow is Sign In… under a program's secrets while one isn't stored
 // (or the wait for it, and why it failed); nil when none is missing.
 func (r *Routine) signInRow(p *cli.ProgramInfo) fyne.CanvasObject {
-	if !needsSignIn(p) && r.signInError == "" {
+	return signInRow(p, r.signingIn, r.signInError, r.signIn)
+}
+
+// signInRow is Sign In… under an executable's secrets (a program's, a
+// hook's, a watcher's) while one isn't stored, or the wait for it
+// (signingIn), and why it failed; nil when none is missing.
+func signInRow(p *cli.ProgramInfo, signingIn bool, problem string, start func()) fyne.CanvasObject {
+	if !needsSignIn(p) && problem == "" {
 		return nil
 	}
 	box := container.NewVBox()
 	switch {
-	case r.signingIn:
+	case signingIn:
 		box.Add(container.NewHBox(spinner(), quiet("Enter them on the page in your browser…")))
 	case needsSignIn(p):
-		box.Add(container.NewHBox(widget.NewButton("Sign In…", r.signIn), quiet("Opens your browser to enter them.")))
+		box.Add(container.NewHBox(widget.NewButton("Sign In…", start), quiet("Opens your browser to enter them.")))
 	}
-	if r.signInError != "" {
-		box.Add(errorRow(r.signInError))
+	if problem != "" {
+		box.Add(errorRow(problem))
 	}
 	return box
 }
@@ -524,13 +414,13 @@ func (r *Routine) render() fyne.CanvasObject {
 	box.Add(segmented(r.tabs(), r.tab, r.ShowTab))
 	switch r.tab {
 	case RunsTab:
-		box.Add(r.runsView())
+		box.Add(r.history.view())
 	case MemoriesTab:
 		if r.isProgram() {
 			box.Add(r.overview())
 			break
 		}
-		box.Add(r.memoriesView())
+		box.Add(r.memories.view())
 	case SettingsTab:
 		box.Add(r.settingsView())
 	default:
@@ -699,102 +589,6 @@ func (r *Routine) access() []fyne.CanvasObject {
 
 // Runs: newest first, each opening to what it did.
 
-func (r *Routine) runsView() fyne.CanvasObject {
-	count := fyne.CanvasObject(container.NewHBox())
-	if len(r.runs) > 0 {
-		count = quiet(plural(len(r.runs), "run", "runs"))
-	}
-	objects := []fyne.CanvasObject{cardTitle("Runs", count)}
-	switch {
-	case r.runsError != "":
-		objects = append(objects, padded(0, 10, rowInset, rowInset, errorRow(r.runsError)))
-	case !r.runsLoaded:
-		objects = append(objects, padded(8, 16, 0, 0, spinner()))
-	case len(r.runs) == 0:
-		objects = append(objects, divider(), padded(20, 20, 0, 0, container.NewCenter(quiet("It hasn't run yet."))))
-	}
-	for _, run := range r.runs {
-		objects = append(objects, divider(), r.runRow(run))
-		if r.openRuns[run.ID] {
-			objects = append(objects, padded(0, 14, 34, rowInset, r.runDetail(run.ID)))
-		}
-	}
-	return card(false, objects...)
-}
-
-// runRow is one run: when, how it ended, what started it, why; how many
-// tool calls it made and what it cost.
-func (r *Routine) runRow(run cli.RunSummary) fyne.CanvasObject {
-	line := container.NewHBox(widget.NewLabelWithStyle(when(run.StartedAt, r.now()), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		outcomeTag(run.Outcome))
-	if run.Trigger != "" {
-		line.Add(tag(run.Trigger, ""))
-	}
-	left := container.NewVBox(line)
-	if run.Reason != "" {
-		reason := quiet(run.Reason)
-		if !r.openRuns[run.ID] {
-			reason.Truncation = fyne.TextTruncateEllipsis
-		} else {
-			reason.Wrapping = fyne.TextWrapWord
-		}
-		left.Add(reason)
-	}
-	numbers := container.NewVBox()
-	if run.ToolCalls != nil {
-		numbers.Add(quiet(plural(*run.ToolCalls, "tool call", "tool calls")))
-	}
-	if run.CostUSD != nil {
-		numbers.Add(quiet(cost(*run.CostUSD)))
-	}
-	id := run.ID
-	return newDisclosure(r.openRuns[id], false, func() { r.toggleRun(id) }, container.NewBorder(nil, nil, nil, numbers, left))
-}
-
-// runDetail is what a run did: its report (done, nothing to do), its final
-// text, every tool call (writes tinted) and its tokens; a program's summary,
-// exit code and output; Open Report.
-func (r *Routine) runDetail(id string) fyne.CanvasObject {
-	if msg, ok := r.runErrors[id]; ok {
-		return errorRow(msg)
-	}
-	e, ok := r.entries[id]
-	if !ok {
-		return spinner()
-	}
-	box := container.NewVBox()
-	report := widget.NewButton("Open Report", func() { r.openReport(id) })
-	if res := e.Result; res != nil {
-		tags := container.NewHBox()
-		if res.Outcome != "" {
-			tags.Add(tag(res.Outcome, ""))
-		}
-		if res.DryRun {
-			tags.Add(tag("dry run", theme.ColorNamePrimary))
-		}
-		if len(tags.Objects) > 0 {
-			box.Add(tags)
-		}
-		if res.Text != "" {
-			out := text(res.Text)
-			out.Selectable = true
-			box.Add(card(true, padded(4, 4, 6, 6, out)))
-		}
-		box.Add(toolCalls(res))
-		tokens := fmt.Sprintf("%d in · %d out · %d cached · %s", res.InputTokens, res.OutputTokens, res.CachedTokens, res.Backend)
-		box.Add(container.NewBorder(nil, nil, quiet(tokens), report))
-	} else {
-		if t := firstNonEmpty(e.Reason, e.Error); t != "" {
-			box.Add(text(t))
-		}
-		if p := e.Program; p != nil {
-			box.Add(programRun(*p, e.FinishedAt, r.now()))
-		}
-		box.Add(right(report))
-	}
-	return box
-}
-
 func firstNonEmpty(s ...string) string {
 	for _, v := range s {
 		if v != "" {
@@ -872,37 +666,6 @@ func arguments(args map[string]any) []string {
 }
 
 // Memories: what its runs are given to remember; added and removed here.
-
-func (r *Routine) memoriesView() fyne.CanvasObject {
-	count := fyne.CanvasObject(container.NewHBox())
-	if len(r.memories) > 0 {
-		count = quiet(plural(len(r.memories), "memory", "memories"))
-	}
-	objects := []fyne.CanvasObject{cardTitle("Memories", count),
-		padded(0, 6, rowInset-8, rowInset, secondary("What "+r.name+"'s runs are given to remember, besides the ones every routine gets."))}
-	if r.memoriesLoaded && len(r.memories) == 0 {
-		objects = append(objects, divider(), padded(16, 16, 0, 0, container.NewCenter(quiet("No memories yet."))))
-	}
-	for _, m := range r.memories {
-		id := m.ID
-		remove := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() { r.removeMemory(id) })
-		remove.Importance = widget.LowImportance
-		t := text(m.Text)
-		t.Selectable = true
-		objects = append(objects, divider(), padded(2, 2, rowInset-8, rowInset-8, container.NewBorder(nil, nil, nil, container.NewCenter(remove), t)))
-	}
-	field := widget.NewEntry()
-	field.SetPlaceHolder("Something " + r.name + " should remember")
-	field.SetText(r.memoryDraft)
-	field.OnChanged = func(s string) { r.memoryDraft = s }
-	field.OnSubmitted = r.addMemory
-	add := widget.NewButton("Add", func() { r.addMemory(field.Text) })
-	objects = append(objects, divider(), padded(8, 8, rowInset-8, rowInset-8, container.NewBorder(nil, nil, nil, add, field)))
-	if r.memoryError != "" {
-		objects = append(objects, padded(0, 10, rowInset, rowInset, errorRow(r.memoryError)))
-	}
-	return card(false, objects...)
-}
 
 // Settings: its own settings, as the Settings window's rows, and its file
 // (a program's: its description file, read-only).

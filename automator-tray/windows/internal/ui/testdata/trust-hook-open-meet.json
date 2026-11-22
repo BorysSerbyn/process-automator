@@ -1,0 +1,5 @@
+{"routine": "open-meet", "kind": "program", "surface": {"servers": [], "tools": []},
+ "program": {"executable": "/home/me/.config/acme/hooks/open-meet/act", "checksum": "666611730ed583c4fae0", "args": [], "writes": true,
+  "secrets": [{"name": "meet-token", "env": "MEET_TOKEN", "stored": false}]},
+ "changes": [], "trusted": true, "hook": true, "trigger": {"watcher": "cal", "type": "meeting.started"},
+ "watcher": {"name": "cal", "trusted": true}}

@@ -1,0 +1,9 @@
+{"name": "open-meet", "kind": "program", "path": "/home/me/.config/acme/hooks/open-meet/hook.yaml", "description": "Opens Meet",
+ "on": {"watcher": "cal", "type": "meeting.started"}, "enabled": true, "staleness": "2m", "timeout": "20m", "rate": 20,
+ "folder": "/home/me/.config/acme/hook-data/open-meet", "trusted": true,
+ "program": {"executable": "/home/me/.config/acme/hooks/open-meet/act", "checksum": "666611730ed583c4fae0", "args": [], "writes": true,
+  "secrets": [{"name": "meet-token", "env": "MEET_TOKEN", "stored": false}]},
+ "source": "description: Opens Meet\nexecutable: ./act\nwrites: true\non: {watcher: cal, type: meeting.started}\n",
+ "watcher": {"name": "cal", "path": "/home/me/.config/acme/watchers/cal/watcher.yaml", "mode": "poll", "interval": "30s", "timeout": "30s",
+  "executable": "/home/me/.config/acme/watchers/cal/watch", "checksum": "9ab8", "args": [], "secrets": [], "enabled": false,
+  "trusted": true, "hooks": ["brief", "open-meet"], "error": "exit 1: calendar unreachable", "errorAt": "2026-11-21T11:00:00Z"}}

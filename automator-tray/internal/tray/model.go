@@ -127,17 +127,19 @@ const MenuText = 80
 
 // Menu is the tray's menu for a status, as automator-ui's: the version, the
 // status in the core's words, Finish Setup… while setup isn't done,
-// Routines › (each routine with its health and summary), the update item,
-// Settings, Quit.
+// Routines › (each routine with its health and summary), Hooks › (each
+// hook, while there are any), the update item, Settings, Quit.
 func Menu(name, version string, s *cli.RunStatus, now time.Time, update MenuItem) []MenuItem {
 	items := []MenuItem{{Text: name + " " + version}}
 	items = append(items, statusItems(s, now)...)
 	if Responding(s, now) && len(s.SetupLeft) > 0 {
 		items = append(items, MenuItem{Text: "Finish Setup…", Action: Action{Kind: ShowWindow, Window: Window{Kind: SetupWindow}}})
 	}
+	items = append(items, separator(), routinesItem(s))
+	if s != nil && len(s.Hooks) > 0 {
+		items = append(items, hooksItem(s))
+	}
 	return append(items,
-		separator(),
-		routinesItem(s),
 		update,
 		MenuItem{Text: "Settings", Action: Action{Kind: ShowWindow, Window: Window{Kind: SettingsWindow}}},
 		separator(),
@@ -146,7 +148,8 @@ func Menu(name, version string, s *cli.RunStatus, now time.Time, update MenuItem
 }
 
 // statusItems are what the status is, in the core's words: why it's red
-// (each reason opens the run it's about), or its summary.
+// (each reason opens the run it's about; one about a hook with no run, the
+// hook's window), or its summary.
 func statusItems(s *cli.RunStatus, now time.Time) []MenuItem {
 	if !Responding(s, now) {
 		return []MenuItem{{Text: "Not responding"}}
@@ -157,8 +160,11 @@ func statusItems(s *cli.RunStatus, now time.Time) []MenuItem {
 	var items []MenuItem
 	for _, r := range s.Reasons {
 		item := MenuItem{Text: shorten(r.Text)}
-		if r.Run != "" {
+		switch {
+		case r.Run != "":
 			item.Action = Action{Kind: OpenRun, Run: r.Run}
+		case r.Hook && r.Routine != "":
+			item.Action = Action{Kind: ShowWindow, Window: Window{Kind: HookWindow, Routine: r.Routine}}
 		}
 		items = append(items, item)
 	}
@@ -191,6 +197,27 @@ func routinesItem(s *cli.RunStatus) MenuItem {
 		}
 	}
 	return MenuItem{Text: "Routines", Submenu: sub}
+}
+
+// hooksItem is Hooks ›: All Hooks…, then every hook with its health and
+// summary as the core gives them; choosing one opens its window. Hooks
+// aren't routines: they never show under Routines ›.
+func hooksItem(s *cli.RunStatus) MenuItem {
+	sub := []MenuItem{
+		{Text: "All Hooks…", Action: Action{Kind: ShowWindow, Window: Window{Kind: HooksWindow}}},
+		separator(),
+	}
+	for _, h := range s.Hooks {
+		text := h.Name
+		if h.Summary != "" {
+			text += " — " + h.Summary
+		}
+		sub = append(sub, MenuItem{
+			Text: shorten(text), Health: healthOrNone(h.Health),
+			Action: Action{Kind: ShowWindow, Window: Window{Kind: HookWindow, Routine: h.Name}},
+		})
+	}
+	return MenuItem{Text: "Hooks", Submenu: sub}
 }
 
 // healthOrNone is a routine's dot: ok green, error red, anything else grey.

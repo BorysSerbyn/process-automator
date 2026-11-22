@@ -16,6 +16,9 @@ type RunStatus struct {
 	Reasons   []Reason        `json:"reasons,omitempty"`
 	SetupLeft []string        `json:"setupLeft,omitempty"`
 	Routines  []RoutineStatus `json:"routines"`
+	// Hooks are the hooks, as routines are (absent when there are none): a
+	// hook is never among Routines.
+	Hooks []RoutineStatus `json:"hooks,omitempty"`
 }
 
 // Reason is one thing making health error, in the core's words.
@@ -24,6 +27,9 @@ type Reason struct {
 	Detail string `json:"detail,omitempty"`
 	// Run is the run it's about, if any (as `runs show` takes it).
 	Run string `json:"run,omitempty"`
+	// Routine is the routine it's about; a hook's name when Hook is true.
+	Routine string `json:"routine,omitempty"`
+	Hook    bool   `json:"hook,omitempty"`
 }
 
 // RoutineStatus is one routine's entry in the status.
@@ -51,6 +57,19 @@ func (s *RunStatus) Routine(name string) *RoutineStatus {
 	return nil
 }
 
+// Hook is a hook's entry in the status (nil: none).
+func (s *RunStatus) Hook(name string) *RoutineStatus {
+	if s == nil {
+		return nil
+	}
+	for i := range s.Hooks {
+		if s.Hooks[i].Name == name {
+			return &s.Hooks[i]
+		}
+	}
+	return nil
+}
+
 // SupportedSchemaVersion is the run status version the tray reads.
 const SupportedSchemaVersion = 1
 
@@ -69,6 +88,8 @@ type ClickOutput struct {
 	Action  string `json:"action"`
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
+	// Hook is true when Routine names a hook.
+	Hook bool `json:"hook,omitempty"`
 }
 
 // UpdateOutput is `update --check --json` and `update --detach --json`.

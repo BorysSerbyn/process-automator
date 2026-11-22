@@ -1,0 +1,2 @@
+[{"id": "open-meet/2026-11-21T093000", "routine": "open-meet", "hook": true, "kind": "program", "trigger": "event",
+  "startedAt": "2026-11-21T09:30:00Z", "finishedAt": "2026-11-21T09:30:01Z", "outcome": "success", "reason": "Opened Meet"}]

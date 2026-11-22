@@ -93,7 +93,10 @@ type RunSummary struct {
 
 // RunEntry is one run in full (`runs show <id> --json`).
 type RunEntry struct {
-	ID         string     `json:"id"`
+	ID string `json:"id"`
+	// Hook is true for a hook's run; Events are what it ran for.
+	Hook       bool       `json:"hook,omitempty"`
+	Events     []Event    `json:"events,omitempty"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 	Outcome    string     `json:"outcome"`
 	Reason     string     `json:"reason,omitempty"`

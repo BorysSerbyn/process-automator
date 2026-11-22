@@ -1,0 +1,8 @@
+{"schemaVersion": 1, "updatedAt": "2026-11-21T11:59:30Z", "validUntil": "2099-01-01T00:00:00Z", "health": "error", "busy": false,
+ "routines": [{"name": "standup", "enabled": true, "health": "ok", "summary": "Next: Monday 09:20"}],
+ "hooks": [
+  {"name": "brief", "enabled": false, "health": "none", "summary": "Paused"},
+  {"name": "open-meet", "enabled": true, "health": "ok", "summary": "Waiting for events",
+   "lastRun": {"id": "open-meet/2026-11-21T093000", "trigger": "event", "startedAt": "2026-11-21T09:30:00Z", "outcome": "success", "reason": "Opened Meet"}}
+ ],
+ "reasons": [{"routine": "open-meet", "hook": true, "text": "open-meet can't run"}]}

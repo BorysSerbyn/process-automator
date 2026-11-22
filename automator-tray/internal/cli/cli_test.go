@@ -124,6 +124,75 @@ esac`)
 	}
 }
 
+// The hook and watcher windows' calls run the commands automator-ui's run;
+// firing a hook waits for its run, past Timeout.
+func TestHookCallsRunTheCommandsAutomatorUIRuns(t *testing.T) {
+	orig := Timeout
+	Timeout = 2 * time.Second
+	t.Cleanup(func() { Timeout = orig })
+	log := filepath.Join(t.TempDir(), "log")
+	c := fake(t, `echo "$*" >> '`+log+`'
+case "$1 $2" in
+  "hooks list"|"watchers list") echo '[]' ;;
+  "hooks fire") sleep 3; echo '{"kind":"program","program":{"exitCode":0,"output":"ok","dryRun":true}}' ;;
+  *) echo '{}' ;;
+esac`)
+	_, _ = c.Hooks()
+	_, _ = c.Hook("open-meet")
+	_, _ = c.HookTrustCheck("open-meet")
+	_ = c.TrustHook("open-meet", false)
+	_ = c.TrustHook("open-meet", true)
+	_ = c.SetHookPaused("open-meet", true)
+	_ = c.SetHookPaused("open-meet", false)
+	_ = c.DeleteHook("open-meet")
+	fired, err := c.FireHook("open-meet", `{"id":"1","type":"meeting.started"}`, true)
+	if err != nil || fired.Program == nil || !fired.Program.DryRun {
+		t.Fatalf("fire: %+v %v", fired, err)
+	}
+	_, _ = c.Watchers()
+	_, _ = c.Watcher("cal")
+	_, _ = c.WatcherTrustCheck("cal")
+	_ = c.TrustWatcher("cal")
+	_ = c.SetWatcherPaused("cal", true)
+	_ = c.SetWatcherPaused("cal", false)
+	_ = c.DeleteWatcher("cal")
+	b, _ := os.ReadFile(log)
+	want := strings.Join([]string{
+		"hooks list --json", "hooks show open-meet --json", "hooks trust open-meet --check --json",
+		"hooks trust open-meet --yes --json", "hooks trust open-meet --yes --resume --json",
+		"hooks pause open-meet --json", "hooks resume open-meet --json", "hooks delete open-meet --json",
+		`hooks fire open-meet --event-json {"id":"1","type":"meeting.started"} --dry-run --json`,
+		"watchers list --json", "watchers show cal --json", "watchers trust cal --check --json",
+		"watchers trust cal --yes --json", "watchers pause cal --json", "watchers resume cal --json",
+		"watchers delete cal --json",
+	}, "\n") + "\n"
+	if string(b) != want {
+		t.Fatalf("ran:\n%s\nwant:\n%s", b, want)
+	}
+}
+
+// Run status keeps hooks apart from routines; a reason or a click about a
+// hook says so; a hook's run has its events, whose data is plain text.
+func TestHooksInWhatTheCoreSays(t *testing.T) {
+	s := ParseStatus([]byte(`{"schemaVersion":1,"updatedAt":"2026-11-22T14:55:10Z","health":"error","busy":false,
+		"routines":[{"name":"standup","enabled":true}],
+		"hooks":[{"name":"open-meet","enabled":true,"health":"error","summary":"open-meet can't run"}],
+		"reasons":[{"routine":"open-meet","hook":true,"text":"open-meet can't run"}]}`))
+	if s == nil || s.Routine("open-meet") != nil || s.Hook("open-meet") == nil || s.Hook("standup") != nil ||
+		!s.Reasons[0].Hook || s.Reasons[0].Routine != "open-meet" {
+		t.Fatalf("%+v", s)
+	}
+	var e RunEntry
+	if err := json.Unmarshal([]byte(`{"id":"open-meet/x","hook":true,"outcome":"success","events":[
+		{"id":"m1","type":"meeting.started","at":"2026-11-22T09:30:00Z","watcher":"cal","data":{"title":"<b>Standup</b>"}},
+		{"id":"m2","type":"meeting.started","at":"2026-11-22T09:31:00Z"}]}`), &e); err != nil {
+		t.Fatal(err)
+	}
+	if !e.Hook || len(e.Events) != 2 || e.Events[0].DataText() != "{\n  \"title\": \"<b>Standup</b>\"\n}" || e.Events[1].DataText() != "" {
+		t.Fatalf("%+v %q", e, e.Events[0].DataText())
+	}
+}
+
 // Signing in waits for the browser as long as it takes: Timeout doesn't
 // stop it.
 func TestSigningInHasNoTimeLimit(t *testing.T) {
@@ -214,6 +283,13 @@ func TestTypesMatchTheContracts(t *testing.T) {
 		"runs.schema.json":               []RunSummary{},
 		"runs-show.schema.json":          RunEntry{},
 		"memory-list.schema.json":        []Memory{},
+		"hooks-list.schema.json":         []HookInfo{},
+		"hooks-show.schema.json":         HookDetail{},
+		"hooks-trust.schema.json":        TrustOutput{},
+		"hooks-fire.schema.json":         FireOutput{},
+		"watchers-list.schema.json":      []WatcherInfo{},
+		"watchers-show.schema.json":      WatcherDetail{},
+		"watchers-trust.schema.json":     WatcherTrustOutput{},
 	} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "cli", schema))
 		if err != nil {

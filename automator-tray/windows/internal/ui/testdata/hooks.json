@@ -1,0 +1,7 @@
+[{"name": "brief", "path": "/home/me/.config/acme/hooks/brief/hook.prompt", "description": "Briefs me",
+  "on": {"watcher": "cal", "type": "meeting.started"}, "batch": true, "enabled": false, "staleness": "10m", "timeout": "20m",
+  "rate": 60, "trusted": false, "untrusted": "not trusted yet", "builtinTools": ["Bash"]},
+ {"name": "open-meet", "kind": "program", "path": "/home/me/.config/acme/hooks/open-meet/hook.yaml", "description": "Opens Meet",
+  "on": {"watcher": "cal"}, "enabled": true, "staleness": "2m", "timeout": "20m", "rate": 20, "trusted": true,
+  "program": {"executable": "/home/me/.config/acme/hooks/open-meet/act", "checksum": "666611730ed583c4", "args": [], "writes": false, "secrets": []},
+  "lastRun": {"id": "open-meet/2026-11-21T093000", "trigger": "event", "startedAt": "2026-11-21T09:30:00Z", "outcome": "success"}}]

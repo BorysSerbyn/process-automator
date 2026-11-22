@@ -48,6 +48,12 @@ func mono(s string) *widget.Label {
 // it writes, its arguments, and its secrets (each with the variable it's
 // passed as and whether it's stored), with signIn under them when given.
 func programRows(p cli.ProgramInfo, signIn fyne.CanvasObject) []fyne.CanvasObject {
+	return executableRows(p, signIn, true)
+}
+
+// executableRows are programRows, saying whether it writes only when
+// writes is true (a watcher only reads: it doesn't).
+func executableRows(p cli.ProgramInfo, signIn fyne.CanvasObject, writes bool) []fyne.CanvasObject {
 	exeRows := []fyne.CanvasObject{mono(p.Executable)}
 	if p.Checksum != "" {
 		sum := p.Checksum
@@ -57,11 +63,14 @@ func programRows(p cli.ProgramInfo, signIn fyne.CanvasObject) []fyne.CanvasObjec
 		cp.Importance = widget.LowImportance
 		exeRows = append(exeRows, container.NewHBox(secondary("SHA-256 "+shortChecksum(sum)), cp))
 	}
-	writes := "No: a dry run runs it as it is"
-	if p.Writes {
-		writes = "Yes: a dry run passes it --dry-run"
+	objects := []fyne.CanvasObject{padded(6, 0, 0, 0, infoRow("Executable", exeRows...))}
+	if writes {
+		w := "No: a dry run runs it as it is"
+		if p.Writes {
+			w = "Yes: a dry run passes it --dry-run"
+		}
+		objects = append(objects, infoRow("Writes", text(w)))
 	}
-	objects := []fyne.CanvasObject{padded(6, 0, 0, 0, infoRow("Executable", exeRows...)), infoRow("Writes", text(writes))}
 	if len(p.Args) > 0 {
 		objects = append(objects, infoRow("Arguments", mono(strings.Join(p.Args, " "))))
 	}
@@ -133,17 +142,31 @@ func programRun(p cli.ProgramRun, finished *time.Time, now time.Time) fyne.Canva
 // says it does, where it is, its data folder, and its text (read-only: a
 // program is updated from a terminal, with command).
 func programFile(d cli.RoutineDetail, command string) fyne.CanvasObject {
-	objects := []fyne.CanvasObject{cardTitle("Program file"), divider()}
-	if d.Description != "" {
-		objects = append(objects, infoRow("Description", text(d.Description)))
+	return descriptionFile(sourceFile{title: "Program file", description: d.Description, path: d.Path, folder: d.Folder,
+		source: d.Source, update: command + " routines update"})
+}
+
+// sourceFile is a file the app keeps a copy of (a program's, a hook's, a
+// watcher's), and the command that updates it.
+type sourceFile struct {
+	title, description, path, folder, source, update string
+}
+
+// descriptionFile is a file as the app keeps it: what it says it does,
+// where it is, its data folder, and its text (read-only: it's updated from
+// a terminal).
+func descriptionFile(f sourceFile) fyne.CanvasObject {
+	objects := []fyne.CanvasObject{cardTitle(f.title), divider()}
+	if f.description != "" {
+		objects = append(objects, infoRow("Description", text(f.description)))
 	}
-	objects = append(objects, infoRow("File", mono(d.Path)))
-	if d.Folder != "" {
-		objects = append(objects, infoRow("Data folder", mono(d.Folder),
+	objects = append(objects, infoRow("File", mono(f.path)))
+	if f.folder != "" {
+		objects = append(objects, infoRow("Data folder", mono(f.folder),
 			secondary("Where it works: kept between runs, and when it's deleted.")))
 	}
 	objects = append(objects,
-		padded(4, 0, rowInset-8, rowInset-8, card(true, padded(4, 4, 6, 6, mono(d.Source)))),
-		padded(0, 8, rowInset-8, rowInset-8, rich("Read-only: the app's copy. Update it from a terminal (`"+command+" routines update`).")))
+		padded(4, 0, rowInset-8, rowInset-8, card(true, padded(4, 4, 6, 6, mono(f.source)))),
+		padded(0, 8, rowInset-8, rowInset-8, rich("Read-only: the app's copy. Update it from a terminal (`"+f.update+"`).")))
 	return card(false, objects...)
 }
