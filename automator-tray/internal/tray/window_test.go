@@ -97,8 +97,8 @@ func display(k string) string {
 	return ""
 }
 
-// Setup and settings open in the windows app beside the CLI, given a
-// display; other windows, no display or no windows app: the terminal.
+// Every window opens in the windows app beside the CLI, given a display;
+// no display or no windows app: the terminal.
 func TestWindowsOpenInTheWindowsAppWhereItHasThem(t *testing.T) {
 	cliPath := windowsApp(t, "exit 0\n")
 	app := filepath.Join(filepath.Dir(cliPath), WindowsApp)
@@ -117,9 +117,10 @@ func TestWindowsOpenInTheWindowsAppWhereItHasThem(t *testing.T) {
 	}{
 		{"setup", display, cliPath, Window{Kind: SetupWindow}, []string{app, "setup"}},
 		{"settings on Wayland", wayland, cliPath, Window{Kind: SettingsWindow}, []string{app, "settings"}},
-		{"routines", display, cliPath, Window{Kind: RoutinesWindow}, nil},
-		{"a routine", display, cliPath, Window{Kind: RoutineWindow, Routine: "standup"}, nil},
-		{"the update", display, cliPath, Window{Kind: UpdateWindow}, nil},
+		{"routines", display, cliPath, Window{Kind: RoutinesWindow}, []string{app, "routines"}},
+		{"a routine", display, cliPath, Window{Kind: RoutineWindow, Routine: "standup"}, []string{app, "routine", "standup"}},
+		{"the update", display, cliPath, Window{Kind: UpdateWindow}, []string{app, "update"}},
+		{"asking before an update", display, cliPath, Window{Kind: ConfirmUpdateWindow}, []string{app, "confirm-update"}},
 		{"no display", func(string) string { return "" }, cliPath, Window{Kind: SetupWindow}, nil},
 		{"no windows app", display, windowsApp(t, ""), Window{Kind: SetupWindow}, nil},
 	} {

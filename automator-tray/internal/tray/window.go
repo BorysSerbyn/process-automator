@@ -26,7 +26,7 @@ const (
 	// UpdateWindow follows the update installing.
 	UpdateWindow WindowKind = "update"
 	// ConfirmUpdateWindow asks before installing an update (only where
-	// notifications can't ask).
+	// notifications can't ask), then follows it.
 	ConfirmUpdateWindow WindowKind = "confirm-update"
 )
 
@@ -63,11 +63,10 @@ const WindowsApp = "automator-windows"
 var StartGrace = 3 * time.Second
 
 // OpenWindow is the window seam: every window the tray opens goes through
-// it. The setup and settings windows are the windows app's (WindowsApp),
-// one process per window that exits when it closes; the others, and every
-// window where the windows app isn't installed or there's no display, are
-// their CLI command run in my terminal (Window.Command), which stays open
-// until Enter.
+// it. Each is the windows app's (WindowsApp), one process per window that
+// exits when it closes; where the windows app isn't installed, there's no
+// display, or it fails as it starts, the window is its CLI command run in my
+// terminal (Window.Command), which stays open until Enter.
 func OpenWindow(cliPath string, w Window) error {
 	return openWindow(os.Getenv, cliPath, w, func() error { return openInTerminal(cliPath, w) })
 }
@@ -110,13 +109,10 @@ func openWindow(getenv func(string) string, cliPath string, w Window, terminal f
 	return nil
 }
 
-// WindowsCommand is the command line that opens w in the windows app, or
-// nil when it has no such window, it isn't installed beside the CLI, or
-// there's no display to show it on.
+// WindowsCommand is the command line that opens w in the windows app
+// (`automator-windows <kind> [<routine>]`), or nil when it isn't installed
+// beside the CLI, or there's no display to show it on.
 func WindowsCommand(getenv func(string) string, cliPath string, w Window) []string {
-	if w.Kind != SetupWindow && w.Kind != SettingsWindow {
-		return nil
-	}
 	if getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "" {
 		log.Printf("the %s window: no display (DISPLAY, WAYLAND_DISPLAY); opening it in a terminal", w.Kind)
 		return nil
@@ -125,6 +121,9 @@ func WindowsCommand(getenv func(string) string, cliPath string, w Window) []stri
 	if st, err := os.Stat(exe); err != nil || st.IsDir() || st.Mode()&0o111 == 0 {
 		log.Printf("the %s window: no windows app at %s; opening it in a terminal", w.Kind, exe)
 		return nil
+	}
+	if w.Kind == RoutineWindow {
+		return []string{exe, string(w.Kind), w.Routine}
 	}
 	return []string{exe, string(w.Kind)}
 }

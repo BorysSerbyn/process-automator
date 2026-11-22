@@ -29,8 +29,26 @@ type Reason struct {
 // RoutineStatus is one routine's entry in the status.
 type RoutineStatus struct {
 	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
 	Health  string `json:"health,omitempty"`
 	Summary string `json:"summary,omitempty"`
+	// Problem says why it can't be scheduled.
+	Problem   string     `json:"problem,omitempty"`
+	NextRunAt *time.Time `json:"nextRunAt,omitempty"`
+	LastRun   *LastRun   `json:"lastRun,omitempty"`
+}
+
+// Routine is a routine's entry in the status (nil: none).
+func (s *RunStatus) Routine(name string) *RoutineStatus {
+	if s == nil {
+		return nil
+	}
+	for i := range s.Routines {
+		if s.Routines[i].Name == name {
+			return &s.Routines[i]
+		}
+	}
+	return nil
 }
 
 // SupportedSchemaVersion is the run status version the tray reads.
@@ -66,10 +84,13 @@ type UpdateOutput struct {
 // UpdateProgress is `update progress --json`.
 type UpdateProgress struct {
 	// State is none, installing, done or failed.
-	State string `json:"state"`
-	Tag   string `json:"tag,omitempty"`
-	Step  string `json:"step,omitempty"`
-	Error string `json:"error,omitempty"`
+	State     string     `json:"state"`
+	Tag       string     `json:"tag,omitempty"`
+	Step      string     `json:"step,omitempty"`
+	Detail    string     `json:"detail,omitempty"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+	Error     string     `json:"error,omitempty"`
+	Log       string     `json:"log,omitempty"`
 }
 
 // errorOutput is what a command given --json prints when it fails.

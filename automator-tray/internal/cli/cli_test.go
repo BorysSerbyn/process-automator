@@ -209,6 +209,11 @@ func TestTypesMatchTheContracts(t *testing.T) {
 		"login-items-start.schema.json":  RunningOutput{},
 		"login-items-stop.schema.json":   RunningOutput{},
 		"paths.schema.json":              Paths{},
+		"routines-list.schema.json":      []RoutineInfo{},
+		"routines-show.schema.json":      RoutineInfo{},
+		"runs.schema.json":               []RunSummary{},
+		"runs-show.schema.json":          RunEntry{},
+		"memory-list.schema.json":        []Memory{},
 	} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "cli", schema))
 		if err != nil {
