@@ -3,8 +3,10 @@ package engine
 import (
 	"path/filepath"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 )
 
 // Layout is where the app keeps its files: all of them in the data folder,
@@ -32,6 +34,22 @@ func (l Layout) Programs() string { return programs.Dir(l.Data()) }
 
 // ProgramData is a program's own folder, where its runs work.
 func (l Layout) ProgramData(program string) string { return l.in("program-data", program) }
+
+// Hooks is the hooks folder: the app's copies of the hooks added.
+func (l Layout) Hooks() string { return hooks.Dir(l.Data()) }
+
+// HookData is a program hook's own folder, where its runs work.
+func (l Layout) HookData(hook string) string { return l.in("hook-data", hook) }
+
+// Watchers is the watchers folder: the app's copies of the watchers added.
+func (l Layout) Watchers() string { return watchers.Dir(l.Data()) }
+
+// WatcherData is a watcher's own folder, where it runs.
+func (l Layout) WatcherData(watcher string) string { return l.in("watcher-data", watcher) }
+
+// WatcherState is what the daemon keeps of each watcher: its cursor and the
+// events it has seen.
+func (l Layout) WatcherState() string { return l.in("watcher-state.json") }
 
 // RunStatus is the run-status file frontends watch.
 func (l Layout) RunStatus() string { return l.in("run-status.json") }

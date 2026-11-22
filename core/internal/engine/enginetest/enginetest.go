@@ -11,12 +11,14 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
@@ -225,4 +227,100 @@ func RunNamed(t *testing.T, a *engine.App, name string, o engine.RunOptions) cha
 		done <- err
 	}()
 	return done
+}
+
+// AddWatcher adds a watcher whose executable is a shell script with body
+// (desc is its watcher.yaml, naming ./watch), and trusts it unless the test
+// says not to.
+func AddWatcher(t *testing.T, a *engine.App, name, desc, body string, trusted bool) watchers.Watcher {
+	t.Helper()
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "watch"), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(src, watchers.DescriptionFile)
+	if err := os.WriteFile(path, []byte(desc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w, err := watchers.Add(a.Layout.Watchers(), name, path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trusted {
+		if err := a.TrustWatcher(w); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return w
+}
+
+// AddHook adds a hook from file (hook.prompt, a .prompt file, or
+// hook.yaml, whose executable ./act is a shell script with body), and
+// trusts it unless the test says not to. Trust is first used before, so the
+// LLM routines already there stay trusted.
+func AddHook(t *testing.T, a *engine.App, name, file, source, body string, trusted bool) hooks.Hook {
+	t.Helper()
+	src := t.TempDir()
+	if body != "" {
+		if err := os.WriteFile(filepath.Join(src, "act"), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(src, file)
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.InitTrust(); err != nil {
+		t.Fatal(err)
+	}
+	h, err := hooks.Add(a.Layout.Hooks(), name, path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trusted {
+		x, err := a.FindHook(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := a.Trust(x); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return h
+}
+
+// UpdateHook replaces a hook's file (and its executable ./act, with body)
+// as `hooks update` does.
+func UpdateHook(t *testing.T, a *engine.App, name, file, source, body string) {
+	t.Helper()
+	src := t.TempDir()
+	if body != "" {
+		if err := os.WriteFile(filepath.Join(src, "act"), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(src, file)
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hooks.Add(a.Layout.Hooks(), name, path, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// UpdateWatcher replaces a watcher's copy (its ./watch with body) as
+// `watchers update` does.
+func UpdateWatcher(t *testing.T, a *engine.App, name, desc, body string) {
+	t.Helper()
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "watch"), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(src, watchers.DescriptionFile)
+	if err := os.WriteFile(path, []byte(desc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := watchers.Add(a.Layout.Watchers(), name, path, true); err != nil {
+		t.Fatal(err)
+	}
 }

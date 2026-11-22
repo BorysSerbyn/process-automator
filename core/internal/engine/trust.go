@@ -39,10 +39,18 @@ func (a *App) Untrusted(x Runnable) (string, error) {
 	case err != nil || why == "":
 		return why, err
 	case changed:
-		return fmt.Sprintf("%s: review it with `"+product.Command+" routines trust %s`", why, x.Name()), nil
+		return fmt.Sprintf("%s: review it with `%s`", why, TrustCommand(x)), nil
 	default:
-		return fmt.Sprintf("%s: review what it can reach with `"+product.Command+" routines trust %s`", why, x.Name()), nil
+		return fmt.Sprintf("%s: review what it can reach with `%s`", why, TrustCommand(x)), nil
 	}
+}
+
+// TrustCommand is the command that reviews and trusts x.
+func TrustCommand(x Runnable) string {
+	if _, ok := x.(*hook); ok {
+		return product.Command + " hooks trust " + x.Name()
+	}
+	return product.Command + " routines trust " + x.Name()
 }
 
 // TrustProblem says in plain words why x may not run for real ("" when it
@@ -55,7 +63,7 @@ func (a *App) TrustProblem(x Runnable) (why string, changed bool, err error) {
 	if err != nil {
 		return "", false, err
 	}
-	if !initialized && slices.Contains(trustedAtFirstUse, x.Kind()) {
+	if _, isHook := x.(*hook); !initialized && !isHook && slices.Contains(trustedAtFirstUse, x.Kind()) {
 		return "", false, nil
 	}
 	rec, ok := f.Routines[x.Name()]

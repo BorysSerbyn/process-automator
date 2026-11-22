@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
+	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 	"github.com/BorysSerbyn/process-automator/core/internal/trust"
 )
 
@@ -19,12 +21,19 @@ import (
 // intercept: trust by checksum is its guard, and what runs is the app's own
 // copy of what was trusted.
 
-// program is a program as the engine runs it.
-type program struct{ p programs.Program }
+// program is a program as the engine runs it: a program, or a hook's action
+// (event: it's given the event it runs for on stdin).
+type program struct {
+	p     programs.Program
+	event bool
+}
 
 // AsProgram is x as a program; an error for an LLM routine, for what only
 // programs have.
 func AsProgram(x Runnable) (programs.Program, error) {
+	if _, ok := x.(*hook); ok {
+		return programs.Program{}, fmt.Errorf("%s is a hook, not a program", x.Name())
+	}
 	p, ok := x.(*program)
 	if !ok {
 		return programs.Program{}, fmt.Errorf("%s is an LLM routine, not a program", x.Name())
@@ -45,11 +54,14 @@ func (p *program) Settings() []settings.Setting { return p.p.Settings() }
 // doesn't write runs for real).
 func (p *program) runConfig(a *App) (RunConfig, error) {
 	c := RunConfig{WorkFolder: a.Layout.ProgramData(p.p.Name), DryRunsNeedTrust: true}
+	if p.p.Hook {
+		c.WorkFolder = a.Layout.HookData(p.p.Name)
+	}
 	vals, err := (settings.Store{Path: a.Layout.Config(), Extra: p.p.Settings()}).Values()
 	if err != nil {
 		return c, err
 	}
-	key := func(field string) string { return "routines." + p.p.Name + "." + field }
+	key := p.p.Key // a hook's are hooks.<name>.<field>
 	c.Enabled = vals.Bool(key("enabled"))
 	if c.Timeout, err = vals.Duration(key("timeout")); err != nil {
 		return c, err
@@ -68,13 +80,20 @@ func (p *program) runConfig(a *App) (RunConfig, error) {
 // namespaced by program.
 func ProgramSecretKey(program, name string) string { return "program/" + program + "/" + name }
 
+// HookSecretKey is the secret-store key of a program hook's secret.
+func HookSecretKey(hook, name string) string { return "hook/" + hook + "/" + name }
+
 // secret is one of its secrets as a sign-in asks for it.
 func (p *program) secret(s programs.Secret) Secret {
 	label := s.Prompt
 	if label == "" {
 		label = s.Name
 	}
-	return Secret{Key: ProgramSecretKey(p.p.Name, s.Name), Label: label}
+	key := ProgramSecretKey(p.p.Name, s.Name)
+	if p.p.Hook {
+		key = HookSecretKey(p.p.Name, s.Name)
+	}
+	return Secret{Key: key, Label: label}
 }
 
 // problems: none it can have that its file being loaded doesn't rule out (a
@@ -162,6 +181,15 @@ func (p *program) run(ctx context.Context, a *App, rc runContext) (*RunResult, e
 		Executable: p.p.Executable, Args: args, Dir: rc.cfg.WorkFolder,
 		Env: programs.Environment(home, vars), Log: rc.log,
 	}
+	if p.event {
+		// A hook's program gets its event as JSON on stdin.
+		in, err := eventFile(rc.occ)
+		if err != nil {
+			return res, err
+		}
+		defer func() { _ = os.Remove(in) }()
+		inv.Stdin = in
+	}
 	out, err := programs.Exec(ctx, inv)
 	if err != nil && ctx.Err() == nil && !p.p.Writes && slept(rc.started) {
 		// The computer slept mid-run; one that changes nothing can run again.
@@ -177,4 +205,27 @@ func (p *program) run(ctx context.Context, a *App, rc runContext) (*RunResult, e
 		}
 	}
 	return res, err
+}
+
+// eventFile writes the event a hook's program runs for (one: a program hook
+// doesn't batch) to a private temporary file, for its stdin.
+func eventFile(occ trigger.Occurrence) (string, error) {
+	evs := occurrenceEvents(occ)
+	if len(evs) == 0 {
+		return "", errors.New("no event to run for")
+	}
+	b, err := json.Marshal(evs[len(evs)-1].Map())
+	if err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp("", "hook-event-")
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.Write(append(b, '\n')); err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), f.Close()
 }

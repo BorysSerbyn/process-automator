@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
-	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
 // Readiness is whether a routine of either kind can run, as far as can be
@@ -29,7 +28,7 @@ type Readiness struct {
 	// Tools are an LLM routine's allowlisted tools as a run gets them (Check).
 	Tools []agent.CheckedTool
 
-	routine string
+	trustFix string
 }
 
 // All is everything that keeps it from running for real, with the
@@ -44,7 +43,7 @@ func (rd Readiness) All() []Problem {
 	case rd.TrustErr != nil:
 		all = append(all, Problem{Text: rd.TrustErr.Error()})
 	case rd.Untrusted != "":
-		all = append(all, Problem{Text: rd.Untrusted, Fix: product.Command + " routines trust " + rd.routine})
+		all = append(all, Problem{Text: rd.Untrusted, Fix: rd.trustFix})
 	}
 	return all
 }
@@ -59,7 +58,7 @@ type Problem struct {
 // settings resolve, what its kind checks (an LLM routine's folder, built-in
 // tools, model and servers), and whether it's trusted.
 func (a *App) Assess(x Runnable) Readiness {
-	rd := Readiness{routine: x.Name()}
+	rd := Readiness{trustFix: TrustCommand(x)}
 	if rd.Config, rd.ConfigErr = x.runConfig(a); rd.ConfigErr != nil {
 		return rd
 	}

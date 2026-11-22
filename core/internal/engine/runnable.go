@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,12 +12,15 @@ import (
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 	"github.com/BorysSerbyn/process-automator/core/internal/trust"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 )
 
 // Kind is what a routine runs: a model (an LLM routine, what "routine" means
@@ -172,6 +176,10 @@ func (a *App) All(kinds ...Kind) ([]Runnable, []Broken, error) {
 			broken = append(broken, Broken{Kind: x.Kind(), Name: x.Name(), Path: x.Path(), Err: bothKinds(x.Name())})
 			continue
 		}
+		if why := a.takenElsewhere(x.Name(), "routine"); why != "" { // files made by hand
+			broken = append(broken, Broken{Kind: x.Kind(), Name: x.Name(), Path: x.Path(), Err: errors.New(why + ": delete one (neither runs until then)")})
+			continue
+		}
 		kept = append(kept, x)
 	}
 	for i, b := range broken {
@@ -230,15 +238,30 @@ func (a *App) Find(name string) (Runnable, error) {
 			return nil, b
 		}
 	}
+	switch {
+	case hooks.Exists(a.Layout.Hooks(), name):
+		return nil, fmt.Errorf("%s is a hook, not a routine: it runs on its events (`%s hooks show %s`; try it with `%s hooks fire %s --event <file>`)",
+			name, product.Command, name, product.Command, name)
+	case watchers.Exists(a.Layout.Watchers(), name):
+		return nil, fmt.Errorf("%s is a watcher, not a routine (`%s watchers show %s`)", name, product.Command, name)
+	}
 	if len(names) == 0 {
 		return nil, fmt.Errorf("no routine %q: there are no routines installed", name)
 	}
 	return nil, fmt.Errorf("no routine %q (have: %s)", name, strings.Join(names, ", "))
 }
 
-// NameTaken says whether a routine of either kind already has name (a new
-// one may not take it), or "" when none does.
+// NameTaken says whether a routine of either kind, a hook or a watcher
+// already has name (a new one may not take it), or "" when none does.
 func (a *App) NameTaken(name string) string {
+	if why := a.routineNameTaken(name); why != "" {
+		return why
+	}
+	return a.takenElsewhere(name, "routine")
+}
+
+// routineNameTaken says whether a routine of either kind has name.
+func (a *App) routineNameTaken(name string) string {
 	if programs.Exists(a.Layout.Programs(), name) {
 		return fmt.Sprintf("a program named %q already exists", name)
 	}
@@ -252,6 +275,9 @@ func (a *App) NameTaken(name string) string {
 // program has the name), for records made without loading it.
 func (a *App) kindOf(name string) Kind {
 	if programs.Exists(a.Layout.Programs(), name) {
+		return KindProgram
+	}
+	if fileExists(filepath.Join(a.Layout.Hooks(), name), hooks.DescriptionFile) {
 		return KindProgram
 	}
 	return KindLLM

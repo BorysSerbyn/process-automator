@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
+	"github.com/BorysSerbyn/process-automator/core/internal/dispatch"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
@@ -202,7 +203,7 @@ func TestStopWaitingInDaemonQueue(t *testing.T) {
 	now = now.Add(80 * time.Minute) // 09:20: first runs, second waits in the queue
 	_ = s.Tick(ctx)
 	done := make(chan struct{})
-	go func() { stopWaiting(ctx, a, s); close(done) }()
+	go func() { stopWaiting(ctx, a, s, &dispatch.Dispatcher{}); close(done) }()
 	// It records the run (status, then history) after the status shows:
 	// wait for it before the test's folders go.
 	defer func() { cancel(); <-done }()

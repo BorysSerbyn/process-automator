@@ -59,7 +59,7 @@ func (a *App) RoutineConfig(r routines.Routine) (RoutineConfig, error) {
 	if err != nil {
 		return c, err
 	}
-	key := func(field string) string { return "routines." + r.Name + "." + field }
+	key := r.Key // a hook's prompt's are hooks.<name>.<field>
 
 	c.Enabled = vals.Bool(key("enabled"))
 	if c.Timeout, err = vals.Duration(key("timeout")); err != nil {
@@ -71,7 +71,7 @@ func (a *App) RoutineConfig(r routines.Routine) (RoutineConfig, error) {
 			return c, err
 		}
 		if !filepath.IsAbs(c.Folder) {
-			return c, fmt.Errorf("routines.%s.folder %q: use an absolute path (or one starting with ~/)", r.Name, folder)
+			return c, fmt.Errorf("%s %q: use an absolute path (or one starting with ~/)", key("folder"), folder)
 		}
 	}
 	for name := range r.Plugins {

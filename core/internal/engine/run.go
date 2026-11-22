@@ -95,7 +95,7 @@ func (a *App) Run(ctx context.Context, x Runnable, o RunOptions) (*RunResult, er
 	// finish records how it ended. Dry runs record nothing.
 	record := func(run runstatus.Run) {
 		if !o.DryRun {
-			writeStatus(a.Layout.RunStatus(), name, forOccurrence(withLive(run), occ))
+			writeStatus(a, name, forOccurrence(withLive(run), occ))
 		}
 	}
 	finish := func(run runstatus.Run, res *RunResult) {
@@ -197,11 +197,11 @@ func forOccurrence(run runstatus.Run, o trigger.Occurrence) runstatus.Run {
 // res is nil for a run that didn't get as far as its kind's run.
 func recordRun(a *App, name string, occ trigger.Occurrence, run runstatus.Run, res *RunResult) {
 	run = forOccurrence(run, occ)
-	writeStatus(a.Layout.RunStatus(), name, run)
+	writeStatus(a, name, run)
 	e := history.Entry{
 		Routine: name, Kind: a.kindOf(name).Written(), Trigger: occ.Trigger, TriggerID: occ.ID, For: run.For,
 		SessionID: run.SessionID, Folder: run.Folder, StartedAt: run.StartedAt, FinishedAt: run.FinishedAt,
-		Outcome: run.Outcome, Reason: run.Reason,
+		Outcome: run.Outcome, Reason: run.Reason, Hook: a.IsHook(name), Events: occurrenceEvents(occ),
 	}
 	if res != nil {
 		e.Kind, e.Inputs, e.Result, e.Program = res.Kind.Written(), res.Inputs, res.Agent, res.Program
@@ -223,11 +223,16 @@ func runOutcome(started, finished time.Time, res *RunResult, runErr error) runst
 	return run
 }
 
-func writeStatus(statusPath, name string, run runstatus.Run) {
+// writeStatus records a routine's (or a hook's) run in run status.
+func writeStatus(a *App, name string, run runstatus.Run) {
 	if run.ID == "" {
 		run.ID = history.RunID(name, run.StartedAt) // the history record it is (or will be)
 	}
-	if err := runstatus.Record(statusPath, name, run, time.Now()); err != nil {
+	record := runstatus.Record
+	if a.IsHook(name) {
+		record = runstatus.RecordHook
+	}
+	if err := record(a.Layout.RunStatus(), name, run, time.Now()); err != nil {
 		fmt.Fprintln(os.Stderr, "warning: could not record run status:", err)
 	}
 }

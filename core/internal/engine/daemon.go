@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/dispatch"
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
@@ -82,6 +83,9 @@ func (a *App) Daemon(ctx context.Context) error {
 		}
 	}()
 
+	// Hooks run in this daemon too: their watchers, and their runs through
+	// the dispatcher (see events.go).
+	ev := newEvents(a, reload)
 	s := &scheduler.Scheduler{
 		StatePath: a.Layout.SchedulerState(),
 		Jobs: func() ([]scheduler.Job, error) {
@@ -95,10 +99,11 @@ func (a *App) Daemon(ctx context.Context) error {
 			}
 			// Before due slots are handled, so each one's nextRunAt has already
 			// moved on: a nextRunAt left in the past means the scheduler stalled.
-			if err := runstatus.Sync(cur.Layout.RunStatus(), statusSetups(jobs, problems, time.Now()), time.Now()); err != nil {
+			if err := runstatus.Sync(cur.Layout.RunStatus(), allSetups(cur, jobs, problems, time.Now()), time.Now()); err != nil {
 				logf("run status: %v", err)
 			}
 			recordSetup(cur)
+			ev.sync(ctx, cur)
 			return jobs, nil
 		},
 		Run: func(ctx context.Context, j scheduler.Job, occ trigger.Occurrence, queuedAt *time.Time) {
@@ -137,7 +142,7 @@ func (a *App) Daemon(ctx context.Context) error {
 		},
 		Queued: func(name string, occ trigger.Occurrence, at time.Time) {
 			logf("%s: queued behind another run (slot %s)", name, occ.At.Format("Mon 15:04"))
-			writeStatus(statusPath, name, forOccurrence(runstatus.Run{StartedAt: at, QueuedAt: &at, Outcome: runstatus.OutcomeQueued}, occ))
+			writeStatus(a, name, forOccurrence(runstatus.Run{StartedAt: at, QueuedAt: &at, Outcome: runstatus.OutcomeQueued}, occ))
 		},
 		Missed: func(name string, occ trigger.Occurrence, late time.Duration) {
 			logf("%s: missed the %s slot (%s late)", name, occ.At.Format("Mon 15:04"), late.Round(time.Minute))
@@ -149,7 +154,7 @@ func (a *App) Daemon(ctx context.Context) error {
 		},
 	}
 
-	go stopWaiting(ctx, a, s)
+	go stopWaiting(ctx, a, s, ev.disp)
 
 	lastPrune := time.Time{}
 	lastTick := time.Now()
@@ -181,7 +186,7 @@ func (a *App) Daemon(ctx context.Context) error {
 		case <-ctx.Done():
 			// Runs in progress were cancelled with ctx: let them record how they ended.
 			done := make(chan struct{})
-			go func() { s.Wait(); close(done) }()
+			go func() { s.Wait(); ev.stop(); close(done) }()
 			select {
 			case <-done:
 			case <-time.After(30 * time.Second):
@@ -254,7 +259,16 @@ func (a *App) SyncStatus(now time.Time) error {
 	if err != nil {
 		return err
 	}
-	return runstatus.Sync(a.Layout.RunStatus(), statusSetups(jobs, problems, now), now)
+	return runstatus.Sync(a.Layout.RunStatus(), allSetups(a, jobs, problems, now), now)
+}
+
+// allSetups are the routines' setups (statusSetups) and the hooks'.
+func allSetups(a *App, jobs []scheduler.Job, problems map[string]string, now time.Time) map[string]runstatus.Setup {
+	setups := statusSetups(jobs, problems, now)
+	for name, setup := range hookSetups(a) {
+		setups[name] = setup
+	}
+	return setups
 }
 
 // statusSetups is how each routine is set up, for runstatus.Sync: enabled,
@@ -360,10 +374,11 @@ func trimNL(p []byte) []byte {
 	return p
 }
 
-// stopWaiting stops runs still waiting in the scheduler's queue when a stop
-// request for them comes in (runs already handed over watch for it
-// themselves): they're taken out of the queue and recorded as stopped.
-func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler) {
+// stopWaiting stops runs still waiting in the scheduler's queue, or a hook's
+// in the dispatcher's, when a stop request for them comes in (runs already
+// handed over watch for it themselves): they're taken out of the queue and
+// recorded as stopped.
+func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler, d *dispatch.Dispatcher) {
 	t := time.NewTicker(stopPoll)
 	defer t.Stop()
 	dir := a.Layout.StopRequests()
@@ -381,7 +396,11 @@ func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler) {
 			name := e.Name()
 			occ, queuedAt, ok := s.Drop(name)
 			if !ok {
-				continue
+				due, dropped := d.Drop(name)
+				if !dropped {
+					continue
+				}
+				occ, queuedAt = due.Occurrence, due.QueuedAt
 			}
 			_ = os.Remove(filepath.Join(dir, name))
 			logf("%s: stopped while waiting for its turn", name)

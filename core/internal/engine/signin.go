@@ -6,8 +6,10 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 )
 
 // SignIn is one name `auth login` takes and what signing in to it is: the
@@ -18,7 +20,7 @@ type SignIn struct {
 	Name string
 	// Kind is what it is, as `auth status` shows it: remote or local (a
 	// configured server), in-process (a plugin), api-key or token (a model
-	// backend's), program (a program's secrets).
+	// backend's), program, hook or watcher (their own secrets).
 	Kind    string
 	Secrets []Secret
 	// OAuth is a remote server's browser sign-in, after Secrets (a
@@ -90,6 +92,30 @@ func (a *App) SignIns() []SignIn {
 			s := SignIn{Name: p.Name, Kind: "program"}
 			for _, sec := range p.Secrets {
 				s.Secrets = append(s.Secrets, (&program{p: p}).secret(sec))
+			}
+			out = append(out, s)
+		}
+	}
+	if set, err := hooks.Load(a.Layout.Hooks()); err == nil {
+		for _, h := range set.Hooks {
+			if h.Program == nil || len(h.Program.Secrets) == 0 {
+				continue
+			}
+			s := SignIn{Name: h.Name, Kind: "hook"}
+			for _, sec := range h.Program.Secrets {
+				s.Secrets = append(s.Secrets, (&program{p: *h.Program}).secret(sec))
+			}
+			out = append(out, s)
+		}
+	}
+	if set, err := watchers.Load(a.Layout.Watchers()); err == nil {
+		for _, w := range set.Watchers {
+			if len(w.Program.Secrets) == 0 {
+				continue
+			}
+			s := SignIn{Name: w.Name, Kind: "watcher"}
+			for _, sec := range w.Program.Secrets {
+				s.Secrets = append(s.Secrets, watcherSecret(w, sec))
 			}
 			out = append(out, s)
 		}
