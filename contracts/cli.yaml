@@ -44,7 +44,7 @@ commands:
         usage: machine-readable output
     jsonOutput: cli/guide.schema.json
   - command: login-items disable
-    usage: procauto login-items disable
+    usage: procauto login-items disable [flags]
     summary: Don't start the app at login (what's running keeps running)
     flags:
       - name: --json
@@ -52,21 +52,37 @@ commands:
         usage: machine-readable output
     jsonOutput: cli/login-items-disable.schema.json
   - command: login-items enable
-    usage: procauto login-items enable
+    usage: procauto login-items enable [flags]
     summary: Start the app at login
     flags:
       - name: --json
         type: bool
         usage: machine-readable output
     jsonOutput: cli/login-items-enable.schema.json
+  - command: login-items start
+    usage: procauto login-items start [flags]
+    summary: Start the scheduler now, if it isn't running (opening the app runs this)
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/login-items-start.schema.json
   - command: login-items status
-    usage: procauto login-items status
+    usage: procauto login-items status [flags]
     summary: Show whether the app starts at login
     flags:
       - name: --json
         type: bool
         usage: machine-readable output
     jsonOutput: cli/login-items-status.schema.json
+  - command: login-items stop
+    usage: procauto login-items stop [flags]
+    summary: Stop the scheduler and the menu bar app or tray now; both start again at the next login (Quit runs this)
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/login-items-stop.schema.json
   - command: mcp call
     usage: procauto mcp call <server> <tool> [json-args]
     summary: Call one tool and print its result (debugging; runs writes for real)

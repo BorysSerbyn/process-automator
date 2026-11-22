@@ -7,7 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
@@ -121,4 +123,99 @@ func setLoginItems(labels map[string]string, on bool) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// uiName is what the frontend is called here.
+const uiName = "tray"
+
+// frontendExecutables are the tray and its windows app, beside the core in
+// the Linux tree (install-app.sh stops them the same way).
+var frontendExecutables = []string{"automator-tray", "automator-windows"}
+
+// userSession is whether systemd's user manager is reachable (a login
+// session, or lingering).
+func userSession() bool {
+	return exec.Command("systemctl", "--user", "show-environment").Run() == nil
+}
+
+// noUserSession says what to do without one.
+func noUserSession(verb string) error {
+	return fmt.Errorf("no systemd user session here, so the scheduler can't be %s by its unit: run `%s daemon` "+
+		"yourself (it runs until stopped), or log in to a session that has one", verb, product.Command)
+}
+
+func isSchedulerRunning(label string) (bool, error) {
+	// is-active exits non-zero for anything but active; its output says which.
+	out, _ := exec.Command("systemctl", "--user", "is-active", label).Output()
+	switch strings.TrimSpace(string(out)) {
+	case "active", "activating", "reloading":
+		return true, nil
+	}
+	return false, nil
+}
+
+func startScheduler(label string) error {
+	if !userSession() {
+		return noUserSession("started")
+	}
+	path, err := itemFile(label)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("the scheduler isn't installed (no %s): install %s first", path, product.Name)
+	}
+	if out, err := exec.Command("systemctl", "--user", "start", label).CombinedOutput(); err != nil {
+		return fmt.Errorf("systemctl --user start %s: %v: %s", label, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func stopScheduler(label string) error {
+	if !userSession() {
+		return noUserSession("stopped")
+	}
+	if out, err := exec.Command("systemctl", "--user", "stop", label).CombinedOutput(); err != nil {
+		return fmt.Errorf("systemctl --user stop %s: %v: %s", label, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// stopFrontends stops the tray and the windows it opened, running from dir,
+// except the processes spared.
+func stopFrontends(_, dir string, spare []int) (bool, error) {
+	stopped := false
+	for _, name := range frontendExecutables {
+		for _, pid := range processesRunning("/proc", filepath.Join(dir, name)) {
+			if spared(pid, spare) {
+				continue
+			}
+			if err := syscall.Kill(pid, syscall.SIGTERM); err == nil && name == frontendExecutables[0] {
+				stopped = true
+			}
+		}
+	}
+	return stopped, nil
+}
+
+// processesRunning are this user's processes whose executable is exe, from
+// proc (others' /proc/<pid>/exe can't be read); one whose file was replaced
+// since (an update) still counts.
+func processesRunning(proc, exe string) []int {
+	entries, err := os.ReadDir(proc)
+	if err != nil {
+		return nil
+	}
+	var pids []int
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		target, err := os.Readlink(filepath.Join(proc, e.Name(), "exe"))
+		if err == nil && strings.TrimSuffix(target, " (deleted)") == exe {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
 }

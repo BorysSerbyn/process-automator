@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "login-items-start.schema.json",
+  "properties": {
+    "scheduler": {
+      "type": "string",
+      "enum": [
+        "running",
+        "stopped"
+      ],
+      "description": "Scheduler is running or stopped, as the command left it."
+    },
+    "changed": {
+      "type": "boolean",
+      "description": "Changed is whether the command started or stopped it (false: it\nalready was)."
+    },
+    "uiStopped": {
+      "type": "boolean",
+      "description": "UIStopped is whether stop stopped a running menu bar app or tray\n(besides the one that ran it, if one did)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "scheduler",
+    "changed"
+  ],
+  "title": "procauto login-items start --json",
+  "description": "RunningOutput is `login-items start --json` and `login-items stop --json`: whether the scheduler runs now, and what the command changed."
+}

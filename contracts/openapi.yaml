@@ -500,6 +500,11 @@ components:
           type: string
         data:
           type: string
+        frontendLog:
+          description: |-
+            FrontendLog is the log a frontend keeps there, if it keeps one: the
+            Linux tray writes its own, and its windows', to it.
+          type: string
         history:
           type: string
         mcpChanges:
@@ -523,6 +528,7 @@ components:
         - history
         - notifications
         - mcpChanges
+        - frontendLog
       type: object
     Picker:
       additionalProperties: false
@@ -1143,6 +1149,30 @@ components:
       required:
         - startedAt
         - outcome
+      type: object
+    RunningOutput:
+      additionalProperties: false
+      description: 'RunningOutput is `login-items start --json` and `login-items stop --json`: whether the scheduler runs now, and what the command changed.'
+      properties:
+        changed:
+          description: |-
+            Changed is whether the command started or stopped it (false: it
+            already was).
+          type: boolean
+        scheduler:
+          description: Scheduler is running or stopped, as the command left it.
+          enum:
+            - running
+            - stopped
+          type: string
+        uiStopped:
+          description: |-
+            UIStopped is whether stop stopped a running menu bar app or tray
+            (besides the one that ran it, if one did).
+          type: boolean
+      required:
+        - scheduler
+        - changed
       type: object
     SetupOutput:
       additionalProperties: false

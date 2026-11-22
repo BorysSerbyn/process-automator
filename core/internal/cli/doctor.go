@@ -90,7 +90,8 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		add("scheduler", "run status", err.Error(), "")
 	case status.ValidUntil == nil || now.After(*status.ValidUntil):
 		add("scheduler", "scheduler", "isn't running, or stopped responding (run status isn't being refreshed)",
-			"start "+product.Name+", which starts the scheduler at login; `"+product.Command+" daemon` in a terminal shows why it stops")
+			"`"+product.Command+" login-items start` (opening "+product.Name+" runs it too); if it keeps stopping, `"+
+				product.Command+" daemon` in a terminal shows why")
 	case status.Problem != "":
 		add("scheduler", "scheduler", status.Problem, "")
 	}

@@ -25,6 +25,10 @@
       "type": "string",
       "description": "MCPChanges logs every side-effecting call made through `mcp serve`."
     },
+    "frontendLog": {
+      "type": "string",
+      "description": "FrontendLog is the log a frontend keeps there, if it keeps one: the\nLinux tray writes its own, and its windows', to it."
+    },
     "templates": {
       "type": "string",
       "description": "Templates is where the app's templates are (empty if unknown)."
@@ -39,7 +43,8 @@
     "runStatus",
     "history",
     "notifications",
-    "mcpChanges"
+    "mcpChanges",
+    "frontendLog"
   ],
   "title": "procauto paths --json",
   "description": "PathsOutput is `paths --json`: where the app keeps its files."

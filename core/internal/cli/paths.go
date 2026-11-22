@@ -20,6 +20,9 @@ type PathsOutput struct {
 	Notifications string `json:"notifications"`
 	// MCPChanges logs every side-effecting call made through `mcp serve`.
 	MCPChanges string `json:"mcpChanges"`
+	// FrontendLog is the log a frontend keeps there, if it keeps one: the
+	// Linux tray writes its own, and its windows', to it.
+	FrontendLog string `json:"frontendLog"`
 	// Templates is where the app's templates are (empty if unknown).
 	Templates string `json:"templates,omitempty"`
 }
@@ -29,6 +32,7 @@ func pathsOf(l engine.Layout) PathsOutput {
 	p := PathsOutput{
 		Config: l.Config(), Data: l.Data(), Routines: l.Routines(), RunStatus: l.RunStatus(),
 		History: l.History(), Notifications: l.Notifications(), MCPChanges: l.MCPChanges(),
+		FrontendLog: l.FrontendLog(),
 	}
 	p.Templates, _ = templatesDir()
 	return p
@@ -54,6 +58,7 @@ func newPathsCmd() *cobra.Command {
 			for _, row := range [][2]string{
 				{"config", p.Config}, {"data", p.Data}, {"routines", p.Routines},
 				{"run status", p.RunStatus}, {"history", p.History}, {"notifications", p.Notifications}, {"mcp changes", p.MCPChanges},
+				{"frontend log", p.FrontendLog},
 				{"templates", orDash(p.Templates)},
 			} {
 				fmt.Fprintf(tw, "%s\t%s\n", row[0], row[1])

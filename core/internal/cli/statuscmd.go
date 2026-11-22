@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 )
 
@@ -96,7 +97,8 @@ func printStatus(w io.Writer, s *runstatus.Status) {
 	}
 	fmt.Fprintf(w, "%s: %s\n", s.Health, summary)
 	if s.ValidUntil == nil || time.Now().After(*s.ValidUntil) {
-		fmt.Fprintln(w, "The scheduler isn't responding (no recent heartbeat).")
+		fmt.Fprintf(w, "The scheduler isn't responding (no recent heartbeat): `%s login-items start` starts it, `%s doctor` says more.\n",
+			product.Command, product.Command)
 	}
 	if s.Problem != "" {
 		fmt.Fprintln(w, "Problem:", s.Problem)

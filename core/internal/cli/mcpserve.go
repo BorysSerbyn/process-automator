@@ -61,6 +61,7 @@ func mcpOverrides() map[string]mcpOverride {
 		// can reach: trusting is reviewed in a terminal (or automator-ui).
 		"routines trust":   {exclude: "trusting a routine is my decision, after reviewing what it can reach"},
 		"uninstall":        {exclude: "removing the app (and this server with it) is mine, from a terminal"},
+		"login-items stop": {exclude: "quitting the app is mine: Quit in its menu, or a terminal"},
 		"usage statusline": {exclude: "it's Claude Code's status line; it reads Claude Code's input on stdin"},
 		"guide":            {plain: true},
 		"update": {after: "Later calls run the new version, but this server's tool list is from before " +

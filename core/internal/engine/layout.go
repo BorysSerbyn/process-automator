@@ -73,6 +73,10 @@ func (l Layout) Reports() string { return l.in("reports") }
 // StartLog is where runs started with `start` log.
 func (l Layout) StartLog() string { return l.in("start.log") }
 
+// FrontendLog is the log the frontends keep, if they keep one (the Linux
+// tray: why a window didn't open, what failed starting).
+func (l Layout) FrontendLog() string { return l.in("frontend.log") }
+
 // UpdateLog is where a detached update logs.
 func (l Layout) UpdateLog() string { return l.in("update.log") }
 
