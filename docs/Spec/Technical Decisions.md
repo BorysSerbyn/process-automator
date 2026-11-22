@@ -626,6 +626,20 @@ A hook isn't a routine (no schedule, no run now, its own commands), so it never 
 - **Hooks in the Routines window, tagged**: the routine lists would mix things with a schedule and things without, and every routine control would need an exception
 - **A hook's window of its own from scratch**: two copies of the run history, the trust review and the program rows, drifting apart
 
+## Decision: trusting a hook trusts its watcher, in one review
+A hook does nothing until its watcher runs, so turning one on meant two reviews in two places (the hook's, then the watcher's) and a hook that looked on but heard nothing in between. `hooks trust <hook>` reviews both: the hook's action and trigger, and, while its watcher isn't trusted, what the watcher runs (its executable by checksum, arguments, secrets) and what changed; `--yes` records both approvals in one write. A watcher shared by several hooks is trusted by the first one turned on; its own `watchers trust` stays for trusting it alone. The review also lists the sign-ins still needed, its watcher's among them, so a third place to visit is a button in it.
+
+### Rejected
+- **Trusting them separately**: two reviews, two places, and a hook trusted and on that hears nothing; the user's own words were that it was confusing
+- **Trusting the watcher silently with the hook**: it runs an executable of its own; what it runs has to be in the review that's said yes to
+
+## Decision: turning anything on is one review and one confirm
+A routine, a program or a hook that's off or untrusted shows one action, **Turn On…**, wherever it appears (its window, a list, the menu, a reason): one review, then one confirm, `trust --yes --resume`. The core says when that has something to do (`turnOn`), and the frontends show the review's details folded, warnings and missing sign-ins first. Review, Trust and Resume buttons in several places, each doing part of it, read as buttons that did nothing: a Review that only unfolded something off screen, a Trust that left it paused or deaf.
+
+### Rejected
+- **Trust and resume as separate controls**: each left it not working, and the frontends had to know which was missing
+- **Turning on from the list in one click, without the review**: trusting is the user's decision, made on what it can reach
+
 ## Decision: names are unique across routines, programs, hooks and watchers
 Trust, settings, run status, history and stop requests are keyed by name, so a hook named like a routine would share its trust record and history. Adding any of the four under a name another has is refused; the commands that take a name and mean any runnable (`stop`, `runs`, `routines pause|resume|trust`) find a hook by it, and those that mean a routine say it's a hook. A hook's settings are `hooks.<hook>.<field>` and a watcher's `watchers.<watcher>.enabled`: they're named explicitly, and never in the app-wide settings.
 

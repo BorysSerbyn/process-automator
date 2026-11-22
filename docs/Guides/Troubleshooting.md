@@ -28,7 +28,7 @@ The menu lists each reason; click one to open the run it's about.
 | *routine* missed its run | The computer was asleep or off past the routine's `staleness`, or other runs took too long. Run it by hand if it still matters (`run <name>`, or `run <name> --date <day>` for a past day) |
 | *routine* didn't start at *time* | Its time passed without a run: the scheduler may be stuck. Check the scheduler log |
 | *routine* is stuck | Its run is going past its timeout. `procauto stop <name>` |
-| *hook* can't run | A hook that's on, whose watcher is missing, not trusted or failing (its polls fail, or its stream keeps ending), or which isn't trusted. `procauto hooks show <name>` and `procauto watchers show <watcher>` say which ([[Guides/Writing a hook\|Writing a hook]]) |
+| *hook* can't run | A hook that's on, whose watcher is missing, not trusted or failing (its polls fail, or its stream keeps ending), or which isn't trusted. `procauto hooks show <name>` and `procauto watchers show <watcher>` say which; a watcher that isn't trusted is trusted with the hook (`procauto hooks trust <name>`, or **Turn On…** in its window) ([[Guides/Writing a hook\|Writing a hook]]) |
 | *hook* was skipped | It was paused for running far past its rate: its action may set it off again. Fix that, then `procauto hooks resume <name>` |
 
 A routine stays red until its next run goes well (or you pause it).

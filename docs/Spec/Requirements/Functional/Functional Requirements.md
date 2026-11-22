@@ -46,7 +46,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Kept apart, run alike**: hooks and watchers live in their own folders, with their own commands (`hooks`, `watchers`), and never show among routines, not even with `--kind all`. A hook's runs share everything around a run with routines: trust, the run queue for an LLM hook (a program hook skips it), keeping the computer awake, waiting for a full wake, stop, pause, timeout, run status, history, notifications and the status dot
 - **One name space**: names are unique across routines, programs, hooks and watchers; the commands that take a name find a hook by it (`stop`, `runs`, `routines pause`, `resume`, `trust`), and the routine-only ones (run, show, check) say it's a hook
 - **Adding one**: from its file's path, in a terminal, an LLM hook validated as a routine is (its servers must exist and offer its tools, when they can be asked); a program hook's executable, and a watcher's, are copied with it, and the copy is what runs. A hook starts off and untrusted. Deleting one removes its copy, settings, trust and secrets, and keeps its run history
-- **Trust**: a hook runs only while its action and its trigger are what I trusted, a program hook's dry runs included; a watcher runs only while its executable is the one I trusted. A hook hears nothing until its watcher is trusted too. Trusting an LLM hook that can write warns that it acts on outside data
+- **Trust**: a hook runs only while its action and its trigger are what I trusted, a program hook's dry runs included; a watcher runs only while its executable is the one I trusted. Trusting a hook trusts its watcher too, while it isn't trusted: one review shows both, and one yes covers both. Trusting an LLM hook that can write warns that it acts on outside data
 - **Trying one**: there's no run now for a hook; it fires with a sample event (a file or stdin), as a dry run or for real
 - **What an action gets**: an LLM hook's prompt gets the event, or every event that waited for it when it takes them in batches, each text from the watcher marked as outside data; a program hook gets its event as JSON on stdin, and the desktop session's display, so it can open an app
 - **Sleep**: an event older than the hook's staleness is dropped; a watcher isn't polled while a Mac is in a maintenance wake, and a poll due while it slept runs as it wakes
@@ -95,14 +95,15 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## UI
 Managing the app is possible entirely from macOS's menu bar app (automator-ui), without a terminal. The CLI does all of it too; the UI is another way in, not a replacement.
-- **Menu** (the menu bar app's and the Linux tray's): the version; the status in words (each reason the dot is red, opening the run it's about, or the hook's window); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); **Hooks ›** while there are hooks (all hooks, then each with its status); updates; Settings; Quit
+- **Menu** (the menu bar app's and the Linux tray's): the version; the status in words (each reason the dot is red, opening the run it's about, or the routine's or hook's window, on its review when it needs turning on); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); **Hooks ›** while there are hooks (all hooks, then each with its status); updates; Settings; Quit
 - **Quit** stops the app: the menu bar app or tray, and the scheduler (no routine runs on its schedule until I open the app again); both start again at the next login. When the scheduler can't be stopped, it says why and quits anyway
 - **Opening the app** starts the scheduler if it isn't running, so opening it after a Quit brings everything back; opening it while it runs opens the Setup window while setup has steps left, else the Settings window
+- **Turning one on**: a routine, program or hook that's off or not trusted is turned on with two clicks: **Turn On…** (in its window, beside it in the Routines and Hooks windows, from the menu or a reason) opens one review, and one confirm trusts it (a hook's watcher with it) and turns it on. The review says in a line what it does, warns first, offers signing in to whatever it still needs, and keeps what it can reach or runs folded underneath; when the core refuses, it says why there. While it's on, the one action is Pause
 - **Routines window**: every routine, LLM routines and programs together, with its health, schedule in words, last run and status
 - **A routine's window**:
   - status: last run (when, outcome, reason), next run, why it can't be scheduled
   - its schedule in plain words (e.g. "At 09:20, Monday through Friday"), edited with a days-and-time picker or a custom cron
-  - what it can reach, and trusting it
+  - what it can reach (trusting it is turning it on, above)
   - its runs: what each did, its tool calls and writes, and its output
   - controls: run now or dry run, stop, pause/resume, delete
   - its memories (see, add, remove) and its own settings
@@ -117,10 +118,10 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 - **A hook's window**: a routine's (a program's, for a program hook), with only these differences:
   - fire with a sample event (written as JSON), as a dry run or for real, in place of run now; pause and resume turn it off and on; no schedule or next run
   - what it acts on: its watcher (its state, opening its window), the event type, batches, staleness and rate
-  - its review shows what it acts on too, and its warnings before Trust; Turn On trusts one that's off and turns it on; while its watcher isn't trusted, it says the hook hears nothing until it is
+  - its review covers its watcher; when it runs is a line (its watcher, the event type), with the rest folded
   - each run's events (type, time, data), shown as plain text
   - memories for an LLM hook only
-- **A watcher's window**: how it runs and last went, why it's failing, the hooks listening, what it runs with trusting it and signing in to its secrets, its file (read-only); pause, resume and delete
+- **A watcher's window**: how it runs and last went, why it's failing, the hooks listening, what it runs with signing in to its secrets and trusting it alone (rarely needed), its file (read-only); pause, resume and delete
 - **Setup window**: every setup step with a button for each
 - **Settings window**: start at login, LLM usage, and every app-wide setting with a control for its type
 - **Updates**: see whether a newer release exists, and install it
