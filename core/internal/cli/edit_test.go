@@ -71,6 +71,7 @@ func TestPluginsAddRemove(t *testing.T) {
 
 func TestRoutineDeleteClearsSettings(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	withNotesServer(t, cfg)
 	src := filepath.Join(t.TempDir(), "x.prompt")
 	_ = os.WriteFile(src, []byte("---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\n---\nhi {{> memories}}\n"), 0o600)
 	if out, err := cli(t, cfg, "routines", "create", "x", "--from", src); err != nil || !strings.Contains(out, "paused") {
@@ -142,6 +143,7 @@ func TestRemoveKeepsSharedSecrets(t *testing.T) {
 // losers' cleanup used to reset the winner's setting, leaving it enabled).
 func TestParallelCreateStaysDisabled(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	withNotesServer(t, cfg)
 	src := "---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\n---\nhi {{> memories}}\n"
 	var wg sync.WaitGroup
 	wins := make(chan bool, 8)
@@ -178,5 +180,20 @@ func TestSettingsScope(t *testing.T) {
 	}
 	if !strings.Contains(routine, `"routines.r.enabled"`) || strings.Contains(routine, `"llm.backend"`) {
 		t.Fatalf("routine scope: %s", routine)
+	}
+}
+
+// withNotesServer declares a "notes" MCP server in cfg (a command that
+// doesn't exist: known, but it can't be asked for its tools), for tests whose
+// routines use one.
+func withNotesServer(t *testing.T, cfg string) {
+	t.Helper()
+	b, _ := os.ReadFile(cfg)
+	if strings.Contains(string(b), "mcpServers:") {
+		t.Fatal("the config already declares servers")
+	}
+	_ = os.MkdirAll(filepath.Dir(cfg), 0o700)
+	if err := os.WriteFile(cfg, append(b, "\nmcpServers:\n  notes:\n    command: /nonexistent/notes-server\n"...), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

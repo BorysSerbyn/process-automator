@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -146,6 +147,9 @@ func newRoutinesCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := checkRoutineTools(cmd, a, parsed); err != nil {
+				return err
+			}
 			// Disabled before the file exists, so the scheduler never sees it enabled.
 			undo, err := disableNew(a, dir, parsed)
 			if err != nil {
@@ -166,6 +170,43 @@ func newRoutinesCreateCmd() *cobra.Command {
 	src.add(cmd)
 	jsonFlag(cmd.Flags(), &asJSON, RoutineChange{})
 	return cmd
+}
+
+// toolsCheckTimeout bounds asking a routine's servers for their tools when
+// it's written.
+const toolsCheckTimeout = 30 * time.Second
+
+// checkRoutineTools refuses a routine whose servers or tools don't exist, as
+// a run would find them: a server no installed plugin or server provides, or
+// a tool none of its servers offers (or two do). Its servers are asked, as
+// `routines check` does; one that can't be asked now (not signed in yet,
+// unreachable) leaves its tools unchecked, with a warning, so a routine can be
+// written before signing in.
+func checkRoutineTools(cmd *cobra.Command, a *engine.App, r routines.Routine) error {
+	for _, s := range a.Servers(r) {
+		if !a.KnownServer(s) {
+			return fmt.Errorf("%s uses %s, which no installed plugin or server provides (`%s plugins list`)", r.Name, s, product.Command)
+		}
+	}
+	if len(r.Tools) == 0 {
+		return nil
+	}
+	folder := ""
+	if c, err := a.RoutineConfig(r); err == nil {
+		folder = c.WorkFolder
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), toolsCheckTimeout)
+	defer cancel()
+	_, err := agent.CheckTools(ctx, a.Connector, engine.RunOf(r, folder, ""), r.Servers, r.Tools)
+	var wrong *agent.ToolsError
+	switch {
+	case errors.As(err, &wrong):
+		return fmt.Errorf("%s: %w", r.Name, err)
+	case err != nil:
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s's tools weren't checked (%v); `%s routines check %s` checks them once that's fixed\n",
+			r.Name, err, product.Command, r.Name)
+	}
+	return nil
 }
 
 // disableNew stores routines.<name>.enabled = false for a routine about to be
@@ -199,6 +240,13 @@ func newRoutinesUpdateCmd() *cobra.Command {
 			defer unlock()
 			source, err := src.read(cmd.InOrStdin())
 			if err != nil {
+				return err
+			}
+			parsed, err := routines.Parse(args[0], source)
+			if err != nil {
+				return err
+			}
+			if err := checkRoutineTools(cmd, a, parsed); err != nil {
 				return err
 			}
 			r, err := routines.Update(a.Layout.Routines(), args[0], source)

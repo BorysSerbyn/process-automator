@@ -171,6 +171,7 @@ func TestArgv(t *testing.T) {
 // and find the change logged.
 func TestServeEndToEnd(t *testing.T) {
 	s := testServer(t, false)
+	withNotesServer(t, s.configPath)
 	srv, err := s.build()
 	if err != nil {
 		t.Fatal(err)

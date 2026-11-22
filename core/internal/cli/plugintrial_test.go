@@ -133,3 +133,42 @@ func TestPluginPathsStayInside(t *testing.T) {
 		t.Errorf("folder behind a symlink: %s %v", out, err)
 	}
 }
+
+// A routine whose tools or servers don't exist isn't written: its servers are
+// asked, as a run would; one that can't be asked leaves a warning instead.
+func TestRoutineToolsChecked(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	if out, err := cli(t, cfg, "plugins", "add", "fx", "--dir", pluginFolder(t, "good")); err != nil {
+		t.Fatalf("plugins add: %v\n%s", err, out)
+	}
+	file := filepath.Join(filepath.Dir(cfg), "routines", "r.prompt")
+	src := func(server, tool string) string {
+		return "---\nautomator.servers: [" + server + "]\ntools: [" + tool + "]\n---\nGo. {{> memories}}\n"
+	}
+	out, err := cli(t, cfg, "routines", "create", "r", "--source", src("fx", "missing_thing"))
+	if err == nil || !strings.Contains(out, "prompt lists tools no connected server offers: missing_thing") {
+		t.Fatalf("a missing tool: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatal("a refused routine was written")
+	}
+	if out, err := cli(t, cfg, "routines", "create", "r", "--source", src("nope", "x")); err == nil || !strings.Contains(out, "uses nope, which no installed plugin or server provides") {
+		t.Fatalf("an unknown server: %v\n%s", err, out)
+	}
+	if out, err := cli(t, cfg, "routines", "create", "r", "--source", src("fx", "read_thing")); err != nil || strings.Contains(out, "warning") {
+		t.Fatalf("a real tool: %v\n%s", err, out)
+	}
+	before, _ := os.ReadFile(file)
+	if out, err := cli(t, cfg, "routines", "update", "r", "--source", src("fx", "read_thing, missing_thing")); err == nil || !strings.Contains(out, "missing_thing") {
+		t.Fatalf("update with a missing tool: %v\n%s", err, out)
+	}
+	if after, _ := os.ReadFile(file); string(after) != string(before) {
+		t.Error("a refused update changed the routine")
+	}
+	// A server that can't be asked now: written, with a warning.
+	other := filepath.Join(t.TempDir(), "config.yaml")
+	withNotesServer(t, other)
+	if out, err := cli(t, other, "routines", "create", "n", "--source", src("notes", "list_notes")); err != nil || !strings.Contains(out, "warning: n's tools weren't checked") {
+		t.Fatalf("an unreachable server: %v\n%s", err, out)
+	}
+}

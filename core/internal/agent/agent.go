@@ -262,6 +262,13 @@ type discovered struct {
 	tool    *sdk.Tool
 }
 
+// ToolsError is a routine's tools not matching what its servers offer (one
+// none offers, or one offered by two): the servers answered, so the list is
+// wrong, unlike a server that can't be reached or isn't signed in.
+type ToolsError struct{ msg string }
+
+func (e *ToolsError) Error() string { return e.msg }
+
 // discover connects to the servers and finds each allowed tool. Every allowed
 // name must be offered by exactly one server. Sessions are returned even on
 // error, for the caller to close.
@@ -285,7 +292,7 @@ func discover(ctx context.Context, conn *mcp.Connector, run pluginapi.Run, serve
 		for _, t := range list.Tools {
 			if want[t.Name] {
 				if prev, dup := byName[t.Name]; dup {
-					return nil, sessions, fmt.Errorf("tool %q is offered by more than one server (%s and %s)", t.Name, prev.server, name)
+					return nil, sessions, &ToolsError{fmt.Sprintf("tool %q is offered by more than one server (%s and %s)", t.Name, prev.server, name)}
 				}
 				byName[t.Name] = discovered{name, s, t}
 			}
@@ -299,7 +306,7 @@ func discover(ctx context.Context, conn *mcp.Connector, run pluginapi.Run, serve
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
-		return nil, sessions, fmt.Errorf("prompt lists tools no connected server offers: %s (missing sign-in or scopes? see `"+product.Command+" mcp tools <server>`)", strings.Join(missing, ", "))
+		return nil, sessions, &ToolsError{fmt.Sprintf("prompt lists tools no connected server offers: %s (missing sign-in or scopes? see `"+product.Command+" mcp tools <server>`)", strings.Join(missing, ", "))}
 	}
 	return byName, sessions, nil
 }

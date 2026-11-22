@@ -13,7 +13,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Backfill**: any routine can be run as of a past day (e.g. Monday's date, for a routine covering the previous workday, covers Friday)
 - **Stop**: a run in progress or waiting its turn can be stopped; it's recorded as stopped, not failed
 - **Missed runs**: if the computer is asleep or off at a scheduled time, the routine runs when the scheduler is next available, unless that's later than the routine's staleness window; then it's recorded as missed
-- **Create, update and delete**: from a file, validated first; deleting a routine removes its settings, trust and memories and keeps its run history
+- **Create, update and delete**: from a file, validated first (its servers must exist and offer its tools, when they can be asked); deleting a routine removes its settings, trust and memories and keeps its run history
 - **Optional per-routine settings**: each one left out keeps the default behaviour
   - **Timeout**: how long a run may take before it's stopped and fails
   - **Effort**: how hard the model thinks

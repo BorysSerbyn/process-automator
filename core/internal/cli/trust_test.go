@@ -14,6 +14,7 @@ func TestTrust(t *testing.T) {
 	// "old" exists before trust is first used: it keeps running.
 	a, _ := enginetest.Fixture(t, map[string]string{"old": "queue"}, nil)
 	cfg := a.Layout.Config()
+	withNotesServer(t, cfg)
 	src := func(tools string) string {
 		return "---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\ntools: [" + tools + "]\n---\nGo. {{> memories}}\n"
 	}
@@ -93,6 +94,7 @@ func TestTrust(t *testing.T) {
 func TestDoctor(t *testing.T) {
 	a, _ := enginetest.Fixture(t, map[string]string{"ok": "queue"}, nil)
 	cfg := a.Layout.Config()
+	withNotesServer(t, cfg)
 	_, _ = cli(t, cfg, "routines", "create", "new", "--source", "---\nautomator.servers: [notes]\ntools: [list_notes]\n---\nGo.")
 	_, _ = cli(t, cfg, "settings", "set", "routines.new.enabled", "true")
 	out, err := cli(t, cfg, "doctor", "--json")
