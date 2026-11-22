@@ -102,8 +102,11 @@ func Sorted(list []string) []string {
 // Status is what the OS said about a permission.
 type Status string
 
-// Statuses. Only Missing and NotChecked keep anything from running: a
-// permission that can't be checked is never taken for one that's missing.
+// Statuses. Only Missing keeps anything from running: a permission that
+// can't be checked, or hasn't been yet, is never taken for one that's
+// missing. (The scheduler checks every permission at the start of each pass,
+// before it schedules anything or starts a watcher, so it never acts on one
+// that's NotChecked; a CLI that can't check them doesn't turn health red.)
 const (
 	// Granted: the OS allows it.
 	Granted Status = "granted"
@@ -123,7 +126,7 @@ const (
 var Statuses = []Status{Granted, Missing, Unknown, Unsupported, NotChecked}
 
 // Blocks reports whether s keeps what needs the permission from running.
-func (s Status) Blocks() bool { return s == Missing || s == NotChecked }
+func (s Status) Blocks() bool { return s == Missing }
 
 // State is what the scheduler last found (permissions.json).
 type State struct {

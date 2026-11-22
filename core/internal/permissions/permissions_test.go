@@ -51,7 +51,7 @@ func TestState(t *testing.T) {
 		!s.CheckedAt.Equal(now) || !s.Requests["notifications"].Asked {
 		t.Fatalf("%+v %v", s, err)
 	}
-	if !Missing.Blocks() || !NotChecked.Blocks() || Unknown.Blocks() || Unsupported.Blocks() || Granted.Blocks() {
-		t.Fatal("only missing and not-checked keep anything from running")
+	if !Missing.Blocks() || NotChecked.Blocks() || Unknown.Blocks() || Unsupported.Blocks() || Granted.Blocks() {
+		t.Fatal("only missing keeps anything from running")
 	}
 }

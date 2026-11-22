@@ -190,15 +190,8 @@ func PermissionProblems(self string, needs []PermissionNeed) []Problem {
 			continue
 		}
 		who := whoNeeds(self, n.By)
-		p := Problem{Permission: n.Permission}
-		switch n.State {
-		case permissions.NotChecked:
-			p.Text = fmt.Sprintf("%s needs the %s permission, which hasn't been checked yet: the scheduler checks it when it runs", who, n.Label)
-			p.Fix = "`" + product.Command + " login-items start` (opening " + product.Name + " runs it too)"
-		default:
-			p.Text = fmt.Sprintf("%s needs the %s permission, which isn't allowed for %s", who, n.Label, product.Name)
-			p.Fix, p.Open = PermissionFix(n), n.SettingsURL
-		}
+		p := Problem{Permission: n.Permission, Open: n.SettingsURL, Fix: PermissionFix(n),
+			Text: fmt.Sprintf("%s needs the %s permission, which isn't allowed for %s", who, n.Label, product.Name)}
 		out = append(out, p)
 	}
 	return out

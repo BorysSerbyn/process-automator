@@ -139,8 +139,9 @@ func problemsAbout(rd Readiness) map[string]Problem {
 // A prompt declares no permissions: it needs what the plugins it uses
 // declare (a compiled-in plugin's, a config server's), shown with each
 // plugin. Until the scheduler has checked them they're "not checked",
-// never granted; once checked, only one that isn't allowed is a problem,
-// naming the permission and where it's turned on.
+// never granted, and not a problem either (a CLI can't check them, and the
+// scheduler checks before it decides anything); once checked, one that
+// isn't allowed is a problem, naming the permission and where it's turned on.
 func TestPromptNeedsItsPluginsPermissions(t *testing.T) {
 	fake := fakePermissions(t, map[string]permissions.Status{"input-monitoring": permissions.Missing, "calendars": permissions.Granted})
 	a := permApp(t, "mcpServers:\n  cal:\n    command: /bin/true\n    permissions: [calendars]\n", stubPlugin("keys", "input-monitoring"), stubPlugin("plain"))
@@ -148,9 +149,8 @@ func TestPromptNeedsItsPluginsPermissions(t *testing.T) {
 	if got := needNames(a.Permissions(x)); got != "input-monitoring=not-checked(plugin:keys) calendars=not-checked(plugin:cal)" {
 		t.Fatalf("before any check: %s", got)
 	}
-	probs := problemsAbout(a.Assess(x))
-	if len(probs) != 2 || !strings.Contains(probs["calendars"].Text, "hasn't been checked yet") {
-		t.Fatalf("not checked yet is a problem, never granted: %+v", probs)
+	if probs := problemsAbout(a.Assess(x)); len(probs) != 0 {
+		t.Fatalf("not checked yet isn't a problem: %+v", probs)
 	}
 
 	if err := a.RecordPermissions(time.Now()); err != nil {
@@ -159,7 +159,7 @@ func TestPromptNeedsItsPluginsPermissions(t *testing.T) {
 	if got := needNames(a.Permissions(x)); got != "input-monitoring=missing(plugin:keys) calendars=granted(plugin:cal)" {
 		t.Fatalf("once checked: %s", got)
 	}
-	probs = problemsAbout(a.Assess(x))
+	probs := problemsAbout(a.Assess(x))
 	p, ok := probs["input-monitoring"]
 	if len(probs) != 1 || !ok || p.Open != "x-test:input-monitoring" ||
 		!strings.Contains(p.Text, "its plugin keys needs the Input Monitoring permission") ||
@@ -206,7 +206,7 @@ func TestMissingPermissionIsAScheduleProblem(t *testing.T) {
 // plugins') and its watcher's; trusting it covers its action's, and its
 // watcher's trust covers the watcher's.
 func TestHookNeedsItsActionsAndWatchersPermissions(t *testing.T) {
-	fakePermissions(t, map[string]permissions.Status{})
+	fakePermissions(t, map[string]permissions.Status{"input-monitoring": permissions.Missing, "accessibility": permissions.Missing})
 	a := permApp(t, "", stubPlugin("notify", "notifications"))
 	w := addWatcher(t, a, "keys", "executable: ./watch\nmode: stream\npermissions: [input-monitoring]\n", "sleep 60\n")
 	addHook(t, a, "click", hooks.DescriptionFile,
@@ -220,6 +220,12 @@ func TestHookNeedsItsActionsAndWatchersPermissions(t *testing.T) {
 	}
 	if got := needNames(a.Permissions(tell)); got != "input-monitoring=not-checked(watcher:keys) notifications=not-checked(plugin:notify)" {
 		t.Fatalf("an LLM hook: %s", got)
+	}
+	if probs := problemsAbout(a.Assess(click)); len(probs) != 0 {
+		t.Fatalf("not checked yet isn't a problem: %+v", probs)
+	}
+	if err := a.RecordPermissions(time.Now()); err != nil {
+		t.Fatal(err)
 	}
 	probs := problemsAbout(a.Assess(click))
 	if !strings.HasPrefix(probs["input-monitoring"].Text, "its watcher keys needs") || !strings.HasPrefix(probs["accessibility"].Text, "it needs") {

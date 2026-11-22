@@ -68,7 +68,7 @@ func newPermissionsListCmd() *cobra.Command {
 					by = []string{"(nothing)"}
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\n", p.Label, permissionStateText(p.State), strings.Join(by, ", "))
-				if p.Blocks() && p.State != permissions.NotChecked && len(p.NeededBy) > 0 {
+				if p.Blocks() && len(p.NeededBy) > 0 {
 					fmt.Fprintf(tw, "\t\tfix: %s\n", engine.PermissionFix(p.PermissionNeed))
 				}
 			}

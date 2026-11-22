@@ -278,7 +278,7 @@ func describePermissions(w io.Writer, needs []engine.PermissionNeed) {
 			by = append(by, s.Kind+" "+s.Name)
 		}
 		line := fmt.Sprintf("  %s\t%s\t(%s)", n.Label, permissionStateText(n.State), strings.Join(by, ", "))
-		if n.Blocks() && n.State != permissions.NotChecked {
+		if n.Blocks() {
 			line += "\tfix: " + engine.PermissionFix(n)
 		}
 		fmt.Fprintln(tw, line)
