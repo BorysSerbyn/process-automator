@@ -1,6 +1,6 @@
 ---
 name: architecture-boundaries
-description: Keeps process-automator's layer boundaries intact (the UI depends only on the CLI; the core uses no plugins; plugins are OS-independent; the MCP server is the core's). Use when changing automator-ui/, automator-tray/ (and its windows/), core/, core/plugins/, the MCP server, contracts/ or the CLI's output, adding anything UI-visible, or touching OS-specific APIs (macOS, launchd, Keychain, systemd, /Applications, ~/Library).
+description: Keeps process-automator's layer boundaries intact (the UI depends only on the CLI; the CLI holds no engine logic; the core uses no plugins; pluginapi is only the plugin contract; plugins are OS-independent; the MCP server is the core's). Use when changing automator-ui/, automator-tray/ (and its windows/), core/ (core/internal/cli especially), core/pluginapi, core/plugins/, the MCP server, contracts/ or the CLI's output, adding anything UI-visible, or touching OS-specific APIs (macOS, launchd, Keychain, systemd, /Applications, ~/Library).
 ---
 
 # Architecture boundaries
@@ -9,6 +9,8 @@ description: Keeps process-automator's layer boundaries intact (the UI depends o
 
 **2. The Go core doesn't know who calls it.** The CLI is the API (contracts in `contracts/`, `make contracts`), and its only interface to frontends. No caller-specific branches, no UI wording or colours. All decisions live here.
 
+**2a. The CLI holds no logic that belongs in the engine.** `core/internal/cli` parses arguments, calls the engine (or another internal package), and prints the result (`emit`, `--json`); it asks the person when a command needs it (`prompt`). Every decision is made below it: what's wrong with a routine (`Readiness`), setup's steps, sign-ins, trust, update progress, stopping a run, what a kind may do. The test: if the daemon, the MCP server or a frontend would need the same answer, it lives in the engine and the CLI only shows it. Never two copies of a rule, one in the CLI and one in the engine, and never the engine reaching back into the CLI through a callback.
+
 **3. The Go core doesn't know which OS it runs on.** OS-specific things live outside shared code: external apps are MCP servers added as plugins, launchd/systemd/bundling in `Makefile` and `scripts/`, unavoidable OS calls behind a per-OS file with a fallback for other OSes (`secrets/default_darwin.go`, `filelock`, `cli/browser_darwin.go`). `internal/osboundary`'s test enforces it, and `core/` must cross-compile (`GOOS=linux go build ./...`, `GOOS=windows go build ./...`).
 
 **4. The core uses no plugins.** Plugins live in `core/plugins/` (e.g. `notify`), each built only on `pluginapi` (nothing from `core/internal/`). The engine adds none: an app lists the ones it wants in its `automator.App.Plugins` (`cmd/procauto` lists `notify`), and the core runs that list for routines without knowing any by name: nothing in `core/internal/` or `core/automator` imports a plugin, no special cases. The app's own features never go through a plugin, and share nothing with one: its notifications (failed runs, sign-ins, updates) are the core's (`internal/notifications`, the `notifications` command, automator-ui's Notifier); the notify plugin's are the plugin's, with no package, type, file, setting or helper in common.
@@ -16,6 +18,12 @@ description: Keeps process-automator's layer boundaries intact (the UI depends o
 **5. A plugin is independent of the OS.** It works wherever the core does; what it needs from one OS sits in per-OS files inside the plugin (e.g. `notify`'s macOS and Linux delivery), with a clear answer elsewhere.
 
 **6. The MCP server is part of the core, not a plugin.** `mcp serve` is the CLI's commands as MCP tools for Claude and other clients. There's no plugin for it and it isn't listed as one; routines don't use it. A plugin that needs the app talks to the server through `pluginapi`'s session to it.
+
+**4a. What `pluginapi` is: the contract a plugin is written against, and nothing else.** A build hands `automator.Main` its plugins (`automator.App.Plugins`); each is a `Plugin`: a `Name` (what routines list in `automator.servers`), a `Description`, `Prepare` (steps outside the app before signing in), and exactly one of:
+- `External *ServerSpec`: a preset external MCP server (remote URL or local command, its auth and transport), which the config file's `mcpServers.<name>` can replace;
+- `InProcess *InProcess`: Go code compiled into the app that builds an MCP server (`Serve(Host)`), with the `Secrets` it needs, whether it reads a section of the routines that use it (`RoutineSection`), and the other servers it calls (`Uses`).
+
+`Host` is all an in-process plugin gets from the app: its config section, its secrets, its data folder, the run it serves (`Run`: routine, run ID, folder; never other plugins' sections) and sessions to the servers it uses. `CallJSON`, `ResultText` and `ToolCaller` are helpers for calling those servers, and `pluginapi/plugintest` (a fake `Host`, an in-memory session) is for plugins' tests. It is not the config file's schema, its validation, secret references or key naming, or the engine's record of a run: those are `internal/config`, `internal/mcp` and the engine's, and a plugin never needs them. Changing pluginapi breaks every app built on it (Chrono's plugins among them): add only what a plugin needs to be written, keep each type's fields meaningful for both kinds or split them, and say why in Technical Decisions.
 
 **7. Only `core/automator`, `core/pluginapi` and `core/plugins/` are public.** Other apps import them (and build with this repo's Makefile and scripts), so keep them small and their changes deliberate; anything else goes in `internal/`. Nothing app-specific belongs in this repo: names come from the `automator.App` (`internal/product` in the core, `AppInfo` in automator-ui, the package's `install.env` in automator-tray), never literals.
 
