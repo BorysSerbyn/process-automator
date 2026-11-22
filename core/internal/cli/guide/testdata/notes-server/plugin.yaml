@@ -1,5 +1,3 @@
 description: My notes, for routines
-command: ./server          # built in the folder with `go build -o server .`
-env:
-  NOTES_FILE: notes.json   # relative to the working directory: the installed copy
-  # API_KEY: "{notes-key}" # a secret: `auth login notes` asks for it
+command: ./server                  # go build -o server .
+# env: {NOTES_KEY: "{notes-key}"}  # a secret: `auth login notes` asks for it

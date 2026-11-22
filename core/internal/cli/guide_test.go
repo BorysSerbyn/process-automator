@@ -98,11 +98,9 @@ func TestGuideRoutinesCoversTheCode(t *testing.T) {
 			}
 		}
 	}
-	for _, p := range routines.Platforms {
-		want = append(want, "`"+p+"`")
-	}
+	want = append(want, routines.Platforms...)
 	want = append(want, "routines create", "run <name> --dry-run", "routines trust <name> --resume", "routines check", "routines update",
-		"report_outcome", "{{> memories}}", "{{today}}", "{{since}}", `{{role "system"}}`, `{{role "user"}}`, "output:", "notify_me", "mcp tools <server>")
+		"report_outcome", "{{> memories}}", "{{today}}", "{{since}}", `{{role "system"}}`, `{{role "user"}}`, "`output`", "notify_me", "mcp tools <server>")
 	for _, w := range want {
 		if !strings.Contains(out, w) {
 			t.Errorf("guide routines lacks %s", w)

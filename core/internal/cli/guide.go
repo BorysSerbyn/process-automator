@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
@@ -24,7 +23,7 @@ import (
 // The guide is in the binary, so an installed app and its MCP clients have
 // it. Its text is written once, in guide/<topic>.md; whatever the code
 // defines (the routine keys, backends, built-in tools, plugin.yaml's
-// fields, a command's flags) is generated into it, so it can't drift. The
+// fields) is generated into it, so it can't drift. The
 // examples are files a test runs: the routine is created against the
 // example server, which is built and installed as a plugin folder.
 //
@@ -111,7 +110,7 @@ func newGuideCmd() *cobra.Command {
 				return emit(cmd, out, "Topics ("+product.Command+" guide <topic>):"+list.String())
 			}
 			i := slices.Index(names, args[0])
-			out, err := renderGuide(guideTopics[i], guideSources{root: cmd.Root(), plugins: pluginsFrom(cmd.Context())})
+			out, err := renderGuide(guideTopics[i], guideSources{plugins: pluginsFrom(cmd.Context())})
 			if err != nil {
 				return err
 			}
@@ -123,9 +122,8 @@ func newGuideCmd() *cobra.Command {
 }
 
 // guideSources are what generated parts are made from, besides packages:
-// the command tree (flags) and the app's plugins.
+// the app's plugins.
 type guideSources struct {
-	root    *cobra.Command
 	plugins []pluginapi.Plugin
 }
 
@@ -232,7 +230,6 @@ func guideValues() map[string]string {
 		"command":     product.Command,
 		"outcomeTool": agent.OutcomeTool,
 		"outcomes":    codeList([]string{agent.OutcomeDone, agent.OutcomeNothingToDo, agent.OutcomeFailed}, "or"),
-		"platforms":   codeList(routines.Platforms, "or"),
 		"paramTypes":  codeList(types, "or"),
 	}
 }
@@ -262,8 +259,6 @@ func (s guideSources) table(id string) (GuideTable, error) {
 		return backendsTable()
 	case "builtins":
 		return builtinsTable()
-	case "add-flags":
-		return s.flagsTable("add-flags", "plugins add")
 	case "manifest":
 		return manifestTable()
 	}
@@ -370,9 +365,9 @@ func backendsTable() (GuideTable, error) {
 		}
 		builtins := "none"
 		if b.Builtins != nil {
-			builtins = "the names under Built-in tools"
+			builtins = "the ones listed below"
 			if b.Builtins.Open {
-				builtins = "any of its tool names; the common ones under Built-in tools"
+				builtins = "any of its tool names; common ones below"
 			}
 		}
 		t.Rows = append(t.Rows, []string{name, strings.Join(models, ", "), b.DefaultModel, builtins, def.EnumHelp[name]})
@@ -400,22 +395,6 @@ func builtinsTable() (GuideTable, error) {
 			t.Rows = append(t.Rows, []string{tool.Name, name, dry, tool.Allows})
 		}
 	}
-	return t, nil
-}
-
-// flagsTable is a command's flags (by path, e.g. "plugins add").
-func (s guideSources) flagsTable(id, command string) (GuideTable, error) {
-	c, _, err := s.root.Find(strings.Fields(command))
-	if err != nil || commandKey(c) != command {
-		return GuideTable{}, fmt.Errorf("no command %q", command)
-	}
-	t := GuideTable{ID: id, Columns: []string{"Flag", "Meaning"}}
-	c.LocalFlags().VisitAll(func(f *pflag.Flag) {
-		if f.Hidden || f.Name == "help" || f.Name == "json" {
-			return
-		}
-		t.Rows = append(t.Rows, []string{"--" + f.Name, f.Usage})
-	})
 	return t, nil
 }
 
@@ -447,7 +426,7 @@ func guideText(g GuideOutput) string {
 	b.WriteString("# " + g.Title + "\n")
 	for i, s := range g.Sections {
 		if i > 0 {
-			b.WriteString("\n## " + s.Title + "\n")
+			b.WriteString("\n## " + s.Title)
 		}
 		b.WriteString("\n" + s.Text + "\n")
 	}
