@@ -157,12 +157,22 @@ func TestExecFails(t *testing.T) {
 }
 
 func TestExecCapsOutput(t *testing.T) {
-	res, log, err := run(context.Background(), t, "i=0; while [ $i -lt 3000 ]; do echo 'a line of output that takes some room'; i=$((i+1)); done\n")
-	if err != nil {
-		t.Fatal(err)
+	res, log, err := run(context.Background(), t, "echo first; i=0; while [ $i -lt 3000 ]; do echo 'a line of output that takes some room'; i=$((i+1)); done; echo 'the error at the end'; exit 1\n")
+	if err == nil || !strings.Contains(err.Error(), "the error at the end") {
+		t.Fatalf("the failure's reason should be the output's last line: %v", err)
 	}
-	if !res.OutputTruncated || len(res.Output) != OutputCap || len(log) > OutputCap+100 {
+	if !res.OutputTruncated || len(res.Output) > OutputCap+100 || len(log) > OutputCap+200 {
 		t.Fatalf("kept %d, logged %d, truncated %v", len(res.Output), len(log), res.OutputTruncated)
+	}
+	for name, s := range map[string]string{"kept": res.Output, "logged": log} {
+		if !strings.HasPrefix(s, "first\n") || !strings.Contains(s, "KiB of output left out") || !strings.HasSuffix(s, "the error at the end\n") {
+			t.Errorf("%s output should keep its start and its end, with the gap marked", name)
+		}
+	}
+	// Short output is kept whole.
+	res, _, err = run(context.Background(), t, "echo short\n")
+	if err != nil || res.Output != "short\n" || res.OutputTruncated {
+		t.Fatalf("%+v %v", res, err)
 	}
 }
 

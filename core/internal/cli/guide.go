@@ -14,6 +14,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
@@ -31,7 +32,7 @@ import (
 // `%{file:<path>}` an embedded file as a code block, and `%{<name>}` inline
 // is a generated value (guideValues).
 
-//go:embed guide/routines.md guide/plugins.md guide/new-notes.prompt guide/testdata/notes-server/main.go guide/testdata/notes-server/plugin.yaml
+//go:embed guide/routines.md guide/plugins.md guide/programs.md guide/new-notes.prompt guide/testdata/notes-server/main.go guide/testdata/notes-server/plugin.yaml
 var guideFiles embed.FS
 
 // guideTopic is one topic of `guide`.
@@ -42,6 +43,7 @@ type guideTopic struct {
 var guideTopics = []guideTopic{
 	{Name: "routines", Summary: "Writing a routine file: its keys, inputs, models and tools, how a run ends, and turning it on", file: "routines.md"},
 	{Name: "plugins", Summary: "Giving routines new tools: adding an MCP server, or writing one and installing it as a plugin folder", file: "plugins.md"},
+	{Name: "programs", Summary: "Writing a program: a routine that runs an executable instead of a model, and its program.yaml", file: "programs.md"},
 }
 
 // GuideOutput is `guide --json`: the topics (no topic given), or one topic.
@@ -87,7 +89,7 @@ func newGuideCmd() *cobra.Command {
 		Use:   "guide [<topic>]",
 		Short: "How to write a routine and how to add a plugin, for people and agents",
 		Long: "Without a topic, lists the topics; with one, prints it. Read `guide routines` before writing a " +
-			"routine and `guide plugins` before adding an MCP server. Topics:" + list.String(),
+			"routine, `guide plugins` before adding an MCP server and `guide programs` before writing a program. Topics:" + list.String(),
 		Example:     "  " + product.Command + " guide routines",
 		Annotations: readOnly(),
 		ValidArgs:   names,
@@ -230,6 +232,13 @@ func guideValues() map[string]string {
 		"outcomeTool": agent.OutcomeTool,
 		"outcomes":    codeList([]string{agent.OutcomeDone, agent.OutcomeNothingToDo, agent.OutcomeFailed}, "or"),
 		"paramTypes":  codeList(types, "or"),
+		"resultEnv":   programs.ResultEnv,
+		"triggerEnv":  programs.TriggerEnv,
+		"forEnv":      programs.ForEnv,
+		"runIDEnv":    programs.RunIDEnv,
+		"dryRunFlag":  programs.DryRunFlag,
+		"programPath": programs.DefaultPath,
+		"outputHalf":  fmt.Sprint(programs.OutputCap / 2 >> 10),
 	}
 }
 
@@ -260,6 +269,8 @@ func (s guideSources) table(id string) (GuideTable, error) {
 		return builtinsTable()
 	case "manifest":
 		return manifestTable()
+	case "programFields":
+		return programFieldsTable(), nil
 	}
 	return GuideTable{}, fmt.Errorf("no table %q", id)
 }
@@ -292,6 +303,15 @@ func routineFieldsTable() GuideTable {
 			desc += " Needs " + routines.Namespace + ".schedule."
 		}
 		t.Rows = append(t.Rows, []string{routines.Namespace + "." + f.Name, typ, def, "yes", desc})
+	}
+	return t
+}
+
+// programFieldsTable is every key a program's description file takes.
+func programFieldsTable() GuideTable {
+	t := GuideTable{ID: "programFields", Columns: []string{"Key", "Type", "Meaning"}}
+	for _, f := range programs.Fields {
+		t.Rows = append(t.Rows, []string{f.Name, f.Type, f.Description})
 	}
 	return t
 }

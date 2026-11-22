@@ -6,7 +6,7 @@ Everything needed to use the app, in reading order:
 - [[Guides/The menu bar app|The menu bar app]] (the status dot, its menu and windows, notifications; the Linux tray)
 - [[Guides/Routines|Routines]] (templates, dry runs, trust, turning them on, running, history, memories)
 - [[Guides/Writing a routine|Writing a routine]] (the routine file, through `procauto guide routines`)
-- [[Guides/Writing a program|Writing a program]] (a routine that runs an executable instead of a model)
+- [[Guides/Writing a program|Writing a program]] (a routine that runs an executable instead of a model, through `procauto guide programs`)
 - [[Guides/Plugins and sign-ins|Plugins and sign-ins]] (the model backend, the plugin that ships with the app, signing in)
 - [[Guides/Adding a plugin|Adding a plugin]] (any MCP server, or one of your own as a folder, through `procauto guide plugins`; servers in the config file)
 - [[Guides/Settings|Settings]] (app-wide and per routine, the usage limit, start at login)

@@ -213,7 +213,9 @@ components:
           description: ExitCode is the code it exited with (-1 when it was killed).
           type: integer
         output:
-          description: Output is what it printed (stdout and stderr), up to the first 64 KiB.
+          description: |-
+            Output is what it printed (stdout and stderr): all of it, or its first
+            and last 32 KiB with what was left out marked between them.
           type: string
         outputTruncated:
           description: OutputTruncated is true when it printed more than Output holds.

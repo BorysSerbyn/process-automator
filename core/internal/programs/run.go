@@ -33,7 +33,7 @@ const (
 const DryRunFlag = "--dry-run"
 
 // OutputCap is how much of a run's output (stdout and stderr) is logged and
-// kept with the run.
+// kept with the run: its first half and its last half.
 const OutputCap = 64 << 10
 
 // stopGrace is how long a program has to end after it's asked to (stop,
@@ -48,7 +48,8 @@ type Invocation struct {
 	Dir string
 	// Env is its whole environment (Environment's), but ResultEnv.
 	Env []string
-	// Log gets its output as it comes, up to OutputCap.
+	// Log gets its output's first half as it comes, and its last half when it
+	// ends (OutputCap).
 	Log io.Writer
 }
 
@@ -59,7 +60,8 @@ type Execution struct {
 	ExitCode int `json:"exitCode"`
 	// Summary is the line it wrote to $PA_RESULT, if it wrote one.
 	Summary string `json:"summary,omitempty"`
-	// Output is what it printed (stdout and stderr), up to the first 64 KiB.
+	// Output is what it printed (stdout and stderr): all of it, or its first
+	// and last 32 KiB with what was left out marked between them.
 	Output string `json:"output,omitempty"`
 	// OutputTruncated is true when it printed more than Output holds.
 	OutputTruncated bool `json:"outputTruncated,omitempty"`
@@ -136,6 +138,7 @@ func Exec(ctx context.Context, inv Invocation) (*Execution, error) {
 	case <-time.After(time.Second): // a process that left its group holds the output
 	}
 	_ = r.Close()
+	out.finish()
 
 	res := &Execution{ExitCode: cmd.ProcessState.ExitCode(), Summary: summary(resultPath)}
 	res.Output, res.OutputTruncated = out.text()
@@ -191,36 +194,71 @@ func lastLine(s string) string {
 	return line
 }
 
-// capped keeps and logs the first limit bytes written to it, and says so
-// once when there were more.
+// capped keeps a run's output within limit: the first half as it comes
+// (logged live), and the last half, logged when the run ends. A failing
+// program's error is at the end, so the end is never lost.
 type capped struct {
-	mu        sync.Mutex
-	log       io.Writer
-	limit     int
-	buf       bytes.Buffer
-	truncated bool
+	mu      sync.Mutex
+	log     io.Writer
+	limit   int
+	head    bytes.Buffer
+	tail    []byte
+	skipped int64
 }
 
 func (c *capped) Write(p []byte) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	n := len(p)
-	if room := c.limit - c.buf.Len(); len(p) > room {
-		p = p[:max(room, 0)]
-		if !c.truncated && c.log != nil {
-			defer fmt.Fprintf(c.log, "\n[output past %d KiB isn't logged or kept]\n", c.limit>>10)
+	half := c.limit / 2
+	if room := half - c.head.Len(); room > 0 {
+		take := min(room, len(p))
+		c.head.Write(p[:take])
+		if c.log != nil {
+			_, _ = c.log.Write(p[:take])
 		}
-		c.truncated = true
+		p = p[take:]
 	}
-	c.buf.Write(p)
-	if c.log != nil && len(p) > 0 {
-		_, _ = c.log.Write(p)
+	if len(p) == 0 {
+		return n, nil
+	}
+	if c.tail == nil && c.log != nil {
+		fmt.Fprintf(c.log, "\n[output past %d KiB: its last %d KiB follow when it ends]\n", half>>10, half>>10)
+	}
+	c.tail = append(c.tail, p...)
+	if over := len(c.tail) - half; over > 0 {
+		c.skipped += int64(over)
+		copy(c.tail, c.tail[over:])
+		c.tail = c.tail[:half]
 	}
 	return n, nil
 }
 
+// gap marks the output left out between the head and the tail, if any.
+func (c *capped) gap() string {
+	if c.skipped == 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n[… %d KiB of output left out …]\n", (c.skipped+1023)>>10)
+}
+
+// finish logs the tail, once the program's output has ended.
+func (c *capped) finish() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.tail != nil && c.log != nil {
+		_, _ = io.WriteString(c.log, c.gap())
+		_, _ = c.log.Write(c.tail)
+	}
+}
+
+// text is the output kept: all of it, or its head and tail with the gap
+// marked; and whether anything was left out.
 func (c *capped) text() (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.buf.String(), c.truncated
+	if c.tail == nil {
+		return c.head.String(), false
+	}
+	return c.head.String() + c.gap() + string(c.tail), c.skipped > 0
 }

@@ -292,8 +292,12 @@ func Add(store, name, descPath string, replace bool) (Program, error) {
 	if err := os.WriteFile(filepath.Join(staging, DescriptionFile), raw, 0o600); err != nil {
 		return Program{}, err
 	}
-	if err := copyFile(exe, filepath.Join(staging, filepath.Base(exe)), 0o700); err != nil {
+	copied := filepath.Join(staging, filepath.Base(exe))
+	if err := copyFile(exe, copied, 0o700); err != nil {
 		return Program{}, err
+	}
+	if err := unquarantine(copied); err != nil {
+		return Program{}, fmt.Errorf("its copy: %w", err)
 	}
 	if replace {
 		old := staging + ".old"

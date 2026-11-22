@@ -115,7 +115,7 @@
         },
         "output": {
           "type": "string",
-          "description": "Output is what it printed (stdout and stderr), up to the first 64 KiB."
+          "description": "Output is what it printed (stdout and stderr): all of it, or its first\nand last 32 KiB with what was left out marked between them."
         },
         "outputTruncated": {
           "type": "boolean",

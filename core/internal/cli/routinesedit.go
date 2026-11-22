@@ -135,7 +135,7 @@ func newRoutinesCreateCmd() *cobra.Command {
 			"it on with `routines trust <routine> --resume`. How to write the file: `" + product.Command + " guide routines`.\n\n" +
 			"With --kind program it adds a program instead: --from is its description file (program.yaml), and the " +
 			"executable it names is copied with it into the app's programs folder; that copy is what runs. It starts " +
-			"paused and untrusted too, and runs only once trusted, dry runs included.",
+			"paused and untrusted too, and runs only once trusted, dry runs included. How to write one: `" + product.Command + " guide programs`.",
 		Example: "  " + product.Command + " routines create standup --from ./standup.prompt\n" +
 			"  " + product.Command + " routines create backup --kind program --from ./backup/program.yaml",
 		Args: cobra.ExactArgs(1),
@@ -246,7 +246,7 @@ func newRoutinesUpdateCmd() *cobra.Command {
 		Long: "Replaces <routine>.prompt after validating it like any routine. Its settings are kept; changing what " +
 			"it can reach takes its trust away. How to write the file: `" + product.Command + " guide routines`.\n\n" +
 			"For a program, --from is its description file's path: it and the executable it names are copied again; " +
-			"a changed executable or description file takes its trust away.",
+			"a changed executable or description file takes its trust away. How to write one: `" + product.Command + " guide programs`.",
 		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			if programs.Exists(a.Layout.Programs(), args[0]) {

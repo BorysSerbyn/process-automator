@@ -16,6 +16,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
@@ -122,6 +123,26 @@ func TestGuidePluginsCoversTheCode(t *testing.T) {
 		if !strings.Contains(out, w) {
 			t.Errorf("guide plugins lacks %q", w)
 		}
+	}
+}
+
+func TestGuideProgramsCoversTheCode(t *testing.T) {
+	out := guideOut(t, "programs")
+	want := []string{"$" + programs.ResultEnv, "$" + programs.TriggerEnv, "$" + programs.ForEnv, "$" + programs.RunIDEnv,
+		programs.DryRunFlag, programs.DefaultPath, "routines create <name> --kind program", "auth login <name>",
+		"routines trust <name> --resume", "run <name> --dry-run", "routines update <name>"}
+	for _, f := range programs.Fields {
+		want = append(want, "`"+f.Name+"` (")
+	}
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("guide programs lacks %s", w)
+		}
+	}
+	src, _ := guideFiles.ReadFile("guide/programs.md")
+	example := strings.SplitN(strings.SplitN(string(src), "```yaml\n", 2)[1], "```", 2)[0]
+	if _, err := programs.Parse("backup", example); err != nil {
+		t.Errorf("the example program.yaml doesn't parse: %v", err)
 	}
 }
 
