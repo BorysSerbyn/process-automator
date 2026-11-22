@@ -619,6 +619,13 @@ A hook runs for an event, so it has no run now: `hooks fire <hook>` gives it one
 - **Run now with an empty event**: the action would run on nothing, and fail or do the wrong thing
 - **Replaying the watcher's last event**: the app keeps events' IDs, not their data, and the last one may have been handled
 
+## Decision: hooks have a menu item and windows of their own, made of the routine window's parts
+A hook isn't a routine (no schedule, no run now, its own commands), so it never shows among routines: **Hooks ›** sits after **Routines ›**, while there are hooks, and the Hooks window lists hooks and their watchers. Prompts and programs show together, as routines do: which kind a hook is matters less to me than what it acts on. A hook's window is a routine's with its differences (fire with a sample event, what it acts on), built from the same parts (runs, memories, what it can reach or runs, sign-in, a file shown read-only), so a fix to one is a fix to both. The sample event goes to `hooks fire` as `--event-json`: the frontends' CLI runners pass no stdin, and the event is a line of JSON.
+
+### Rejected
+- **Hooks in the Routines window, tagged**: the routine lists would mix things with a schedule and things without, and every routine control would need an exception
+- **A hook's window of its own from scratch**: two copies of the run history, the trust review and the program rows, drifting apart
+
 ## Decision: names are unique across routines, programs, hooks and watchers
 Trust, settings, run status, history and stop requests are keyed by name, so a hook named like a routine would share its trust record and history. Adding any of the four under a name another has is refused; the commands that take a name and mean any runnable (`stop`, `runs`, `routines pause|resume|trust`) find a hook by it, and those that mean a routine say it's a hook. A hook's settings are `hooks.<hook>.<field>` and a watcher's `watchers.<watcher>.enabled`: they're named explicitly, and never in the app-wide settings.
 

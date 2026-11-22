@@ -82,7 +82,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## Notifications
 - **From routines** (the notify plugin): a routine can send me a short desktop notification, a title and a message, shown by the plugin itself through the OS (macOS, as the app; Linux, through the desktop's notification service), not by the menu bar app. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade. Clicking one does nothing. It has no settings, app-wide or per routine
-- **The app's own**: a desktop notification when a run (a routine's or a hook's) fails, needs a sign-in, is missed or skipped, saying which routine or hook, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app on macOS and the tray on Linux; clicking one opens the app: on the run it's about, in its routine's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
+- **The app's own**: a desktop notification when a run (a routine's or a hook's) fails, needs a sign-in, is missed or skipped, saying which routine or hook, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app on macOS and the tray on Linux; clicking one opens the app: on the run it's about, in its routine's or hook's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
 - **On Linux** clicking one opens its run's report, or (an update's) the Routines window
 
 ## Status indicator
@@ -95,7 +95,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## UI
 Managing the app is possible entirely from macOS's menu bar app (automator-ui), without a terminal. The CLI does all of it too; the UI is another way in, not a replacement.
-- **Menu** (the menu bar app's and the Linux tray's): the version; the status in words (each reason the dot is red, opening the run it's about); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); updates; Settings; Quit
+- **Menu** (the menu bar app's and the Linux tray's): the version; the status in words (each reason the dot is red, opening the run it's about, or the hook's window); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); **Hooks ›** while there are hooks (all hooks, then each with its status); updates; Settings; Quit
 - **Quit** stops the app: the menu bar app or tray, and the scheduler (no routine runs on its schedule until I open the app again); both start again at the next login. When the scheduler can't be stopped, it says why and quits anyway
 - **Opening the app** starts the scheduler if it isn't running, so opening it after a Quit brings everything back; opening it while it runs opens the Setup window while setup has steps left, else the Settings window
 - **Routines window**: every routine, LLM routines and programs together, with its health, schedule in words, last run and status
@@ -113,11 +113,19 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
     - its description file, read-only, with its description and data folder
     - deleting it says its run history and data folder are kept
     - no memories or model
+- **Hooks window**: every hook, LLM hooks and program hooks together, with its health, what it acts on in words, whether it's on, and its last run; and every watcher: how it runs, whether it's trusted or paused, the hooks listening, and why it's failing
+- **A hook's window**: a routine's (a program's, for a program hook), with only these differences:
+  - fire with a sample event (written as JSON), as a dry run or for real, in place of run now; pause and resume turn it off and on; no schedule or next run
+  - what it acts on: its watcher (its state, opening its window), the event type, batches, staleness and rate
+  - its review shows what it acts on too, and its warnings before Trust; Turn On trusts one that's off and turns it on; while its watcher isn't trusted, it says the hook hears nothing until it is
+  - each run's events (type, time, data), shown as plain text
+  - memories for an LLM hook only
+- **A watcher's window**: how it runs and last went, why it's failing, the hooks listening, what it runs with trusting it and signing in to its secrets, its file (read-only); pause, resume and delete
 - **Setup window**: every setup step with a button for each
 - **Settings window**: start at login, LLM usage, and every app-wide setting with a control for its type
 - **Updates**: see whether a newer release exists, and install it
 - **Start at login**: on or off
-- **Linux tray**: the same menu, updates, notifications and windows (Setup, Settings, Routines, a routine's, Updating); a routine's schedule is edited as its cron setting, with no days-and-time picker. Installing an update is confirmed in a notification (where notifications have no buttons, in a window that asks). With no display to show a window on, or without the windows app, a window is its CLI command in my terminal (Setup: `setup`; Settings: `settings list --scope app`; Routines: `routines list --kind all`; a routine: `routines show <routine>`; Updating: `update progress`; asking before an update: `update --ask`)
+- **Linux tray**: the same menu, updates, notifications and windows (Setup, Settings, Routines, a routine's, Hooks, a hook's, a watcher's, Updating); a routine's schedule is edited as its cron setting, with no days-and-time picker. Installing an update is confirmed in a notification (where notifications have no buttons, in a window that asks). With no display to show a window on, or without the windows app, a window is its CLI command in my terminal (Setup: `setup`; Settings: `settings list --scope app`; Routines: `routines list --kind all`; a routine: `routines show <routine>`; Hooks: `hooks list`; a hook: `hooks show <hook>`; a watcher: `watchers show <watcher>`; Updating: `update progress`; asking before an update: `update --ask`)
 
 ## CLI
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each

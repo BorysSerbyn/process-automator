@@ -12,7 +12,7 @@ It has an example watcher, a program hook and an LLM hook, every key, the event 
 Run it by hand first: a poll watcher is a program that reads `$PA_CURSOR`, prints JSON lines and exits, so `PA_CURSOR= ./calendar-watch` shows what the app would get. Give each event an ID that stays the same when it's printed again (the calendar event's ID with its start time, say): that's how the app acts on it once. Build it for the machine it runs on, as a program, and call anything it needs by its full path.
 
 ## Trying a hook
-There's no run now for a hook, since it runs for an event: `hooks fire` gives it a sample, a line as its watcher would print it, saved in a file. With `--dry-run`, an LLM hook's writes are intercepted and a program hook that writes is passed `--dry-run`.
+There's no run now for a hook, since it runs for an event: `hooks fire` gives it a sample, a line as its watcher would print it, saved in a file. With `--dry-run`, an LLM hook's writes are intercepted and a program hook that writes is passed `--dry-run`. In the menu bar app, a hook's window (**Hooks ›**) does the same with **Fire…**: see [[Guides/The menu bar app#A hook's window|A hook's window]].
 
 ## Opening apps
 On macOS a hook's program can open an app as from a terminal (`open -a`, `open <url>`). On Linux it gets the desktop session's display variables when the scheduler has them; under systemd that's when the session hands them to systemd's user manager, as GNOME and KDE do. If an app doesn't open, add `systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XAUTHORITY` to the session's startup, then restart the scheduler (`procauto login-items stop`, then `start`).
