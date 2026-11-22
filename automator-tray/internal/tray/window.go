@@ -40,6 +40,9 @@ type Window struct {
 	Kind WindowKind
 	// Routine names the routine, hook or watcher it's about.
 	Routine string
+	// Review opens a routine's or hook's window on its Turn On review, when
+	// it needs turning on (from the menu, a reason).
+	Review bool
 }
 
 // Named is whether the window is about one routine, hook or watcher.
@@ -55,10 +58,16 @@ func (w Window) Command() []string {
 	case SettingsWindow:
 		return []string{"settings", "list", "--scope", "app"}
 	case RoutineWindow:
+		if w.Review {
+			return []string{"routines", "trust", w.Routine, "--resume"}
+		}
 		return []string{"routines", "show", w.Routine}
 	case HooksWindow:
 		return []string{"hooks", "list"}
 	case HookWindow:
+		if w.Review {
+			return []string{"hooks", "trust", w.Routine, "--resume"}
+		}
 		return []string{"hooks", "show", w.Routine}
 	case WatcherWindow:
 		return []string{"watchers", "show", w.Routine}
@@ -140,6 +149,9 @@ func WindowsCommand(getenv func(string) string, cliPath string, w Window) []stri
 		return nil
 	}
 	if w.Named() {
+		if w.Review {
+			return []string{exe, string(w.Kind), w.Routine, "review"}
+		}
 		return []string{exe, string(w.Kind), w.Routine}
 	}
 	return []string{exe, string(w.Kind)}

@@ -148,8 +148,8 @@ func Menu(name, version string, s *cli.RunStatus, now time.Time, update MenuItem
 }
 
 // statusItems are what the status is, in the core's words: why it's red
-// (each reason opens the run it's about; one about a hook with no run, the
-// hook's window), or its summary.
+// (each reason opens the run it's about; one about a routine or hook with
+// no run, its window on its Turn On review), or its summary.
 func statusItems(s *cli.RunStatus, now time.Time) []MenuItem {
 	if !Responding(s, now) {
 		return []MenuItem{{Text: "Not responding"}}
@@ -164,7 +164,10 @@ func statusItems(s *cli.RunStatus, now time.Time) []MenuItem {
 		case r.Run != "":
 			item.Action = Action{Kind: OpenRun, Run: r.Run}
 		case r.Hook && r.Routine != "":
-			item.Action = Action{Kind: ShowWindow, Window: Window{Kind: HookWindow, Routine: r.Routine}}
+			item.Action = Action{Kind: ShowWindow, Window: Window{Kind: HookWindow, Routine: r.Routine, Review: true}}
+		case r.Routine != "":
+			// Nothing ran (it isn't trusted, say): its window, on its review.
+			item.Action = Action{Kind: ShowWindow, Window: Window{Kind: RoutineWindow, Routine: r.Routine, Review: true}}
 		}
 		items = append(items, item)
 	}
@@ -192,7 +195,7 @@ func routinesItem(s *cli.RunStatus) MenuItem {
 			}
 			sub = append(sub, MenuItem{
 				Text: shorten(text), Health: healthOrNone(r.Health),
-				Action: Action{Kind: ShowWindow, Window: Window{Kind: RoutineWindow, Routine: r.Name}},
+				Action: Action{Kind: ShowWindow, Window: Window{Kind: RoutineWindow, Routine: r.Name, Review: true}},
 			})
 		}
 	}
@@ -214,7 +217,7 @@ func hooksItem(s *cli.RunStatus) MenuItem {
 		}
 		sub = append(sub, MenuItem{
 			Text: shorten(text), Health: healthOrNone(h.Health),
-			Action: Action{Kind: ShowWindow, Window: Window{Kind: HookWindow, Routine: h.Name}},
+			Action: Action{Kind: ShowWindow, Window: Window{Kind: HookWindow, Routine: h.Name, Review: true}},
 		})
 	}
 	return MenuItem{Text: "Hooks", Submenu: sub}

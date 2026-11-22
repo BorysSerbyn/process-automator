@@ -328,14 +328,20 @@ func (w *Watcher) access() []fyne.CanvasObject {
 	objects := []fyne.CanvasObject{cardTitle("What it runs", state), divider()}
 	objects = append(objects, executableRows(program, signInRow(&program, w.signingIn, w.signInError, w.signIn), false)...)
 	objects = append(objects, changedRows(changes)...)
-	if w.trustError != "" {
+	switch {
+	case w.trustError != "" && w.review == nil:
+		objects = append(objects, padded(0, 8, rowInset, rowInset, container.NewBorder(nil, nil, nil,
+			widget.NewButton("Try Again", w.loadTrust), errorRow(w.trustError))))
+	case w.trustError != "":
 		objects = append(objects, padded(0, 8, rowInset, rowInset, errorRow(w.trustError)))
+	case !d.Trusted && w.review == nil:
+		objects = append(objects, padded(0, 8, rowInset, rowInset, container.NewHBox(spinner(), quiet("Reading what it runs…"))))
 	}
 	var do func()
 	if !d.Trusted && w.review != nil {
 		do = w.trust
 	}
-	return reviewButton(objects, "Trust", "Trusting it lets this executable run, for the hooks listening to it.", do, w.working)
+	return reviewButton(objects, "Trust", "Turning on a hook that listens to it trusts it too; this trusts it alone.", do, w.working)
 }
 
 // modeText is how a watcher runs, in words: "Polled every 30s", "Streams events".

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -60,6 +61,11 @@ type Routine struct {
 	trustError string
 	accessOpen bool
 
+	// turnOn is its one review and confirm; reviewWhenLoaded opens it once
+	// the routine is read, if it needs turning on (from the menu, a reason).
+	turnOn           *turnOn
+	reviewWhenLoaded bool
+
 	// signingIn is a program's sign-in to its secrets, waiting for me.
 	signingIn   bool
 	signInError string
@@ -80,6 +86,7 @@ func NewRoutine(c cli.CLI, win fyne.Window, async Async, name string, deleted fu
 	r.history = newRunHistory(c, async, name, func() time.Time { return r.now() }, r.refresh,
 		func(msg string) { r.actionError = msg; r.refresh() })
 	r.memories = newMemoryList(c, async, name, r.refresh)
+	r.turnOn = newTurnOn(c, async, name, false, r.summary, r.refresh, r.Load)
 	r.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -168,10 +175,10 @@ func (r *Routine) loadDetail() {
 				if !d.IsProgram() && !r.memories.loaded {
 					r.memories.load()
 				}
-				if !d.Trusted {
-					r.accessOpen = true
-					if r.review == nil {
-						r.loadTrust()
+				if r.reviewWhenLoaded {
+					r.reviewWhenLoaded = false
+					if d.TurnOn {
+						r.turnOn.start()
 					}
 				}
 			}
@@ -288,17 +295,6 @@ func (r *Routine) toggleAccess() {
 	r.refresh()
 }
 
-// reviewTrust is the Not trusted banner's Review…: what it can reach, open
-// in Overview.
-func (r *Routine) reviewTrust() {
-	r.tab = OverviewTab
-	if !r.accessOpen {
-		r.toggleAccess()
-		return
-	}
-	r.refresh()
-}
-
 func (r *Routine) loadTrust() {
 	r.async(func() func() {
 		review, err := r.cli.TrustCheck(r.name)
@@ -361,29 +357,32 @@ func signInRow(p *cli.ProgramInfo, signingIn bool, problem string, start func())
 	return box
 }
 
-// trust trusts the routine with what it can reach; turnOn also has it run
-// on its schedule (a paused routine), as setup's Turn On does.
-func (r *Routine) trust(turnOn bool) {
-	r.working = true
-	r.refresh()
-	r.async(func() func() {
-		var err error
-		if turnOn {
-			err = r.cli.TurnOn(r.name)
-		} else {
-			_, err = r.cli.Trust(r.name)
-		}
-		return func() {
-			r.working = false
-			if err != nil {
-				r.trustError = err.Error()
-			} else {
-				r.trustError, r.review = "", nil
-				r.Load()
-			}
-			r.refresh()
-		}
-	})
+// Review opens its Turn On review, once it's read, if it needs turning on
+// (the window opened, or raised, from the menu or a reason).
+func (r *Routine) Review() {
+	if r.detail == nil {
+		r.reviewWhenLoaded = true
+		return
+	}
+	if r.detail.TurnOn {
+		r.turnOn.start()
+	}
+}
+
+// summary is what it does, in a line, for its review.
+func (r *Routine) summary() string {
+	d := r.detail
+	if d == nil {
+		return ""
+	}
+	var parts []string
+	if d.Description != "" {
+		parts = append(parts, d.Description)
+	}
+	if d.ScheduleText != "" {
+		parts = append(parts, "Runs: "+d.ScheduleText+".")
+	}
+	return strings.Join(parts, " ")
 }
 
 // The view
@@ -407,9 +406,15 @@ func (r *Routine) render() fyne.CanvasObject {
 	if r.loadError != "" && r.detail == nil {
 		box.Add(banner("Couldn't read "+r.name, r.loadError))
 	}
-	if r.detail != nil && !r.detail.Trusted {
-		review := widget.NewButton("Review…", r.reviewTrust)
-		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(review), banner("Not trusted", r.detail.Untrusted)))
+	if r.turnOn.showing {
+		box.Add(r.turnOn.view())
+	} else if d := r.detail; d != nil && d.TurnOn {
+		why := d.Untrusted
+		if why == "" {
+			why = "It's paused."
+		}
+		on := widget.NewButton("Turn On…", r.turnOn.start)
+		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(on), banner(r.name+" isn't on", why)))
 	}
 	box.Add(segmented(r.tabs(), r.tab, r.ShowTab))
 	switch r.tab {
@@ -456,14 +461,17 @@ func (r *Routine) controls() fyne.CanvasObject {
 		buttons = append(buttons, stop)
 	} else {
 		run := widget.NewButtonWithIcon("Run Now", theme.MediaPlayIcon(), func() { r.runNow(false) })
-		run.Importance = widget.HighImportance
 		buttons = append(buttons, run, widget.NewButton("Dry Run", func() { r.runNow(true) }))
 	}
-	if r.detail != nil {
-		enabled := r.detail.Enabled
-		if enabled {
+	if d := r.detail; d != nil {
+		switch {
+		case d.TurnOn:
+			on := widget.NewButtonWithIcon("Turn On…", theme.ConfirmIcon(), r.turnOn.start)
+			on.Importance = widget.HighImportance
+			buttons = append(buttons, on)
+		case d.Enabled:
 			buttons = append(buttons, widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() { r.setPaused(true) }))
-		} else {
+		default:
 			buttons = append(buttons, widget.NewButtonWithIcon("Resume", theme.MediaPlayIcon(), func() { r.setPaused(false) }))
 		}
 	}
@@ -538,8 +546,8 @@ func (r *Routine) statusRows() []fyne.CanvasObject {
 	return append(rows, padded(0, 6, 0, 0, container.NewHBox()))
 }
 
-// access is what the routine can reach, opening to its review, with Trust
-// (or Turn On, for a paused routine) while it isn't trusted.
+// access is what the routine can reach (a program's: what it runs), read
+// only, opening to its review.
 func (r *Routine) access() []fyne.CanvasObject {
 	d := r.detail
 	state := tag("Trusted", successColour)
@@ -565,22 +573,8 @@ func (r *Routine) access() []fyne.CanvasObject {
 	if review.Program != nil {
 		signIn = r.signInRow(review.Program)
 	}
-	var do func()
-	action, note := "Trust", "Trusting it lets it run for real with what's listed above. Dry runs never need it."
-	if d.IsProgram() {
-		note = "Trusting it lets this executable run, dry runs included."
-	}
-	if !d.Trusted && r.review != nil {
-		turnOn := !d.Enabled
-		if turnOn {
-			action, note = "Turn On", "Turning it on trusts it with what's listed above and runs it on its schedule. Dry runs never need it."
-			if d.IsProgram() {
-				note = "Turning it on trusts this executable to run (dry runs included) and runs it on its schedule."
-			}
-		}
-		do = func() { r.trust(turnOn) }
-	}
-	objects = append(objects, trustReview(review, action, note, do, r.working, signIn)...)
+	// Read only: Turn On… is where it's trusted.
+	objects = append(objects, trustReview(review, "", "", nil, r.working, signIn)...)
 	if r.trustError != "" {
 		objects = append(objects, padded(0, 8, rowInset, rowInset, errorRow(r.trustError)))
 	}

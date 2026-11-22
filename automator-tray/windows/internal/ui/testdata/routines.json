@@ -4,6 +4,6 @@
    "session": "none", "builtinTools": [], "trusted": true, "next": "2026-11-23T09:20:00Z",
    "lastRun": {"id": "standup/2026-11-21T092001", "trigger": "schedule", "startedAt": "2026-11-21T09:20:01Z", "outcome": "success"}},
   {"name": "digest", "path": "/home/me/.config/acme/routines/digest.prompt", "servers": ["notify"], "tools": ["notify_me"],
-   "enabled": false, "timeout": "10m", "effort": "medium", "session": "none", "builtinTools": [], "trusted": false,
+   "enabled": false, "timeout": "10m", "effort": "medium", "session": "none", "builtinTools": [], "trusted": false, "turnOn": true,
    "untrusted": "it's never been trusted"}
 ]

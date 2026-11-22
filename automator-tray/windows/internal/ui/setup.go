@@ -561,7 +561,16 @@ func (s *Setup) action(step cli.SetupStep) fyne.CanvasObject {
 			if !step.Done {
 				turnOn = func() { s.turnOn(step) }
 			}
-			return card(true, trustReview(r, "Turn On", "", turnOn, s.working[id], nil)...)
+			// The sign-ins it still needs, from the review, as a window's
+			// Turn On… shows them; then the one confirm.
+			var rows []fyne.CanvasObject
+			for _, name := range r.SignIns {
+				n := name
+				signIn := s.button("Sign In…", step, func() { s.run(step, func() error { return s.cli.SignIn(n) }, nil) })
+				rows = append(rows, padded(4, 0, rowInset-8, rowInset-8, container.NewBorder(nil, nil, nil, signIn,
+					widget.NewLabel(n+" needs signing in"))))
+			}
+			return card(true, append(rows, trustReview(r, r.ConfirmTitle(), "", turnOn, s.working[id], nil)...)...)
 		}
 		if s.errors[id] == "" {
 			return spinner()

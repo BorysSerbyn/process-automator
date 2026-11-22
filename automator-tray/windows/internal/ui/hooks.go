@@ -7,7 +7,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/cli"
@@ -22,6 +21,7 @@ type Hooks struct {
 	cli         cli.CLI
 	async       Async
 	openHook    func(name string)
+	turnOn      func(name string)
 	openWatcher func(name string)
 	now         func() time.Time
 
@@ -38,8 +38,9 @@ type Hooks struct {
 
 // NewHooks makes the Hooks window's content; Load reads it, Update gives it
 // run status.
-func NewHooks(c cli.CLI, async Async, openHook, openWatcher func(string)) *Hooks {
-	h := &Hooks{cli: c, async: async, openHook: openHook, openWatcher: openWatcher, now: time.Now}
+// turnOn opens a hook's window on its Turn On review.
+func NewHooks(c cli.CLI, async Async, openHook, turnOn, openWatcher func(string)) *Hooks {
+	h := &Hooks{cli: c, async: async, openHook: openHook, turnOn: turnOn, openWatcher: openWatcher, now: time.Now}
 	h.scroll = container.NewVScroll(container.NewVBox())
 	h.refresh()
 	return h
@@ -171,12 +172,6 @@ func (h *Hooks) hookRow(hk cli.HookInfo) fyne.CanvasObject {
 		kind = "Program"
 	}
 	name := container.NewHBox(widget.NewLabelWithStyle(hk.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), tag(kind, ""))
-	if !hk.Enabled {
-		name.Add(tag("Off", ""))
-	}
-	if !hk.Trusted {
-		name.Add(tag("Not trusted", theme.ColorNameWarning))
-	}
 	lines := container.NewVBox(name, secondary("On "+onText(hk.On)))
 	if last != nil {
 		lines.Add(lastRunLine(last, h.now()))
@@ -193,7 +188,7 @@ func (h *Hooks) hookRow(hk cli.HookInfo) fyne.CanvasObject {
 	}
 	row := container.NewBorder(nil, nil, healthDot(health, 10), container.NewCenter(trailing), lines)
 	n := hk.Name
-	return newLinkRow(func() { h.openHook(n) }, padded(4, 4, 0, 0, row))
+	return withTurnOn(hk.TurnOn, func() { h.turnOn(n) }, newLinkRow(func() { h.openHook(n) }, padded(4, 4, 0, 0, row)))
 }
 
 // watcherRow is one watcher: its name and state, how it runs, the hooks

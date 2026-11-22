@@ -37,7 +37,7 @@ func main() {
 	log.SetPrefix("automator-windows: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env (default: found beside this program)")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name>|hooks|hook <name>|watcher <name>|update|confirm-update")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review]|hooks|hook <name> [review]|watcher <name>|update|confirm-update")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -73,6 +73,9 @@ func window(args []string) (tray.Window, error) {
 			return w, nil
 		}
 	case tray.RoutineWindow, tray.HookWindow, tray.WatcherWindow:
+		if len(args) == 3 && args[2] == "review" && w.Kind != tray.WatcherWindow {
+			w.Review, args = true, args[:2]
+		}
 		if len(args) == 2 && args[1] != "" {
 			w.Routine = args[1]
 			return w, nil
@@ -94,6 +97,9 @@ func lockName(w tray.Window) string {
 	return "window-" + string(w.Kind) + "-" + hex.EncodeToString(sum[:8])
 }
 
+// reviewer is a window that can open its Turn On review.
+type reviewer interface{ Review() }
+
 // statusFollower is a window that shows run status as it changes.
 type statusFollower interface{ Update(*cli.RunStatus) }
 
@@ -114,7 +120,11 @@ func run(dir string, which tray.Window) error {
 	if id == "" {
 		id = info.Command
 	}
-	holder, err := instance.Claim(instance.Dir(os.Getenv, id), lockName(which))
+	ask := "raise"
+	if which.Review {
+		ask = "review"
+	}
+	holder, err := instance.Ask(instance.Dir(os.Getenv, id), lockName(which), ask)
 	if err != nil {
 		return err
 	}
@@ -151,6 +161,7 @@ func run(dir string, which tray.Window) error {
 		size = fyne.NewSize(600, 460)
 		view = ui.NewRoutines(c, ui.Background,
 			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name}) },
+			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name, Review: true}) },
 			func() { open(tray.Window{Kind: tray.SetupWindow}) },
 			func() { open(tray.Window{Kind: tray.SettingsWindow}) })
 	case tray.RoutineWindow:
@@ -162,6 +173,7 @@ func run(dir string, which tray.Window) error {
 		size = fyne.NewSize(620, 520)
 		view = ui.NewHooks(c, ui.Background,
 			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) },
+			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name, Review: true}) },
 			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
 	case tray.HookWindow:
 		w = a.NewWindow(which.Routine)
@@ -215,7 +227,7 @@ func run(dir string, which tray.Window) error {
 		holder.Release()
 	})
 	go func() {
-		for range holder.Raised {
+		for asked := range holder.Raised {
 			fyne.Do(func() {
 				if stopped.Load() {
 					return
@@ -223,9 +235,16 @@ func run(dir string, which tray.Window) error {
 				w.Show()
 				w.RequestFocus()
 				view.Load()
+				if r, ok := view.(reviewer); ok && asked == "review" {
+					r.Review()
+				}
 			})
 		}
 	}()
+	// Opened to turn it on: its review shows once it's read, if it needs it.
+	if r, ok := view.(reviewer); ok && which.Review {
+		r.Review()
+	}
 	// What the CLI answers waits for the app's loop, which starts here.
 	view.Load()
 	w.ShowAndRun()

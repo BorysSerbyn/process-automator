@@ -173,6 +173,7 @@ type TrustOutput struct {
 	// Program is a program's: what runs, in place of servers and tools.
 	Program *ProgramInfo  `json:"program,omitempty"`
 	Changes []string      `json:"changes"`
+	Trusted bool          `json:"trusted"`
 	Tools   []CheckedTool `json:"tools,omitempty"`
 	// ToolsError says why its tools couldn't be checked.
 	ToolsError string `json:"toolsError,omitempty"`
@@ -183,6 +184,37 @@ type TrustOutput struct {
 	Trigger  *Trigger      `json:"trigger,omitempty"`
 	Watcher  *WatcherTrust `json:"watcher,omitempty"`
 	Warnings []string      `json:"warnings,omitempty"`
+	// SignIns are the sign-ins it still needs before it works (`auth login <name>`).
+	SignIns []string `json:"signIns,omitempty"`
+}
+
+// NeedsTrust is whether confirming its review trusts anything: it isn't
+// trusted, or (a hook) its watcher isn't, which trusting the hook trusts too.
+func (t TrustOutput) NeedsTrust() bool { return !t.Trusted || t.WatcherToTrust() != nil }
+
+// WatcherToTrust is the hook's watcher that confirming trusts with it (nil: none).
+func (t TrustOutput) WatcherToTrust() *WatcherTrust {
+	if t.Watcher == nil || t.Watcher.Trusted || t.Watcher.Program == nil {
+		return nil
+	}
+	return t.Watcher
+}
+
+// MissingWatcher is the hook's watcher that can't be trusted: there's no
+// such watcher (nil: there's one).
+func (t TrustOutput) MissingWatcher() *WatcherTrust {
+	if t.Watcher == nil || t.Watcher.Trusted || t.Watcher.Program != nil {
+		return nil
+	}
+	return t.Watcher
+}
+
+// ConfirmTitle is the review's one button.
+func (t TrustOutput) ConfirmTitle() string {
+	if t.NeedsTrust() {
+		return "Trust and Turn On"
+	}
+	return "Turn On"
 }
 
 // Trigger is what a hook is trusted to act on.
@@ -192,11 +224,16 @@ type Trigger struct {
 	Batch   bool   `json:"batch,omitempty"`
 }
 
-// WatcherTrust is whether a hook's watcher is trusted.
+// WatcherTrust is a hook's watcher in the hook's review: whether it's
+// trusted, and what trusting it approves (absent without a watcher).
 type WatcherTrust struct {
-	Name      string `json:"name"`
-	Trusted   bool   `json:"trusted"`
-	Untrusted string `json:"untrusted,omitempty"`
+	Name        string       `json:"name"`
+	Trusted     bool         `json:"trusted"`
+	Untrusted   string       `json:"untrusted,omitempty"`
+	Description string       `json:"description,omitempty"`
+	Mode        string       `json:"mode,omitempty"`
+	Program     *ProgramInfo `json:"program,omitempty"`
+	Changes     []string     `json:"changes,omitempty"`
 }
 
 // Surface is what a routine can reach.

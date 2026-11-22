@@ -27,7 +27,8 @@ const (
 		`"hooks":[{"name":"brief","enabled":false,"health":"none","summary":"Paused"},` +
 		`{"name":"open-meet","enabled":true,"health":"error","summary":"open-meet can't run"}],` +
 		`"reasons":[{"routine":"open-meet","hook":true,"text":"open-meet can't run","detail":"its watcher cal is paused"},` +
-		`{"routine":"brief","hook":true,"text":"brief failed","run":"brief/r1"}]}`
+		`{"routine":"brief","hook":true,"text":"brief failed","run":"brief/r1"},` +
+		`{"routine":"standup","text":"standup can't be scheduled","detail":"it isn't trusted"}]}`
 	// lineNoHeartbeat has no validUntil: the scheduler never said it's up.
 	lineNoHeartbeat = `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","health":"ok","busy":true,"routines":[]}`
 )
@@ -104,6 +105,12 @@ func window(k WindowKind, routine string) Action {
 	return Action{Kind: ShowWindow, Window: Window{Kind: k, Routine: routine}}
 }
 
+// review is a routine's or hook's window, on its Turn On review when it
+// needs one.
+func review(k WindowKind, name string) Action {
+	return Action{Kind: ShowWindow, Window: Window{Kind: k, Routine: name, Review: true}}
+}
+
 // The rest of the menu after the status: Routines ›, the update item,
 // Settings, Quit.
 func tail(routines ...MenuItem) []MenuItem {
@@ -129,8 +136,8 @@ func TestTheMenu(t *testing.T) {
 		{"ok: the summary, and each routine with its health and summary", lineOK, fresh, append([]MenuItem{
 			version, {Text: "All good"},
 		}, tail(
-			MenuItem{Text: "weekly_report — Next: tomorrow 09:20", Health: "ok", Action: window(RoutineWindow, "weekly_report")},
-			MenuItem{Text: "standup — Paused", Health: "none", Action: window(RoutineWindow, "standup")},
+			MenuItem{Text: "weekly_report — Next: tomorrow 09:20", Health: "ok", Action: review(RoutineWindow, "weekly_report")},
+			MenuItem{Text: "standup — Paused", Health: "none", Action: review(RoutineWindow, "standup")},
 		)...)},
 		{"error: each reason (one about a run opens it), and Finish Setup… while setup is left", lineError, fresh, append([]MenuItem{
 			version,
@@ -138,22 +145,23 @@ func TestTheMenu(t *testing.T) {
 			{Text: "Setup isn't finished"},
 			{Text: "Finish Setup…", Action: window(SetupWindow, "")},
 		}, tail(
-			MenuItem{Text: "standup — standup failed", Health: "error", Action: window(RoutineWindow, "standup")},
+			MenuItem{Text: "standup — standup failed", Health: "error", Action: review(RoutineWindow, "standup")},
 		)...)},
 		{"stale: not responding, no Finish Setup…, the last routines stand", lineError, stale, append([]MenuItem{
 			version, {Text: "Not responding"},
 		}, tail(
-			MenuItem{Text: "standup — standup failed", Health: "error", Action: window(RoutineWindow, "standup")},
+			MenuItem{Text: "standup — standup failed", Health: "error", Action: review(RoutineWindow, "standup")},
 		)...)},
 		{"hooks: their own submenu after Routines ›; a reason about one opens its window, or its run", lineHooks, fresh, append([]MenuItem{
 			version,
-			{Text: "open-meet can't run", Action: window(HookWindow, "open-meet")},
+			{Text: "open-meet can't run", Action: review(HookWindow, "open-meet")},
 			{Text: "brief failed", Action: Action{Kind: OpenRun, Run: "brief/r1"}},
+			{Text: "standup can't be scheduled", Action: review(RoutineWindow, "standup")},
 		}, withHooks(tail(
-			MenuItem{Text: "standup — Next: tomorrow 09:20", Health: "ok", Action: window(RoutineWindow, "standup")},
+			MenuItem{Text: "standup — Next: tomorrow 09:20", Health: "ok", Action: review(RoutineWindow, "standup")},
 		),
-			MenuItem{Text: "brief — Paused", Health: "none", Action: window(HookWindow, "brief")},
-			MenuItem{Text: "open-meet — open-meet can't run", Health: "error", Action: window(HookWindow, "open-meet")},
+			MenuItem{Text: "brief — Paused", Health: "none", Action: review(HookWindow, "brief")},
+			MenuItem{Text: "open-meet — open-meet can't run", Health: "error", Action: review(HookWindow, "open-meet")},
 		)...)},
 		{"no routines", lineNone, fresh, append([]MenuItem{version, {Text: "No routines enabled"}}, tail(MenuItem{Text: "No routines"})...)},
 		{"no status", "", fresh, append([]MenuItem{version, {Text: "Not responding"}}, tail(MenuItem{Text: "Not responding"})...)},

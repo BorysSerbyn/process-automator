@@ -33,6 +33,9 @@ type HookInfo struct {
 	Folder    string `json:"folder,omitempty"`
 	Trusted   bool   `json:"trusted"`
 	Untrusted string `json:"untrusted,omitempty"`
+	// TurnOn is true while turning it on has something to do (it's off, or
+	// it or its watcher isn't trusted): Turn On…
+	TurnOn bool `json:"turnOn,omitempty"`
 	// Problem is why it can't run while it's on, in the core's words.
 	Problem      string       `json:"problem,omitempty"`
 	Servers      []string     `json:"servers,omitempty"`

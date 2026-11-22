@@ -23,6 +23,7 @@ type Routines struct {
 	async Async
 	// open opens a routine's window, and the Setup and Settings windows.
 	openRoutine  func(name string)
+	turnOn       func(name string)
 	openSetup    func()
 	openSettings func()
 	now          func() time.Time
@@ -38,8 +39,10 @@ type Routines struct {
 
 // NewRoutines makes the Routines window's content; Load reads it, Update
 // gives it run status.
-func NewRoutines(c cli.CLI, async Async, openRoutine func(string), openSetup, openSettings func()) *Routines {
-	r := &Routines{cli: c, async: async, openRoutine: openRoutine, openSetup: openSetup, openSettings: openSettings, now: time.Now}
+// turnOn opens a routine's window on its Turn On review.
+func NewRoutines(c cli.CLI, async Async, openRoutine, turnOn func(string), openSetup, openSettings func()) *Routines {
+	r := &Routines{cli: c, async: async, openRoutine: openRoutine, turnOn: turnOn, openSetup: openSetup, openSettings: openSettings,
+		now: time.Now}
 	r.scroll = container.NewVScroll(container.NewVBox())
 	r.refresh()
 	return r
@@ -157,9 +160,6 @@ func (r *Routines) row(rt cli.RoutineInfo) fyne.CanvasObject {
 		}
 	}
 	name := container.NewHBox(widget.NewLabelWithStyle(rt.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-	if !rt.Trusted {
-		name.Add(tag("Not trusted", theme.ColorNameWarning))
-	}
 	schedule := rt.ScheduleText
 	if schedule == "" {
 		schedule = "No schedule"
@@ -181,7 +181,18 @@ func (r *Routines) row(rt cli.RoutineInfo) fyne.CanvasObject {
 	}
 	row := container.NewBorder(nil, nil, healthDot(health, 10), container.NewCenter(trailing), lines)
 	name2 := rt.Name
-	return newLinkRow(func() { r.openRoutine(name2) }, padded(4, 4, 0, 0, row))
+	return withTurnOn(rt.TurnOn, func() { r.turnOn(name2) }, newLinkRow(func() { r.openRoutine(name2) }, padded(4, 4, 0, 0, row)))
+}
+
+// withTurnOn puts Turn On… beside a list's row while it needs turning on:
+// it opens the window on its review.
+func withTurnOn(needed bool, turnOn func(), row fyne.CanvasObject) fyne.CanvasObject {
+	if !needed {
+		return row
+	}
+	b := widget.NewButton("Turn On…", turnOn)
+	b.Importance = widget.HighImportance
+	return container.NewBorder(nil, nil, nil, padded(0, 0, 0, rowInset-6, container.NewCenter(b)), row)
 }
 
 // lastRunLine is a last run in a line: when, how it ended, why.

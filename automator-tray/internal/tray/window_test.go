@@ -64,15 +64,17 @@ func TestTheTerminalFallbackOrder(t *testing.T) {
 // Each window is its CLI command in the terminal for now.
 func TestWindowsAreTheirCommands(t *testing.T) {
 	for w, want := range map[Window][]string{
-		{Kind: SetupWindow}:                         {"setup"},
-		{Kind: SettingsWindow}:                      {"settings", "list", "--scope", "app"},
-		{Kind: RoutinesWindow}:                      {"routines", "list", "--kind", "all"},
-		{Kind: RoutineWindow, Routine: "my_report"}: {"routines", "show", "my_report"},
-		{Kind: HooksWindow}:                         {"hooks", "list"},
-		{Kind: HookWindow, Routine: "open-meet"}:    {"hooks", "show", "open-meet"},
-		{Kind: WatcherWindow, Routine: "cal"}:       {"watchers", "show", "cal"},
-		{Kind: UpdateWindow}:                        {"update", "progress"},
-		{Kind: ConfirmUpdateWindow}:                 {"update", "--ask"},
+		{Kind: SetupWindow}:                                       {"setup"},
+		{Kind: SettingsWindow}:                                    {"settings", "list", "--scope", "app"},
+		{Kind: RoutinesWindow}:                                    {"routines", "list", "--kind", "all"},
+		{Kind: RoutineWindow, Routine: "my_report"}:               {"routines", "show", "my_report"},
+		{Kind: HooksWindow}:                                       {"hooks", "list"},
+		{Kind: RoutineWindow, Routine: "my_report", Review: true}: {"routines", "trust", "my_report", "--resume"},
+		{Kind: HookWindow, Routine: "open-meet", Review: true}:    {"hooks", "trust", "open-meet", "--resume"},
+		{Kind: HookWindow, Routine: "open-meet"}:                  {"hooks", "show", "open-meet"},
+		{Kind: WatcherWindow, Routine: "cal"}:                     {"watchers", "show", "cal"},
+		{Kind: UpdateWindow}:                                      {"update", "progress"},
+		{Kind: ConfirmUpdateWindow}:                               {"update", "--ask"},
 	} {
 		if got := w.Command(); !reflect.DeepEqual(got, want) {
 			t.Errorf("%+v: %q", w, got)
@@ -124,6 +126,7 @@ func TestWindowsOpenInTheWindowsAppWhereItHasThem(t *testing.T) {
 		{"a routine", display, cliPath, Window{Kind: RoutineWindow, Routine: "standup"}, []string{app, "routine", "standup"}},
 		{"hooks", display, cliPath, Window{Kind: HooksWindow}, []string{app, "hooks"}},
 		{"a hook", display, cliPath, Window{Kind: HookWindow, Routine: "open-meet"}, []string{app, "hook", "open-meet"}},
+		{"a hook's review", display, cliPath, Window{Kind: HookWindow, Routine: "open-meet", Review: true}, []string{app, "hook", "open-meet", "review"}},
 		{"a watcher", display, cliPath, Window{Kind: WatcherWindow, Routine: "cal"}, []string{app, "watcher", "cal"}},
 		{"the update", display, cliPath, Window{Kind: UpdateWindow}, []string{app, "update"}},
 		{"asking before an update", display, cliPath, Window{Kind: ConfirmUpdateWindow}, []string{app, "confirm-update"}},

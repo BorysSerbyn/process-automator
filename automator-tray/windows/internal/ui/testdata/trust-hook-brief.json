@@ -1,4 +1,7 @@
 {"routine": "brief", "surface": {"servers": [], "tools": [], "builtinTools": ["Bash"]}, "changes": [], "trusted": false,
  "hook": true, "trigger": {"watcher": "cal", "type": "meeting.started", "batch": true},
- "watcher": {"name": "cal", "trusted": false, "untrusted": "not trusted yet"},
+ "watcher": {"name": "cal", "trusted": false, "untrusted": "not trusted yet", "mode": "poll", "description": "My calendar",
+  "program": {"executable": "/home/me/.config/acme/watchers/cal/watch", "checksum": "9ab8fabc8c72bfa0", "args": [], "writes": false,
+   "secrets": [{"name": "cal-token", "env": "CAL_TOKEN", "stored": false}]}},
+ "signIns": ["cal"],
  "warnings": ["it can write (Bash) and acts on outside event data: an event from cal could try to steer what it writes"]}

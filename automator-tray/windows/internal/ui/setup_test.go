@@ -38,7 +38,7 @@ func TestSetupStepsRenderFromSetupJSON(t *testing.T) {
 		"Trust standup to run for real with what it can reach", "Servers", "Tools",
 		"Tinted tools write (they're intercepted in dry runs).")
 	mustNotShow(t, c, "First, on its own: which of the templates' projects")
-	if n := len(buttons(c, "Turn On")); n != 2 {
+	if n := len(buttons(c, "Trust and Turn On")); n != 2 {
 		t.Errorf("%d Turn On buttons", n)
 	}
 	if !slices.Contains(texts(c), "Done") {
@@ -83,7 +83,7 @@ func TestStepsAndGroupsOpenAndClose(t *testing.T) {
 	mustNotShow(t, s.Content(), "Turn on standup")
 	test.Tap(rowOf(t, s.Content(), "Turn on routines"))
 	test.Tap(rowOf(t, s.Content(), "Turn on standup"))
-	if n := len(buttons(s.Content(), "Turn On")); n != 1 {
+	if n := len(buttons(s.Content(), "Trust and Turn On")); n != 1 {
 		t.Errorf("%d Turn On buttons with standup closed", n)
 	}
 }
@@ -98,8 +98,24 @@ func TestTurnOnTrustsAndResumes(t *testing.T) {
 	})
 	f.mustHaveRun(t, "routines trust standup --check --json", "routines trust digest --check --json")
 	mustShow(t, s.Content(), "notify", "notify_me")
-	test.Tap(buttons(s.Content(), "Turn On")[1])
+	test.Tap(buttons(s.Content(), "Trust and Turn On")[1])
 	f.mustHaveRun(t, "routines trust standup --yes --resume --json")
+}
+
+// A turn-on step's review names the sign-ins it still needs, each signed
+// in from it; a routine already trusted (paused) turns on with Turn On.
+func TestTurnOnSignsInFromTheReview(t *testing.T) {
+	s, f, _ := newSetupFor(t, map[string]string{
+		"setup --json":                          "@setup-claude-code.json",
+		"routines trust standup --check --json": `{"routine":"standup","surface":{"servers":["tracker"],"tools":[]},"changes":[],"trusted":true,"signIns":["tracker"]}`,
+		"routines trust digest --check --json":  "@trust.json",
+	})
+	mustShow(t, s.Content(), "tracker needs signing in")
+	test.Tap(button(t, s.Content(), "Sign In…"))
+	f.mustHaveRun(t, "auth login tracker --browser")
+	if len(buttons(s.Content(), "Turn On")) != 1 {
+		t.Error("a trusted routine's review doesn't just Turn On")
+	}
 }
 
 // The backend picker sets the step's setting; the chosen backend's own
@@ -247,7 +263,7 @@ func TestErrorsInTheCoresWords(t *testing.T) {
 		"mcp connect --json":                           "!Claude Code isn't installed",
 	})
 	mustShow(t, s.Content(), "Claude Code isn't installed", "digest's servers can't be reached: notify doesn't answer")
-	test.Tap(button(t, s.Content(), "Turn On"))
+	test.Tap(button(t, s.Content(), "Trust and Turn On"))
 	mustShow(t, s.Content(), "standup can't be trusted: notify doesn't answer")
 
 	broken, _, _ := newSetupFor(t, map[string]string{"setup --json": "!config.yaml: line 3: not a setting"})

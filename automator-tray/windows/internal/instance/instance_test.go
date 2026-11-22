@@ -37,9 +37,24 @@ func TestOneWindowOfAKind(t *testing.T) {
 		t.Fatalf("second claim: %v", err)
 	}
 	select {
-	case <-h.Raised:
+	case ask := <-h.Raised:
+		if ask != "raise" {
+			t.Fatalf("asked %q", ask)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the holder wasn't asked to come to the front")
+	}
+	// Asked for something as it comes to the front: its review, say.
+	if _, err := Ask(dir, "windows-setup", "review"); !errors.Is(err, ErrHeld) {
+		t.Fatalf("asking: %v", err)
+	}
+	select {
+	case ask := <-h.Raised:
+		if ask != "review" {
+			t.Fatalf("asked %q", ask)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the holder wasn't asked for its review")
 	}
 	h.Release()
 	h2, err := Claim(dir, "windows-setup")

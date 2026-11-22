@@ -1,3 +1,3 @@
 {"name": "digest", "path": "/home/me/.config/acme/routines/digest.prompt", "servers": ["notify"], "tools": ["notify_me"],
- "enabled": false, "timeout": "10m", "effort": "medium", "session": "none", "builtinTools": [], "trusted": false,
+ "enabled": false, "timeout": "10m", "effort": "medium", "session": "none", "builtinTools": [], "trusted": false, "turnOn": true,
  "untrusted": "it's never been trusted", "source": "---\n---\n"}

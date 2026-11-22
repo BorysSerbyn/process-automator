@@ -19,12 +19,13 @@ var hooksReplies = map[string]string{
 func TestHooksListsHooksAndWatchers(t *testing.T) {
 	f := newFakeCLI(t, hooksReplies)
 	var opened []string
-	h := NewHooks(f.CLI, now, func(n string) { opened = append(opened, "hook "+n) }, func(n string) { opened = append(opened, "watcher "+n) })
+	h := NewHooks(f.CLI, now, func(n string) { opened = append(opened, "hook "+n) }, func(n string) { opened = append(opened, "turn on "+n) },
+		func(n string) { opened = append(opened, "watcher "+n) })
 	h.now = noon
 	h.Load()
 	h.Update(statusFrom(t, "status-hooks.json"))
 	c := h.Content()
-	mustShow(t, c, "Hooks", "brief", "Prompt", "Off", "Not trusted", "On cal's meeting.started events", "Paused",
+	mustShow(t, c, "Hooks", "brief", "Prompt", "On cal's meeting.started events", "Paused",
 		"open-meet", "Program", "On every event from cal", "Waiting for events", "Last run Today at",
 		"Watchers", "cal", "Polled every 30s", "Heard by brief, open-meet",
 		"inbox", "Streams events", "Failing", "exit 1: no token (since Today at", "No hook listens", "acme-auto guide hooks")
@@ -35,7 +36,11 @@ func TestHooksListsHooksAndWatchers(t *testing.T) {
 	}
 	test.Tap(rows[1])
 	test.Tap(rows[3])
-	if strings.Join(opened, ",") != "hook open-meet,watcher inbox" {
+	test.Tap(button(t, c, "Turn On…"))
+	if len(buttons(c, "Turn On…")) != 1 {
+		t.Error("Turn On… isn't only on the hook that needs it")
+	}
+	if strings.Join(opened, ",") != "hook open-meet,watcher inbox,turn on brief" {
 		t.Fatalf("opened %q", opened)
 	}
 }
@@ -44,7 +49,7 @@ func TestHooksListsHooksAndWatchers(t *testing.T) {
 // not on every status.
 func TestHooksFollowRunStatus(t *testing.T) {
 	f := newFakeCLI(t, hooksReplies)
-	h := NewHooks(f.CLI, now, func(string) {}, func(string) {})
+	h := NewHooks(f.CLI, now, func(string) {}, func(string) {}, func(string) {})
 	h.Load()
 	mustShow(t, h.Content(), "Not responding")
 	h.Update(statusFrom(t, "status-hooks.json"))
@@ -59,7 +64,7 @@ func TestHooksFollowRunStatus(t *testing.T) {
 		t.Fatalf("read %d times", n)
 	}
 	empty := newFakeCLI(t, map[string]string{"hooks list --json": "[]", "watchers list --json": "!no watchers folder"})
-	h2 := NewHooks(empty.CLI, now, func(string) {}, func(string) {})
+	h2 := NewHooks(empty.CLI, now, func(string) {}, func(string) {}, func(string) {})
 	h2.Load()
 	mustShow(t, h2.Content(), "No hooks.", "Couldn't read the watchers", "no watchers folder")
 }
@@ -94,16 +99,18 @@ func newHookFor(t *testing.T, name string, replies map[string]string) (*Hook, *f
 func TestAProgramHooksWindow(t *testing.T) {
 	h, f, events := newHookFor(t, "open-meet", openMeetReplies)
 	c := h.Content()
-	mustShow(t, c, "open-meet", "Waiting for events", "Status", "Last run", "success", "event", "What it acts on",
-		"Polled every 30s", "Paused", "Failing", "exit 1: calendar unreachable", "meeting.started",
-		"Events older than 2m are dropped.", "At most 20 runs an hour; far past it, it's paused.", "What it runs", "Trusted")
-	for _, gone := range []string{"Run Now", "Next run", "Memories", "Batches", "Not trusted"} {
+	mustShow(t, c, "open-meet", "Waiting for events", "Status", "Last run", "success", "event", "When it runs",
+		"On cal's meeting.started events", "cal paused", "cal failing", "exit 1: calendar unreachable", "What it runs", "Trusted")
+	for _, gone := range []string{"Run Now", "Next run", "Memories", "Batches", "Not trusted", "Turn On…", "Staleness"} {
 		mustNotShow(t, c, gone)
 	}
-	test.Tap(button(t, c, "cal"))
+	// When it runs opens to the rest: its watcher (opening it), type, staleness, rate.
+	test.Tap(rowOf(t, c, "When it runs"))
+	mustShow(t, h.Content(), "Polled every 30s", "meeting.started", "Events older than 2m are dropped.",
+		"At most 20 runs an hour; far past it, it's paused.")
+	test.Tap(button(t, h.Content(), "cal"))
 	test.Tap(rowOf(t, h.Content(), "What it runs"))
-	mustShow(t, h.Content(), "Acts on", "cal's meeting.started events", "Trusting it covers this too",
-		"/home/me/.config/acme/hooks/open-meet/act", "meet-token", "Not stored")
+	mustShow(t, h.Content(), "/home/me/.config/acme/hooks/open-meet/act", "meet-token", "Not stored")
 	test.Tap(button(t, h.Content(), "Sign In…"))
 	test.Tap(button(t, h.Content(), "Pause"))
 	test.Tap(button(t, h.Content(), "Delete…"))
@@ -165,29 +172,48 @@ var briefReplies = map[string]string{
 	"hooks trust brief --check --json":     "@trust-hook-brief.json",
 }
 
-// An LLM hook that isn't trusted, nor is its watcher: both say so (the
-// watcher's opens it); its review shows the warning before Turn On, what
-// it acts on and what it can reach; it has Memories and batches.
-func TestAnLLMHooksWindow(t *testing.T) {
-	h, f, events := newHookFor(t, "brief", briefReplies)
+// An LLM hook that's off and untrusted, as is its watcher: one Turn On…
+// opens one review covering the watcher, the warning, and the sign-in its
+// watcher needs (done from the review); its one confirm trusts both and
+// turns it on. It has Memories and batches.
+func TestTurningOnAHookAndItsWatcher(t *testing.T) {
+	replies := map[string]string{"hooks trust brief --yes --resume --json": "{}"}
+	for k, v := range briefReplies {
+		replies[k] = v
+	}
+	h, f, events := newHookFor(t, "brief", replies)
 	c := h.Content()
-	mustShow(t, c, "Paused", "Not trusted", "not trusted yet: review what it can reach",
-		"Its watcher cal isn't trusted", "brief hears nothing until it is.",
-		"One run gets every event that waited for it.", "Before you trust it", "it can write (Bash) and acts on outside event data",
-		"What it can reach", "Built-in tools", "Bash")
-	if len(buttons(c, "Resume")) != 1 {
-		t.Error("no Resume for a hook that's off")
+	mustShow(t, c, "Paused", "brief isn't on", "not trusted yet: review what it can reach")
+	mustNotShow(t, c, "Its watcher cal isn't trusted")
+	if len(buttons(c, "Turn On…")) != 2 || len(buttons(c, "Resume")) != 0 || len(buttons(c, "Pause")) != 0 {
+		t.Fatal("not one action, Turn On…, for a hook that's off")
 	}
-	test.Tap(button(t, c, "Review cal…"))
-	if strings.Join(*events, ",") != "watcher cal" {
-		t.Fatalf("got %q", *events)
+	test.Tap(button(t, c, "Turn On…"))
+	c = h.Content()
+	mustShow(t, c, "Turn on brief", "Briefs me. It runs on cal's meeting.started events.", "Before you turn it on",
+		"it can write (Bash) and acts on outside event data", "cal needs signing in",
+		"It can be turned on now; it works once signed in.", "Its watcher, cal, is trusted with it")
+	test.Tap(button(t, c, "Sign In…"))
+	f.mustHaveRun(t, "auth login cal --browser")
+	if f.count("hooks trust brief --check --json") != 2 {
+		t.Error("the review wasn't read again after signing in")
 	}
-	test.Tap(button(t, h.Content(), "Turn On"))
+	test.Tap(rowOf(t, h.Content(), "Details"))
+	mustShow(t, h.Content(), "Built-in tools", "Bash", "Its watcher, cal", "Watches", "My calendar",
+		"/home/me/.config/acme/watchers/cal/watch", "cal-token")
+	test.Tap(button(t, h.Content(), "Trust and Turn On"))
 	f.mustHaveRun(t, "hooks trust brief --yes --resume --json")
+	mustNotShow(t, h.Content(), "Turn on brief")
+	if len(*events) != 0 {
+		t.Fatalf("it sent me elsewhere: %q", *events)
+	}
 	h.ShowTab(MemoriesTab)
 	mustShow(t, h.Content(), "The team channel is #team.")
 	test.Tap(button(t, h.Content(), "Fire…"))
 	mustShow(t, h.Content(), "A dry run intercepts its writes, and needs no trust.")
+	h.ShowTab(OverviewTab)
+	test.Tap(rowOf(t, h.Content(), "When it runs"))
+	mustShow(t, h.Content(), "One run gets every event that waited for it.")
 }
 
 // A hook's runs: each with what started it, and the events it ran for,

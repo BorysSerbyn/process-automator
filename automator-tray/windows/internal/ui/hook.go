@@ -45,6 +45,13 @@ type Hook struct {
 	review     *cli.TrustOutput
 	trustError string
 	accessOpen bool
+	// triggerOpen shows the details of when it runs.
+	triggerOpen bool
+
+	// turnOn is its one review and confirm; reviewWhenLoaded opens it once
+	// the hook is read, if it needs turning on (from the menu, a reason).
+	turnOn           *turnOn
+	reviewWhenLoaded bool
 
 	signingIn   bool
 	signInError string
@@ -72,6 +79,7 @@ func NewHook(c cli.CLI, win fyne.Window, async Async, name string, deleted func(
 	h.history = newRunHistory(c, async, name, func() time.Time { return h.now() }, h.refresh,
 		func(msg string) { h.actionError = msg; h.refresh() })
 	h.memories = newMemoryList(c, async, name, h.refresh)
+	h.turnOn = newTurnOn(c, async, name, true, h.summary, h.refresh, h.Load)
 	h.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -152,10 +160,10 @@ func (h *Hook) loadDetail() {
 				if !d.IsProgram() && !h.memories.loaded {
 					h.memories.load()
 				}
-				if !d.Trusted {
-					h.accessOpen = true
-					if h.review == nil {
-						h.loadTrust()
+				if h.reviewWhenLoaded {
+					h.reviewWhenLoaded = false
+					if d.TurnOn {
+						h.turnOn.start()
 					}
 				}
 			}
@@ -291,15 +299,6 @@ func (h *Hook) toggleAccess() {
 	h.refresh()
 }
 
-func (h *Hook) reviewTrust() {
-	h.tab = OverviewTab
-	if !h.accessOpen {
-		h.toggleAccess()
-		return
-	}
-	h.refresh()
-}
-
 func (h *Hook) loadTrust() {
 	h.async(func() func() {
 		review, err := h.cli.HookTrustCheck(h.name)
@@ -333,24 +332,29 @@ func (h *Hook) signIn() {
 	})
 }
 
-// trust trusts it with what it acts on and can reach; turnOn also turns it
-// on (one that's off).
-func (h *Hook) trust(turnOn bool) {
-	h.working = true
-	h.refresh()
-	h.async(func() func() {
-		err := h.cli.TrustHook(h.name, turnOn)
-		return func() {
-			h.working = false
-			if err != nil {
-				h.trustError = err.Error()
-			} else {
-				h.trustError, h.review = "", nil
-				h.Load()
-			}
-			h.refresh()
-		}
-	})
+// Review opens its Turn On review, once it's read, if it needs turning on
+// (the window opened, or raised, from the menu or a reason).
+func (h *Hook) Review() {
+	if h.detail == nil {
+		h.reviewWhenLoaded = true
+		return
+	}
+	if h.detail.TurnOn {
+		h.turnOn.start()
+	}
+}
+
+// summary is what it does, in a line, for its review.
+func (h *Hook) summary() string {
+	d := h.detail
+	if d == nil {
+		return ""
+	}
+	s := "It runs on " + onText(d.On) + "."
+	if d.Description != "" {
+		s = d.Description + ". " + s
+	}
+	return s
 }
 
 // The view
@@ -370,17 +374,18 @@ func (h *Hook) render() fyne.CanvasObject {
 	if h.loadError != "" && h.detail == nil {
 		box.Add(banner("Couldn't read "+h.name, h.loadError))
 	}
-	if d := h.detail; d != nil {
-		if !d.Trusted {
-			review := widget.NewButton("Review…", h.reviewTrust)
-			box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(review), banner("Not trusted", d.Untrusted)))
+	if h.turnOn.showing {
+		box.Add(h.turnOn.view())
+	} else if d := h.detail; d != nil && d.TurnOn {
+		why := d.Untrusted
+		if why == "" && d.Enabled {
+			why = d.Problem
 		}
-		if w := d.Watcher; w != nil && !w.Trusted {
-			name := w.Name
-			review := widget.NewButton("Review "+name+"…", func() { h.openWatcher(name) })
-			box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(review),
-				banner("Its watcher "+name+" isn't trusted", h.name+" hears nothing until it is.")))
+		if why == "" {
+			why = "It's off."
 		}
+		on := widget.NewButton("Turn On…", h.turnOn.start)
+		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(on), banner(h.name+" isn't on", why)))
 	}
 	box.Add(segmented(h.tabs(), h.tab, h.ShowTab))
 	switch h.tab {
@@ -425,15 +430,15 @@ func (h *Hook) controls() fyne.CanvasObject {
 		stop.Importance = widget.DangerImportance
 		buttons = append(buttons, stop)
 	} else {
-		fire := widget.NewButtonWithIcon("Fire…", theme.MediaPlayIcon(), h.toggleFire)
-		fire.Importance = widget.HighImportance
-		buttons = append(buttons, fire)
+		buttons = append(buttons, widget.NewButtonWithIcon("Fire…", theme.MediaPlayIcon(), h.toggleFire))
 	}
-	if h.detail != nil {
-		if h.detail.Enabled {
-			buttons = append(buttons, widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() { h.setPaused(true) }))
+	if d := h.detail; d != nil {
+		if d.TurnOn {
+			on := widget.NewButtonWithIcon("Turn On…", theme.ConfirmIcon(), h.turnOn.start)
+			on.Importance = widget.HighImportance
+			buttons = append(buttons, on)
 		} else {
-			buttons = append(buttons, widget.NewButtonWithIcon("Resume", theme.MediaPlayIcon(), func() { h.setPaused(false) }))
+			buttons = append(buttons, widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() { h.setPaused(true) }))
 		}
 	}
 	buttons = append(buttons, widget.NewButtonWithIcon("Delete…", theme.DeleteIcon(), h.askDelete))
@@ -578,11 +583,38 @@ func (h *Hook) statusRows() []fyne.CanvasObject {
 	return append(rows, padded(0, 6, 0, 0, container.NewHBox()))
 }
 
-// trigger is what it acts on: its watcher (with its state, opening it),
-// the event type, batches, staleness and rate.
+// trigger is when it runs, in a line ("On cal's meeting.started events"),
+// with its watcher's state when it needs me (paused, failing); the rest
+// (its watcher, the event type, batches, staleness, rate) opens under it.
 func (h *Hook) trigger() []fyne.CanvasObject {
 	d := h.detail
-	rows := []fyne.CanvasObject{cardTitle("What it acts on"), divider()}
+	line := container.NewVBox(heading("When it runs", false), secondary("On "+onText(d.On)))
+	tags := container.NewHBox()
+	if w := d.Watcher; w != nil {
+		if !w.Enabled {
+			tags.Add(tag(w.Name+" paused", ""))
+		}
+		if w.Error != "" {
+			tags.Add(tag(w.Name+" failing", theme.ColorNameError))
+		}
+	} else {
+		tags.Add(tag("No watcher "+d.On.Watcher, theme.ColorNameError))
+	}
+	rows := []fyne.CanvasObject{newDisclosure(h.triggerOpen, false, func() {
+		h.triggerOpen = !h.triggerOpen
+		h.refresh()
+	}, container.NewBorder(nil, nil, nil, container.NewCenter(tags), line))}
+	if w := d.Watcher; w != nil && w.Error != "" {
+		failing := []fyne.CanvasObject{errorRow(w.Error)}
+		if w.ErrorAt != nil {
+			failing = append(failing, secondary("Since "+when(*w.ErrorAt, h.now())))
+		}
+		rows = append(rows, infoRow("Watcher", failing...))
+	}
+	if !h.triggerOpen {
+		return rows
+	}
+	rows = append(rows, divider())
 	if w := d.Watcher; w != nil {
 		name := w.Name
 		link := widget.NewButton(name, func() { h.openWatcher(name) })
@@ -591,14 +623,7 @@ func (h *Hook) trigger() []fyne.CanvasObject {
 		for _, t := range watcherTags(*w) {
 			line.Add(t)
 		}
-		content := []fyne.CanvasObject{line, secondary(modeText(*w))}
-		if w.Error != "" {
-			content = append(content, errorRow(w.Error))
-			if w.ErrorAt != nil {
-				content = append(content, secondary("Since "+when(*w.ErrorAt, h.now())))
-			}
-		}
-		rows = append(rows, infoRow("Watcher", content...))
+		rows = append(rows, infoRow("Watcher", line, secondary(modeText(*w))))
 	} else {
 		missing := text("There's no watcher by that name.")
 		missing.Importance = widget.DangerImportance
@@ -617,11 +642,10 @@ func (h *Hook) trigger() []fyne.CanvasObject {
 		rows = append(rows, infoRow("Batches", text(batch)))
 	}
 	rate := plural(d.Rate, "run", "runs")
-	rows = append(rows,
+	return append(rows,
 		infoRow("Staleness", text("Events older than "+d.Staleness+" are dropped.")),
 		infoRow("Rate", text("At most "+rate+" an hour; far past it, it's paused.")),
 		padded(0, 6, 0, 0, container.NewHBox()))
-	return rows
 }
 
 // onText is what a hook acts on, in words: "cal's meeting.started events",
@@ -634,8 +658,7 @@ func onText(on cli.On) string {
 }
 
 // access is what the hook can reach (an LLM hook's) or runs (a program
-// hook's), opening to its review: warnings first, what it acts on (trust
-// covers that too), then Trust (or Turn On, for one that's off).
+// hook's), read only, opening to its review.
 func (h *Hook) access() []fyne.CanvasObject {
 	d := h.detail
 	state := tag("Trusted", successColour)
@@ -657,15 +680,6 @@ func (h *Hook) access() []fyne.CanvasObject {
 	if h.review != nil {
 		review = *h.review
 	}
-	for _, w := range review.Warnings {
-		objects = append(objects, padded(6, 2, rowInset-8, rowInset-8, warning("Before you trust it", w)))
-	}
-	on := d.On
-	if t := review.Trigger; t != nil {
-		on = cli.On{Watcher: t.Watcher, Type: t.Type}
-	}
-	objects = append(objects, padded(6, 0, 0, 0, infoRow("Acts on", text(onText(on)),
-		secondary("Trusting it covers this too: another watcher or event type needs trusting again."))))
 	if review.ToolsError != "" {
 		objects = append(objects, infoRow("Tools", errorRow(review.ToolsError)))
 	}
@@ -673,22 +687,8 @@ func (h *Hook) access() []fyne.CanvasObject {
 	if review.Program != nil {
 		signIn = h.signInRow(review.Program)
 	}
-	var do func()
-	action, note := "Trust", "Trusting it lets it run for real on its events with what's listed above. Dry runs never need it."
-	if d.IsProgram() {
-		note = "Trusting it lets this executable run on its events, dry runs included."
-	}
-	if !d.Trusted && h.review != nil {
-		turnOn := !d.Enabled
-		if turnOn {
-			action, note = "Turn On", "Turning it on trusts it with what's listed above and has it run on its events. Dry runs never need it."
-			if d.IsProgram() {
-				note = "Turning it on trusts this executable (dry runs included) and has it run on its events."
-			}
-		}
-		do = func() { h.trust(turnOn) }
-	}
-	objects = append(objects, trustReview(review, action, note, do, h.working, signIn)...)
+	// Read only: Turn On… is where it's trusted.
+	objects = append(objects, trustReview(review, "", "", nil, h.working, signIn)...)
 	if h.trustError != "" {
 		objects = append(objects, padded(0, 8, rowInset, rowInset, errorRow(h.trustError)))
 	}

@@ -24,7 +24,9 @@ type RoutineInfo struct {
 	Folder       string   `json:"folder,omitempty"`
 	Trusted      bool     `json:"trusted"`
 	// Untrusted says why it isn't trusted, in the core's words.
-	Untrusted  string     `json:"untrusted,omitempty"`
+	Untrusted string `json:"untrusted,omitempty"`
+	// TurnOn is true while turning it on has something to do: Turn On…
+	TurnOn     bool       `json:"turnOn,omitempty"`
 	AgentModel string     `json:"agentModel,omitempty"`
 	Next       *time.Time `json:"next,omitempty"`
 	LastRun    *LastRun   `json:"lastRun,omitempty"`

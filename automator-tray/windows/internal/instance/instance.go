@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -19,10 +20,10 @@ import (
 // the front.
 var ErrHeld = errors.New("the window is open in another process")
 
-// Holder holds a window: Raised gets a value each time another process
-// asked for it.
+// Holder holds a window: Raised gets what another process asked of it
+// each time one did ("raise": come to the front; or what Ask gave).
 type Holder struct {
-	Raised <-chan struct{}
+	Raised <-chan string
 	lock   *os.File
 	ln     net.Listener
 }
@@ -39,7 +40,11 @@ func Dir(getenv func(string) string, app string) string {
 // Claim makes this process the one holding the window named name, in dir.
 // If another already does, it's asked to come to the front and Claim
 // returns ErrHeld.
-func Claim(dir, name string) (*Holder, error) {
+func Claim(dir, name string) (*Holder, error) { return Ask(dir, name, "raise") }
+
+// Ask is Claim, asking the window that's open for ask (one word: what it
+// should show as it comes to the front) when another process holds it.
+func Ask(dir, name, ask string) (*Holder, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -55,7 +60,7 @@ func Claim(dir, name string) (*Holder, error) {
 	}
 	if !held {
 		_ = lock.Close()
-		return nil, raise(sock)
+		return nil, raise(sock, ask)
 	}
 	// A socket left by a holder that's gone is in the way.
 	_ = os.Remove(sock)
@@ -64,7 +69,7 @@ func Claim(dir, name string) (*Holder, error) {
 		_ = lock.Close()
 		return nil, err
 	}
-	raised := make(chan struct{}, 1)
+	raised := make(chan string, 1)
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -72,10 +77,10 @@ func Claim(dir, name string) (*Holder, error) {
 				return
 			}
 			_ = conn.SetDeadline(time.Now().Add(time.Second))
-			_, _ = bufio.NewReader(conn).ReadString('\n')
+			line, _ := bufio.NewReader(conn).ReadString('\n')
 			_ = conn.Close()
 			select {
-			case raised <- struct{}{}:
+			case raised <- strings.TrimSpace(line):
 			default:
 			}
 		}
@@ -91,12 +96,12 @@ func (h *Holder) Release() {
 
 // raise asks the holder to come to the front: its socket may not be there
 // yet when it has only just started, so it's tried for a moment.
-func raise(sock string) error {
+func raise(sock, ask string) error {
 	var err error
 	for range 20 {
 		var conn net.Conn
 		if conn, err = net.DialTimeout("unix", sock, time.Second); err == nil {
-			_, err = conn.Write([]byte("raise\n"))
+			_, err = conn.Write([]byte(ask + "\n"))
 			_ = conn.Close()
 			if err == nil {
 				return ErrHeld

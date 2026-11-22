@@ -38,23 +38,28 @@ func statusFrom(t *testing.T, file string) *cli.RunStatus {
 func TestRoutinesListsEachRoutine(t *testing.T) {
 	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "@routines.json"})
 	var opened []string
-	r := NewRoutines(f.CLI, now, func(n string) { opened = append(opened, n) },
+	r := NewRoutines(f.CLI, now, func(n string) { opened = append(opened, n) }, func(n string) { opened = append(opened, "turn on "+n) },
 		func() { opened = append(opened, "setup") }, func() { opened = append(opened, "settings") })
 	r.now = noon
 	r.Load()
 	r.Update(statusFrom(t, "status-routines.json"))
 	c := r.Content()
 	mustShow(t, c, "Routines", "1 routine needs you", "standup", "At 09:20, Monday through Friday", "Last run Today at",
-		"success", "Next: Monday 09:20", "digest", "No schedule", "Not trusted", "digest can't be scheduled")
+		"success", "Next: Monday 09:20", "digest", "No schedule", "digest can't be scheduled")
 	mustNotShow(t, c, "Not responding")
 	rows := all[*linkRow](c)
 	if len(rows) != 2 {
 		t.Fatalf("%d rows", len(rows))
 	}
 	test.Tap(rows[1])
+	// One that needs turning on has Turn On…: its window, on its review.
+	if len(buttons(c, "Turn On…")) != 1 {
+		t.Fatal("no Turn On… for the routine that needs it, or one for a routine that's on")
+	}
+	test.Tap(button(t, c, "Turn On…"))
 	test.Tap(button(t, c, "Setup"))
 	test.Tap(button(t, c, "Settings"))
-	if strings.Join(opened, ",") != "digest,setup,settings" {
+	if strings.Join(opened, ",") != "digest,turn on digest,setup,settings" {
 		t.Fatalf("opened %q", opened)
 	}
 }
@@ -63,7 +68,7 @@ func TestRoutinesListsEachRoutine(t *testing.T) {
 // (a run ended), not on every status; no status is not responding.
 func TestRoutinesFollowRunStatus(t *testing.T) {
 	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "@routines.json"})
-	r := NewRoutines(f.CLI, now, func(string) {}, func() {}, func() {})
+	r := NewRoutines(f.CLI, now, func(string) {}, func(string) {}, func() {}, func() {})
 	r.now = noon
 	r.Load()
 	mustShow(t, r.Content(), "Not responding")
@@ -84,11 +89,11 @@ func TestRoutinesFollowRunStatus(t *testing.T) {
 
 func TestRoutinesSayWhatWentWrong(t *testing.T) {
 	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "!the routines folder can't be read"})
-	r := NewRoutines(f.CLI, now, func(string) {}, func() {}, func() {})
+	r := NewRoutines(f.CLI, now, func(string) {}, func(string) {}, func() {}, func() {})
 	r.Load()
 	mustShow(t, r.Content(), "Couldn't read the routines", "the routines folder can't be read")
 	f2 := newFakeCLI(t, map[string]string{"routines list --kind all --json": "[]"})
-	r2 := NewRoutines(f2.CLI, now, func(string) {}, func() {}, func() {})
+	r2 := NewRoutines(f2.CLI, now, func(string) {}, func(string) {}, func() {}, func() {})
 	r2.Load()
 	mustShow(t, r2.Content(), "No routines installed.")
 }
@@ -155,9 +160,9 @@ func TestStoppingARunAndErrors(t *testing.T) {
 	mustShow(t, r.Content(), "standup isn't running")
 }
 
-// Not trusted: the banner's Review… shows what it can reach; a paused
-// routine is turned on (trusted and resumed) in one step.
-func TestReviewingAndTurningOnARoutine(t *testing.T) {
+// Not on: the banner and the header say so, each with Turn On…, which
+// opens the one review; its one confirm trusts it and turns it on.
+func TestTurningOnARoutine(t *testing.T) {
 	r, f, _ := newRoutineFor(t, "digest", map[string]string{
 		"routines show digest --json":           "@routine-digest.json",
 		"routines trust digest --check --json":  "@trust-digest.json",
@@ -166,16 +171,66 @@ func TestReviewingAndTurningOnARoutine(t *testing.T) {
 		"memory list --routine digest --json":   "[]",
 	})
 	c := r.Content()
-	mustShow(t, c, "Not trusted", "it's never been trusted", "Can't schedule", "it isn't trusted", "Never", "None")
-	if len(buttons(c, "Resume")) != 1 {
-		t.Error("no Resume for a paused routine")
+	mustShow(t, c, "digest isn't on", "it's never been trusted", "Can't schedule", "Never", "None")
+	if len(buttons(c, "Turn On…")) != 2 || len(buttons(c, "Pause")) != 0 || len(buttons(c, "Resume")) != 0 {
+		t.Fatal("not one action, Turn On…, for a routine that's off")
 	}
 	r.ShowTab(RunsTab)
 	mustShow(t, r.Content(), "It hasn't run yet.")
-	test.Tap(button(t, r.Content(), "Review…"))
+	test.Tap(button(t, r.Content(), "Turn On…"))
+	mustShow(t, r.Content(), "Turn on digest", "Details")
+	mustNotShow(t, r.Content(), "digest isn't on")
+	test.Tap(rowOf(t, r.Content(), "Details"))
 	mustShow(t, r.Content(), "notify_me", "Tinted tools write")
-	test.Tap(button(t, r.Content(), "Turn On"))
+	test.Tap(button(t, r.Content(), "Trust and Turn On"))
 	f.mustHaveRun(t, "routines trust digest --check --json", "routines trust digest --yes --resume --json")
+	mustNotShow(t, r.Content(), "Turn on digest")
+	if f.count("routines show digest --json") < 2 {
+		t.Error("it wasn't read again once on")
+	}
+}
+
+// Every button says why it failed, where it is: a review that can't be
+// read (with Try Again), and a confirm the core refused.
+func TestTurningOnSaysWhyItCouldnt(t *testing.T) {
+	r, f, _ := newRoutineFor(t, "digest", map[string]string{
+		"routines show digest --json":                 "@routine-digest.json",
+		"routines trust digest --check --json":        "!notify: it needs a sign-in",
+		"routines trust digest --yes --resume --json": "!the config file is locked",
+		"settings list --routine digest --json":       "[]",
+		"runs digest --limit 50 --json":               "[]",
+		"memory list --routine digest --json":         "[]",
+	})
+	test.Tap(button(t, r.Content(), "Turn On…"))
+	mustShow(t, r.Content(), "notify: it needs a sign-in")
+	if b := button(t, r.Content(), "Trust and Turn On"); !b.Disabled() {
+		t.Error("confirm enabled with no review")
+	}
+	test.Tap(button(t, r.Content(), "Try Again"))
+	if f.count("routines trust digest --check --json") != 2 {
+		t.Error("Try Again didn't read the review again")
+	}
+	// A review that reads, then a confirm the core refuses: why, in the review.
+	r.turnOn.review = &cli.TrustOutput{Routine: "digest", Trusted: true}
+	r.refresh()
+	test.Tap(button(t, r.Content(), "Turn On"))
+	mustShow(t, r.Content(), "the config file is locked", "Turn on digest")
+}
+
+// Opened from the menu or a reason, a routine that needs turning on opens
+// on its review; one that's on doesn't.
+func TestAWindowOpenedToTurnItOn(t *testing.T) {
+	f := newFakeCLI(t, map[string]string{
+		"routines show digest --json":          "@routine-digest.json",
+		"routines trust digest --check --json": "@trust-digest.json",
+	})
+	r := NewRoutine(f.CLI, window(t), now, "digest", func() {})
+	r.Review()
+	r.Load()
+	mustShow(t, r.Content(), "Turn on digest", "Trust and Turn On")
+	r2, _, _ := newRoutineFor(t, "standup", standupReplies)
+	r2.Review()
+	mustNotShow(t, r2.Content(), "Turn on standup")
 }
 
 // Runs: newest first, the latest open with its report, final text and
@@ -250,6 +305,8 @@ var backupReplies = map[string]string{
 // stored; its delete says what's kept.
 func TestAProgramsWindow(t *testing.T) {
 	r, f, _ := newRoutineFor(t, "backup", backupReplies)
+	// What it runs opens to its details (read only: Turn On… trusts it).
+	test.Tap(rowOf(t, r.Content(), "What it runs"))
 	c := r.Content()
 	mustShow(t, c, "What it runs", "Executable", "/home/me/.config/acme/programs/backup/backup", "SHA-256 9f86d081884c…",
 		"a dry run passes it --dry-run", "api-token", "as $API_TOKEN", "Not stored", "--quiet",
@@ -292,6 +349,7 @@ func TestAProgramThatDoesntWrite(t *testing.T) {
 		replies[k] = reads.Replace(string(b))
 	}
 	r, _, _ := newRoutineFor(t, "backup", replies)
+	test.Tap(rowOf(t, r.Content(), "What it runs"))
 	c := r.Content()
 	mustShow(t, c, "It doesn't write: Dry Run runs it as it is.", "No: a dry run runs it as it is", "Stored")
 	if len(buttons(c, "Sign In…")) != 0 {
