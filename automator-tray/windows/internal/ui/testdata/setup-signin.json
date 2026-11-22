@@ -1,0 +1,46 @@
+{
+  "steps": [
+    {
+      "step": "backend",
+      "title": "Model backend",
+      "done": false,
+      "status": "Runs with claude-api, but no Anthropic API key is stored",
+      "ask": "Which backend should run your routines?",
+      "signIn": "anthropic",
+      "setting": "llm.backend"
+    },
+    {
+      "step": "routine",
+      "subject": "broken",
+      "title": "Fix broken",
+      "done": false,
+      "status": "broken doesn't load: automator.schedule: not a cron expression"
+    },
+    {
+      "step": "sign-in",
+      "subject": "tracker",
+      "title": "Sign in to tracker",
+      "done": false,
+      "status": "tracker needs a sign-in (OAuth)",
+      "signIn": "tracker"
+    },
+    {
+      "step": "sign-in",
+      "subject": "chat",
+      "title": "Sign in to chat",
+      "done": false,
+      "status": "chat needs a sign-in (OAuth)",
+      "signIn": "chat",
+      "prepare": "chat needs an app of your own first.\n1. Open https://chat.example.com/apps and create an app.\n2. Set its redirect URL to `http://localhost:8765/callback`.\n3. Copy its client ID."
+    },
+    {
+      "step": "sign-in",
+      "subject": "wiki",
+      "title": "Sign in to wiki",
+      "done": true,
+      "status": "Signed in"
+    }
+  ],
+  "done": false,
+  "remaining": 4
+}

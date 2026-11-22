@@ -33,6 +33,8 @@
 # A running tray is stopped (and waited for) before its files are replaced,
 # and started again in the session it ran in; with none running, it's started
 # only when this runs in a graphical session. A headless machine never starts it.
+# The windows app (bin/automator-windows) beside it is the tray's, started for
+# a window; windows open from the app being replaced are closed with it.
 set -euo pipefail
 
 main() {
@@ -265,9 +267,9 @@ desktop_quoted() {
   printf '"%s"' "$v"
 }
 
-# tray_pids <exe>: this user's processes running the tray at <exe> (others'
+# exe_pids <exe>: this user's processes running <exe> (others'
 # /proc/<pid>/exe can't be read).
-tray_pids() {
+exe_pids() {
   local exe p target
   exe="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)/$(basename "$1")"
   for p in /proc/[0-9]*; do
@@ -284,7 +286,7 @@ tray_env=()
 # kills it) until it has exited, so the next one doesn't start beside it.
 stop_tray() {
   local exe=$1 pid pids
-  pids=$(tray_pids "$exe")
+  pids=$(exe_pids "$exe")
   [ -n "$pids" ] || return 0
   for pid in $pids; do
     if [ ${#tray_env[@]} -eq 0 ]; then
@@ -293,10 +295,17 @@ stop_tray() {
     kill "$pid" 2>/dev/null || true
   done
   for _ in $(seq 1 20); do
-    [ -n "$(tray_pids "$exe")" ] || return 0
+    [ -n "$(exe_pids "$exe")" ] || return 0
     sleep 0.5
   done
-  for pid in $(tray_pids "$exe"); do kill -9 "$pid" 2>/dev/null || true; done
+  for pid in $(exe_pids "$exe"); do kill -9 "$pid" 2>/dev/null || true; done
+}
+
+# close_windows <exe>: closes the windows the windows app at <exe> has open
+# (their CLI is about to go); they aren't reopened.
+close_windows() {
+  local pid
+  for pid in $(exe_pids "$1"); do kill "$pid" 2>/dev/null || true; done
 }
 
 # graphical_session: this runs in a desktop session (a display and a session bus).
@@ -382,6 +391,7 @@ stop_items() {
     stop_agent "$SCHED_LABEL"
   else
     stop_tray "$1/bin/automator-tray"
+    close_windows "$1/bin/automator-windows"
     systemctl --user stop "$SCHED_LABEL" 2>/dev/null || true
   fi
 }

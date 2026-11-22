@@ -36,7 +36,16 @@ func (f *Failure) Error() string { return f.Message }
 // core's error object (commands given --json print one), else what it wrote
 // to stderr.
 func (c CLI) Exec(args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	return c.exec(Timeout, args)
+}
+
+// exec runs a command, stopping it after limit (0: no limit, for a command
+// that waits for me, as signing in does).
+func (c CLI) exec(limit time.Duration, args []string) ([]byte, error) {
+	ctx, cancel := context.Background(), context.CancelFunc(func() {})
+	if limit > 0 {
+		ctx, cancel = context.WithTimeout(ctx, limit)
+	}
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.Path, args...)
 	// What it started that keeps its output open isn't waited for long.
@@ -45,7 +54,7 @@ func (c CLI) Exec(args ...string) ([]byte, error) {
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, &Failure{Message: fmt.Sprintf("%s %s didn't answer in %s", c.Command, strings.Join(args, " "), Timeout)}
+			return nil, &Failure{Message: fmt.Sprintf("%s %s didn't answer in %s", c.Command, strings.Join(args, " "), limit)}
 		}
 		if _, ok := err.(*exec.ExitError); !ok {
 			return nil, &Failure{Message: "couldn't start " + c.Command}

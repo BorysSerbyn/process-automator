@@ -2,8 +2,11 @@ package tray
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 // The terminal is $TERMINAL, else the first installed of
@@ -71,5 +74,97 @@ func TestWindowsAreTheirCommands(t *testing.T) {
 		if got := w.Command(); !reflect.DeepEqual(got, want) {
 			t.Errorf("%+v: %q", w, got)
 		}
+	}
+}
+
+// windowsApp writes a stand-in windows app beside a CLI, running body, and
+// returns the CLI's path.
+func windowsApp(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if body != "" {
+		if err := os.WriteFile(filepath.Join(dir, WindowsApp), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return filepath.Join(dir, "acme-auto")
+}
+
+func display(k string) string {
+	if k == "DISPLAY" {
+		return ":0"
+	}
+	return ""
+}
+
+// Setup and settings open in the windows app beside the CLI, given a
+// display; other windows, no display or no windows app: the terminal.
+func TestWindowsOpenInTheWindowsAppWhereItHasThem(t *testing.T) {
+	cliPath := windowsApp(t, "exit 0\n")
+	app := filepath.Join(filepath.Dir(cliPath), WindowsApp)
+	wayland := func(k string) string {
+		if k == "WAYLAND_DISPLAY" {
+			return "wayland-0"
+		}
+		return ""
+	}
+	for _, c := range []struct {
+		name   string
+		getenv func(string) string
+		cli    string
+		w      Window
+		want   []string
+	}{
+		{"setup", display, cliPath, Window{Kind: SetupWindow}, []string{app, "setup"}},
+		{"settings on Wayland", wayland, cliPath, Window{Kind: SettingsWindow}, []string{app, "settings"}},
+		{"routines", display, cliPath, Window{Kind: RoutinesWindow}, nil},
+		{"a routine", display, cliPath, Window{Kind: RoutineWindow, Routine: "standup"}, nil},
+		{"the update", display, cliPath, Window{Kind: UpdateWindow}, nil},
+		{"no display", func(string) string { return "" }, cliPath, Window{Kind: SetupWindow}, nil},
+		{"no windows app", display, windowsApp(t, ""), Window{Kind: SetupWindow}, nil},
+	} {
+		if got := WindowsCommand(c.getenv, c.cli, c.w); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// A windows app that fails as it starts (no OpenGL, a display that won't
+// open) has its window opened in the terminal; one that runs, or that
+// handed the window to one already open (exit 0), doesn't.
+func TestAWindowsAppThatFailsFallsBackToTheTerminal(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		body     string
+		terminal bool
+	}{
+		{"fails", "echo 'no display' >&2; exit 1\n", true},
+		{"handed over", "exit 0\n", false},
+		{"runs", "sleep 2\n", false},
+	} {
+		cliPath := windowsApp(t, c.body)
+		opened := make(chan struct{}, 1)
+		err := openWindow(display, cliPath, Window{Kind: SetupWindow}, func() error {
+			opened <- struct{}{}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		select {
+		case <-opened:
+			if !c.terminal {
+				t.Errorf("%s: opened in the terminal", c.name)
+			}
+		case <-time.After(time.Second):
+			if c.terminal {
+				t.Errorf("%s: not opened in the terminal", c.name)
+			}
+		}
+	}
+	// Without the windows app, the terminal at once.
+	called := false
+	if err := openWindow(display, windowsApp(t, ""), Window{Kind: SettingsWindow}, func() error { called = true; return ErrNoTerminal }); !errors.Is(err, ErrNoTerminal) || !called {
+		t.Errorf("no windows app: %v %v", err, called)
 	}
 }

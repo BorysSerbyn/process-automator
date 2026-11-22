@@ -1,0 +1,146 @@
+[
+  {
+    "key": "llm.backend",
+    "type": "enum",
+    "default": "claude-api",
+    "description": "What runs your routines.",
+    "enum": [
+      "claude-code",
+      "claude-api",
+      "local",
+      "codex"
+    ],
+    "enumHelp": {
+      "claude-api": "Anthropic's API, paid per token",
+      "claude-code": "Claude Code on your Claude subscription (recommended)",
+      "codex": "OpenAI's Codex CLI (experimental, untested)",
+      "local": "Your own model server, e.g. Ollama (experimental, untested)"
+    },
+    "value": "local",
+    "isDefault": false,
+    "valueText": "local",
+    "defaultText": "claude-api"
+  },
+  {
+    "key": "llm.local.url",
+    "type": "string",
+    "default": "http://localhost:11434/v1",
+    "description": "Experimental, untested: the OpenAI-compatible server the local backend runs routines on, and claude-api runs routines whose model is local/\u003cmodel\u003e on. The default is Ollama on this machine; llama.cpp's llama-server, vLLM, LM Studio and hosted APIs such as DeepSeek, Qwen (DashScope) or Kimi (Moonshot) work too. A server that needs an API key gets it with `auth login local`. Its runs have no list price, so they don't count toward the llm.budget.* budgets.",
+    "backend": "local",
+    "alsoBackend": "claude-api",
+    "value": "http://localhost:11434/v1",
+    "isDefault": true,
+    "valueText": "http://localhost:11434/v1",
+    "defaultText": "http://localhost:11434/v1"
+  },
+  {
+    "key": "llm.local.model",
+    "type": "string",
+    "default": "",
+    "description": "The model the local backend runs routines on: its name on the server (e.g. qwen3:8b; `ollama list` shows the ones pulled). It replaces the model a routine names, unless that's local/\u003cmodel\u003e, another model on the same server.",
+    "backend": "local",
+    "value": "qwen3:8b",
+    "isDefault": false,
+    "valueText": "qwen3:8b",
+    "defaultText": ""
+  },
+  {
+    "key": "llm.usage-limit",
+    "type": "percent",
+    "default": 90,
+    "description": "Scheduled runs don't start while the Claude plan's 5-hour or weekly usage is above this share (they're recorded as skipped); runs started by hand still run. A run that hits the plan's limit stops scheduled runs until it resets.",
+    "unit": "%",
+    "min": 0,
+    "max": 100,
+    "backend": "claude-code",
+    "value": 90,
+    "isDefault": true,
+    "valueText": "90",
+    "defaultText": "90",
+    "inactive": "only used with llm.backend claude-code"
+  },
+  {
+    "key": "llm.budget.window",
+    "type": "duration",
+    "default": "5h",
+    "description": "Length of the rolling short budget window.",
+    "backend": "claude-api",
+    "value": "5h",
+    "isDefault": true,
+    "valueText": "5h",
+    "defaultText": "5h",
+    "inactive": "only used with llm.backend claude-api"
+  },
+  {
+    "key": "llm.budget.window-usd",
+    "type": "number",
+    "default": 2,
+    "description": "API spend allowed in the rolling short window (0: no limit); past it, scheduled runs don't start.",
+    "unit": "USD",
+    "min": 0,
+    "backend": "claude-api",
+    "value": 2,
+    "isDefault": true,
+    "valueText": "2",
+    "defaultText": "2",
+    "inactive": "only used with llm.backend claude-api"
+  },
+  {
+    "key": "llm.budget.weekly-usd",
+    "type": "number",
+    "default": 20,
+    "description": "API spend allowed in the rolling 7 days (0: no limit); past it, scheduled runs don't start.",
+    "unit": "USD",
+    "min": 0,
+    "backend": "claude-api",
+    "value": 20,
+    "isDefault": true,
+    "valueText": "20",
+    "defaultText": "20",
+    "inactive": "only used with llm.backend claude-api"
+  },
+  {
+    "key": "history.retention-days",
+    "type": "int",
+    "default": 90,
+    "description": "How long run history and logs are kept.",
+    "unit": "days",
+    "min": 1,
+    "value": 90,
+    "isDefault": true,
+    "valueText": "90",
+    "defaultText": "90"
+  },
+  {
+    "key": "runs.failure-notifications",
+    "type": "bool",
+    "default": true,
+    "description": "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one opens the app on the run).",
+    "value": true,
+    "isDefault": true,
+    "valueText": "true",
+    "defaultText": "true"
+  },
+  {
+    "key": "update.source-dir",
+    "type": "string",
+    "default": "",
+    "description": "Source checkout `update` builds from when no published release has a download for this machine. Empty: the checkout this build came from.",
+    "value": "",
+    "isDefault": true,
+    "valueText": "",
+    "defaultText": ""
+  },
+  {
+    "key": "memories.max-chars",
+    "type": "int",
+    "default": 4000,
+    "description": "How much each memories file may hold (every routine's, and each routine's own): what a run's prompt gets, kept small. Past it, `memory add` asks to compact first.",
+    "unit": "characters",
+    "min": 200,
+    "value": 4000,
+    "isDefault": true,
+    "valueText": "4000",
+    "defaultText": "4000"
+  }
+]

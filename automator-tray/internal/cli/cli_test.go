@@ -86,6 +86,59 @@ esac`)
 	}
 }
 
+// The windows' calls run the commands automator-ui's Setup and Settings
+// windows run.
+func TestWindowCallsRunTheCommandsAutomatorUIRuns(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "log")
+	c := fake(t, `echo "$*" >> '`+log+`'
+case "$1" in
+  settings|templates) [ "$2" = list ] && echo '[]' || echo '{}' ;;
+  *) echo '{}' ;;
+esac`)
+	_, _ = c.Setup()
+	_, _ = c.Templates()
+	_ = c.InstallTemplate("projects/acme/standup", []Value{{"channel", "#team"}, {"when", "9:00"}})
+	_, _ = c.AppSettings()
+	_, _ = c.SetSetting("llm.backend", "local")
+	_, _ = c.ResetSetting("llm.local.url")
+	_ = c.SignIn("tracker")
+	_, _ = c.TrustCheck("standup")
+	_ = c.TurnOn("standup")
+	_ = c.ConnectClaudeCode()
+	_ = c.InstallStatusLine()
+	_, _ = c.Usage()
+	_, _ = c.LoginItems()
+	_, _ = c.SetStartAtLogin(true)
+	_, _ = c.SetStartAtLogin(false)
+	b, _ := os.ReadFile(log)
+	want := strings.Join([]string{
+		"setup --json", "templates list --json",
+		"templates install projects/acme/standup --set channel=#team --set when=9:00 --json",
+		"settings list --scope app --json", "settings set llm.backend local --json", "settings reset llm.local.url --json",
+		"auth login tracker --browser", "routines trust standup --check --json", "routines trust standup --yes --resume --json",
+		"mcp connect --json", "usage statusline install --json", "usage --json",
+		"login-items status --json", "login-items enable --json", "login-items disable --json",
+	}, "\n") + "\n"
+	if string(b) != want {
+		t.Fatalf("ran:\n%s\nwant:\n%s", b, want)
+	}
+}
+
+// Signing in waits for the browser as long as it takes: Timeout doesn't
+// stop it.
+func TestSigningInHasNoTimeLimit(t *testing.T) {
+	orig := Timeout
+	Timeout = 100 * time.Millisecond
+	t.Cleanup(func() { Timeout = orig })
+	c := fake(t, "sleep 0.5\n")
+	if err := c.SignIn("tracker"); err != nil {
+		t.Fatalf("sign-in stopped: %v", err)
+	}
+	if _, err := c.Setup(); err == nil || !strings.Contains(err.Error(), "didn't answer") {
+		t.Fatalf("setup wasn't stopped: %v", err)
+	}
+}
+
 func TestParseStatus(t *testing.T) {
 	for line, ok := range map[string]bool{
 		`{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","health":"ok","busy":false,"routines":[]}`:    true,
@@ -144,6 +197,15 @@ func TestTypesMatchTheContracts(t *testing.T) {
 		"notifications-open.schema.json": ClickOutput{},
 		"update.schema.json":             UpdateOutput{},
 		"update-progress.schema.json":    UpdateProgress{},
+		"setup.schema.json":              SetupOutput{},
+		"templates-list.schema.json":     []TemplateInfo{},
+		"settings-list.schema.json":      []Setting{},
+		"settings-set.schema.json":       Setting{},
+		"settings-reset.schema.json":     Setting{},
+		"routines-trust.schema.json":     TrustOutput{},
+		"usage.schema.json":              Report{},
+		"login-items-status.schema.json": LoginItems{},
+		"login-items-enable.schema.json": LoginItems{},
 	} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "cli", schema))
 		if err != nil {

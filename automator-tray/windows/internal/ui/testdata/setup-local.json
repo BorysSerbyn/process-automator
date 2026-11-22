@@ -1,0 +1,60 @@
+{
+  "steps": [
+    {
+      "step": "templates",
+      "title": "Templates",
+      "done": true,
+      "optional": true,
+      "status": "Routines installed: digest, standup",
+      "ask": "First, on its own: which of the templates' projects do you work on (name each one, even if there's only one)? Then, each template as its own choice: which should be installed as routines, of those of your projects and those for any project? Templates with the same name are alternatives. None are picked by default.",
+      "commands": [
+        "procauto templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none, and only those with supportsBackend (the others need another llm.backend)",
+        "procauto templates install \u003ctemplate\u003e [--set \u003cparam\u003e=\u003cvalue\u003e]..."
+      ]
+    },
+    {
+      "step": "backend",
+      "title": "Model backend",
+      "done": true,
+      "status": "Runs with local (experimental, untested), ready",
+      "ask": "Which backend should run your routines?\n- claude-code: Claude Code on your Claude subscription (recommended)\n- claude-api: Anthropic's API, paid per token\n- local: Your own model server, e.g. Ollama (experimental, untested)\n- codex: OpenAI's Codex CLI (experimental, untested)",
+      "setting": "llm.backend",
+      "settings": [
+        "llm.local.url",
+        "llm.local.model"
+      ],
+      "commands": [
+        "procauto settings set llm.backend \u003cclaude-code|claude-api|local|codex\u003e",
+        "procauto settings set llm.local.url \u003curl\u003e   # local only, experimental and untested: when the server isn't at http://localhost:11434/v1 (Ollama on this machine)",
+        "procauto settings set llm.local.model \u003cmodel\u003e   # local only: the model routines run on, its name on the server (e.g. qwen3:8b)",
+        "procauto auth login local --browser   # local only: when the server needs an API key (doctor says so; hosted ones do, Ollama doesn't)"
+      ]
+    },
+    {
+      "step": "turn-on",
+      "subject": "digest",
+      "title": "Turn on digest",
+      "done": false,
+      "status": "Not trusted yet; paused (At 08:00)",
+      "ask": "Trust digest to run for real with what it can reach, and run it on its schedule (At 08:00)?",
+      "commands": [
+        "procauto routines trust digest --check --json   # show me what it can reach before asking",
+        "procauto routines trust digest --yes --resume"
+      ]
+    },
+    {
+      "step": "turn-on",
+      "subject": "standup",
+      "title": "Turn on standup",
+      "done": false,
+      "status": "Not trusted yet; paused (At 09:00, Monday through Friday)",
+      "ask": "Trust standup to run for real with what it can reach, and run it on its schedule (At 09:00, Monday through Friday)?",
+      "commands": [
+        "procauto routines trust standup --check --json   # show me what it can reach before asking",
+        "procauto routines trust standup --yes --resume"
+      ]
+    }
+  ],
+  "done": false,
+  "remaining": 2
+}

@@ -1,0 +1,18 @@
+{
+  "kind": "plan",
+  "limitPercent": 90,
+  "windows": [
+    {
+      "name": "session",
+      "length": "5h",
+      "over": false
+    },
+    {
+      "name": "weekly",
+      "length": "7d",
+      "over": false
+    }
+  ],
+  "readError": "claude-code backend: the `claude` CLI isn't on PATH (https://claude.com/claude-code)",
+  "over": false
+}

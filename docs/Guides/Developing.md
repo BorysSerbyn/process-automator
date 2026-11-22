@@ -7,12 +7,17 @@ Back to [[Home]]. See also: [[Spec/Requirements/Technical/Distribution|Technical
 make deps      # dev tools (Go, golangci-lint, shellcheck) via Homebrew
 make test      # Go + Swift tests
 make lint
-make ci        # before pushing: tests, lint, Linux/Windows builds, the tray's Linux builds, shellcheck, the Linux package, the macOS artifact's install test
+make ci        # before pushing: tests, lint, Linux/Windows builds, the tray's Linux builds, shellcheck, the Linux package (Docker), the macOS artifact's install test
 make install   # build, sign, install to ~/Applications, (re)start; CLI linked to ~/.local/bin
 make help      # everything else
 ```
 
 Development builds are signed with a self-signed certificate so macOS keeps permission grants across rebuilds: create it once as in [[Guides/Getting started#Building it from the checkout|Building it from the checkout]], or use another identity with `make install SIGN_IDENTITY="..."`. Build identifiers derive from `BUNDLE_PREFIX` (default `dev`); set your own reverse-DNS prefix with `make install BUNDLE_PREFIX=com.example`.
+
+## The Linux windows app needs Docker
+The Linux package's windows app (`automator-tray/windows`, Fyne) needs cgo against Linux's OpenGL, X11 and Wayland libraries, so `make package-linux` (and so `make ci` and `make publish`) builds it in a Docker container, for amd64 and arm64 alike: any Docker engine that runs Linux containers (OrbStack, Docker Desktop, Colima; on Linux, Docker itself), running. The first build makes the image (`scripts/linux-windows.Dockerfile`) and fills Go's caches (Docker volumes `automator-windows-gomod` and `automator-windows-gocache`), a few minutes; later ones take seconds. Without Docker, `make package-linux LINUX_WINDOWS=none` packages without the windows app (the tray then opens every window in a terminal). The tray and the core stay CGO-free.
+
+Its tests run on the Mac with Fyne's headless test driver (`make test`), and lint builds it there with cgo. To look at its windows without a Linux desktop, run a package's `bin/automator-windows setup` under Xvfb in a Linux VM.
 
 ## Releases
 Versions come from git tags (`vX.Y.Z`); untagged builds are `X.Y.Z-dev+<sha>`. Releases are built and published from my Mac: after `make ci`, `make release PART=major|minor|patch` tags HEAD, then `make publish SIGN_P12=<cert.p12> SIGN_P12_PASSWORD=…` (or `SIGN_IDENTITY=` an identity in my keychains) builds the signed macOS app (Apple silicon) and the Linux tarballs, runs the install test, pushes the tag and publishes them as its GitHub release, with `install.sh` (for the one-line install) and `SHA256SUMS`, through the first `gh` account that can push to the repository. `DRY_RUN=1` stops before pushing. It doesn't update a Homebrew tap. `make package` and `make package-linux LINUX_ARCH=…` build single artifacts; `scripts/test-install.sh <artifact>` installs one into a throwaway home, uses it and uninstalls it.

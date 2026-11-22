@@ -4,9 +4,10 @@
 # Usage:
 #   package.sh macos <app> <out-dir>
 #       → <out-dir>/<FOLDER>-<version>-macos.zip (the signed .app, zipped with ditto)
-#   package.sh linux <core-binary> <out-dir> <arch> <install.env> <tray-binary> <tray-icons>
+#   package.sh linux <core-binary> <out-dir> <arch> <install.env> <tray-binary> <tray-icons> [<windows-binary>]
 #       → <out-dir>/<FOLDER>-<version>-linux-<arch>.tar.gz, holding bin/<COMMAND>,
-#         bin/automator-tray (the tray, beside the core) and share/<FOLDER>/
+#         bin/automator-tray (the tray, beside the core), bin/automator-windows
+#         (the windows app, when given) and share/<FOLDER>/
 #         (templates, installer, systemd unit and autostart entry templates,
 #         the tray's icons in tray/)
 # TEMPLATES is the templates folder the Linux tree ships (default: the repo's templates/).
@@ -29,7 +30,7 @@ case $kind in
     echo "$zip"
     ;;
   linux)
-    core=$1 out=$2 arch=$3 env=$4 tray=$5 icons=$6
+    core=$1 out=$2 arch=$3 env=$4 tray=$5 icons=$6 windows=${7:-}
     version=$(env_var "$env" VERSION) folder=$(env_var "$env" FOLDER) command=$(env_var "$env" COMMAND)
     templates=${TEMPLATES:-$scripts/../templates}
     name="$folder-$version-linux-$arch"
@@ -40,6 +41,10 @@ case $kind in
     cp "$core" "$tree/bin/$command"
     cp "$tray" "$tree/bin/automator-tray"
     chmod 755 "$tree/bin/$command" "$tree/bin/automator-tray"
+    if [ -n "$windows" ]; then
+      cp "$windows" "$tree/bin/automator-windows"
+      chmod 755 "$tree/bin/automator-windows"
+    fi
     cp -R "$icons" "$tree/share/$folder/tray"
     if [ -d "$templates" ]; then cp -R "$templates" "$tree/share/$folder/templates"; else mkdir "$tree/share/$folder/templates"; fi
     cp "$scripts/install-app.sh" "$scripts/scheduler.service.in" "$scripts/tray.desktop.in" "$tree/share/$folder/"

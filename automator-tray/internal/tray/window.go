@@ -1,11 +1,16 @@
 package tray
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // WindowKind is one of the app's windows (automator-ui's).
@@ -48,10 +53,70 @@ func (w Window) Command() []string {
 	return []string{"routines", "list"}
 }
 
+// WindowsApp is the windows app (automator-windows), beside the tray and
+// the CLI: the windows it has open there, the others in a terminal.
+const WindowsApp = "automator-windows"
+
+// StartGrace is how long a windows app just started is watched: one that
+// fails in that time (no OpenGL, a display that won't open) has its window
+// opened in a terminal instead.
+var StartGrace = 3 * time.Second
+
 // OpenWindow is the window seam: every window the tray opens goes through
-// it. Until the app has windows on Linux, a window is its CLI command run in
-// the user's terminal (Window.Command), which stays open until Enter.
+// it. The setup and settings windows are the windows app's (WindowsApp),
+// one process per window that exits when it closes; the others, and every
+// window where the windows app isn't installed or there's no display, are
+// their CLI command run in my terminal (Window.Command), which stays open
+// until Enter.
 func OpenWindow(cliPath string, w Window) error {
+	return openWindow(os.Getenv, cliPath, w, func() error { return openInTerminal(cliPath, w) })
+}
+
+func openWindow(getenv func(string) string, cliPath string, w Window, terminal func() error) error {
+	argv := WindowsCommand(getenv, cliPath, w)
+	if argv == nil {
+		return terminal()
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &limitedWriter{w: &stderr, left: 4096}
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		return terminal()
+	}
+	started := time.Now()
+	go func() {
+		err := cmd.Wait()
+		if err == nil || time.Since(started) > StartGrace {
+			return
+		}
+		log.Printf("the %s window didn't open (%v: %s); opening it in a terminal", w.Kind, err, strings.TrimSpace(stderr.String()))
+		if err := terminal(); err != nil {
+			log.Printf("the %s window: %v", w.Kind, err)
+		}
+	}()
+	return nil
+}
+
+// WindowsCommand is the command line that opens w in the windows app, or
+// nil when it has no such window, it isn't installed beside the CLI, or
+// there's no display to show it on.
+func WindowsCommand(getenv func(string) string, cliPath string, w Window) []string {
+	if w.Kind != SetupWindow && w.Kind != SettingsWindow {
+		return nil
+	}
+	if getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "" {
+		return nil
+	}
+	exe := filepath.Join(filepath.Dir(cliPath), WindowsApp)
+	if st, err := os.Stat(exe); err != nil || st.IsDir() || st.Mode()&0o111 == 0 {
+		return nil
+	}
+	return []string{exe, string(w.Kind)}
+}
+
+// openInTerminal runs w's CLI command in my terminal.
+func openInTerminal(cliPath string, w Window) error {
 	argv, err := TerminalCommand(os.Getenv, exec.LookPath, append([]string{cliPath}, w.Command()...))
 	if err != nil {
 		return err
@@ -63,6 +128,23 @@ func OpenWindow(cliPath string, w Window) error {
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// limitedWriter keeps the first left bytes written to it: what a windows
+// app that failed said, for the log.
+type limitedWriter struct {
+	w    io.Writer
+	left int
+	mu   sync.Mutex
+}
+
+func (l *limitedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	keep := p[:min(len(p), l.left)]
+	l.left -= len(keep)
+	_, _ = l.w.Write(keep)
+	return len(p), nil
 }
 
 // keepOpen runs the command given after it ($0 and its arguments), then

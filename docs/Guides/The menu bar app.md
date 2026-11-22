@@ -46,14 +46,14 @@ macOS asks once whether the app may show notifications (for both); until you all
 ## The Linux tray
 In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the routines list. It starts at login; **Quit** stops it until the next login (or run `~/.local/lib/process-automator/bin/automator-tray &` to bring it back).
 
-It has no windows: what opens a window on macOS runs its `procauto` command in your terminal (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`), which stays open until you press Enter:
+**Finish Setup…** and **Settings** open the same Setup and Settings windows as on macOS ([[#Setup window]], [[#Settings window]]); opening one again brings it to the front. The other windows aren't on Linux yet: those menu items run their `procauto` command in your terminal (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`), which stays open until you press Enter:
 
 | Menu item | Runs |
 |---|---|
-| **Finish Setup…** | `procauto setup` |
 | **All Routines…** | `procauto routines list` |
 | A routine | `procauto routines show <routine>` |
-| **Settings** | `procauto settings list --scope app` |
 | **Updating to X…** | `procauto update progress` |
+
+Setup and Settings open in a terminal too (`procauto setup`, `procauto settings list --scope app`) when their window can't open: no display, no OpenGL, or a package built without the windows app.
 
 **Update to X…** asks in a notification, with **Update** and **Later** (where notifications have no buttons, in your terminal: `procauto update --ask`). On GNOME the tray needs the AppIndicator extension (Ubuntu has it on); see [[Guides/Getting started#On Linux|On Linux]].

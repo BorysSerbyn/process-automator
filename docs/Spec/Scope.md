@@ -13,7 +13,7 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 ## What it isn't
 - Not a chat assistant or an open-ended agent: routines are fixed prompts run unattended, with no one answering questions mid-run
 - Not tied to any service: the engine knows no specific service; integrations are MCP servers I add
-- No app windows on Linux: the tray opens setup, settings and routines as CLI commands in a terminal
+- On Linux, only the Setup and Settings windows: the tray opens the routines and update progress as CLI commands in a terminal
 - No Windows support (the core cross-compiles for it, nothing more)
 - Memories are mine: routines never write them
 

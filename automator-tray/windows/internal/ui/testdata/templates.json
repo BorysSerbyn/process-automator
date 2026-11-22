@@ -1,0 +1,57 @@
+[
+  {
+    "id": "projects/acme/digest",
+    "name": "digest",
+    "tags": [
+      "projects",
+      "acme"
+    ],
+    "project": "acme",
+    "description": "Tells me what changed in the acme project since yesterday",
+    "runsHere": true,
+    "supportsBackend": true,
+    "installed": false
+  },
+  {
+    "id": "projects/zeta/review",
+    "name": "review",
+    "tags": [
+      "projects",
+      "zeta"
+    ],
+    "project": "zeta",
+    "description": "Reminds me on Fridays to review zeta's open items",
+    "runsHere": true,
+    "supportsBackend": true,
+    "installed": false
+  },
+  {
+    "id": "standup",
+    "name": "standup",
+    "tags": null,
+    "description": "Sends me a short standup note each weekday morning",
+    "params": [
+      {
+        "name": "team",
+        "type": "string",
+        "description": "The team the note is for",
+        "required": true
+      },
+      {
+        "name": "tone",
+        "type": "string",
+        "default": "brief",
+        "description": "How long the note is",
+        "enum": [
+          "brief",
+          "detailed"
+        ],
+        "required": false,
+        "defaultText": "brief"
+      }
+    ],
+    "runsHere": true,
+    "supportsBackend": true,
+    "installed": false
+  }
+]
