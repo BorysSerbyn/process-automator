@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
@@ -24,8 +25,9 @@ var LocalKeys = []string{LocalKey, formerLocalKey}
 
 // The local server's settings.
 const (
-	LocalURLSetting   = "llm.local.url"
-	LocalModelSetting = "llm.local.model"
+	LocalURLSetting       = "llm.local.url"
+	LocalModelSetting     = "llm.local.model"
+	LocalKeepAliveSetting = "llm.local.keep-alive"
 )
 
 // Local is my own OpenAI-compatible server (the local backend's, and
@@ -40,7 +42,16 @@ func (a *App) Local() (agent.OpenAICompat, error) {
 	if err != nil {
 		return agent.OpenAICompat{}, fmt.Errorf("can't read the local server's API key: %w", err)
 	}
-	return agent.OpenAICompat{BaseURL: vals.String(LocalURLSetting), APIKey: key}, nil
+	keepAlive := vals.String(LocalKeepAliveSetting)
+	if keepAlive != "" {
+		d, err := time.ParseDuration(keepAlive)
+		if err != nil || d < 0 {
+			return agent.OpenAICompat{}, fmt.Errorf("%s %q: want a duration like 1m (0 unloads after each request), or empty: `%s settings set %s 1m`",
+				LocalKeepAliveSetting, keepAlive, product.Command, LocalKeepAliveSetting)
+		}
+		keepAlive = d.String()
+	}
+	return agent.OpenAICompat{BaseURL: vals.String(LocalURLSetting), APIKey: key, KeepAlive: keepAlive}, nil
 }
 
 // localKey is the local server's API key ("" when none is stored).

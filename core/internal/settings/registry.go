@@ -90,6 +90,11 @@ var Registry = []Setting{
 			"llm.budget.* budgets.",
 	},
 	{
+		Key: "llm.local.keep-alive", Type: TypeString, Default: "1m", Backend: "local", AlsoBackend: "claude-api",
+		Description: "How long the local server keeps the model loaded after the last request from anyone, sent with each " +
+			"request (Ollama's keep_alive; other servers ignore it). 0 unloads after each request; empty leaves the server's own.",
+	},
+	{
 		Key: "llm.local.model", Type: TypeString, Default: "", Backend: "local",
 		Description: "The model the local backend runs routines on: its name on the server (e.g. qwen3:8b; `ollama list` " +
 			"shows the ones pulled). It replaces the model a routine names, unless that's local/<model>, another model on " +

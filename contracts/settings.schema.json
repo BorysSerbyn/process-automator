@@ -125,6 +125,12 @@
       "x-type": "number",
       "x-unit": "USD"
     },
+    "llm.local.keep-alive": {
+      "default": "1m",
+      "description": "How long the local server keeps the model loaded after the last request from anyone, sent with each request (Ollama's keep_alive; other servers ignore it). 0 unloads after each request; empty leaves the server's own.",
+      "type": "string",
+      "x-type": "string"
+    },
     "llm.local.model": {
       "default": "",
       "description": "The model the local backend runs routines on: its name on the server (e.g. qwen3:8b; `ollama list` shows the ones pulled). It replaces the model a routine names, unless that's local/<model>, another model on the same server.",
@@ -172,6 +178,7 @@
   "x-order": [
     "llm.backend",
     "llm.local.url",
+    "llm.local.keep-alive",
     "llm.local.model",
     "llm.usage-limit",
     "llm.budget.window",

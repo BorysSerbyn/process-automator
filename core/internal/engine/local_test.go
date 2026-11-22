@@ -156,3 +156,34 @@ func TestLocalFormerURLSetting(t *testing.T) {
 		t.Errorf("former URL setting: %+v %v", c, err)
 	}
 }
+
+// The local server gets llm.local.keep-alive with each request: 1m by
+// default, as a Go duration; empty sends none; anything else that isn't a
+// duration keeps the local backend from running, saying how to fix it.
+func TestLocalKeepAlive(t *testing.T) {
+	a := testApp(t)
+	setSetting(t, a, "llm.backend", "local")
+	setSetting(t, a, "llm.local.model", "qwen3:8b")
+	keepAlive := func() string {
+		c, err := a.Local()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.KeepAlive
+	}
+	if got := keepAlive(); got != "1m0s" {
+		t.Errorf("default: %q", got)
+	}
+	setSetting(t, a, "llm.local.keep-alive", "0")
+	if got := keepAlive(); got != "0s" {
+		t.Errorf("0: %q", got)
+	}
+	setSetting(t, a, "llm.local.keep-alive", "")
+	if got := keepAlive(); got != "" {
+		t.Errorf("empty: %q", got)
+	}
+	setSetting(t, a, "llm.local.keep-alive", "soon")
+	if b, _ := a.BackendReady(); !strings.Contains(b.Problem, `llm.local.keep-alive "soon": want a duration like 1m`) {
+		t.Errorf("invalid: %+v", b)
+	}
+}

@@ -27,6 +27,12 @@ type fakeOpenAI struct {
 	// fail, if set, is the status every chat completion answers with.
 	fail   int
 	models []string
+	// refuseKeepAlive answers a request carrying keep_alive with a 400, as
+	// OpenAI's API does an argument it doesn't know.
+	refuseKeepAlive bool
+	refused         int // requests refused for keep_alive (not turns)
+	// badRequest answers every request with a 400 of this message.
+	badRequest string
 
 	mu       sync.Mutex
 	requests []chatRequest
@@ -34,8 +40,9 @@ type fakeOpenAI struct {
 }
 
 type chatRequest struct {
-	Model    string `json:"model"`
-	Messages []struct {
+	Model     string          `json:"model"`
+	KeepAlive json.RawMessage `json:"keep_alive"`
+	Messages  []struct {
 		Role       string `json:"role"`
 		Content    any    `json:"content"`
 		ToolCallID string `json:"tool_call_id"`
@@ -78,7 +85,19 @@ func (f *fakeOpenAI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(body, &req); err != nil {
 		f.t.Errorf("request: %v: %s", err, body)
 	}
+	if f.refuseKeepAlive && req.KeepAlive != nil {
+		f.refused++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"error":{"message":"Unrecognized request argument supplied: keep_alive","type":"invalid_request_error"}}`)
+		return
+	}
 	f.requests = append(f.requests, req)
+	if f.badRequest != "" {
+		w.Header().Set("X-Should-Retry", "false")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"error":{"message":"`+f.badRequest+`","type":"invalid_request_error"}}`)
+		return
+	}
 	if f.fail != 0 {
 		w.Header().Set("X-Should-Retry", "false") // the SDK would retry it
 		w.WriteHeader(f.fail)
@@ -437,5 +456,73 @@ func TestLocalBackendRunsItsModel(t *testing.T) {
 	}
 	if err := run(&Genkit{Backend: LocalBackend, LocalModel: "qwen3"}, ""); err == nil || !strings.Contains(err.Error(), "settings set llm.local.url <url>") {
 		t.Errorf("no URL: %v", err)
+	}
+}
+
+func runKeepAlive(t *testing.T, f *fakeOpenAI, keepAlive string) (*Result, error) {
+	t.Helper()
+	srv := httptest.NewServer(f)
+	t.Cleanup(srv.Close)
+	ag := testAgent(0, false, nil)
+	ag.Backend = &Genkit{Local: OpenAICompat{BaseURL: srv.URL + "/v1", KeepAlive: keepAlive}}
+	return ag.Run(context.Background(), Request{Name: "r", Source: compatRoutine, Servers: []string{"chat"}, Tools: []string{"read", "post"}})
+}
+
+// Every chat request of a run carries keep_alive (Ollama's extension), so the
+// server frees the model soon after the run's last request.
+func TestLocalKeepAliveOnEveryRequest(t *testing.T) {
+	f := &fakeOpenAI{t: t, turns: [][]toolCall{{{"read", map[string]any{}}}, {reportCall("done")}}}
+	if _, err := runKeepAlive(t, f, "1m0s"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.requests) < 3 {
+		t.Fatalf("a multi-turn run made %d requests", len(f.requests))
+	}
+	for i, r := range f.requests {
+		if string(r.KeepAlive) != `"1m0s"` {
+			t.Errorf("request %d: keep_alive %s", i, r.KeepAlive)
+		}
+	}
+}
+
+// Without a keep-alive set, nothing is added: the server keeps its own.
+func TestLocalKeepAliveEmpty(t *testing.T) {
+	f := &fakeOpenAI{t: t, turns: [][]toolCall{{reportCall("done")}}}
+	if _, err := runKeepAlive(t, f, ""); err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range f.requests {
+		if r.KeepAlive != nil {
+			t.Errorf("request %d: keep_alive %s sent", i, r.KeepAlive)
+		}
+	}
+}
+
+// A server that refuses keep_alive gets the request again without it, and
+// never again: the run goes on as if it hadn't been asked.
+func TestLocalKeepAliveRefused(t *testing.T) {
+	f := &fakeOpenAI{t: t, refuseKeepAlive: true, turns: [][]toolCall{{{"read", map[string]any{}}}, {reportCall("done")}}}
+	if _, err := runKeepAlive(t, f, "1m0s"); err != nil {
+		t.Fatal(err)
+	}
+	if f.refused != 1 || len(f.requests) < 3 {
+		t.Fatalf("refused %d, then %d requests", f.refused, len(f.requests))
+	}
+	for i, r := range f.requests {
+		if r.KeepAlive != nil {
+			t.Errorf("request %d after the refusal: keep_alive %s", i, r.KeepAlive)
+		}
+	}
+}
+
+// Any other 400 isn't taken for a refusal: it fails the run, unretried.
+func TestLocalKeepAliveOtherBadRequest(t *testing.T) {
+	f := &fakeOpenAI{t: t, badRequest: "context length exceeded"}
+	_, err := runKeepAlive(t, f, "1m0s")
+	if err == nil || !strings.Contains(err.Error(), "context length exceeded") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(f.requests) != 1 {
+		t.Errorf("a 400 was retried: %d requests", len(f.requests))
 	}
 }

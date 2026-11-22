@@ -71,6 +71,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `llm.backend` | `claude-api` | `claude-code`, `claude-api`, `local` or `codex` (both experimental, untested) |
 | `llm.local.url` | `http://localhost:11434/v1` | `local`, and `claude-api`'s `local/<model>` routines |
 | `llm.local.model` | empty | `local` only: the server's name for the model |
+| `llm.local.keep-alive` | `1m` | `local`, and `claude-api`'s `local/<model>` routines: sent with every chat request as `keep_alive` (Ollama's extension to the OpenAI API: how long the model stays loaded after the last request from anyone); `0` unloads after each request, empty sends none. A server that answers 400 refusing the field gets the request again without it, and isn't sent it again in that process |
 | `llm.usage-limit` | `90` (%) | `claude-code` only |
 | `llm.budget.window` | `5h` | `claude-api` only |
 | `llm.budget.window-usd` | `2` | `claude-api` only; 0 is no limit |

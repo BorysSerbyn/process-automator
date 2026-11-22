@@ -17,6 +17,7 @@ procauto settings reset llm.backend         # back to the default
 | `llm.backend` | `claude-api` | What runs your routines: `claude-code`, Claude Code on your Claude subscription (recommended); `claude-api`, Anthropic's API, paid per token; `local`, your own model server, e.g. Ollama (experimental, untested); `codex`, OpenAI's Codex CLI (experimental, untested). See [[Guides/Plugins and sign-ins#Model backend\|Model backend]] |
 | `llm.local.url` | `http://localhost:11434/v1` | With `local` (and `claude-api`'s `local/…` routines): your model server. See [[Guides/Plugins and sign-ins#Your own model server (experimental, untested)\|Your own model server]] |
 | `llm.local.model` | | With `local`: the model routines run on, its name on the server (e.g. `qwen3:8b`) |
+| `llm.local.keep-alive` | `1m` | How long the local server keeps the model loaded after the last request from anyone (Ollama; other servers ignore it). `0` unloads after each request; empty leaves the server's own (Ollama: 5 minutes) |
 | `llm.usage-limit` | `90%` | With `claude-code`: see [[#Usage limit]] |
 | `llm.budget.window`, `llm.budget.window-usd`, `llm.budget.weekly-usd` | `5h`, `2`, `20` | With `claude-api`: see [[#Usage limit]] |
 | `history.retention-days` | `90` | How long run history and logs are kept |

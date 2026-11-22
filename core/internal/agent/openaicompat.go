@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,10 +11,13 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
@@ -26,6 +30,88 @@ type OpenAICompat struct {
 	BaseURL string
 	// APIKey is sent as a bearer token; "" sends none (local servers need none).
 	APIKey string
+	// KeepAlive, when set (a duration like "1m"; "0s" unloads after each
+	// request), is sent with every chat request as keep_alive: Ollama's
+	// extension to the OpenAI API for how long it keeps the model loaded
+	// after the last request from anyone. Other clients' requests (a chat
+	// app) keep it loaded with their own. Servers that ignore unknown fields
+	// ignore it; one that refuses it gets the request again without it.
+	KeepAlive string
+}
+
+// keepAliveRefused are the servers (by base URL) that refused keep_alive in
+// this process: it isn't sent to them again.
+var keepAliveRefused sync.Map
+
+// requestOptions are the OpenAI client's options for this server.
+func (c OpenAICompat) requestOptions() []option.RequestOption {
+	if c.KeepAlive == "" {
+		return nil
+	}
+	return []option.RequestOption{option.WithMiddleware(c.addKeepAlive)}
+}
+
+// addKeepAlive adds keep_alive to a chat request's JSON body. A 400 that
+// refuses the field sends the request again as it was, and the field isn't
+// sent to that server again.
+func (c OpenAICompat) addKeepAlive(req *http.Request, next option.MiddlewareNext) (*http.Response, error) {
+	if !strings.HasSuffix(req.URL.Path, "/chat/completions") || req.Body == nil {
+		return next(req)
+	}
+	if _, refused := keepAliveRefused.Load(c.BaseURL); refused {
+		return next(req)
+	}
+	body, err := io.ReadAll(req.Body)
+	_ = req.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil {
+		return next(withBody(req, body))
+	}
+	fields["keep_alive"], _ = json.Marshal(c.KeepAlive)
+	with, err := json.Marshal(fields)
+	if err != nil {
+		return next(withBody(req, body))
+	}
+	resp, err := next(withBody(req, with))
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		return resp, err
+	}
+	answer, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !refusesKeepAlive(answer) {
+		resp.Body = io.NopCloser(bytes.NewReader(answer))
+		return resp, nil
+	}
+	keepAliveRefused.Store(c.BaseURL, true)
+	return next(withBody(req, body))
+}
+
+// refusesKeepAlive says a 400's body refuses the keep_alive field (by name,
+// or as an argument or field the server doesn't know).
+func refusesKeepAlive(body []byte) bool {
+	s := strings.ToLower(string(body))
+	if strings.Contains(s, "keep_alive") {
+		return true
+	}
+	for _, phrase := range []string{"unrecognized request argument", "unknown field", "unknown parameter", "extra fields not permitted", "extra inputs are not permitted"} {
+		if strings.Contains(s, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+// withBody is req with body as its body.
+func withBody(req *http.Request, body []byte) *http.Request {
+	r := req.Clone(req.Context())
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
+	r.ContentLength = int64(len(body))
+	r.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	return r
 }
 
 // CheckURL says what's wrong with the server's URL, without connecting.

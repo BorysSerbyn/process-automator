@@ -117,6 +117,7 @@ func (b *Genkit) Run(ctx context.Context, j Job) (*Output, error) {
 	if b.Local.BaseURL != "" {
 		plugins = append(plugins, &compat_oai.OpenAICompatible{
 			Provider: LocalProvider, BaseURL: b.Local.BaseURL, APIKey: b.Local.APIKey,
+			Opts: b.Local.requestOptions(),
 		})
 	}
 	g := newGenkit(ctx, j, genkit.WithPlugins(plugins...))

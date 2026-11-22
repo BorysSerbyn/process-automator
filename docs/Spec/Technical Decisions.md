@@ -418,3 +418,11 @@ Its runs aren't priced: a local model costs nothing, but a hosted one does at a 
 - **Checking the server in the scheduler's pass**, with a short timeout and a cache: a slow or blackholed server would still stall a pass, and the run reports the same failure
 - **Counting its runs as free**: a hosted API's spend would vanish from the record
 
+## Decision: the local server keeps a model briefly after each request
+Every chat request to the local server carries `keep_alive` (`llm.local.keep-alive`, 1 minute), Ollama's extension to the OpenAI API, so a model's memory is freed a minute after a run instead of after Ollama's 5 minutes. Each request resets that time, so a run keeps its model loaded between turns, and so does anyone else using the model (a chat app's own requests). Ollama can't tell a client whether a model is in use (`/api/ps` has no such field), and unloading waits for requests in progress but then makes every other client reload. Servers that don't know the field ignore it; one that refuses it gets the request again without it.
+
+### Rejected
+- **Unloading the model after a run** (an empty request with `keep_alive: 0`): it would unload a model someone is chatting with
+- **Asking `/api/ps` first**: it says what's loaded and until when, not whether anyone is using it
+- **`OLLAMA_KEEP_ALIVE`**: the server's own setting, for everything on it, not the app's to change
+
