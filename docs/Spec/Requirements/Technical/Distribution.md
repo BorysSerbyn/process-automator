@@ -51,6 +51,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 ## Building from a checkout
 - **macOS**: `make deps` (Go and the build tools, from the `Brewfile`), then `make install`: builds the core and automator-ui, assembles the `.app` with the core inside, signs it with `SIGN_IDENTITY`, and runs the installer, which stops the running core and UI, swaps the bundle and restarts them. `make uninstall` (`PURGE=1` to purge) runs the installer's uninstall
 - **Stable signing identity**: development builds are signed with the same self-signed certificate (`Process Automator Dev`) on every build, with a stable bundle ID and install path, so permission grants and Keychain access survive rebuilds
+- **Permissions the app may ask for**: `Info.plist` has a usage description for calendars, reminders, contacts, the camera, the microphone and Apple Events ("A plugin, program or watcher you turn on may need to …; <app> asks only when one does"), and `bundle.sh` signs the core and the app with `scripts/entitlements.plist`, the matching hardened-runtime entitlements. Linux has no equivalent: there, access is the user's (e.g. the `input` group)
 - **Linux**: `make package-linux LINUX_ARCH=…`, then `install.sh --from <the tarball>`
 - **The checkout is remembered** (`SOURCE_DIR`, overridable by `update.source-dir`) for updates while no published release has a download for this machine
 

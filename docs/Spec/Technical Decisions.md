@@ -683,6 +683,13 @@ macOS shows its prompt, naming the app, only to a process attributed to the app,
 - **The command asking itself**: right when the menu bar app runs it (it shares the app's identity), wrong from a terminal or an MCP client, where the prompt would name the terminal and the grant go to it
 - **Only opening System Settings**: Calendars, Contacts, Camera and Microphone list only apps that have asked, so there'd be nothing to turn on
 
+## Decision: the app declares every permission a plugin might ask for, up front
+Calendars, reminders, contacts, the camera, the microphone and Apple Events can only be asked for by an app whose `Info.plist` says why, and, under the hardened runtime, whose signature carries the matching entitlement; otherwise macOS ends the process that asks. The engine doesn't know which a build's plugins will need, so every app built on it declares them all, with one plain reason: something I turn on may need it. Declaring one asks for nothing: macOS prompts only when the scheduler asks, which only Grant… (`permissions request`) does, once per permission.
+
+### Rejected
+- **Declaring per build, from its plugins' permissions**: the plist and signature are made by the engine's scripts, and a plugin added later through the config would need a rebuild to be granted anything
+- **Declaring none**: those permissions couldn't be granted to the app at all
+
 ## Decision: pluginapi gets one field for permissions, `Plugin.Permissions`
 A compiled-in plugin declares its permissions in `Plugin.Permissions`, a list of names, meaningful for both kinds: what an in-process plugin's Go code needs, or what a preset external server needs. A config entry replacing a preset declares its own (`mcpServers.<name>.permissions`, in `config.Server`, the engine's), since it may be another server. Names are checked by `App.Validate`, so a typo stops the app at start.
 
