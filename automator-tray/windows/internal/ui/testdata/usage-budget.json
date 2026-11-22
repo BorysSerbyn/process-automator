@@ -1,0 +1,20 @@
+{
+  "kind": "budget",
+  "windows": [
+    {
+      "name": "window",
+      "length": "5h",
+      "spentUsd": 0,
+      "budgetUsd": 2,
+      "over": false
+    },
+    {
+      "name": "week",
+      "length": "7d",
+      "spentUsd": 0,
+      "budgetUsd": 20,
+      "over": false
+    }
+  ],
+  "over": false
+}
