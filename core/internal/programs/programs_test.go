@@ -223,3 +223,22 @@ func TestExecEndsWhatItLeaves(t *testing.T) {
 		t.Fatalf("waited %s for what it left running", time.Since(start))
 	}
 }
+
+// A program gets the desktop session's display variables the app has (to
+// open an app), and nothing else from the app's environment.
+func TestEnvironmentPassesTheDisplay(t *testing.T) {
+	t.Setenv("DISPLAY", ":7")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("ANTHROPIC_API_KEY", "not for programs")
+	env := strings.Join(Environment("/home/me", map[string]string{"TOKEN": "t"}), "\n")
+	for _, want := range []string{"DISPLAY=:7", "HOME=/home/me", "TOKEN=t", "PATH=" + DefaultPath} {
+		if !strings.Contains(env, want) {
+			t.Errorf("lacks %s:\n%s", want, env)
+		}
+	}
+	for _, not := range []string{"ANTHROPIC_API_KEY", "WAYLAND_DISPLAY="} {
+		if strings.Contains(env, not) {
+			t.Errorf("has %s:\n%s", not, env)
+		}
+	}
+}

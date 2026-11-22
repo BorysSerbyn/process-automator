@@ -51,6 +51,12 @@ type Invocation struct {
 	// Log gets its output's first half as it comes, and its last half when it
 	// ends (OutputCap).
 	Log io.Writer
+	// Stdin, if set, is a file whose content it reads on stdin (a hook's
+	// event); otherwise stdin is empty.
+	Stdin string
+	// Stdout, if set, gets its stdout as it comes (a watcher's events), and
+	// only its stderr is its output; otherwise both are.
+	Stdout io.Writer
 }
 
 // Execution is how a program's run went: the program's section of its run's
@@ -70,10 +76,21 @@ type Execution struct {
 	Checksum string `json:"checksum,omitempty"`
 }
 
+// DisplayEnv are the desktop session's variables a program is given when the
+// app has them, so it can open an app or a window (on Linux, the display and
+// the session bus; macOS needs none).
+var DisplayEnv = []string{"DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_SESSION_TYPE", "XDG_CURRENT_DESKTOP"}
+
 // Environment is what a program runs with, and nothing else from the app's
-// own: a fixed PATH, HOME, TMPDIR, and vars (secrets, what the run is for).
+// own: a fixed PATH, HOME, TMPDIR, the desktop session's DisplayEnv that are
+// set, and vars (secrets, what the run is for).
 func Environment(home string, vars map[string]string) []string {
 	env := []string{"PATH=" + DefaultPath, "HOME=" + home, "TMPDIR=" + os.TempDir()}
+	for _, k := range DisplayEnv {
+		if v, ok := os.LookupEnv(k); ok && v != "" {
+			env = append(env, k+"="+v)
+		}
+	}
 	for k, v := range vars {
 		env = append(env, k+"="+v)
 	}
@@ -108,12 +125,48 @@ func Exec(ctx context.Context, inv Invocation) (*Execution, error) {
 	cmd.Dir = inv.Dir
 	cmd.Env = append(slices.Clone(inv.Env), ResultEnv+"="+resultPath)
 	cmd.Stdout, cmd.Stderr = w, w
+	// Its stdout, when it's read apart: through a pipe of our own too.
+	var outR, outW *os.File
+	stdoutDone := make(chan struct{})
+	close(stdoutDone)
+	if inv.Stdout != nil {
+		if outR, outW, err = os.Pipe(); err != nil {
+			_ = r.Close()
+			_ = w.Close()
+			<-copied
+			return nil, err
+		}
+		cmd.Stdout = outW
+		stdoutDone = make(chan struct{})
+		go func() {
+			defer close(stdoutDone)
+			_, _ = io.Copy(inv.Stdout, outR)
+		}()
+	}
+	if inv.Stdin != "" {
+		in, err := os.Open(inv.Stdin)
+		if err != nil {
+			_ = r.Close()
+			_ = w.Close()
+			<-copied
+			return nil, err
+		}
+		defer func() { _ = in.Close() }()
+		cmd.Stdin = in
+	}
 	newGroup(cmd)
 	startErr := cmd.Start()
 	_ = w.Close()
+	if outW != nil {
+		_ = outW.Close()
+	}
 	if startErr != nil {
 		_ = r.Close()
 		<-copied
+		if outR != nil {
+			_ = outR.Close()
+			<-stdoutDone
+		}
 		return nil, fmt.Errorf("couldn't start it: %w", startErr)
 	}
 	exited := make(chan error, 1)
@@ -138,6 +191,14 @@ func Exec(ctx context.Context, inv Invocation) (*Execution, error) {
 	case <-time.After(time.Second): // a process that left its group holds the output
 	}
 	_ = r.Close()
+	if outR != nil {
+		select {
+		case <-stdoutDone:
+		case <-time.After(time.Second):
+		}
+		_ = outR.Close()
+		<-stdoutDone
+	}
 	out.finish()
 
 	res := &Execution{ExitCode: cmd.ProcessState.ExitCode(), Summary: summary(resultPath)}

@@ -229,6 +229,63 @@ func RoutineFieldNames() []string {
 // for how long. The others are an LLM routine's.
 var ProgramFields = []string{"enabled", "schedule", "staleness", "timeout"}
 
+// HookFields are a hook's own settings, besides what its action takes
+// (HookActionFields): hooks.<hook>.<Name>, set in its file as automator.<Name>
+// (a prompt's) or <Name> (a hook.yaml's).
+var HookFields = []RoutineField{
+	{
+		Name: "enabled", Type: TypeBool, Default: true,
+		Description: "Whether the hook runs when its events come.",
+	},
+	{
+		Name: "staleness", Type: TypeDuration, Default: "10m",
+		Description: "How old an event may be when the hook would run (its at time); an older one is dropped, " +
+			"e.g. one that happened while the computer slept.",
+	},
+	{
+		Name: "timeout", Type: TypeDuration, Default: "20m",
+		Description: "How long a run may take before it's stopped and recorded as failed.",
+	},
+	{
+		Name: "rate", Type: TypeInt, Default: 60, Min: ptr(1), Max: ptr(3600), Unit: "runs an hour",
+		Description: "At most this many runs in any hour; an event past it is dropped. A hook due to run more " +
+			"than three times its rate in an hour (its action triggering it, say) is paused.",
+	},
+}
+
+// HookActionFields are the LLM routine settings an LLM hook's prompt takes
+// too (a program hook takes none).
+var HookActionFields = []string{"effort", "folder", "session", "concurrency", "builtinTools"}
+
+// HookFieldNames are the setting names a hook's file may use: an LLM hook's
+// (llm) or a program hook's.
+func HookFieldNames(llm bool) []string {
+	var names []string
+	for _, f := range HookFields {
+		names = append(names, f.Name)
+	}
+	if llm {
+		names = append(names, HookActionFields...)
+	}
+	return names
+}
+
+// HookSettings are a hook's settings (hooks.<hook>.<field>), with defaults
+// from its file: its own, then (llm) its action's.
+func HookSettings(hook string, fileValues map[string]any, llm bool) []Setting {
+	out := scopedSettings("hooks", hook, fileValues, HookFields, nil)
+	if llm {
+		out = append(out, scopedSettings("hooks", hook, fileValues, RoutineFields, HookActionFields)...)
+	}
+	return out
+}
+
+// WatcherSettings are a watcher's settings: watchers.<watcher>.enabled.
+func WatcherSettings(watcher string) []Setting {
+	return []Setting{{Key: "watchers." + watcher + ".enabled", Type: TypeBool, Default: true,
+		Description: "Whether the watcher runs (while a hook that's on listens to it)."}}
+}
+
 // RoutineSettings are the settings of one routine, with defaults taken from the
 // automator.* values in its file (fileValues; missing ones fall back to the
 // field's default). A routine without a schedule gets no scheduled-only fields.
@@ -240,13 +297,25 @@ func RoutineSettings(routine string, fileValues map[string]any) []Setting {
 // field when names is nil): a program's are ProgramFields.
 func RoutineSettingsOf(routine string, fileValues map[string]any, names []string) []Setting {
 	_, scheduled := fileValues["schedule"]
-	var out []Setting
+	var fields []RoutineField
 	for _, f := range RoutineFields {
-		if f.ScheduledOnly && !scheduled || names != nil && !slices.Contains(names, f.Name) {
+		if !f.ScheduledOnly || scheduled {
+			fields = append(fields, f)
+		}
+	}
+	return scopedSettings("routines", routine, fileValues, fields, names)
+}
+
+// scopedSettings are fields (only those named, when names isn't nil) as
+// <scope>.<name>.<field> settings, with defaults from fileValues.
+func scopedSettings(scope, name string, fileValues map[string]any, fields []RoutineField, names []string) []Setting {
+	var out []Setting
+	for _, f := range fields {
+		if names != nil && !slices.Contains(names, f.Name) {
 			continue
 		}
 		st := Setting{
-			Key: "routines." + routine + "." + f.Name, Type: f.Type, Default: f.Default,
+			Key: scope + "." + name + "." + f.Name, Type: f.Type, Default: f.Default,
 			Description: f.Description, Unit: f.Unit, Enum: f.Enum, Min: f.Min, Max: f.Max,
 		}
 		// The file's value is the routine's default, in canonical form (a YAML
