@@ -424,11 +424,31 @@ load_agent() {
   bootstrap "$domain" "$plist"
 }
 
+# mac_pids <exe>: the processes running the executable at <exe> (macOS).
+mac_pids() {
+  ps -axo pid=,comm= | awk -v exe="$1" '{ pid = $1; sub(/^ *[0-9]+ /, ""); if ($0 == exe) print pid }'
+}
+
+# stop_copies <exe>: stops every process running <exe> (macOS), not only the
+# login item's: macOS reopens the app by itself (after a permission is
+# granted, "Quit & Reopen"), outside launchd, and that copy would keep
+# running beside the new one. Waits up to 10s, then kills.
+stop_copies() {
+  local pid
+  for pid in $(mac_pids "$1"); do kill "$pid" 2>/dev/null || true; done
+  for _ in $(seq 1 20); do
+    [ -n "$(mac_pids "$1")" ] || return 0
+    sleep 0.5
+  done
+  for pid in $(mac_pids "$1"); do kill -9 "$pid" 2>/dev/null || true; done
+}
+
 # stop_items <app>: stops the login items running the app at <app>.
 stop_items() {
   system || return 0
   if [ "$OS" = macos ]; then
     stop_agent "$UI_LABEL"
+    stop_copies "$1/Contents/MacOS/AutomatorUI"
     stop_agent "$SCHED_LABEL"
   else
     stop_tray "$1/bin/automator-tray"

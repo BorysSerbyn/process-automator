@@ -253,3 +253,28 @@ extension Banner where Actions == EmptyView {
         self.init(title: title, message: message, systemImage: systemImage, tint: tint) { EmptyView() }
     }
 }
+
+/// A scroll view as tall as what it holds, up to maxHeight, scrolling only
+/// past that. A plain ScrollView has no height of its own, so in a sheet it
+/// shrinks to a sliver; this one measures its content.
+struct FittingScrollView<Content: View>: View {
+    let maxHeight: CGFloat
+    @ViewBuilder let content: Content
+    @State private var height: CGFloat = 0
+
+    var body: some View {
+        ScrollView {
+            content.background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: ContentHeight.self, value: proxy.size.height)
+                })
+        }
+        .frame(height: min(max(height, 1), maxHeight))
+        .onPreferenceChange(ContentHeight.self) { height = $0 }
+    }
+}
+
+private struct ContentHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}

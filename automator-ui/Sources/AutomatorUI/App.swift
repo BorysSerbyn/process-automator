@@ -29,6 +29,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsOpenGroups: Set<String>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // One copy at a time: the login item and a copy macOS opened by
+        // itself (after a permission is granted, "Quit & Reopen") would each
+        // put an indicator in the menu bar. The newer one leaves, quietly
+        // (a successful exit: launchd doesn't start it again).
+        if anotherCopyIsRunning() {
+            NSApp.terminate(nil)
+            return
+        }
         updates = Updates(cli: cli)
         if let cli {
             // After a setup action, the app's notifications are asked for
@@ -56,6 +64,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     // MARK: Opening and quitting
+
+    /// Whether another process runs this same app (this executable), e.g.
+    /// one launchd started at login beside one macOS reopened. The core's
+    /// own processes in the bundle (the daemon, the CLI) aren't apps.
+    private func anotherCopyIsRunning() -> Bool {
+        guard let id = Bundle.main.bundleIdentifier, let me = Bundle.main.executableURL?.resolvingSymlinksInPath()
+        else {
+            return false
+        }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        return NSRunningApplication.runningApplications(withBundleIdentifier: id).contains {
+            $0.processIdentifier != pid && $0.executableURL?.resolvingSymlinksInPath() == me
+        }
+    }
 
     /// Opening the app starts the scheduler if it isn't running, so opening
     /// it after a Quit brings everything back.

@@ -194,7 +194,7 @@ struct FireSheet: View {
         if let error = model.fireError {
             RowError(message: error)
         } else if let output = model.fireResult {
-            ScrollView {
+            FittingScrollView(maxHeight: 320) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         Text("How it went").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
@@ -210,7 +210,6 @@ struct FireSheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 260)
         }
     }
 }

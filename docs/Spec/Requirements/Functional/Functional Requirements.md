@@ -95,6 +95,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## UI
 Managing the app is possible entirely from macOS's menu bar app (automator-ui), without a terminal. The CLI does all of it too; the UI is another way in, not a replacement.
+- **One indicator**: the menu bar app runs once; a second copy (opened beside the running one, e.g. by macOS after a permission is granted) quits at once
 - **Menu** (the menu bar app's and the Linux tray's): the version; the status in words (each reason the dot is red, opening the run it's about, or the routine's or hook's window, on its review when it needs turning on); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); **Hooks ›** while there are hooks (all hooks, then each with its status); updates; Settings; Quit
 - **Quit** stops the app: the menu bar app or tray, and the scheduler (no routine runs on its schedule until I open the app again); both start again at the next login. When the scheduler can't be stopped, it says why and quits anyway
 - **Opening the app** starts the scheduler if it isn't running, so opening it after a Quit brings everything back; opening it while it runs opens the Setup window while setup has steps left, else the Settings window

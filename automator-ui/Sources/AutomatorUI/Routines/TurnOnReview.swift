@@ -112,7 +112,7 @@ struct TurnOnSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Turn on \(turnOn.name)").font(.title3.weight(.semibold))
-            ScrollView {
+            FittingScrollView(maxHeight: 520) {
                 TurnOnReview(
                     summary: summary, review: turnOn.review, loadError: turnOn.loadError,
                     retry: { Task { await turnOn.load() } }, signingIn: turnOn.signingIn,
@@ -120,7 +120,6 @@ struct TurnOnSheet: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 460)
             if let error = turnOn.error { RowError(message: error) }
             HStack {
                 if turnOn.working { ProgressView().controlSize(.small) }
