@@ -66,7 +66,7 @@ func TestWindowsAreTheirCommands(t *testing.T) {
 	for w, want := range map[Window][]string{
 		{Kind: SetupWindow}:                         {"setup"},
 		{Kind: SettingsWindow}:                      {"settings", "list", "--scope", "app"},
-		{Kind: RoutinesWindow}:                      {"routines", "list"},
+		{Kind: RoutinesWindow}:                      {"routines", "list", "--kind", "all"},
 		{Kind: RoutineWindow, Routine: "my_report"}: {"routines", "show", "my_report"},
 		{Kind: UpdateWindow}:                        {"update", "progress"},
 		{Kind: ConfirmUpdateWindow}:                 {"update", "--ask"},

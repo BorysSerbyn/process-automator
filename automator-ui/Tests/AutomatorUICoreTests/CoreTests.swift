@@ -218,3 +218,21 @@ private func ran(_ log: URL) -> [String] {
         failing, failed: { events.append("failed: \($0.message)") }, terminate: { events.append("terminate") })
     #expect(events == ["failed: launchctl bootout failed", "terminate"])
 }
+
+@Test func decodesRoutinesOfBothKinds() throws {
+    // `routines list --kind all`: an LLM routine has no kind; a program has kind program and its section.
+    let json = """
+        [{"name":"standup","path":"/r/standup.prompt","servers":["chat"],"tools":["post"],"enabled":true,
+          "timeout":"20m","effort":"default","session":"discard","builtinTools":[],"trusted":true},
+         {"name":"backup","kind":"program","path":"/p/backup/program.yaml","servers":[],"tools":[],"enabled":false,
+          "timeout":"20m","effort":"","session":"","builtinTools":[],"trusted":false,
+          "program":{"executable":"/p/backup/backup","checksum":"9f86","args":[],"writes":true,
+            "secrets":[{"name":"api-token","env":"API_TOKEN","stored":false}]}}]
+        """
+    let rows = try CoreJSON.decoder().decode([Components.Schemas.RoutineInfo].self, from: Data(json.utf8))
+    #expect(rows[0].kind == nil)
+    #expect(rows[0].program == nil)
+    #expect(rows[1].kind == .program)
+    #expect(rows[1].program?.writes == true)
+    #expect(rows[1].program?.secrets.first?.env == "API_TOKEN")
+}

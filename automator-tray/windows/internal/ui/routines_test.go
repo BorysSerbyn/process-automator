@@ -34,7 +34,7 @@ func statusFrom(t *testing.T, file string) *cli.RunStatus {
 // Every routine with its health, schedule in words, last run and summary;
 // a row opens its routine; Setup and Settings open theirs.
 func TestRoutinesListsEachRoutine(t *testing.T) {
-	f := newFakeCLI(t, map[string]string{"routines list --json": "@routines.json"})
+	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "@routines.json"})
 	var opened []string
 	r := NewRoutines(f.CLI, now, func(n string) { opened = append(opened, n) },
 		func() { opened = append(opened, "setup") }, func() { opened = append(opened, "settings") })
@@ -60,7 +60,7 @@ func TestRoutinesListsEachRoutine(t *testing.T) {
 // The list is read again when what the routines are changes in run status
 // (a run ended), not on every status; no status is not responding.
 func TestRoutinesFollowRunStatus(t *testing.T) {
-	f := newFakeCLI(t, map[string]string{"routines list --json": "@routines.json"})
+	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "@routines.json"})
 	r := NewRoutines(f.CLI, now, func(string) {}, func() {}, func() {})
 	r.now = noon
 	r.Load()
@@ -68,24 +68,24 @@ func TestRoutinesFollowRunStatus(t *testing.T) {
 	s := statusFrom(t, "status-routines.json")
 	r.Update(s)
 	r.Update(statusFrom(t, "status-routines.json")) // a heartbeat
-	if n := f.count("routines list --json"); n != 2 {
+	if n := f.count("routines list --kind all --json"); n != 2 {
 		t.Fatalf("read %d times", n)
 	}
 	s2 := statusFrom(t, "status-routines.json")
 	s2.Routines[0].LastRun.Outcome = "running"
 	r.Update(s2)
-	if n := f.count("routines list --json"); n != 3 {
+	if n := f.count("routines list --kind all --json"); n != 3 {
 		t.Fatalf("read %d times", n)
 	}
 	mustShow(t, r.Content(), "running")
 }
 
 func TestRoutinesSayWhatWentWrong(t *testing.T) {
-	f := newFakeCLI(t, map[string]string{"routines list --json": "!the routines folder can't be read"})
+	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "!the routines folder can't be read"})
 	r := NewRoutines(f.CLI, now, func(string) {}, func() {}, func() {})
 	r.Load()
 	mustShow(t, r.Content(), "Couldn't read the routines", "the routines folder can't be read")
-	f2 := newFakeCLI(t, map[string]string{"routines list --json": "[]"})
+	f2 := newFakeCLI(t, map[string]string{"routines list --kind all --json": "[]"})
 	r2 := NewRoutines(f2.CLI, now, func(string) {}, func() {}, func() {})
 	r2.Load()
 	mustShow(t, r2.Content(), "No routines installed.")
@@ -232,4 +232,29 @@ func TestARoutinesSettings(t *testing.T) {
 		}
 	}
 	f.mustHaveRun(t, "settings set routines.standup.timeout 20m --json")
+}
+
+// A program's window: no Memories tab or model; what it runs, in place of
+// what it can reach; its runs with their exit code and output.
+func TestAProgramsWindow(t *testing.T) {
+	r, f, _ := newRoutineFor(t, "backup", map[string]string{
+		"routines show backup --json":               "@routine-backup.json",
+		"routines trust backup --check --json":      "@trust-backup.json",
+		"settings list --routine backup --json":     "[]",
+		"runs backup --limit 50 --json":             "@runs-backup.json",
+		"runs show backup/2026-11-21T090000 --json": "@run-backup.json",
+	})
+	c := r.Content()
+	mustShow(t, c, "What it runs", "Executable", "/home/me/.config/acme/programs/backup/backup", "SHA-256 9f86d081884c7d65",
+		"a dry run passes it --dry-run", "api-token (as $API_TOKEN), not stored", "--quiet")
+	mustNotShow(t, c, "Memories")
+	mustNotShow(t, c, "Servers")
+	r.ShowTab(SettingsTab)
+	mustShow(t, r.Content(), "Program file")
+	mustNotShow(t, r.Content(), "Model")
+	r.ShowTab(RunsTab)
+	mustShow(t, r.Content(), "Copied 3 files", "exit 0", "copying notes.md")
+	if f.count("memory list --routine backup --json") != 0 {
+		t.Error("asked for a program's memories")
+	}
 }

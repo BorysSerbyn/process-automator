@@ -1,0 +1,3 @@
+{"routine": "backup", "kind": "program", "surface": {"servers": [], "tools": []}, "changes": [], "trusted": false,
+ "program": {"executable": "/home/me/.config/acme/programs/backup/backup", "checksum": "9f86d081884c7d65",
+  "args": ["--quiet"], "writes": true, "secrets": [{"name": "api-token", "env": "API_TOKEN", "stored": false}]}}

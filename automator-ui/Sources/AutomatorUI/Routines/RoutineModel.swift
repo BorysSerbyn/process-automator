@@ -60,12 +60,15 @@ final class RoutineModel: ObservableObject {
     var otherSettings: [SettingState] { settings.filter { $0._type != .cron } }
     /// A run in progress or waiting for its turn: Stop replaces Run Now.
     var running: Bool { [.running, .queued].contains(entry?.lastRun?.outcome) }
+    /// A program: only LLM routines have memories.
+    var isProgram: Bool { detail?.isProgram ?? false }
+    /// The tabs it has.
+    var tabs: [Tab] { Tab.allCases.filter { $0 != .memories || !isProgram } }
 
     func load() {
         loadDetail()
         loadSettings()
         loadRuns()
-        loadMemories()
     }
 
     /// A new run status: when this routine's last run changed, its runs and
@@ -85,6 +88,7 @@ final class RoutineModel: ObservableObject {
             case .success(let detail):
                 self.detail = detail
                 loadError = nil
+                if !detail.isProgram, memories == nil, memoryError == nil { loadMemories() }
                 accessOpen = accessOpen || !detail.trusted
                 if !detail.trusted, trustReview == nil { loadTrust() }
             case .failure(let failure):

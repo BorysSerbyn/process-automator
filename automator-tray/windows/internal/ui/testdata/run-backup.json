@@ -1,0 +1,3 @@
+{"id": "backup/2026-11-21T090000", "routine": "backup", "kind": "program", "trigger": "schedule",
+ "startedAt": "2026-11-21T09:00:00Z", "outcome": "success", "reason": "Copied 3 files",
+ "program": {"exitCode": 0, "summary": "Copied 3 files", "output": "copying notes.md", "dryRun": false}}

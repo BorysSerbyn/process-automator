@@ -112,12 +112,23 @@ func (r *Routine) running() bool {
 	return e != nil && e.LastRun.InProgress()
 }
 
-// Load reads everything again.
+// Load reads everything again (its memories once it's known to be an LLM
+// routine: a program has none).
 func (r *Routine) Load() {
 	r.loadDetail()
 	r.loadSettings()
 	r.loadRuns()
-	r.loadMemories()
+}
+
+// isProgram is whether it's a program, not an LLM routine.
+func (r *Routine) isProgram() bool { return r.detail != nil && r.detail.IsProgram() }
+
+// tabs are the tabs it has: a program has no memories.
+func (r *Routine) tabs() []string {
+	if !r.isProgram() {
+		return routineTabs
+	}
+	return []string{OverviewTab, RunsTab, SettingsTab}
 }
 
 // Update shows a new run status; when the routine's last run changed, its
@@ -159,6 +170,9 @@ func (r *Routine) loadDetail() {
 				r.loadError = err.Error()
 			} else {
 				r.detail, r.loadError = &d, ""
+				if !d.IsProgram() && !r.memoriesLoaded {
+					r.loadMemories()
+				}
 				if !d.Trusted {
 					r.accessOpen = true
 					if r.review == nil {
@@ -305,7 +319,11 @@ func (r *Routine) setPaused(paused bool) {
 }
 
 func (r *Routine) askDelete() {
-	r.confirm("Delete "+r.name+"?", "Its file, settings, trust and memories are deleted. Its run history is kept.", "Delete", func() {
+	what := "Its file, settings, trust and memories are deleted. Its run history is kept."
+	if r.isProgram() {
+		what = "Its copy, settings, trust and secrets are deleted. Its run history and data folder are kept."
+	}
+	r.confirm("Delete "+r.name+"?", what, "Delete", func() {
 		r.control(func() error { return r.cli.DeleteRoutine(r.name) }, r.deleted)
 	})
 }
@@ -451,11 +469,15 @@ func (r *Routine) render() fyne.CanvasObject {
 		review := widget.NewButton("Review…", r.reviewTrust)
 		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(review), banner("Not trusted", r.detail.Untrusted)))
 	}
-	box.Add(segmented(routineTabs, r.tab, r.ShowTab))
+	box.Add(segmented(r.tabs(), r.tab, r.ShowTab))
 	switch r.tab {
 	case RunsTab:
 		box.Add(r.runsView())
 	case MemoriesTab:
+		if r.isProgram() {
+			box.Add(r.overview())
+			break
+		}
 		box.Add(r.memoriesView())
 	case SettingsTab:
 		box.Add(r.settingsView())
@@ -582,23 +604,33 @@ func (r *Routine) access() []fyne.CanvasObject {
 	if !d.Trusted {
 		state = tag("Not trusted", theme.ColorNameWarning)
 	}
+	title := "What it can reach"
+	if d.IsProgram() {
+		title = "What it runs"
+	}
 	objects := []fyne.CanvasObject{newDisclosure(r.accessOpen, false, r.toggleAccess,
-		container.NewBorder(nil, nil, nil, state, heading("What it can reach", false)))}
+		container.NewBorder(nil, nil, nil, state, heading(title, false)))}
 	if !r.accessOpen {
 		return objects
 	}
 	objects = append(objects, divider())
 	review := cli.TrustOutput{Routine: d.Name, Surface: cli.Surface{Servers: d.Servers, Tools: d.Tools,
-		BuiltinTools: d.BuiltinTools, Folder: d.Folder}}
+		BuiltinTools: d.BuiltinTools, Folder: d.Folder}, Program: d.Program}
 	if r.review != nil {
 		review = *r.review
 	}
 	var do func()
 	action, note := "Trust", "Trusting it lets it run for real with what's listed above. Dry runs never need it."
+	if d.IsProgram() {
+		note = "Trusting it lets this executable run, dry runs included."
+	}
 	if !d.Trusted && r.review != nil {
 		turnOn := !d.Enabled
 		if turnOn {
 			action, note = "Turn On", "Turning it on trusts it with what's listed above and runs it on its schedule. Dry runs never need it."
+			if d.IsProgram() {
+				note = "Turning it on trusts this executable to run (dry runs included) and runs it on its schedule."
+			}
 		}
 		do = func() { r.trust(turnOn) }
 	}
@@ -697,6 +729,19 @@ func (r *Routine) runDetail(id string) fyne.CanvasObject {
 	} else {
 		if t := firstNonEmpty(e.Reason, e.Error); t != "" {
 			box.Add(text(t))
+		}
+		if p := e.Program; p != nil {
+			tags := container.NewHBox(tag(fmt.Sprintf("exit %d", p.ExitCode), ""))
+			if p.DryRun {
+				tags.Add(tag("dry run", theme.ColorNamePrimary))
+			}
+			box.Add(tags)
+			if p.Output != "" {
+				out := text(p.Output)
+				out.Selectable = true
+				out.TextStyle = fyne.TextStyle{Monospace: true}
+				box.Add(card(true, padded(4, 4, 6, 6, out)))
+			}
 		}
 		box.Add(right(report))
 	}
@@ -830,8 +875,13 @@ func (r *Routine) settingsView() fyne.CanvasObject {
 		}
 		path := widget.NewLabelWithStyle(d.Path, fyne.TextAlignLeading, fyne.TextStyle{Monospace: true})
 		path.Wrapping = fyne.TextWrapBreak
-		box.Add(card(false, cardTitle("Routine file"), divider(), infoRow("Model", modelLabel), infoRow("File", path),
-			padded(0, 6, 0, 0, container.NewHBox())))
+		if d.IsProgram() {
+			box.Add(card(false, cardTitle("Program file"), divider(), infoRow("File", path),
+				padded(0, 6, 0, 0, container.NewHBox())))
+		} else {
+			box.Add(card(false, cardTitle("Routine file"), divider(), infoRow("Model", modelLabel), infoRow("File", path),
+				padded(0, 6, 0, 0, container.NewHBox())))
+		}
 	}
 	return box
 }

@@ -11,7 +11,9 @@ import (
 // RoutineInfo is a routine with its effective settings (`routines list
 // --json`, and `routines show --json`).
 type RoutineInfo struct {
-	Name         string   `json:"name"`
+	Name string `json:"name"`
+	// Kind is program for a program; absent for an LLM routine.
+	Kind         string   `json:"kind,omitempty"`
 	Path         string   `json:"path"`
 	Servers      []string `json:"servers"`
 	Tools        []string `json:"tools"`
@@ -26,6 +28,29 @@ type RoutineInfo struct {
 	AgentModel string     `json:"agentModel,omitempty"`
 	Next       *time.Time `json:"next,omitempty"`
 	LastRun    *LastRun   `json:"lastRun,omitempty"`
+	// Program is a program's own: what runs.
+	Program *ProgramInfo `json:"program,omitempty"`
+}
+
+// IsProgram is whether it's a program (an executable), not an LLM routine:
+// it has no servers, tools, model or memories.
+func (r RoutineInfo) IsProgram() bool { return r.Kind == "program" }
+
+// ProgramInfo is what a program runs: the app's copy of its executable, and
+// what its description file declares.
+type ProgramInfo struct {
+	Executable string          `json:"executable"`
+	Checksum   string          `json:"checksum,omitempty"`
+	Args       []string        `json:"args"`
+	Writes     bool            `json:"writes"`
+	Secrets    []ProgramSecret `json:"secrets"`
+}
+
+// ProgramSecret is a secret a program declares, and whether it's stored.
+type ProgramSecret struct {
+	Name   string `json:"name"`
+	Env    string `json:"env"`
+	Stored bool   `json:"stored"`
 }
 
 // LastRun is a routine's latest run, as run status and `routines list` give it.
@@ -64,6 +89,16 @@ type RunEntry struct {
 	Reason  string     `json:"reason,omitempty"`
 	Error   string     `json:"error,omitempty"`
 	Result  *RunResult `json:"result,omitempty"`
+	// Program is a program's run (an LLM routine's is Result).
+	Program *ProgramRun `json:"program,omitempty"`
+}
+
+// ProgramRun is what a program did in a run.
+type ProgramRun struct {
+	ExitCode int    `json:"exitCode"`
+	Summary  string `json:"summary,omitempty"`
+	Output   string `json:"output,omitempty"`
+	DryRun   bool   `json:"dryRun"`
 }
 
 // RunResult is what the model did in a run.
@@ -102,10 +137,11 @@ type Memory struct {
 	Text string `json:"text"`
 }
 
-// Routines is every routine with its effective settings (`routines list`).
+// Routines is every routine of either kind, LLM routines and programs
+// together, with its effective settings (`routines list --kind all`).
 func (c CLI) Routines() ([]RoutineInfo, error) {
 	var out []RoutineInfo
-	return out, c.call(&out, "routines", "list")
+	return out, c.call(&out, "routines", "list", "--kind", "all")
 }
 
 // Routine is one routine in full (`routines show`).

@@ -9,6 +9,13 @@ typealias RunEntry = Components.Schemas.Entry
 typealias ScheduleInfo = Components.Schemas.Info
 typealias Memory = Components.Schemas.Memory
 typealias TrustReview = Components.Schemas.TrustOutput
+typealias ProgramInfo = Components.Schemas.ProgramInfo
+
+extension RoutineDetail {
+    /// A program (an executable), not an LLM routine: it has no servers,
+    /// tools, model or memories.
+    var isProgram: Bool { kind == .program }
+}
 
 extension RunStatus {
     /// A routine's entry, by name.

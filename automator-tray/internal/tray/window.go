@@ -50,7 +50,7 @@ func (w Window) Command() []string {
 	case ConfirmUpdateWindow:
 		return []string{"update", "--ask"}
 	}
-	return []string{"routines", "list"}
+	return []string{"routines", "list", "--kind", "all"}
 }
 
 // WindowsApp is the windows app (automator-windows), beside the tray and

@@ -893,6 +893,9 @@ func (s *Setup) preparation(step cli.SetupStep, prepare string) fyne.CanvasObjec
 // with a button (action: Turn On, Trust) when do is given, and the note
 // beside it, if any.
 func trustReview(r cli.TrustOutput, action, note string, do func(), working bool) []fyne.CanvasObject {
+	if r.Program != nil {
+		return reviewButton(append(programRows(*r.Program), changedRows(r.Changes)...), action, note, do, working)
+	}
 	writes := map[string]bool{}
 	for _, t := range r.Tools {
 		if !t.ReadOnly {
@@ -916,13 +919,57 @@ func trustReview(r cli.TrustOutput, action, note string, do func(), working bool
 		folder.Wrapping = fyne.TextWrapBreak
 		objects = append(objects, infoRow("Folder", folder))
 	}
-	if len(r.Changes) > 0 {
-		var changes []fyne.CanvasObject
-		for _, c := range r.Changes {
-			changes = append(changes, text(c))
-		}
-		objects = append(objects, infoRow("Changed", changes...))
+	return reviewButton(append(objects, changedRows(r.Changes)...), action, note, do, working)
+}
+
+// changedRows say what changed since it was trusted.
+func changedRows(changed []string) []fyne.CanvasObject {
+	if len(changed) == 0 {
+		return nil
 	}
+	var changes []fyne.CanvasObject
+	for _, c := range changed {
+		changes = append(changes, text(c))
+	}
+	return []fyne.CanvasObject{infoRow("Changed", changes...)}
+}
+
+// programRows are what a program runs, as trust approves it: its
+// executable (the app's copy, by checksum), whether it writes, its
+// arguments and secrets.
+func programRows(p cli.ProgramInfo) []fyne.CanvasObject {
+	exe := widget.NewLabel(p.Executable)
+	exe.TextStyle = fyne.TextStyle{Monospace: true}
+	exe.Wrapping = fyne.TextWrapBreak
+	exeRows := []fyne.CanvasObject{exe}
+	if p.Checksum != "" {
+		exeRows = append(exeRows, secondary("SHA-256 "+p.Checksum))
+	}
+	writes := "No: a dry run runs it as it is"
+	if p.Writes {
+		writes = "Yes: a dry run passes it --dry-run"
+	}
+	objects := []fyne.CanvasObject{padded(6, 0, 0, 0, infoRow("Executable", exeRows...)), infoRow("Writes", text(writes))}
+	if len(p.Args) > 0 {
+		objects = append(objects, infoRow("Arguments", text(strings.Join(p.Args, " "))))
+	}
+	if len(p.Secrets) > 0 {
+		var secrets []fyne.CanvasObject
+		for _, s := range p.Secrets {
+			line := s.Name + " (as $" + s.Env + ")"
+			if !s.Stored {
+				line += ", not stored"
+			}
+			secrets = append(secrets, text(line))
+		}
+		objects = append(objects, infoRow("Secrets", secrets...))
+	}
+	return objects
+}
+
+// reviewButton adds the review's button (when do is given) and the note
+// beside it.
+func reviewButton(objects []fyne.CanvasObject, action, note string, do func(), working bool) []fyne.CanvasObject {
 	if do != nil {
 		b := widget.NewButton(action, do)
 		b.Importance = widget.HighImportance

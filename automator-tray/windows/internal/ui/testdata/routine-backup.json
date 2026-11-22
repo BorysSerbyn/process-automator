@@ -1,0 +1,7 @@
+{"name": "backup", "kind": "program", "path": "/home/me/.config/acme/programs/backup/program.yaml",
+ "description": "Backs up my notes", "servers": [], "tools": [], "enabled": false, "timeout": "20m", "effort": "",
+ "session": "", "builtinTools": [], "folder": "/home/me/.config/acme/program-data/backup", "trusted": false,
+ "untrusted": "not trusted yet: review what it can reach with `acme routines trust backup`",
+ "program": {"executable": "/home/me/.config/acme/programs/backup/backup", "checksum": "9f86d081884c7d65",
+  "args": ["--quiet"], "writes": true, "secrets": [{"name": "api-token", "env": "API_TOKEN", "stored": false}]},
+ "source": "executable: ./backup\nwrites: true\n"}

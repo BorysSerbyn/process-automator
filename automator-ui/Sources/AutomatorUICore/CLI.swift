@@ -182,7 +182,7 @@ public struct CLI: Sendable {
 
     /// Every routine with its effective settings (`routines list`).
     public func routines() -> Result<[Components.Schemas.RoutineInfo], Failure> {
-        call([Components.Schemas.RoutineInfo].self, ["routines", "list"])
+        call([Components.Schemas.RoutineInfo].self, ["routines", "list", "--kind", "all"])
     }
 
     /// One routine in full (`routines show`).

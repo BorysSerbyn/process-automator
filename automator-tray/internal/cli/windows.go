@@ -168,8 +168,10 @@ type Setting struct {
 
 // TrustOutput is `routines trust --check --json`: what a routine can reach.
 type TrustOutput struct {
-	Routine string        `json:"routine"`
-	Surface Surface       `json:"surface"`
+	Routine string  `json:"routine"`
+	Surface Surface `json:"surface"`
+	// Program is a program's: what runs, in place of servers and tools.
+	Program *ProgramInfo  `json:"program,omitempty"`
 	Changes []string      `json:"changes"`
 	Tools   []CheckedTool `json:"tools,omitempty"`
 }
