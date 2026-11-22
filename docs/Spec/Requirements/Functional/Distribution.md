@@ -24,7 +24,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Technical/Distribution|Technical:
 - **Cutting a release is one command**
 
 ## First-run setup
-- **Guided setup** (`setup` in a terminal, Finish Setup… in automator-ui): optional templates (first asking which projects I work on, when any templates are made for a project), the model backend and its sign-in, reading my Claude plan's usage when the default way can't, connecting Claude Code to the app's MCP server (on the `claude-code` backend), routines that can't run, sign-ins for the servers my routines use, and turning each routine on: trusting it with what it can reach and running it on its schedule, in one yes
+- **Guided setup** (`setup` in a terminal, Finish Setup… in automator-ui): optional templates (first asking which projects I work on, when any templates are made for a project), the model backend and its sign-in (on `local`, the server and which of its models to run), reading my Claude plan's usage when the default way can't, connecting Claude Code to the app's MCP server (on the `claude-code` backend), routines that can't run, sign-ins for the servers my routines use, and turning each routine on: trusting it with what it can reach and running it on its schedule, in one yes
 - **Asks before each step**, except connecting Claude Code to the app's MCP server, which it does without asking; skips what's done, and can run again any time
 - **Unfinished setup shows**: until the required steps are done, the status dot is red with "Setup isn't finished"
 - **Usable without routines**: installing templates is optional

@@ -66,13 +66,13 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 - **Progress**: the process installing records its progress in `update-progress.json` as it goes: the release, the step in words (checking, downloading, checking it's genuine, installing, or building from the checkout), the latest line the step printed, and how it ended. `update progress [--json]` reports it: `state` `installing` (the lock is held, or an update started in the last 30 seconds), `done`, `failed` (with the error; one that stopped without finishing is failed too) or `none`
 
 ## First-run setup
-- **`setup`** in a terminal walks through the steps in order, asking before each (except `auto` ones) and running the same commands as below; done steps are skipped, and it can run again any time. A choice is a numbered list, one value per line with its `enumHelp` line (the backend: recommended first), answered by number or name; anything else is asked again. `setup --json`'s `ask` lists the same lines
+- **`setup`** in a terminal walks through the steps in order, asking before each (except `auto` ones) and running the same commands as below; done steps are skipped, and it can run again any time. A choice is a numbered list, one value per line with its `enumHelp` line (the backend: recommended first), answered by number or name; anything else is asked again. `setup --json`'s `ask` lists the same lines. On `local`, it then asks for the server's URL (Enter keeps it), lists the models the server has (`GET <url>/models`) to pick by number or name, or asks for the model's name when the server doesn't answer, and asks for the server's key (`auth login local`) only when the server answers 401 or 403
 - **`setup --json`** changes nothing: it lists the steps by kind, each with `done`, `optional`, `auto`, `status`, `ask` and the `commands` that do it (placeholders for my answers), for an LLM or automator-ui guiding me. An `auto` step is done without asking: whoever guides me runs its commands as soon as it comes to it
 
 | Kind | Step |
 |---|---|
 | `templates` | Optional: which projects I work on (when templates are made for any), then which templates to install, with their parameters |
-| `backend` | `llm.backend`, and its key or token |
+| `backend` | `llm.backend`, and its key or token; on `local`, not done while `llm.local.url` isn't an http(s) URL or `llm.local.model` is empty (its status names what's missing, its `ask` asks for both, and its `commands` set them, with `auth login local --browser` for a server that needs a key) |
 | `usage` | While Claude Code's `/usage` can't be read (it answered without a usage report, or 3 tries in a row failed): the status line fallback |
 | `mcp` | On `claude-code`: Claude Code has the app's MCP server at user scope (`mcp connect`); `auto` |
 | `routine` | A routine that can't run, and why |

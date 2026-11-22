@@ -41,8 +41,8 @@ Plain Dotprompt keys:
 | Key | |
 |---|---|
 | `description` | What it does |
-| `model` | e.g. `anthropic/claude-sonnet-5-5`, `openai/gpt-5.5` on `codex`, or `openai-compat/qwen3:8b` on `api` for an [[Guides/Plugins and sign-ins#OpenAI-compatible servers (experimental, untested)\|OpenAI-compatible server]] (experimental, untested); left out, the backend's default (the `api` backend has none: name one). The `claude-code` backend runs only Claude models (`anthropic/…`), the `codex` backend only OpenAI ones (`openai/…`), the `api` backend `anthropic/…` and `openai-compat/…` ones |
-| `config` | Model settings, e.g. `max_tokens: 4000` (the `api` backend only) |
+| `model` | e.g. `anthropic/claude-sonnet-5-5`; left out, the backend's default (`claude-api` has none: name one). By backend: `claude-code` runs only Claude models (`anthropic/…`); `claude-api` runs `anthropic/…` ones, and `local/<model>` on [[Guides/Plugins and sign-ins#Your own model server (experimental, untested)\|your own model server]]; `codex` runs only OpenAI ones (`openai/gpt-5.5`); `local` ignores the model and runs `llm.local.model`, unless it's `local/<model>` (e.g. `local/qwen3:8b`), another model on the same server |
+| `config` | Model settings, e.g. `max_tokens: 4000` (`claude-api` and `local` only) |
 | `tools` | The tool allowlist |
 | `output` | The shape of its result (see [[#Structured output]]) |
 
@@ -54,9 +54,9 @@ The app's own keys, written dotted (`automator.servers:`, not a nested `automato
 | `automator.schedule` | none | Cron, local time. Without one it runs only by hand |
 | `automator.staleness` | `1h` | How late a missed scheduled run may still start; later, it's recorded as missed |
 | `automator.timeout` | `20m` | How long a run may take before it's stopped and fails |
-| `automator.effort` | `default` | How hard the model thinks: `default`, `low`, `medium`, `high`, `xhigh`, `max` (the same names on `claude-code` and `codex`, if the model has them; the `api` backend takes only `default`) |
+| `automator.effort` | `default` | How hard the model thinks: `default`, `low`, `medium`, `high`, `xhigh`, `max` (the same names on `claude-code` and `codex`, if the model has them; `claude-api` and `local` take only `default`) |
 | `automator.folder` | an empty temporary folder (one of its own that's kept, when it saves its session) | The folder it works in; its `CLAUDE.md` (`claude-code`) or `AGENTS.md` (`codex`) is added to the instructions |
-| `automator.builtinTools` | `[]` | The agent CLI's own tools it may use, in that backend's names (see [[#Built-in tools]]); not on the `api` backend |
+| `automator.builtinTools` | `[]` | The agent CLI's own tools it may use, in that backend's names (see [[#Built-in tools]]); not on `claude-api` or `local` |
 | `automator.session` | `discard` | `save` keeps the agent CLI session and records its ID, folder and backend with the run, so you can resume it from that folder (`claude --resume <id>`, `codex resume <id>`; without `automator.folder`, the routine gets a folder of its own for it) |
 | `automator.concurrency` | `queue` | `queue` waits for other runs (one at a time); `parallel` runs alongside them. A routine never overlaps itself |
 | `automator.parameters` | | Values set at install (see below) |

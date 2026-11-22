@@ -15,21 +15,23 @@ procauto mcp call <server> <tool> '<json args>'   # call one tool by hand (write
 `auth login` opens your browser for OAuth sign-ins and asks for keys and tokens in the terminal; with `--browser` it asks for them on a local page instead. `procauto setup` and the Setup window offer a sign-in for each server your routines use. Sign-ins are refreshed automatically; when one can't be, runs end with "needs a sign-in" and you run `auth login` again.
 
 ## Model backend
-Routines run on one of three backends, set with `procauto settings set llm.backend <name>`:
+Routines run on one of four backends, set with `procauto settings set llm.backend <name>` (or chosen in `procauto setup`):
 
-- **`claude-code`**: Claude Code on your Claude plan. Install [Claude Code](https://claude.com/claude-code) and sign in to it (run `claude` once). If scheduled runs say Claude Code isn't logged in, run `claude setup-token` and store its token with `procauto auth login claude-code`
-- **`codex`** (experimental, untested: it has run only against a stand-in for OpenAI's API, never OpenAI itself; prefer `claude-code` or `api`): OpenAI's [Codex CLI](https://developers.openai.com/codex/cli) on your Codex sign-in (a ChatGPT plan or an OpenAI API key). Install it and run `codex login` once; the app uses that sign-in and keeps none of its own. Runs don't load your Codex `config.toml`, and read the sign-in from `~/.codex/auth.json` (Codex's default), not from the system keyring
-- **`api`** (the default): an Anthropic API key, paid per token. Store it with `procauto auth login anthropic`. It also runs models on an OpenAI-compatible server (below)
+- **`claude-code`** (recommended): Claude Code on your Claude plan. Install [Claude Code](https://claude.com/claude-code) and sign in to it (run `claude` once). If scheduled runs say Claude Code isn't logged in, run `claude setup-token` and store its token with `procauto auth login claude-code`
+- **`claude-api`** (the default): Anthropic's API with your API key, paid per token. Store it with `procauto auth login anthropic`
+- **`local`** (experimental, untested): your own model server (below)
+- **`codex`** (experimental, untested: it has run only against a stand-in for OpenAI's API, never OpenAI itself; prefer `claude-code` or `claude-api`): OpenAI's [Codex CLI](https://developers.openai.com/codex/cli) on your Codex sign-in (a ChatGPT plan or an OpenAI API key). Install it and run `codex login` once; the app uses that sign-in and keeps none of its own. Runs don't load your Codex `config.toml`, and read the sign-in from `~/.codex/auth.json` (Codex's default), not from the system keyring
 
 Claude Code and the API each have their own usage limit ([[Guides/Settings#Usage limit|Usage limit]]).
 
-### OpenAI-compatible servers (experimental, untested)
-On the `api` backend, a routine whose model is `openai-compat/<model>` runs on an OpenAI-compatible server instead of Anthropic's API: a local one (Ollama, llama.cpp's `llama-server`, vLLM, LM Studio) or a hosted one (DeepSeek, Qwen on DashScope, Kimi on Moonshot, ...). It has been tried only against a stand-in for the API and small models on Ollama, never with real work: prefer `claude-code`, or `api` with Anthropic models.
-- **The server**: `llm.openai-compat.base-url`, by default Ollama on this machine (`http://localhost:11434/v1`). There's one: every `openai-compat/…` model runs on it
-- **Its API key**, for a server that needs one (hosted ones do; Ollama doesn't): `procauto auth login openai-compat`
-- **The model** is the server's own name for it, after the prefix: `openai-compat/qwen3:8b` on Ollama (pull it first: `ollama pull qwen3:8b`), `openai-compat/deepseek-chat` on DeepSeek. Pick one that calls tools: routines need it to, and small models often don't, or call them wrong
-- **No Anthropic key needed** when every routine runs on the server. Its runs have no list price, so they don't count toward the API budgets
-- `procauto doctor` asks the server whether it answers and has each routine's model
+### Your own model server (experimental, untested)
+On `local`, routines run on an OpenAI-compatible server you run or pay for: a local one (Ollama, llama.cpp's `llama-server`, vLLM, LM Studio) or a hosted one (DeepSeek, Qwen on DashScope, Kimi on Moonshot, ...). It has been tried only against a stand-in for the API and small models on Ollama, never with real work: prefer `claude-code` or `claude-api`.
+- **The server**: `llm.local.url`, by default Ollama on this machine (`http://localhost:11434/v1`). Install Ollama and pull a model yourself first (`ollama pull qwen3:8b`)
+- **The model**: `llm.local.model`, its name on the server (`qwen3:8b` on Ollama, `deepseek-chat` on DeepSeek). Every routine runs on it, whatever model its file names; a routine that names `local/<model>` runs on that one instead. Pick one that calls tools: routines need it to, and small models often don't, or call them wrong
+- **Its API key**, for a server that needs one (hosted ones do; Ollama doesn't): `procauto auth login local`
+- `procauto setup` asks for the server and lists its models to pick from; `procauto doctor` asks the server whether it answers and has the model. Its runs have no list price and no usage limit
+- **Mixing with Claude**: on `claude-api`, a routine whose model is `local/<model>` runs on this server too (with the same URL and key), and when every routine does, no Anthropic key is needed
+- **Former names** still work: `openai-compat/<model>` models, the `llm.openai-compat.base-url` setting and a key stored with `auth login openai-compat`
 
 ## The plugin that ships with the app
 The app ships with no integrations; one plugin comes with it and needs no sign-in:

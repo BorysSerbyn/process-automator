@@ -5,7 +5,7 @@ Process Automator runs **routines**: prompt files that a model (Claude) runs on 
 
 - **Routines** are `.prompt` files in a routines folder on your machine. You write them ([[Guides/Writing a routine|Writing a routine]]), install them from templates your team shares, or ask Claude to write them
 - **Plugins** are MCP servers that give routines their tools: any server you add ([[Guides/Adding a plugin|Adding a plugin]]), plus `notify` (desktop notifications), which ships with the app ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
-- **The model backend** runs routines: `claude-code` (Claude Code on your Claude plan), `codex` (OpenAI's Codex CLI on your Codex sign-in; experimental, untested) or `api` (an Anthropic API key, paid per token; or, experimental and untested, models on an OpenAI-compatible server such as Ollama)
+- **The model backend** runs routines: `claude-code` (Claude Code on your Claude plan), `claude-api` (an Anthropic API key, paid per token), `local` (your own model server, such as Ollama; experimental, untested) or `codex` (OpenAI's Codex CLI on your Codex sign-in; experimental, untested)
 - **The scheduler** starts at login and runs enabled routines on their schedules
 - **The `procauto` CLI** does everything; every command has `--help`
 - **The menu bar app** (macOS) shows whether all is well and lets you manage routines without a terminal; on Linux, **the tray** shows the same status, menu and notifications ([[Guides/The menu bar app|The menu bar app]])
@@ -58,7 +58,7 @@ Tell Claude Code (or another coding agent) to "find the process-automator repo a
 Setup takes you through what the app needs, in order:
 
 1. **Templates** (optional): if any templates are made for particular projects, which projects you work on; then which templates to install. None are picked by default, and with no templates available the step has nothing to offer
-2. **Model backend**: `claude-code`, `codex` or `api`, and its sign-in ([[Guides/Plugins and sign-ins#Model backend|Model backend]])
+2. **Model backend**: `claude-code`, `claude-api`, `local` or `codex`, and its sign-in; on `local`, your server and which of its models to run ([[Guides/Plugins and sign-ins#Model backend|Model backend]])
 3. **Plan usage** (only if the app can't read your Claude plan's usage from Claude Code): reading it from your Claude Code status line instead ([[Guides/Settings#Usage limit|Usage limit]])
 4. **Claude Code** (on the `claude-code` backend): setup connects Claude Code to the app's MCP server, without asking, so `/mcp` lists it in every folder ([[Guides/Using it from Claude|Using it from Claude]])
 5. **Routines to fix**: any routine that can't run, and why
