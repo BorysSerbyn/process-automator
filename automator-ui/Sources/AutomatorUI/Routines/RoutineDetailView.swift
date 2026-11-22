@@ -44,6 +44,9 @@ struct RoutineDetailView: View {
                         Button("Turn On…", action: model.startTurnOn)
                     }
                 }
+                if let detail = model.detail {
+                    PermissionsBanner(name: model.name, permissions: detail.permissions ?? [], granter: model.granter)
+                }
                 Picker("Show", selection: $model.tab) {
                     ForEach(model.tabs) { Text($0.rawValue).tag($0) }
                 }
@@ -180,6 +183,7 @@ struct RoutineOverview: View {
             }
             if let detail = model.detail {
                 SettingsCard { RoutineAccess(model: model, detail: detail) }
+                PermissionsCard(permissions: detail.permissions ?? [], granter: model.granter)
             }
         }
     }

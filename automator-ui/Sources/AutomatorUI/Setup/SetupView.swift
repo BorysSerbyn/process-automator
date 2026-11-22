@@ -197,7 +197,7 @@ struct SetupStepView: View {
                 TurnOnReview(
                     summary: nil, review: model.reviews[routine], loadError: model.reviewErrors[routine],
                     retry: { model.review(routine, step) }, signingIn: model.signingIn,
-                    signInError: model.signInError, signIn: model.signIn(named:))
+                    signInError: model.signInError, signIn: model.signIn(named:), granter: model.granter)
                 if !step.done, let review = model.reviews[routine] {
                     HStack {
                         if model.working.contains(id) { ProgressView().controlSize(.small) }

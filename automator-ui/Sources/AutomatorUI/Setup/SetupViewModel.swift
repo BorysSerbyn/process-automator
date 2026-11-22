@@ -44,6 +44,14 @@ final class SetupViewModel: ObservableObject {
     /// name), and why the last one failed.
     @Published var signingIn: String?
     @Published var signInError: String?
+    /// Grant… for the permissions a turn-on review says are missing; after
+    /// asking, the steps (and their reviews) are read again.
+    lazy var granter: PermissionGranter = {
+        let granter = PermissionGranter(cli: cli, app: AppInfo.name)
+        granter.openURL = { NSWorkspace.shared.open($0) }
+        granter.asked = { [weak self] in self?.load() }
+        return granter
+    }()
     /// Steps the core does without asking (`auto`) that were started once
     /// already: a failed one waits for its button.
     private var autoStarted: Set<String> = []

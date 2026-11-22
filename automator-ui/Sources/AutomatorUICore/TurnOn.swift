@@ -27,18 +27,48 @@ public final class TurnOn: ObservableObject {
     @Published public private(set) var signInError: String?
     /// Called once it's on (the window reads everything again).
     public var turnedOn: () -> Void = {}
+    /// Grant… for the permissions the review says are missing.
+    public let granter: PermissionGranter
+    /// How often the review is read again while it shows a permission
+    /// that isn't allowed yet, so the row turns allowed by itself (nil:
+    /// never; then only a status change reads it again).
+    public var pollEvery: Duration? = .seconds(2)
 
-    public init(name: String, kind: Kind, cli: CLI) {
+    public init(name: String, kind: Kind, cli: CLI, app: String = AppInfo.name) {
         self.name = name
         self.kind = kind
         self.cli = cli
+        granter = PermissionGranter(cli: cli, app: app)
+        granter.asked = { [weak self] in Task { await self?.load() } }
     }
 
-    /// Turn On…: the review shows, read afresh.
+    /// Turn On…: the review shows, read afresh, and read again while it
+    /// waits for a permission.
     public func start() {
         error = nil
         showing = true
-        Task { await load() }
+        Task {
+            await load()
+            await poll()
+        }
+    }
+
+    /// Run status changed (the scheduler recorded a permission, say): an
+    /// open review is read again.
+    public func statusChanged() async {
+        if showing { await load() }
+    }
+
+    /// Whether the review shows a permission that isn't allowed yet.
+    public var waitingForPermission: Bool { !(review?.permissions ?? []).blocking.isEmpty }
+
+    private func poll() async {
+        guard let every = pollEvery else { return }
+        while showing, waitingForPermission {
+            try? await Task.sleep(for: every)
+            guard showing else { return }
+            await load()
+        }
     }
 
     /// Reads the review (`routines trust --check`, `hooks trust --check`).

@@ -41,6 +41,11 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
     @Published var accessOpen = false
     /// Turning it on: its one review and confirm.
     let turnOn: TurnOn
+    /// Grant… for the permissions it needs that aren't allowed.
+    let granter: PermissionGranter
+    /// Its detail is read again now and then while a permission it needs
+    /// isn't allowed, so it turns allowed by itself.
+    private var watchingPermissions = false
     /// The sign-in waiting for me in the browser (`auth login <name>
     /// --browser`): its name.
     @Published var signingIn: String?
@@ -61,7 +66,11 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
         self.cli = cli
         self.status = status
         turnOn = TurnOn(name: name, kind: .routine, cli: cli)
+        granter = PermissionGranter(cli: cli, app: AppInfo.name)
         turnOn.turnedOn = { [weak self] in self?.load() }
+        turnOn.granter.openURL = { NSWorkspace.shared.open($0) }
+        granter.openURL = { NSWorkspace.shared.open($0) }
+        granter.asked = { [weak self] in self?.loadDetail() }
     }
 
     /// Its entry in run status (health, summary, last and next run, problem).
@@ -85,11 +94,31 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
     /// A new run status: when this routine's last run changed, its runs and
     /// detail are re-read.
     func update(_ status: RunStatus?) {
-        let before = entry?.lastRun
+        let before = entry
         self.status = status
-        if entry?.lastRun != before {
+        if entry?.lastRun != before?.lastRun || entry?.problem != before?.problem {
             loadDetail()
             loadRuns()
+            Task { await turnOn.statusChanged() }
+        }
+    }
+
+    /// Reads its detail again every few seconds while a permission it needs
+    /// isn't allowed (the scheduler records it within a pass).
+    private func watchPermissions() {
+        guard !watchingPermissions else { return }
+        watchingPermissions = true
+        Task { [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(3))
+                // A window closed meanwhile is let go: it's held only weakly.
+                guard let self else { return }
+                guard !(self.detail?.permissions ?? []).blocking.isEmpty else {
+                    self.watchingPermissions = false
+                    return
+                }
+                self.loadDetail()
+            }
         }
     }
 
@@ -97,6 +126,7 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
         Task {
             switch await cli.background({ [name] in $0.routine(name) }) {
             case .success(let detail):
+                if !(detail.permissions ?? []).blocking.isEmpty { watchPermissions() }
                 self.detail = detail
                 loadError = nil
                 if !detail.isProgram, memories == nil, memoryError == nil { loadMemories() }

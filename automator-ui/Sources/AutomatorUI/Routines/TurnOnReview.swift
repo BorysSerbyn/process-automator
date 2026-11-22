@@ -13,6 +13,8 @@ struct TurnOnReview: View {
     var signingIn: String?
     var signInError: String?
     let signIn: (String) -> Void
+    /// Grant… for the permissions it needs that aren't allowed yet.
+    var granter: PermissionGranter?
     @State private var detailsOpen = false
 
     var body: some View {
@@ -38,8 +40,11 @@ struct TurnOnReview: View {
         ForEach(review.warnings ?? [], id: \.self) { warning in
             Banner(title: "Before you turn it on", message: warning, systemImage: "exclamationmark.triangle.fill")
         }
-        // What it needs before it works. Sign-ins go here; so would anything
-        // else it needs from me first.
+        // What it needs before it works: the permissions the OS hasn't
+        // allowed yet, and the sign-ins.
+        if let granter, !(review.permissions ?? []).blocking.isEmpty {
+            PermissionRows(permissions: (review.permissions ?? []).blocking, granter: granter)
+        }
         if let signIns = review.signIns, !signIns.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(signIns, id: \.self) { name in
@@ -116,11 +121,19 @@ struct TurnOnSheet: View {
                 TurnOnReview(
                     summary: summary, review: turnOn.review, loadError: turnOn.loadError,
                     retry: { Task { await turnOn.load() } }, signingIn: turnOn.signingIn,
-                    signInError: turnOn.signInError, signIn: { name in Task { await turnOn.signIn(name) } }
+                    signInError: turnOn.signInError, signIn: { name in Task { await turnOn.signIn(name) } },
+                    granter: turnOn.granter
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let error = turnOn.error { RowError(message: error) }
+            if let wontRun = (turnOn.review?.permissions ?? []).wontRunText {
+                // It can be turned on now; it says plainly it won't run yet.
+                Label(wontRun, systemImage: "hand.raised.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack {
                 if turnOn.working { ProgressView().controlSize(.small) }
                 Spacer()
@@ -143,5 +156,102 @@ struct TurnOnPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content.sheet(isPresented: $turnOn.showing) { TurnOnSheet(turnOn: turnOn, summary: summary) }
+    }
+}
+
+/// The OS permissions something needs, one row each: its plain name, why
+/// it's needed ("for its watcher home-key"), its state, and Grant… while
+/// it isn't allowed; after asking, what to switch on and where. Allowed
+/// ones show quietly; unknown and unsupported ones aren't passed in.
+struct PermissionRows: View {
+    let permissions: [PermissionNeed]
+    @ObservedObject var granter: PermissionGranter
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(permissions, id: \.permission) { need in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: need.blocking ? "hand.raised.fill" : "checkmark.circle.fill")
+                            .foregroundStyle(need.blocking ? Color.orange : Color.green)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(need.label).font(.body.weight(need.blocking ? .medium : .regular))
+                            Text([need.reason, need.stateText].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if need.blocking {
+                            if granter.granting == need.permission {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Button("Grant…") { Task { await granter.grant(need.permission) } }
+                                    .disabled(granter.granting != nil)
+                                    .help("Ask macOS to allow \(AppInfo.name) \(need.label)")
+                            }
+                        }
+                    }
+                    if need.blocking, let note = granter.notes[need.permission] {
+                        Text(note).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let error = granter.errors[need.permission] { RowError(message: error) }
+                }
+            }
+        }
+    }
+}
+
+/// A window's permissions banner while one it needs isn't allowed: it
+/// won't run until it is, with Grant… for each (a reason about it opens
+/// the window here).
+struct PermissionsBanner: View {
+    let name: String
+    let permissions: [PermissionNeed]
+    let granter: PermissionGranter
+
+    var body: some View {
+        let blocking = permissions.blocking
+        if !blocking.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(
+                    blocking.count == 1 ? "\(name) needs a permission" : "\(name) needs permissions",
+                    systemImage: "hand.raised.fill"
+                )
+                .font(.headline)
+                if let wontRun = permissions.wontRunText {
+                    Text(wontRun).font(.subheadline).foregroundStyle(.secondary)
+                }
+                PermissionRows(permissions: blocking, granter: granter)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color.orange.opacity(0.1),
+                in: RoundedRectangle(cornerRadius: SettingsMetrics.cornerRadius, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsMetrics.cornerRadius, style: .continuous)
+                    .strokeBorder(Color.orange.opacity(0.3)))
+        }
+    }
+}
+
+/// A window's permissions card: each one it needs with its state (allowed
+/// ones too), and Grant… for one that isn't allowed.
+struct PermissionsCard: View {
+    let permissions: [PermissionNeed]
+    let granter: PermissionGranter
+
+    var body: some View {
+        let shown = permissions.filter(\.shown)
+        if !shown.isEmpty {
+            SettingsCard {
+                CardTitle("Permissions", systemImage: "hand.raised")
+                Divider().padding(.leading, SettingsMetrics.rowInset)
+                PermissionRows(permissions: shown, granter: granter)
+                    .padding(.horizontal, SettingsMetrics.rowInset)
+                    .padding(.vertical, 10)
+            }
+        }
     }
 }

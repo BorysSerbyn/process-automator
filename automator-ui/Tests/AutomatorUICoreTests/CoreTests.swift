@@ -574,3 +574,108 @@ private let hookReview = """
                 .utf8))
     #expect(rows.first?.turnOn == true)
 }
+
+// MARK: Permissions
+
+private func permission(_ json: String) throws -> PermissionNeed {
+    try CoreJSON.decoder().decode(PermissionNeed.self, from: Data(json.utf8))
+}
+
+private let inputMonitoring = """
+    {"permission":"input-monitoring","label":"Input Monitoring","state":"missing","by":[{"kind":"watcher","name":"home-key"}],
+     "where":"in System Settings > Privacy & Security > Input Monitoring",
+     "settingsUrl":"x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"}
+    """
+
+@Test func putsPermissionsInWords() throws {
+    let missing = try permission(inputMonitoring)
+    #expect(missing.blocking && missing.shown)
+    #expect(missing.reason == "for its watcher home-key" && missing.stateText == "Not allowed")
+    let notify = try permission(
+        #"{"permission":"notifications","label":"Notifications","state":"not-checked","by":[{"kind":"plugin","name":"notify"}]}"#
+    )
+    #expect(notify.blocking && notify.reason == "for the notify plugin" && notify.stateText == "Not checked yet")
+    let granted = try permission(
+        #"{"permission":"accessibility","label":"Accessibility","state":"granted","by":[{"kind":"program","name":"x"}]}"#
+    )
+    #expect(!granted.blocking && granted.shown && granted.reason == "for its program")
+    // Unknown and unsupported never block, and aren't shown.
+    for state in ["unknown", "unsupported"] {
+        let quiet = try permission(
+            #"{"permission":"full-disk-access","label":"Full Disk Access","state":"\#(state)","by":[]}"#)
+        #expect(!quiet.blocking && !quiet.shown)
+    }
+    #expect(
+        [missing, notify, granted].wontRunText == "It won't run until Input Monitoring and Notifications are allowed.")
+    #expect([missing].wontRunText == "It won't run until Input Monitoring is allowed.")
+    #expect([granted].wontRunText == nil)
+}
+
+@MainActor
+@Test func grantAsksThenOpensTheSettingsPage() async throws {
+    let still = inputMonitoring.replacingOccurrences(of: #""by""#, with: #""asked":true,"by""#)
+    let (cli, log) = try scriptedCLI([
+        "permissions request input-monitoring --json": still,
+        "permissions request notifications --json":
+            #"{"permission":"notifications","label":"Notifications","state":"granted","asked":true,"by":[]}"#,
+        "permissions request accessibility --json": "!the scheduler isn't running",
+    ])
+    let granter = PermissionGranter(cli: cli, app: "Acme")
+    var opened: [URL] = []
+    var asked = 0
+    granter.openURL = { opened.append($0) }
+    granter.asked = { asked += 1 }
+    await granter.grant("input-monitoring")
+    // Still not allowed: its page opens, and it says what to switch on, for which app.
+    #expect(
+        opened.map(\.absoluteString) == ["x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"])
+    #expect(
+        granter.notes["input-monitoring"]
+            == "Answer the prompt, or switch on Acme in System Settings > Privacy & Security > Input Monitoring.")
+    // Allowed at once: nothing to open.
+    await granter.grant("notifications")
+    #expect(opened.count == 1 && granter.notes["notifications"] == nil)
+    // Asking failed: why, by its button.
+    await granter.grant("accessibility")
+    #expect(granter.errors["accessibility"] == "the scheduler isn't running" && granter.granting == nil)
+    #expect(asked == 3)
+    #expect(ran(log).allSatisfy { $0.hasPrefix("permissions request ") })
+}
+
+/// A stand-in CLI whose `trust --check` says the permission is missing the
+/// first time and granted after (the scheduler recorded it meanwhile).
+private func permissionFlippingCLI() throws -> CLI {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "automator-ui-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let review = """
+        {"routine":"tell","surface":{"servers":["notify"],"tools":["notify_me"]},"changes":[],"trusted":false,"hook":true,
+         "permissions":[\(inputMonitoring)]}
+        """
+    try review.write(to: dir.appending(path: "missing"), atomically: true, encoding: .utf8)
+    try review.replacingOccurrences(of: #""state":"missing""#, with: #""state":"granted""#)
+        .write(to: dir.appending(path: "granted"), atomically: true, encoding: .utf8)
+    let script = dir.appending(path: "procauto")
+    try """
+    #!/bin/sh
+    if [ -e '\(dir.path)/asked' ]; then cat '\(dir.path)/granted'; else touch '\(dir.path)/asked'; cat '\(dir.path)/missing'; fi
+    """.write(to: script, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    return CLI(executable: script)
+}
+
+@MainActor
+@Test func aPermissionInTheReviewTurnsAllowedByItself() async throws {
+    let turnOn = TurnOn(name: "tell", kind: .hook, cli: try permissionFlippingCLI(), app: "Acme")
+    turnOn.pollEvery = nil
+    turnOn.showing = true
+    await turnOn.load()
+    #expect(turnOn.waitingForPermission)
+    #expect(turnOn.review?.permissions?.blocking.map(\.label) == ["Input Monitoring"])
+    // Run status changed: the open review is read again, and the row is allowed.
+    await turnOn.statusChanged()
+    #expect(!turnOn.waitingForPermission)
+    #expect(turnOn.review?.permissions?.first?.state == .granted)
+    // A closed review isn't read on a status change.
+    turnOn.showing = false
+    await turnOn.statusChanged()
+}

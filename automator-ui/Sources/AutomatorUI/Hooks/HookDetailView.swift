@@ -47,6 +47,9 @@ struct HookDetailView: View {
                         Button("Turn On…", action: model.startTurnOn)
                     }
                 }
+                if let detail = model.detail {
+                    PermissionsBanner(name: model.name, permissions: detail.permissions ?? [], granter: model.granter)
+                }
                 Picker("Show", selection: $model.tab) {
                     ForEach(model.tabs) { Text($0.rawValue).tag($0) }
                 }
@@ -225,6 +228,7 @@ struct HookOverview: View {
             if let detail = model.detail {
                 SettingsCard { HookTrigger(detail: detail, openWatcher: openWatcher) }
                 SettingsCard { HookAccess(model: model, detail: detail) }
+                PermissionsCard(permissions: detail.permissions ?? [], granter: model.granter)
             }
         }
     }

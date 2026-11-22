@@ -26,5 +26,23 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to read or change your calendars. __NAME__ asks only when one does.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to read or change your calendars. __NAME__ asks only when one does.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to add events to your calendars. __NAME__ asks only when one does.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to read or change your reminders. __NAME__ asks only when one does.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to read or change your reminders. __NAME__ asks only when one does.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to read your contacts. __NAME__ asks only when one does.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to use the camera. __NAME__ asks only when one does.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to use the microphone. __NAME__ asks only when one does.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>A plugin, program or watcher you turn on may need to control other apps. __NAME__ asks only when one does.</string>
 </dict>
 </plist>

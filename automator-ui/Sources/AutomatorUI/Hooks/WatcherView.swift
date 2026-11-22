@@ -18,11 +18,36 @@ final class WatcherModel: ObservableObject {
     @Published var actionError: String?
     @Published var working = false
     var onDeleted: () -> Void = {}
+    /// Grant… for the permissions it declares that aren't allowed.
+    let granter: PermissionGranter
+    private var watchingPermissions = false
 
     init(name: String, cli: CLI, status: RunStatus?) {
         self.name = name
         self.cli = cli
         self.status = status
+        granter = PermissionGranter(cli: cli, app: AppInfo.name)
+        granter.openURL = { NSWorkspace.shared.open($0) }
+        granter.asked = { [weak self] in self?.load() }
+    }
+
+    /// Reads it again every few seconds while a permission it declares isn't
+    /// allowed (the scheduler records it within a pass).
+    private func watchPermissions() {
+        guard !watchingPermissions else { return }
+        watchingPermissions = true
+        Task { [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(3))
+                // A window closed meanwhile is let go: it's held only weakly.
+                guard let self else { return }
+                guard !(self.detail?.permissions ?? []).blocking.isEmpty else {
+                    self.watchingPermissions = false
+                    return
+                }
+                self.load()
+            }
+        }
     }
 
     func load() {
@@ -30,6 +55,7 @@ final class WatcherModel: ObservableObject {
             switch await cli.background({ [name] in $0.watcher(name) }) {
             case .success(let detail):
                 self.detail = detail
+                if !(detail.permissions ?? []).blocking.isEmpty { watchPermissions() }
                 loadError = nil
                 if !detail.trusted, review == nil { loadTrust() }
             case .failure(let failure):
@@ -141,7 +167,9 @@ struct WatcherView: View {
                             .compactMap { $0 }.joined(separator: ". "),
                             systemImage: "lock.shield")
                     }
+                    PermissionsBanner(name: model.name, permissions: detail.permissions ?? [], granter: model.granter)
                     SettingsCard { state(detail) }
+                    PermissionsCard(permissions: detail.permissions ?? [], granter: model.granter)
                     SettingsCard { hooks(detail) }
                     SettingsCard { access(detail) }
                     SettingsCard {
