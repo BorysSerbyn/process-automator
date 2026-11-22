@@ -225,14 +225,24 @@ func RoutineFieldNames() []string {
 	return names
 }
 
+// ProgramFields are the per-routine settings a program has: when it runs, and
+// for how long. The others are an LLM routine's.
+var ProgramFields = []string{"enabled", "schedule", "staleness", "timeout"}
+
 // RoutineSettings are the settings of one routine, with defaults taken from the
 // automator.* values in its file (fileValues; missing ones fall back to the
 // field's default). A routine without a schedule gets no scheduled-only fields.
 func RoutineSettings(routine string, fileValues map[string]any) []Setting {
+	return RoutineSettingsOf(routine, fileValues, nil)
+}
+
+// RoutineSettingsOf is RoutineSettings with only the fields named (every
+// field when names is nil): a program's are ProgramFields.
+func RoutineSettingsOf(routine string, fileValues map[string]any, names []string) []Setting {
 	_, scheduled := fileValues["schedule"]
 	var out []Setting
 	for _, f := range RoutineFields {
-		if f.ScheduledOnly && !scheduled {
+		if f.ScheduledOnly && !scheduled || names != nil && !slices.Contains(names, f.Name) {
 			continue
 		}
 		st := Setting{
