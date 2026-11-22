@@ -325,7 +325,6 @@ type PluginCheck struct {
 }
 
 func newPluginsCheckCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "check [<name>]",
 		Short: "Try plugins: start each server, check its tools, report what routines would get",
@@ -334,11 +333,8 @@ func newPluginsCheckCmd() *cobra.Command {
 			"doesn't start, isn't signed in, or has broken tools.",
 		Annotations: readOnly(),
 		Args:        cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			var err error
 			var names []string
 			if len(args) == 1 {
 				names = args
@@ -354,7 +350,6 @@ func newPluginsCheckCmd() *cobra.Command {
 				sort.Strings(names)
 			}
 			var rows []PluginCheck
-			failed := 0
 			for _, name := range names {
 				p, found := a.FindPlugin(name)
 				inProcess := found && p.InProcess != nil
@@ -373,34 +368,21 @@ func newPluginsCheckCmd() *cobra.Command {
 					}
 				}
 				row.OK = row.Problem == ""
-				if !row.OK {
-					failed++
-				}
 				rows = append(rows, row)
 			}
-			if asJSON {
-				if err := writeJSON(cmd.OutOrStdout(), rows); err != nil {
-					return err
+			return reportChecks(cmd, rows, "plugins", func(r PluginCheck) (bool, string) {
+				line := fmt.Sprintf("FAIL  %s: %s", r.Plugin, r.Problem)
+				if r.OK {
+					line = fmt.Sprintf("ok    %s (%s)", r.Plugin, toolSummary(r.Tools))
 				}
-			} else {
-				for _, r := range rows {
-					if r.OK {
-						fmt.Fprintf(cmd.OutOrStdout(), "ok    %s (%s)\n", r.Plugin, toolSummary(r.Tools))
-					} else {
-						fmt.Fprintf(cmd.OutOrStdout(), "FAIL  %s: %s\n", r.Plugin, r.Problem)
-					}
-					for _, w := range r.Warnings {
-						fmt.Fprintf(cmd.OutOrStdout(), "      warning: %s\n", w)
-					}
+				for _, w := range r.Warnings {
+					line += "\n      warning: " + w
 				}
-			}
-			if failed > 0 {
-				return reported(fmt.Errorf("%d of %d plugins have problems", failed, len(rows)))
-			}
-			return nil
-		},
+				return r.OK, line
+			})
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, []PluginCheck{})
+	jsonFlag(cmd.Flags(), []PluginCheck{})
 	return cmd
 }
 

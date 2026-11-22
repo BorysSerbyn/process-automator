@@ -40,19 +40,14 @@ func pathsOf(l engine.Layout) PathsOutput {
 }
 
 func newPathsCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:         "paths",
 		Annotations: readOnly(),
 		Short:       "Show where the app keeps its config, routines, run status and history",
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			p := pathsOf(a.Layout)
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), p)
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
@@ -65,8 +60,8 @@ func newPathsCmd() *cobra.Command {
 				fmt.Fprintf(tw, "%s\t%s\n", row[0], row[1])
 			}
 			return tw.Flush()
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, PathsOutput{})
+	jsonFlag(cmd.Flags(), PathsOutput{})
 	return cmd
 }

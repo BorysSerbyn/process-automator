@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -65,17 +64,12 @@ func newMemoryCmd() *cobra.Command {
 
 func newMemoryListCmd() *cobra.Command {
 	var sf scopeFlag
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List memories (all, or one routine's with --routine)",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			scopes, err := a.Memories().Scopes()
 			if err != nil {
 				return err
@@ -91,7 +85,7 @@ func newMemoryListCmd() *cobra.Command {
 				}
 				all = append(all, ms...)
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), all)
 			}
 			if len(all) == 0 {
@@ -104,26 +98,21 @@ func newMemoryListCmd() *cobra.Command {
 				fmt.Fprintf(tw, "%s\t%s\t%s\n", m.ID, scopeName(m.Routine), m.Text)
 			}
 			return tw.Flush()
-		},
+		}),
 	}
 	sf.add(cmd, "list")
-	jsonFlag(cmd.Flags(), &asJSON, []memory.Memory{})
+	jsonFlag(cmd.Flags(), []memory.Memory{})
 	return cmd
 }
 
 func newMemoryAddCmd() *cobra.Command {
 	var sf scopeFlag
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:     "add <text>",
 		Short:   "Remember something (for every routine, or one with --routine)",
 		Example: "  " + product.Command + " memory add \"The team's thread is in #eng-updates\" --routine standup",
 		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			scope, err := sf.scope(a)
 			if err != nil {
 				return err
@@ -146,10 +135,10 @@ func newMemoryAddCmd() *cobra.Command {
 				return err
 			}
 			return emit(cmd, m, fmt.Sprintf("Remembered for %s (%s).", scopeName(scope), m.ID))
-		},
+		}),
 	}
 	sf.add(cmd, "add to")
-	jsonFlag(cmd.Flags(), &asJSON, memory.Memory{})
+	jsonFlag(cmd.Flags(), memory.Memory{})
 	return cmd
 }
 
@@ -173,40 +162,31 @@ func newMemoryRmCmd() *cobra.Command {
 		Use:   "rm <id>",
 		Short: "Forget a memory",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			m, err := a.Memories().Remove(args[0])
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Forgot %q.\n", m.Text)
 			return nil
-		},
+		}),
 	}
 }
 
 func newMemoryEditCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "edit <id> <text>",
 		Short: "Change a memory's text",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			m, err := a.Memories().Edit(args[0], args[1])
 			if err != nil {
 				return err
 			}
 			return emit(cmd, m, fmt.Sprintf("Changed (now %s).", m.ID))
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, memory.Memory{})
+	jsonFlag(cmd.Flags(), memory.Memory{})
 	return cmd
 }
 
@@ -236,7 +216,7 @@ person's own words; don't add, generalise or explain anything.
 
 func newMemoryCompactCmd() *cobra.Command {
 	var sf scopeFlag
-	var yes, asJSON bool
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "compact",
 		Short: "Merge duplicate and outdated memories, after showing you the result",
@@ -244,11 +224,7 @@ func newMemoryCompactCmd() *cobra.Command {
 			"adding anything, shows what would change, and asks before saving (--yes without a terminal).",
 		Annotations: map[string]string{annNotReadOnly: "memories are mine"},
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			scope, err := sf.scope(a)
 			if err != nil {
 				return err
@@ -283,16 +259,14 @@ func newMemoryCompactCmd() *cobra.Command {
 			if slices.Equal(out.After, out.Before) {
 				return emit(cmd, out, "Nothing to merge or drop.")
 			}
-			if !asJSON {
+			if !wantsJSON(cmd) {
 				describeCompact(cmd, out)
 			}
 			if !yes {
 				if !isTerminal(os.Stdin) {
 					return errors.New("compacting is your decision: run it in a terminal, or add --yes after reviewing the above")
 				}
-				fmt.Fprint(cmd.OutOrStdout(), "\nSave this? [y/N] ")
-				line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-				if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
+				if !newPrompt(cmd).Confirm("\nSave this?", false) {
 					return errors.New("not saved")
 				}
 			}
@@ -301,11 +275,11 @@ func newMemoryCompactCmd() *cobra.Command {
 			}
 			out.Applied = true
 			return emit(cmd, out, fmt.Sprintf("Saved: %d memories, from %d.", len(out.After), len(out.Before)))
-		},
+		}),
 	}
 	sf.add(cmd, "compact")
 	cmd.Flags().BoolVar(&yes, "yes", false, "save without asking (after reviewing the result)")
-	jsonFlag(cmd.Flags(), &asJSON, CompactOutput{})
+	jsonFlag(cmd.Flags(), CompactOutput{})
 	return cmd
 }
 

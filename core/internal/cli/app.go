@@ -55,6 +55,29 @@ func loadAppForEdit(cmd *cobra.Command) (a *engine.App, unlock func(), err error
 	return engine.LoadForEdit(path, pluginsFrom(cmd.Context()), secretStore())
 }
 
+// withApp is a command's RunE that loads the app first.
+func withApp(run func(cmd *cobra.Command, a *engine.App, args []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		a, err := loadApp(cmd)
+		if err != nil {
+			return err
+		}
+		return run(cmd, a, args)
+	}
+}
+
+// withAppForEdit is withApp under the edit lock, for the whole command.
+func withAppForEdit(run func(cmd *cobra.Command, a *engine.App, args []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		a, unlock, err := loadAppForEdit(cmd)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+		return run(cmd, a, args)
+	}
+}
+
 func writeJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

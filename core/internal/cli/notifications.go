@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 )
 
@@ -33,17 +34,13 @@ func newNotificationsCmd() *cobra.Command {
 }
 
 func newNotificationsListCmd() *cobra.Command {
-	var pending, asJSON bool
+	var pending bool
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List notifications, newest last",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			f, err := notifications.Load(a.Layout.Notifications())
 			if err != nil {
 				return err
@@ -57,7 +54,7 @@ func newNotificationsListCmd() *cobra.Command {
 					}
 				}
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), list)
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
@@ -70,10 +67,10 @@ func newNotificationsListCmd() *cobra.Command {
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", n.ID, n.At.Local().Format("Mon Jan 2 15:04"), n.Kind, n.Title, delivered)
 			}
 			return tw.Flush()
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&pending, "pending", false, "only those not delivered yet")
-	jsonFlag(cmd.Flags(), &asJSON, []notifications.Notification{})
+	jsonFlag(cmd.Flags(), []notifications.Notification{})
 	return cmd
 }
 
@@ -83,18 +80,13 @@ func newNotificationsDeliveredCmd() *cobra.Command {
 		Short:       "Mark notifications delivered (frontends call this after showing them)",
 		Annotations: map[string]string{annNotReadOnly: "only frontends deliver notifications"},
 		Args:        cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(_ *cobra.Command, a *engine.App, args []string) error {
 			return notifications.MarkDelivered(a.Layout.Notifications(), args, time.Now())
-		},
+		}),
 	}
 }
 
 func newNotificationsOpenCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "open <id>",
 		Short: "Say what clicking a notification shows (frontends call this on a click)",
@@ -103,11 +95,7 @@ func newNotificationsOpenCmd() *cobra.Command {
 			"The frontend shows it; this opens nothing.",
 		Annotations: readOnly(),
 		Args:        cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			n, err := notifications.Get(a.Layout.Notifications(), args[0])
 			if err != nil {
 				return err
@@ -117,8 +105,8 @@ func newNotificationsOpenCmd() *cobra.Command {
 				out.Action, out.Routine, out.Run = "show-run", n.Routine, n.Run
 			}
 			return emit(cmd, out, strings.TrimSpace(out.Action+" "+out.Run))
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, ClickOutput{})
+	jsonFlag(cmd.Flags(), ClickOutput{})
 	return cmd
 }

@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
@@ -15,19 +12,14 @@ type VersionOutput struct {
 }
 
 func newVersionCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:         "version",
 		Annotations: readOnly(),
 		Short:       "Print the version",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if asJSON {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(VersionOutput{Version: product.Version})
-			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), product.Version)
-			return err
+			return emit(cmd, VersionOutput{Version: product.Version}, product.Version)
 		},
 	}
-	jsonFlag(cmd.Flags(), &asJSON, VersionOutput{})
+	jsonFlag(cmd.Flags(), VersionOutput{})
 	return cmd
 }

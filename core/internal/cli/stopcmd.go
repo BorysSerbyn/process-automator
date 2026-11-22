@@ -22,7 +22,6 @@ type StopOutput struct {
 const stopWait = time.Minute
 
 func newStopCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "stop <routine>",
 		Short: "Stop a routine's run in progress (or waiting for its turn); it's recorded as stopped",
@@ -30,11 +29,7 @@ func newStopCmd() *cobra.Command {
 			"for it to end. A stopped run is recorded as stopped, not as a failure.",
 		Annotations: map[string]string{annNotReadOnly: "it stops runs"},
 		Args:        cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			name := args[0]
 			if !inProgress(a, name) {
 				return fmt.Errorf("%s isn't running", name)
@@ -59,23 +54,15 @@ func newStopCmd() *cobra.Command {
 				out.Outcome, out.Reason = run.Outcome, run.Reason
 			}
 			return emit(cmd, out, fmt.Sprintf("%s: %s", name, out.Outcome))
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, StopOutput{})
+	jsonFlag(cmd.Flags(), StopOutput{})
 	return cmd
 }
 
 func lastRun(a *engine.App, name string) *runstatus.Run {
-	s, err := runstatus.Load(a.Layout.RunStatus())
-	if err != nil {
-		return nil
-	}
-	for _, r := range s.Routines {
-		if r.Name == name {
-			return r.LastRun
-		}
-	}
-	return nil
+	s, _ := runstatus.Load(a.Layout.RunStatus())
+	return s.LastRun(name)
 }
 
 func inProgress(a *engine.App, name string) bool {

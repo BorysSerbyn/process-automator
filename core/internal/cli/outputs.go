@@ -30,11 +30,11 @@ func (v jsonValue) Set(s string) error {
 	return nil
 }
 
-// jsonFlag adds --json to fs, bound to on: the command then prints out's type
-// as JSON (see emit and writeJSON) instead of text. On a parent's persistent
-// flags it's every subcommand's output.
-func jsonFlag(fs *pflag.FlagSet, on *bool, out any) *pflag.Flag {
-	f := fs.VarPF(jsonValue{on: on, out: out}, "json", "", "machine-readable output")
+// jsonFlag adds --json to fs: the command then prints out's type as JSON
+// (see wantsJSON and emit) instead of text. On a parent's persistent flags
+// it's every subcommand's output.
+func jsonFlag(fs *pflag.FlagSet, out any) *pflag.Flag {
+	f := fs.VarPF(jsonValue{on: new(bool), out: out}, "json", "", "machine-readable output")
 	f.NoOptDefVal = "true"
 	return f
 }
@@ -64,5 +64,26 @@ func emit(cmd *cobra.Command, v any, text string) error {
 		return writeJSON(cmd.OutOrStdout(), v)
 	}
 	fmt.Fprintln(cmd.OutOrStdout(), text)
+	return nil
+}
+
+// reportChecks prints a check's rows (as JSON with --json, else a line
+// each) and fails when any row did, naming how many of what.
+func reportChecks[T any](cmd *cobra.Command, rows []T, what string, line func(T) (ok bool, text string)) error {
+	failed := 0
+	var text []string
+	for _, r := range rows {
+		ok, l := line(r)
+		if !ok {
+			failed++
+		}
+		text = append(text, l)
+	}
+	if err := emit(cmd, rows, strings.Join(text, "\n")); err != nil {
+		return err
+	}
+	if failed > 0 {
+		return reported(fmt.Errorf("%d of %d %s have problems", failed, len(rows), what))
+	}
 	return nil
 }

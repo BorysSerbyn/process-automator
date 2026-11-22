@@ -35,22 +35,18 @@ func newTemplatesCmd() *cobra.Command {
 }
 
 func newTemplatesListCmd() *cobra.Command {
-	var all, asJSON bool
+	var all bool
 	cmd := &cobra.Command{
 		Use:         "list",
 		Annotations: readOnly(),
 		Short:       "List templates for this OS (--all for every OS)",
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			rows, err := a.Templates(all)
 			if err != nil {
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), rows)
 			}
 			out := cmd.OutOrStdout()
@@ -82,17 +78,16 @@ func newTemplatesListCmd() *cobra.Command {
 			_ = tw.Flush()
 			fmt.Fprintln(out, "\n* required. Install with: "+product.Command+" templates install <template> [--as <name>] [--set param=value]")
 			return nil
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "include templates for other operating systems")
-	jsonFlag(cmd.Flags(), &asJSON, []engine.TemplateInfo{})
+	jsonFlag(cmd.Flags(), []engine.TemplateInfo{})
 	return cmd
 }
 
 func newTemplatesInstallCmd() *cobra.Command {
 	var as string
 	var sets []string
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "install <template>",
 		Short: "Install a template as a routine; its parameter values become the routine's settings",
@@ -103,12 +98,7 @@ func newTemplatesInstallCmd() *cobra.Command {
 		Example: "  " + product.Command + " templates install projects/acme/standup\n" +
 			"  " + product.Command + " templates install personal/digest --set lookback=72h",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, unlock, err := loadAppForEdit(cmd)
-			if err != nil {
-				return err
-			}
-			defer unlock()
+		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			dir, err := engine.TemplatesDir()
 			if err != nil {
 				return err
@@ -162,7 +152,7 @@ func newTemplatesInstallCmd() *cobra.Command {
 				undo()
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), InstallOutput{Template: t.ID, Routine: name, Path: path})
 			}
 			if t.Description != "" {
@@ -172,11 +162,11 @@ func newTemplatesInstallCmd() *cobra.Command {
 				"Turn it on (trust it and run it on its schedule): "+product.Command+" routines trust %s --resume\n",
 				t.ID, name, path, name, name)
 			return nil
-		},
+		}),
 	}
 	cmd.Flags().StringVar(&as, "as", "", "routine name (default: the template's name)")
 	cmd.Flags().StringArrayVar(&sets, "set", nil, "a parameter value, param=value (repeatable)")
-	jsonFlag(cmd.Flags(), &asJSON, InstallOutput{})
+	jsonFlag(cmd.Flags(), InstallOutput{})
 	return cmd
 }
 

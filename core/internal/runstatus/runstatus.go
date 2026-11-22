@@ -137,3 +137,17 @@ type Run struct {
 	Outcome  Outcome    `json:"outcome" jsonschema:"enum=success,enum=failed,enum=skipped,enum=missed,enum=needs-reauth,enum=running,enum=queued,enum=stopped"`
 	Reason   string     `json:"reason,omitempty"`
 }
+
+// LastRun is a routine's last run; nil when it has none, or there's no
+// status.
+func (s *Status) LastRun(routine string) *Run {
+	if s == nil {
+		return nil
+	}
+	for _, r := range s.Routines {
+		if r.Name == routine {
+			return r.LastRun
+		}
+	}
+	return nil
+}

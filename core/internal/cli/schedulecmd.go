@@ -22,10 +22,9 @@ func newScheduleCmd() *cobra.Command {
 			"and when it next runs, and reads it as days and a time when it is one; build turns days and a time " +
 			"into one. Neither changes anything: set the result with `settings set`.",
 	}
-	var asJSON bool
-	jsonFlag(cmd.PersistentFlags(), &asJSON, schedule.Info{})
+	jsonFlag(cmd.PersistentFlags(), schedule.Info{})
 	show := func(cmd *cobra.Command, info schedule.Info) error {
-		if asJSON {
+		if wantsJSON(cmd) {
 			return writeJSON(cmd.OutOrStdout(), info)
 		}
 		w := cmd.OutOrStdout()

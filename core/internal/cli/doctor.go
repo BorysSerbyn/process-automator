@@ -30,7 +30,6 @@ type DoctorOutput struct {
 }
 
 func newDoctorCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Explain a red indicator: check the scheduler, enabled routines, their plugins and last runs",
@@ -41,15 +40,11 @@ func newDoctorCmd() *cobra.Command {
 			"with what fixes it. Fails if there are any.",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			out := DoctorOutput{Findings: diagnose(cmd, a, time.Now())}
 			out.OK = len(out.Findings) == 0
 			switch {
-			case asJSON:
+			case wantsJSON(cmd):
 				if err := writeJSON(cmd.OutOrStdout(), out); err != nil {
 					return err
 				}
@@ -71,9 +66,9 @@ func newDoctorCmd() *cobra.Command {
 				return reported(fmt.Errorf("%d problems", n))
 			}
 			return nil
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, DoctorOutput{})
+	jsonFlag(cmd.Flags(), DoctorOutput{})
 	return cmd
 }
 
@@ -124,18 +119,11 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		for _, p := range rd.All() {
 			add("routine", r.Name, p.Text, p.Fix)
 		}
-		if rd.ConfigErr != nil || status == nil {
-			continue
-		}
-		for _, rs := range status.Routines {
-			if rs.Name != r.Name || rs.LastRun == nil {
-				continue
-			}
-			run := rs.LastRun
-			id := history.RunID(r.Name, run.StartedAt)
+		if run := status.LastRun(r.Name); run != nil && rd.ConfigErr == nil {
 			switch run.Outcome {
 			case runstatus.OutcomeFailed, runstatus.OutcomeMissed:
-				add("run", r.Name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason), "see it: "+product.Command+" runs show "+id)
+				add("run", r.Name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason),
+					"see it: "+product.Command+" runs show "+history.RunID(r.Name, run.StartedAt))
 			case runstatus.OutcomeNeedsReauth:
 				add("run", r.Name, "its last run needed a sign-in: "+run.Reason, product.Command+" auth status shows which one")
 			}

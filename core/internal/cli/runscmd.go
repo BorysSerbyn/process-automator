@@ -19,7 +19,6 @@ import (
 )
 
 func newRunsCmd() *cobra.Command {
-	var asJSON bool
 	var since string
 	var limit int
 	cmd := &cobra.Command{
@@ -29,11 +28,8 @@ func newRunsCmd() *cobra.Command {
 		Example: "  " + product.Command + " runs\n  " + product.Command + " runs standup --since 7d\n" +
 			"  " + product.Command + " runs show standup/2026-11-19T092022",
 		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			var err error
 			f := history.Filter{Limit: limit}
 			if len(args) == 1 {
 				f.Routine = args[0]
@@ -47,7 +43,7 @@ func newRunsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				if runs == nil {
 					runs = []history.Summary{}
 				}
@@ -69,9 +65,9 @@ func newRunsCmd() *cobra.Command {
 					trig, r.Outcome, oneLine(r.Reason, 70))
 			}
 			return tw.Flush()
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, []history.Summary{})
+	jsonFlag(cmd.Flags(), []history.Summary{})
 	cmd.Flags().StringVar(&since, "since", "", "only runs started after this: a duration back (7d, 12h) or a date (2026-11-17)")
 	cmd.Flags().IntVar(&limit, "limit", 50, "at most this many runs (0 = all)")
 	cmd.AddCommand(newRunsShowCmd())
@@ -79,17 +75,13 @@ func newRunsCmd() *cobra.Command {
 }
 
 func newRunsShowCmd() *cobra.Command {
-	var asJSON, open bool
+	var open bool
 	cmd := &cobra.Command{
 		Use:         "show <id>",
 		Annotations: readOnly(),
 		Short:       "Show one run in full: what it covered, how it ended, its tool calls and writes, and its final text",
 		Args:        cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			if open {
 				path, err := openRunReport(a, args[0])
 				if err != nil {
@@ -102,14 +94,14 @@ func newRunsShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), e)
 			}
 			printRun(cmd.OutOrStdout(), e)
 			return nil
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, history.Entry{})
+	jsonFlag(cmd.Flags(), history.Entry{})
 	cmd.Flags().BoolVar(&open, "open", false, "open a readable report of the run in the default app (frontends showing a run)")
 	hideFromMCP(cmd, "open") // opening on my desktop isn't a client's business
 	cmd.MarkFlagsMutuallyExclusive("open", "json")

@@ -77,7 +77,6 @@ type GuideTable struct {
 }
 
 func newGuideCmd() *cobra.Command {
-	var asJSON bool
 	names := make([]string, len(guideTopics))
 	var list strings.Builder
 	for i, t := range guideTopics {
@@ -117,7 +116,7 @@ func newGuideCmd() *cobra.Command {
 			return emit(cmd, out, guideText(out))
 		},
 	}
-	jsonFlag(cmd.Flags(), &asJSON, GuideOutput{})
+	jsonFlag(cmd.Flags(), GuideOutput{})
 	return cmd
 }
 

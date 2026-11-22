@@ -8,6 +8,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
@@ -23,17 +24,12 @@ type ToolInfo struct {
 
 func newMCPCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "mcp", Short: "Inspect configured MCP servers, serve this CLI as one, and connect it to Claude Code"}
-	var asJSON bool
 	tools := &cobra.Command{
 		Use:         "tools <server>",
 		Annotations: readOnly(),
 		Short:       "List the tools a server exposes",
 		Args:        cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			session, err := a.Connector.Connect(cmd.Context(), args[0])
 			if err != nil {
 				return err
@@ -52,7 +48,7 @@ func newMCPCmd() *cobra.Command {
 				}
 				rows = append(rows, row)
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), rows)
 			}
 			for _, r := range rows {
@@ -63,9 +59,9 @@ func newMCPCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "%-32s %s\n", r.Name, desc)
 			}
 			return nil
-		},
+		}),
 	}
-	jsonFlag(tools.Flags(), &asJSON, []ToolInfo{})
+	jsonFlag(tools.Flags(), []ToolInfo{})
 
 	call := &cobra.Command{
 		Use:     "call <server> <tool> [json-args]",

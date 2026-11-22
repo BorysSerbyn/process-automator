@@ -18,7 +18,6 @@ import (
 )
 
 func newUsageCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "usage",
 		Short: "LLM usage against its limit: the Claude plan's usage (claude-code) or API spend (claude-api); none on codex",
@@ -30,16 +29,12 @@ func newUsageCmd() *cobra.Command {
 			"started by hand still run. On codex the app can't read Codex's usage, so there's no limit (kind none).",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			r, err := a.Usage(cmd.Context(), time.Now())
 			if err != nil {
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), r)
 			}
 			w := cmd.OutOrStdout()
@@ -55,9 +50,9 @@ func newUsageCmd() *cobra.Command {
 				fmt.Fprintf(w, "\nScheduled runs don't start: %s.\n", r.Reason)
 			}
 			return nil
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, usage.Report{})
+	jsonFlag(cmd.Flags(), usage.Report{})
 	cmd.AddCommand(newStatusLineCmd())
 	return cmd
 }
@@ -130,7 +125,6 @@ func newStatusLineCmd() *cobra.Command {
 		},
 	}
 	switchCmd := func(install bool) *cobra.Command {
-		var asJSON bool
 		use, short := "uninstall", "Put back the Claude Code status line you had"
 		if install {
 			use, short = "install", "Have Claude Code's status line record the plan's usage (yours keeps showing)"
@@ -138,11 +132,7 @@ func newStatusLineCmd() *cobra.Command {
 		c := &cobra.Command{
 			Use: use, Short: short, Args: cobra.NoArgs,
 			Annotations: map[string]string{annNotReadOnly: "it changes Claude Code's settings"},
-			RunE: func(cmd *cobra.Command, _ []string) error {
-				a, err := loadApp(cmd)
-				if err != nil {
-					return err
-				}
+			RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 				settingsPath, err := statusline.SettingsPath()
 				if err != nil {
 					return err
@@ -162,7 +152,7 @@ func newStatusLineCmd() *cobra.Command {
 				out := StatusLineOutput{}
 				out.Installed, _ = statusline.Installed(settingsPath)
 				out.Wraps, _ = statusline.Original(a.Layout.StatusLine())
-				if asJSON {
+				if wantsJSON(cmd) {
 					return writeJSON(cmd.OutOrStdout(), out)
 				}
 				switch {
@@ -174,9 +164,9 @@ func newStatusLineCmd() *cobra.Command {
 					fmt.Fprintln(cmd.OutOrStdout(), "Your Claude Code status line is back as it was.")
 				}
 				return nil
-			},
+			}),
 		}
-		jsonFlag(c.Flags(), &asJSON, StatusLineOutput{})
+		jsonFlag(c.Flags(), StatusLineOutput{})
 		return c
 	}
 	cmd.AddCommand(switchCmd(true), switchCmd(false))

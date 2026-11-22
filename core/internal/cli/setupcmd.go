@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -21,7 +20,6 @@ import (
 )
 
 func newSetupCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Guided first run: templates, the model backend, sign-ins, and turning routines on",
@@ -30,12 +28,8 @@ func newSetupCmd() *cobra.Command {
 			"or a frontend guiding me. Run it again any time; done steps are skipped.",
 		Annotations: map[string]string{annReadOnlyWith: "json", annNotReadOnly: "setting up the app is mine"},
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
-			if asJSON {
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
+			if wantsJSON(cmd) {
 				out, err := a.Setup()
 				if err != nil {
 					return err
@@ -46,9 +40,9 @@ func newSetupCmd() *cobra.Command {
 				return errors.New("setup asks questions: run it in a terminal, or see the steps with --json")
 			}
 			return setupInteractive(cmd, a)
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, engine.SetupOutput{}).Usage = "list the steps and the commands for each, changing nothing"
+	jsonFlag(cmd.Flags(), engine.SetupOutput{}).Usage = "list the steps and the commands for each, changing nothing"
 	return cmd
 }
 
@@ -58,33 +52,14 @@ func newSetupCmd() *cobra.Command {
 // questions work), and sets the backend directly.
 func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 	w := cmd.OutOrStdout()
-	in := bufio.NewReader(cmd.InOrStdin())
-	ask := func(q string) string {
-		fmt.Fprint(w, q+" ")
-		line, _ := in.ReadString('\n')
-		return strings.TrimSpace(line)
-	}
-	yes := func(q string, def bool) bool {
-		hint := " [y/N]"
-		if def {
-			hint = " [Y/n]"
-		}
-		switch strings.ToLower(ask(q + hint)) {
-		case "y", "yes":
-			return true
-		case "n", "no":
-			return false
-		default:
-			return def
-		}
-	}
+	p := newPrompt(cmd)
 	// A command that fails says why itself, on the terminal.
 	self := func(args ...string) { runSelf(a, cmd.InOrStdin(), w, cmd.ErrOrStderr(), args...) }
 
 	fmt.Fprintln(w, "Setting up "+product.Name+". Nothing changes without your yes.")
 
 	fmt.Fprintln(w, "\n1. Templates")
-	if err := setupTemplates(a, w, ask, self); err != nil {
+	if err := setupTemplates(a, p, self); err != nil {
 		fmt.Fprintln(w, "  Skipped:", err)
 	}
 
@@ -100,10 +75,7 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 		fmt.Fprintf(w, "    %d. %s\n", i+1, line)
 	}
 	for {
-		choice := strings.ToLower(ask("  Number or name [Enter keeps " + b.Name + "]:"))
-		if n, err := strconv.Atoi(choice); err == nil && n >= 1 && n <= len(def.Enum) {
-			choice = def.Enum[n-1]
-		}
+		choice := strings.ToLower(p.Pick("  Number or name [Enter keeps "+b.Name+"]:", def.Enum))
 		if choice == "" || choice == b.Name {
 			break
 		}
@@ -117,14 +89,14 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 		return err
 	}
 	if b.Name == agent.LocalBackend {
-		if err := setupLocal(cmd.Context(), a, w, ask, yes, self); err != nil {
+		if err := setupLocal(cmd.Context(), a, p, self); err != nil {
 			return err
 		}
 		if b, err = a.BackendReady(); err != nil {
 			return err
 		}
 	}
-	if b.SignIn != "" && yes("  "+engine.Capitalize(b.Problem)+". Sign in to "+b.SignIn+" now?", true) {
+	if b.SignIn != "" && p.Confirm("  "+engine.Capitalize(b.Problem)+". Sign in to "+b.SignIn+" now?", true) {
 		self("auth", "login", b.SignIn)
 	} else if b.Problem != "" {
 		fmt.Fprintln(w, "  Still needed: "+b.Problem)
@@ -149,11 +121,11 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 		case engine.StepRoutine:
 			fmt.Fprintf(w, "  %s: %s (`"+product.Command+" doctor` says how to fix it)\n", s.Title, s.Status)
 		case engine.StepSignIn:
-			if yes("  "+s.Status+". "+s.Ask, true) {
+			if p.Confirm("  "+s.Status+". "+s.Ask, true) {
 				self("auth", "login", s.Subject)
 			}
 		case engine.StepUsage:
-			if yes("  "+s.Ask, true) {
+			if p.Confirm("  "+s.Ask, true) {
 				self("usage", "statusline", "install")
 			}
 		case engine.StepTurnOn:
@@ -183,7 +155,8 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 // URL (Enter keeps it), then one of the models it lists, by number or name,
 // or a model's name when it doesn't answer. It asks for the server's API key
 // only when the server wants one (HTTP 401 or 403).
-func setupLocal(ctx context.Context, a *engine.App, w io.Writer, ask func(string) string, yes func(string, bool) bool, self func(...string)) error {
+func setupLocal(ctx context.Context, a *engine.App, p *prompt, self func(...string)) error {
+	w := p.out
 	store := settings.Store{Path: a.Layout.Config()}
 	vals, err := a.Settings()
 	if err != nil {
@@ -192,7 +165,7 @@ func setupLocal(ctx context.Context, a *engine.App, w io.Writer, ask func(string
 	def, _ := settings.Lookup(engine.LocalURLSetting)
 	url := vals.String(engine.LocalURLSetting)
 	for {
-		answer := ask("  Your model server's URL [Enter keeps " + url + engine.OllamaNote(url, def.Default) + "]:")
+		answer := p.Ask("  Your model server's URL [Enter keeps " + url + engine.OllamaNote(url, def.Default) + "]:")
 		if answer == "" {
 			break
 		}
@@ -218,7 +191,7 @@ func setupLocal(ctx context.Context, a *engine.App, w io.Writer, ask func(string
 	if errors.As(err, &needsKey) && needsKey.Refused {
 		q = "  The server at %s refuses its API key. Enter another now?"
 	}
-	if needsKey != nil && yes(fmt.Sprintf(q, needsKey.BaseURL), true) {
+	if needsKey != nil && p.Confirm(fmt.Sprintf(q, needsKey.BaseURL), true) {
 		self("auth", "login", agent.LocalProvider)
 		ids, listed, err = models()
 	}
@@ -231,28 +204,18 @@ func setupLocal(ctx context.Context, a *engine.App, w io.Writer, ask func(string
 	switch {
 	case err != nil:
 		fmt.Fprintln(w, "  "+engine.Capitalize(err.Error())+".")
-		model = ask(byName)
+		model = p.Ask(byName)
 	case listed && len(ids) > 0:
 		fmt.Fprintln(w, "  Which model should routines run on? The server has:")
 		for i, id := range ids {
 			fmt.Fprintf(w, "    %d. %s\n", i+1, id)
 		}
-		for {
-			model = ask("  Number or name" + keep + ":")
-			if n, err := strconv.Atoi(model); err == nil {
-				if n < 1 || n > len(ids) {
-					fmt.Fprintf(w, "  %d isn't one of them: a number from 1 to %d, or a name\n", n, len(ids))
-					continue
-				}
-				model = ids[n-1]
-			}
-			break
-		}
+		model = p.Pick("  Number or name"+keep+":", ids)
 	case listed:
 		fmt.Fprintln(w, "  The server has no models yet (on Ollama, pull one in a terminal: `ollama pull qwen3:8b`).")
-		model = ask(byName)
+		model = p.Ask(byName)
 	default: // it answers in a shape of its own
-		model = ask(byName)
+		model = p.Ask(byName)
 	}
 	if model != "" {
 		if _, err := store.Set(engine.LocalModelSetting, model); err != nil {
@@ -264,7 +227,8 @@ func setupLocal(ctx context.Context, a *engine.App, w io.Writer, ask func(string
 
 // setupTemplates offers the templates for this OS not installed yet; none
 // are picked by default.
-func setupTemplates(a *engine.App, w io.Writer, ask func(string) string, self func(...string)) error {
+func setupTemplates(a *engine.App, p *prompt, self func(...string)) error {
+	w := p.out
 	rows, err := a.Templates(false)
 	if err != nil {
 		return err
@@ -279,7 +243,7 @@ func setupTemplates(a *engine.App, w io.Writer, ask func(string) string, self fu
 		for i, p := range projects {
 			fmt.Fprintf(w, "  %d. %s\n", i+1, p)
 		}
-		for _, n := range pickNumbers(w, ask("  Which do you work on? Numbers, comma-separated (Enter for none):"), len(projects)) {
+		for _, n := range pickNumbers(w, p.Ask("  Which do you work on? Numbers, comma-separated (Enter for none):"), len(projects)) {
 			mine[projects[n]] = true
 		}
 	}
@@ -301,7 +265,7 @@ func setupTemplates(a *engine.App, w io.Writer, ask func(string) string, self fu
 	for i, t := range offer {
 		fmt.Fprintf(w, "  %d. %s: %s\n", i+1, t.ID, oneLine(t.Description, 80))
 	}
-	for _, n := range pickNumbers(w, ask("  Install which? Numbers, comma-separated (Enter for none):"), len(offer)) {
+	for _, n := range pickNumbers(w, p.Ask("  Install which? Numbers, comma-separated (Enter for none):"), len(offer)) {
 		self("templates", "install", offer[n].ID)
 	}
 	return nil

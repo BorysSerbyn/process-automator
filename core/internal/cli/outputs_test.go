@@ -90,12 +90,11 @@ func TestJSONErrors(t *testing.T) {
 		t.Errorf("without --json, the error is only on stderr; stdout got %q", out)
 	}
 	// A failure the output already reports prints no second object.
-	var asJSON bool
 	check := &cobra.Command{Use: "check", SilenceErrors: true, SilenceUsage: true, RunE: func(cmd *cobra.Command, _ []string) error {
 		_ = writeJSON(cmd.OutOrStdout(), []string{"x"})
 		return reported(errors.New("1 problem"))
 	}}
-	jsonFlag(check.Flags(), &asJSON, []string{})
+	jsonFlag(check.Flags(), []string{})
 	check.SetArgs([]string{"--json"})
 	var checkOut bytes.Buffer
 	check.SetOut(&checkOut)

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -76,29 +75,20 @@ func updateProgress(a *engine.App, now time.Time) (UpdateProgress, error) {
 }
 
 func newUpdateProgressCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:         "progress",
 		Short:       "Show what the update installing is doing, or how the latest one ended",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			p, err := updateProgress(a, time.Now())
 			if err != nil {
 				return err
 			}
-			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), p)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), describeProgress(p))
-			return nil
-		},
+			return emit(cmd, p, describeProgress(p))
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, UpdateProgress{})
+	jsonFlag(cmd.Flags(), UpdateProgress{})
 	return cmd
 }
 
@@ -148,9 +138,7 @@ func askFirst(cmd *cobra.Command, a *engine.App) (install bool, err error) {
 		fmt.Fprintln(out, describeUpdate(res))
 		return false, nil
 	}
-	fmt.Fprintf(out, "%s is available (this is %s). %s\nInstall it now? [y/N] ", plan.tag, product.Version, plan.note())
-	line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-	if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
+	if !newPrompt(cmd).Confirm(fmt.Sprintf("%s is available (this is %s). %s\nInstall it now?", plan.tag, product.Version, plan.note()), false) {
 		fmt.Fprintln(out, "Not updated.")
 		return false, nil
 	}
@@ -158,7 +146,7 @@ func askFirst(cmd *cobra.Command, a *engine.App) (install bool, err error) {
 }
 
 func newUpdateCmd() *cobra.Command {
-	var check, asJSON, background, ask bool
+	var check, background, ask bool
 	cmd := &cobra.Command{
 		Use: "update",
 		Annotations: map[string]string{
@@ -174,11 +162,7 @@ func newUpdateCmd() *cobra.Command {
 			"release is left alone. " + releasesHelp() + " An app installed by a Homebrew " +
 			"formula is updated with brew. `update progress` says what an update installing is doing.",
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			if ask && !check {
 				if install, err := askFirst(cmd, a); err != nil || !install {
 					return err
@@ -241,12 +225,8 @@ func newUpdateCmd() *cobra.Command {
 					return err
 				}
 				res.Started, res.InProgress = true, true
-				if asJSON {
-					return writeJSON(cmd.OutOrStdout(), res)
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Installing %s in the background; the app restarts when it's done (`%s update progress` follows it; log: %s).\n",
-					latest, product.Command, a.Layout.UpdateLog())
-				return nil
+				return emit(cmd, res, fmt.Sprintf("Installing %s in the background; the app restarts when it's done (`%s update progress` follows it; log: %s).",
+					latest, product.Command, a.Layout.UpdateLog()))
 			}
 			if res.UpdateAvailable && !check {
 				if err := plan.install(cmd.Context(), appRoot, progress, io.MultiWriter(cmd.ErrOrStderr(), progress)); err != nil {
@@ -260,17 +240,13 @@ func newUpdateCmd() *cobra.Command {
 			if !check {
 				progress.Finish(strings.TrimSuffix(describeUpdate(res), "."), nil)
 			}
-			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), res)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), describeUpdate(res))
-			return nil
-		},
+			return emit(cmd, res, describeUpdate(res))
+		}),
 	}
 	cmd.Flags().BoolVar(&check, "check", false, "only report whether a newer release exists")
 	cmd.Flags().BoolVar(&background, "detach", false, "install in the background and return at once; the result comes as a notification (frontends)")
 	cmd.Flags().BoolVar(&ask, "ask", false, "say what's available and ask in the terminal before installing it (frontends that can't ask themselves)")
-	jsonFlag(cmd.Flags(), &asJSON, UpdateOutput{})
+	jsonFlag(cmd.Flags(), UpdateOutput{})
 	cmd.AddCommand(newUpdateProgressCmd())
 	return cmd
 }

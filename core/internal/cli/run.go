@@ -10,12 +10,11 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 )
 
 func newRunCmd() *cobra.Command {
-	var dryRun, asJSON bool
+	var dryRun bool
 	var date string
 	cmd := &cobra.Command{
 		Use: "run <routine>",
@@ -32,16 +31,8 @@ func newRunCmd() *cobra.Command {
 			"  " + product.Command + " run standup\n" +
 			"  " + product.Command + " run weekly-report --date 2026-11-16   # as if it were Mon Nov 16",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
-			set, err := routines.Load(a.Layout.Routines())
-			if err != nil {
-				return err
-			}
-			r, err := set.Find(args[0])
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			r, set, err := a.Routine(args[0])
 			if err != nil {
 				return err
 			}
@@ -62,15 +53,15 @@ func newRunCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), res)
 			}
 			printResult(cmd, res)
 			return nil
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "intercept every side-effecting tool call (nothing is posted or written)")
-	jsonFlag(cmd.Flags(), &asJSON, agent.Result{})
+	jsonFlag(cmd.Flags(), agent.Result{})
 	cmd.Flags().StringVar(&date, "date", "", "run as of this day, YYYY-MM-DD (today or earlier): a backfill")
 	return cmd
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 )
@@ -19,7 +20,7 @@ import (
 var watchPoll = time.Second
 
 func newStatusCmd() *cobra.Command {
-	var watch, asJSON bool
+	var watch bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show the app's status: health, why, and each routine's last and next run",
@@ -28,11 +29,7 @@ func newStatusCmd() *cobra.Command {
 			"--watch prints it again, one JSON line each time it changes, until stopped (frontends follow it so).",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			path := a.Layout.RunStatus()
 			if watch {
 				return watchStatus(cmd.Context(), path, cmd.OutOrStdout())
@@ -41,16 +38,16 @@ func newStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), s)
 			}
 			printStatus(cmd.OutOrStdout(), s)
 			return nil
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&watch, "watch", false, "print it again, as one JSON line, each time it changes (until stopped)")
 	hideFromMCP(cmd, "watch") // it never ends
-	jsonFlag(cmd.Flags(), &asJSON, runstatus.Status{})
+	jsonFlag(cmd.Flags(), runstatus.Status{})
 	return cmd
 }
 

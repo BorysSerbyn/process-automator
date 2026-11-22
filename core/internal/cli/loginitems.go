@@ -53,8 +53,7 @@ func newLoginItemsCmd() *cobra.Command {
 		}
 	}
 	withJSON := func(c *cobra.Command, out any) *cobra.Command {
-		var asJSON bool
-		jsonFlag(c.Flags(), &asJSON, out)
+		jsonFlag(c.Flags(), out)
 		return c
 	}
 	cmd.AddCommand(

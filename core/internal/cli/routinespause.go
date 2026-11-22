@@ -13,7 +13,6 @@ func newRoutinesPauseCmd(resume bool) *cobra.Command {
 	if resume {
 		use, short, verb = "resume <routine>", "Let a paused routine run on its schedule again", "Resumed"
 	}
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   use,
 		Short: short,
@@ -34,6 +33,6 @@ func newRoutinesPauseCmd(resume bool) *cobra.Command {
 			return emit(cmd, out, fmt.Sprintf("%s %s.", verb, r.Name))
 		},
 	}
-	jsonFlag(cmd.Flags(), &asJSON, RoutineChange{})
+	jsonFlag(cmd.Flags(), RoutineChange{})
 	return cmd
 }

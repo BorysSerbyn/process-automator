@@ -52,11 +52,7 @@ func newUninstallCmd() *cobra.Command {
 			"without a terminal it needs --yes. An app installed with Homebrew is removed with brew.",
 		Annotations: map[string]string{annNotReadOnly: "removing the app is mine"},
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			root, installer, err := installedApp()
 			if err != nil {
 				return err
@@ -69,10 +65,7 @@ func newUninstallCmd() *cobra.Command {
 				if !isTerminal(os.Stdin) {
 					return errors.New("uninstalling removes " + what + ": add --yes to go ahead")
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "This removes %s. Go ahead? [y/N] ", what)
-				var answer string
-				_, _ = fmt.Fscanln(cmd.InOrStdin(), &answer)
-				if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
+				if !newPrompt(cmd).Confirm("This removes "+what+". Go ahead?", false) {
 					return errors.New("nothing removed")
 				}
 			}
@@ -88,7 +81,7 @@ func newUninstallCmd() *cobra.Command {
 			c := exec.CommandContext(cmd.Context(), "bash", args...)
 			c.Stdout, c.Stderr = cmd.OutOrStdout(), cmd.ErrOrStderr()
 			return c.Run()
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&purge, "purge", false, "also remove config, routines, history, logs and secrets")
 	cmd.Flags().BoolVar(&yes, "yes", false, "don't ask (needed without a terminal)")

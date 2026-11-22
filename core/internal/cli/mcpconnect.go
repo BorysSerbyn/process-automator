@@ -72,7 +72,6 @@ func isFile(p string) bool {
 }
 
 func newMCPConnectCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "connect",
 		Short: "Register this app's MCP server with Claude Code, at user scope (every folder)",
@@ -115,6 +114,6 @@ func newMCPConnectCmd() *cobra.Command {
 				"` for its "+product.Command+" MCP server (/mcp lists it; a running Claude Code session needs a restart).")
 		},
 	}
-	jsonFlag(cmd.Flags(), &asJSON, MCPConnectOutput{})
+	jsonFlag(cmd.Flags(), MCPConnectOutput{})
 	return cmd
 }

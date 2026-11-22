@@ -245,6 +245,17 @@ func (a *App) InProcess(name string) (pluginapi.Plugin, bool) {
 	return p, ok && p.InProcess != nil
 }
 
+// Routine is the installed routine named name, with the set it's in (its
+// partials).
+func (a *App) Routine(name string) (routines.Routine, *routines.Set, error) {
+	set, err := routines.Load(a.Layout.Routines())
+	if err != nil {
+		return routines.Routine{}, nil, err
+	}
+	r, err := set.Find(name)
+	return r, set, err
+}
+
 // FindPlugin returns an installed plugin by name.
 func (a *App) FindPlugin(name string) (pluginapi.Plugin, bool) {
 	for _, p := range a.Plugins {

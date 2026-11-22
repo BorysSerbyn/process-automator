@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -14,7 +13,6 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/schedule"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trust"
@@ -41,7 +39,7 @@ type TrustOutput struct {
 }
 
 func newRoutinesTrustCmd() *cobra.Command {
-	var yes, check, resume, asJSON bool
+	var yes, check, resume bool
 	cmd := &cobra.Command{
 		Use:   "trust <routine>",
 		Short: "Review what a routine can reach, and trust it to run for real (--resume: and turn it on)",
@@ -54,17 +52,8 @@ func newRoutinesTrustCmd() *cobra.Command {
 		Example: "  " + product.Command + " routines trust digest --check --json   # review only\n" +
 			"  " + product.Command + " routines trust digest --yes --resume    # trust it and run it on its schedule",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, unlock, err := loadAppForEdit(cmd)
-			if err != nil {
-				return err
-			}
-			defer unlock()
-			set, err := routines.Load(a.Layout.Routines())
-			if err != nil {
-				return err
-			}
-			r, err := set.Find(args[0])
+		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			r, _, err := a.Routine(args[0])
 			if err != nil {
 				return err
 			}
@@ -92,7 +81,7 @@ func newRoutinesTrustCmd() *cobra.Command {
 				return emit(cmd, out, r.Name+" is already trusted with what it can reach now.")
 			case out.Trusted && !check:
 				// Nothing to review: only the schedule to turn on.
-				if !asJSON {
+				if !wantsJSON(cmd) {
 					fmt.Fprintln(cmd.OutOrStdout(), r.Name+" is already trusted with what it can reach now.")
 				}
 				question = "Run " + r.Name + " on its schedule (" + schedule.Text(c.Schedule) + ")"
@@ -102,7 +91,7 @@ func newRoutinesTrustCmd() *cobra.Command {
 				if toolsErr != nil {
 					out.ToolsError = toolsErr.Error()
 				}
-				if !asJSON {
+				if !wantsJSON(cmd) {
 					describeSurface(cmd, out, toolsErr)
 				}
 				if check {
@@ -118,9 +107,7 @@ func newRoutinesTrustCmd() *cobra.Command {
 				if !isTerminal(os.Stdin) {
 					return errors.New("trusting is your decision: run it in a terminal, or add --yes after reviewing the above")
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s? [y/N] ", question)
-				line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-				if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
+				if !newPrompt(cmd).Confirm(question+"?", false) {
 					return errors.New("nothing changed")
 				}
 			}
@@ -141,14 +128,14 @@ func newRoutinesTrustCmd() *cobra.Command {
 				done = append(done, "Resumed "+r.Name+": it runs on its schedule")
 			}
 			return emit(cmd, out, strings.Join(done, ". ")+".")
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "don't ask (after reviewing what it can reach)")
 	cmd.Flags().BoolVar(&check, "check", false, "only show what it can reach and what changed; trust nothing (frontends review with it, then trust with --yes)")
 	cmd.Flags().BoolVar(&resume, "resume", false, "also let it run on its schedule, if it's paused (turns it on in one step)")
 	cmd.MarkFlagsMutuallyExclusive("check", "yes")
 	cmd.MarkFlagsMutuallyExclusive("check", "resume")
-	jsonFlag(cmd.Flags(), &asJSON, TrustOutput{})
+	jsonFlag(cmd.Flags(), TrustOutput{})
 	return cmd
 }
 

@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 )
 
 // StartOutput is `start --json`: a run started in the background.
@@ -21,7 +20,7 @@ type StartOutput struct {
 }
 
 func newStartCmd() *cobra.Command {
-	var dryRun, asJSON bool
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "start <routine>",
 		Short: "Start a routine's run in the background and return at once (frontends: run now)",
@@ -29,16 +28,8 @@ func newStartCmd() *cobra.Command {
 			"status (running, queued) and the run history; `stop` stops it.",
 		Annotations: map[string]string{annNotReadOnly: "it runs a routine"},
 		Args:        cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
-			set, err := routines.Load(a.Layout.Routines())
-			if err != nil {
-				return err
-			}
-			r, err := set.Find(args[0])
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			r, _, err := a.Routine(args[0])
 			if err != nil {
 				return err
 			}
@@ -46,7 +37,7 @@ func newStartCmd() *cobra.Command {
 			if err := startDetachedRun(a, r.Name, dryRun, out.Log); err != nil {
 				return err
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), out)
 			}
 			kind := "Started"
@@ -55,10 +46,10 @@ func newStartCmd() *cobra.Command {
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "%s %s in the background (log: %s).\n", kind, r.Name, out.Log)
 			return nil
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "intercept every side-effecting tool call (nothing is posted or written)")
-	jsonFlag(cmd.Flags(), &asJSON, StartOutput{})
+	jsonFlag(cmd.Flags(), StartOutput{})
 	return cmd
 }
 

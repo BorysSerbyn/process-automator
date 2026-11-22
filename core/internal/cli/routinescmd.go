@@ -58,17 +58,12 @@ type RoutineInfo struct {
 
 func newRoutinesCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "routines", Short: "Routines installed on this device (one .prompt file each)"}
-	var asJSON bool
 	list := &cobra.Command{
 		Use:         "list",
 		Annotations: readOnly(),
 		Short:       "List routine files with their schedule and enabled state",
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			dir := a.Layout.Routines()
 			set, err := routines.Load(dir)
 			if err != nil {
@@ -88,7 +83,7 @@ func newRoutinesCmd() *cobra.Command {
 			for _, r := range set.Routines {
 				rows = append(rows, routineInfo(cmd, a, def, status, r, now))
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), rows)
 			}
 			out := cmd.OutOrStdout()
@@ -114,9 +109,9 @@ func newRoutinesCmd() *cobra.Command {
 			_ = tw.Flush()
 			fmt.Fprintf(out, "\nFolder: %s\n", dir)
 			return nil
-		},
+		}),
 	}
-	jsonFlag(list.Flags(), &asJSON, []RoutineInfo{})
+	jsonFlag(list.Flags(), []RoutineInfo{})
 	cmd.AddCommand(list, newRoutinesShowCmd(), newRoutinesCreateCmd(), newRoutinesUpdateCmd(), newRoutinesDeleteCmd(), newRoutinesCheckCmd(), newRoutinesTrustCmd(), newRoutinesPauseCmd(false), newRoutinesPauseCmd(true))
 	return cmd
 }
@@ -163,13 +158,7 @@ func routineInfo(cmd *cobra.Command, a *engine.App, def engine.BackendDef, statu
 			row.Next = &n
 		}
 	}
-	if status != nil {
-		for _, s := range status.Routines {
-			if s.Name == r.Name {
-				row.LastRun = s.LastRun
-			}
-		}
-	}
+	row.LastRun = status.LastRun(r.Name)
 	return row
 }
 

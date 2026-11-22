@@ -26,30 +26,25 @@ type PluginInfo struct {
 
 func newPluginsCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "plugins", Short: "Plugins (MCP servers) routines can use"}
-	var asJSON bool
 	list := &cobra.Command{
 		Use:         "list",
 		Annotations: readOnly(),
 		Short:       "List installed plugins: the built-in ones plus servers added in config",
 		Args:        cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			var rows []PluginInfo
 			seen := map[string]bool{}
 			for _, p := range a.Plugins {
 				seen[p.Name] = true
 				row := PluginInfo{Name: p.Name, Description: p.Description, Kind: "in-process"}
 				if p.External != nil {
-					row.Kind, row.Endpoint = kindOf(a, p.Name)
+					row.Kind, row.Endpoint = endpoint(a.Config.MCPServers[p.Name])
 				}
 				rows = append(rows, row)
 			}
 			for name := range a.Config.MCPServers {
 				if !seen[name] {
-					kind, ep := kindOf(a, name)
+					kind, ep := endpoint(a.Config.MCPServers[name])
 					desc := a.Config.MCPServers[name].Description
 					if desc == "" {
 						desc = "(from config)"
@@ -57,7 +52,7 @@ func newPluginsCmd() *cobra.Command {
 					rows = append(rows, PluginInfo{Name: name, Kind: kind, Endpoint: ep, Description: desc})
 				}
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), rows)
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
@@ -66,9 +61,9 @@ func newPluginsCmd() *cobra.Command {
 				fmt.Fprintf(tw, "%s\t%s\t%s\n", r.Name, r.Kind, r.Description)
 			}
 			return tw.Flush()
-		},
+		}),
 	}
-	jsonFlag(list.Flags(), &asJSON, []PluginInfo{})
+	jsonFlag(list.Flags(), []PluginInfo{})
 	cmd.AddCommand(list, newPluginsAddCmd(), newPluginsRemoveCmd(), newPluginsCheckCmd())
 	return cmd
 }
@@ -89,7 +84,7 @@ func newPluginsAddCmd() *cobra.Command {
 	var spec pluginapi.ServerSpec
 	var env, headers []string
 	var dir string
-	var replace, asJSON bool
+	var replace bool
 	cmd := &cobra.Command{
 		Use:   "add <name>",
 		Short: "Add an MCP server routines can use, after trying it (this starts the server)",
@@ -106,12 +101,8 @@ func newPluginsAddCmd() *cobra.Command {
 			"  " + product.Command + " plugins add acme --url https://mcp.acme.dev --auth headers --header 'Authorization=Bearer {acme-key}'\n" +
 			"  " + product.Command + " plugins add files --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ~/notes",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, unlock, err := loadAppForEdit(cmd)
-			if err != nil {
-				return err
-			}
-			defer unlock()
+		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			var err error
 			name := args[0]
 			if !config.ValidName(name) {
 				return fmt.Errorf("%q can't name a plugin: lowercase letters, digits and dashes", name)
@@ -159,15 +150,12 @@ func newPluginsAddCmd() *cobra.Command {
 			if exists && managed(a, prev) && filepath.Clean(prev.Dir) != filepath.Clean(spec.Dir) {
 				_ = os.RemoveAll(prev.Dir)
 			}
-			kind, ep := "local", spec.Command
-			if config.Remote(spec) {
-				kind, ep = "remote", spec.URL
-			}
+			kind, ep := endpoint(spec)
 			out := PluginChange{Plugin: name, Kind: kind, Endpoint: ep, Trial: &trial}
 			if trial.NeedsSignIn {
 				out.SignIn = product.Command + " auth login " + name
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), out)
 			}
 			w := cmd.OutOrStdout()
@@ -188,7 +176,7 @@ func newPluginsAddCmd() *cobra.Command {
 				fmt.Fprintf(w, "warning: %s\n", warn)
 			}
 			return nil
-		},
+		}),
 	}
 	f := cmd.Flags()
 	f.StringVar(&spec.URL, "url", "", "a remote server's URL")
@@ -204,7 +192,7 @@ func newPluginsAddCmd() *cobra.Command {
 	_ = f.SetAnnotation("env", annRedact, []string{"true"})
 	_ = f.SetAnnotation("header", annRedact, []string{"true"})
 	f.BoolVar(&replace, "replace", false, "replace a server of the same name (a built-in preset is overridden)")
-	jsonFlag(f, &asJSON, PluginChange{})
+	jsonFlag(f, PluginChange{})
 	return cmd
 }
 
@@ -224,7 +212,6 @@ func keyValues(flag string, kvs []string) (map[string]string, error) {
 }
 
 func newPluginsRemoveCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove an MCP server added in config, and forget its credentials",
@@ -232,12 +219,7 @@ func newPluginsRemoveCmd() *cobra.Command {
 			"forgets its stored credentials. For a built-in preset that " +
 			"config overrode, the preset applies again (its credentials are kept). Built-in plugins can't be removed.",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, unlock, err := loadAppForEdit(cmd)
-			if err != nil {
-				return err
-			}
-			defer unlock()
+		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			name := args[0]
 			p, bundled := a.FindPlugin(name)
 			if bundled && p.InProcess != nil {
@@ -268,21 +250,19 @@ func newPluginsRemoveCmd() *cobra.Command {
 			out := PluginChange{Plugin: name}
 			msg := fmt.Sprintf("Removed %s.", name)
 			if bundled && p.External != nil {
-				out.Kind, out.Endpoint = "local", p.External.Command
-				if config.Remote(*p.External) {
-					out.Kind, out.Endpoint = "remote", p.External.URL
-				}
+				out.Kind, out.Endpoint = endpoint(*p.External)
 				msg = fmt.Sprintf("Removed the config override of %s; the built-in preset applies again.", name)
 			}
 			return emit(cmd, out, msg)
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, PluginChange{})
+	jsonFlag(cmd.Flags(), PluginChange{})
 	return cmd
 }
 
-func kindOf(a *engine.App, name string) (kind, endpoint string) {
-	s := a.Config.MCPServers[name]
+// endpoint is a server's kind (remote or local) and where it is (its URL
+// or command).
+func endpoint(s pluginapi.ServerSpec) (kind, where string) {
 	if config.Remote(s) {
 		return "remote", s.URL
 	}

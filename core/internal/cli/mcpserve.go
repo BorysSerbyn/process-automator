@@ -80,11 +80,7 @@ func newMCPServeCmd() *cobra.Command {
 			"tools, minus those that run, stop or set up anything.",
 		Example: "  claude mcp add " + product.Command + " -- " + product.Command + " mcp serve",
 		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			exe, err := os.Executable()
 			if err != nil {
 				return err
@@ -103,7 +99,7 @@ func newMCPServeCmd() *cobra.Command {
 				return nil // stopped by a signal: a normal end
 			}
 			return err
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&readOnlyMode, "read-only", false, "serve only read-only tools")
 	return cmd

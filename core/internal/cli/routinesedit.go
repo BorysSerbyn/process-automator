@@ -46,22 +46,13 @@ type RoutineCheck struct {
 }
 
 func newRoutinesShowCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:         "show <routine>",
 		Short:       "Show a routine: its file, effective settings and last run",
 		Annotations: readOnly(),
 		Args:        cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
-			set, err := routines.Load(a.Layout.Routines())
-			if err != nil {
-				return err
-			}
-			r, err := set.Find(args[0])
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			r, _, err := a.Routine(args[0])
 			if err != nil {
 				return err
 			}
@@ -74,7 +65,7 @@ func newRoutinesShowCmd() *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: can't read run status: %v\n", err)
 			}
 			d := RoutineDetail{RoutineInfo: routineInfo(cmd, a, def, status, r, time.Now()), Source: r.Source}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), d)
 			}
 			out := cmd.OutOrStdout()
@@ -88,9 +79,9 @@ func newRoutinesShowCmd() *cobra.Command {
 			}
 			fmt.Fprintf(out, "\n%s", d.Source)
 			return nil
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, RoutineDetail{})
+	jsonFlag(cmd.Flags(), RoutineDetail{})
 	return cmd
 }
 
@@ -123,7 +114,6 @@ func (f *sourceFlags) read(in io.Reader) (string, error) {
 
 func newRoutinesCreateCmd() *cobra.Command {
 	var src sourceFlags
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "create <routine>",
 		Short: "Add a routine file, validated first; it starts disabled",
@@ -132,12 +122,7 @@ func newRoutinesCreateCmd() *cobra.Command {
 			"it on with `routines trust <routine> --resume`. How to write the file: `" + product.Command + " guide routines`.",
 		Example: "  " + product.Command + " routines create standup --from ./standup.prompt",
 		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, unlock, err := loadAppForEdit(cmd)
-			if err != nil {
-				return err
-			}
-			defer unlock()
+		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			source, err := src.read(cmd.InOrStdin())
 			if err != nil {
 				return err
@@ -165,10 +150,10 @@ func newRoutinesCreateCmd() *cobra.Command {
 				fmt.Sprintf("Created %s (%s), paused and not trusted.\nTry it: "+product.Command+" run %s --dry-run\n"+
 					"Turn it on (trust it and run it on its schedule): "+product.Command+" routines trust %s --resume",
 					r.Name, r.Path, r.Name, r.Name))
-		},
+		}),
 	}
 	src.add(cmd)
-	jsonFlag(cmd.Flags(), &asJSON, RoutineChange{})
+	jsonFlag(cmd.Flags(), RoutineChange{})
 	return cmd
 }
 
@@ -227,19 +212,13 @@ func disableNew(a *engine.App, dir string, r routines.Routine) (undo func(), err
 
 func newRoutinesUpdateCmd() *cobra.Command {
 	var src sourceFlags
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "update <routine>",
 		Short: "Replace a routine's file, validated first (its settings are kept)",
 		Long: "Replaces <routine>.prompt after validating it like any routine. Its settings are kept; changing what " +
 			"it can reach takes its trust away. How to write the file: `" + product.Command + " guide routines`.",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, unlock, err := loadAppForEdit(cmd)
-			if err != nil {
-				return err
-			}
-			defer unlock()
+		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			source, err := src.read(cmd.InOrStdin())
 			if err != nil {
 				return err
@@ -264,25 +243,19 @@ func newRoutinesUpdateCmd() *cobra.Command {
 				text = fmt.Sprintf("Updated %s (%s); enabled: %v.", r.Name, r.Path, c.Enabled)
 			}
 			return emit(cmd, out, text)
-		},
+		}),
 	}
 	src.add(cmd)
-	jsonFlag(cmd.Flags(), &asJSON, RoutineChange{})
+	jsonFlag(cmd.Flags(), RoutineChange{})
 	return cmd
 }
 
 func newRoutinesDeleteCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "delete <routine>",
 		Short: "Delete a routine's file, its settings, trust and memories (run history is kept)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, unlock, err := loadAppForEdit(cmd)
-			if err != nil {
-				return err
-			}
-			defer unlock()
+		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			path, err := routines.Delete(a.Layout.Routines(), args[0])
 			if err != nil {
 				return err
@@ -298,14 +271,13 @@ func newRoutinesDeleteCmd() *cobra.Command {
 			}
 			return emit(cmd, RoutineChange{Routine: args[0], Path: path},
 				fmt.Sprintf("Deleted %s (%s) and its settings.", args[0], path))
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, RoutineChange{})
+	jsonFlag(cmd.Flags(), RoutineChange{})
 	return cmd
 }
 
 func newRoutinesCheckCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "check [<routine>]",
 		Short: "Check routines would run: file, settings, servers connect, allowlisted tools exist",
@@ -316,11 +288,7 @@ func newRoutinesCheckCmd() *cobra.Command {
 			"its models). Fails if any routine has a problem.",
 		Annotations: readOnly(),
 		Args:        cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			set, err := routines.Load(a.Layout.Routines())
 			if err != nil {
 				return err
@@ -331,12 +299,9 @@ func newRoutinesCheckCmd() *cobra.Command {
 				rd := a.Assess(r)
 				rd.CheckTools(cmd.Context(), a, r)
 				rd.CheckModel(cmd.Context(), a, r)
-				switch {
-				case rd.ConfigErr != nil:
-					row.Problem = rd.ConfigErr.Error()
-				case len(rd.Problems) > 0:
-					row.Problem = rd.Problems[0].Text
-				default:
+				if rd.ConfigErr != nil || len(rd.Problems) > 0 {
+					row.Problem = rd.All()[0].Text
+				} else {
 					row.Tools = rd.Tools
 				}
 				row.OK = row.Problem == ""
@@ -357,31 +322,14 @@ func newRoutinesCheckCmd() *cobra.Command {
 					add(r)
 				}
 			}
-			failed := 0
-			for _, r := range rows {
-				if !r.OK {
-					failed++
+			return reportChecks(cmd, rows, "routines", func(r RoutineCheck) (bool, string) {
+				if r.OK {
+					return true, fmt.Sprintf("ok    %s (%d tools)", r.Routine, len(r.Tools))
 				}
-			}
-			if asJSON {
-				if err := writeJSON(cmd.OutOrStdout(), rows); err != nil {
-					return err
-				}
-			} else {
-				for _, r := range rows {
-					if r.OK {
-						fmt.Fprintf(cmd.OutOrStdout(), "ok    %s (%d tools)\n", r.Routine, len(r.Tools))
-					} else {
-						fmt.Fprintf(cmd.OutOrStdout(), "FAIL  %s: %s\n", r.Routine, r.Problem)
-					}
-				}
-			}
-			if failed > 0 {
-				return reported(fmt.Errorf("%d of %d routines have problems", failed, len(rows)))
-			}
-			return nil
-		},
+				return false, fmt.Sprintf("FAIL  %s: %s", r.Routine, r.Problem)
+			})
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, []RoutineCheck{})
+	jsonFlag(cmd.Flags(), []RoutineCheck{})
 	return cmd
 }

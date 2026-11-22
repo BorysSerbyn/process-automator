@@ -117,12 +117,7 @@ func (a *App) Daemon(ctx context.Context) error {
 				fail(err)
 				return
 			}
-			set, err := routines.Load(cur.Layout.Routines())
-			if err != nil {
-				fail(err)
-				return
-			}
-			r, err := set.Find(name)
+			r, set, err := cur.Routine(name)
 			if err != nil {
 				fail(err)
 				return

@@ -363,7 +363,7 @@ func TestSignInPrepares(t *testing.T) {
 	}}
 	a := enginetest.Load(t, cfg, p)
 	var out bytes.Buffer
-	ui := &terminalUI{in: bufio.NewReader(strings.NewReader("n\n")), out: &out}
+	ui := &terminalUI{prompt: &prompt{in: bufio.NewReader(strings.NewReader("n\n")), out: &out}}
 	if err := login(context.Background(), a, "pt-app", ui); err == nil || strings.Contains(out.String(), "Paste the token") {
 		t.Fatalf("went on without the preparation done: %v\n%s", err, out.String())
 	}
@@ -371,13 +371,13 @@ func TestSignInPrepares(t *testing.T) {
 		t.Errorf("preparation not shown:\n%s", out.String())
 	}
 	out.Reset()
-	ui = &terminalUI{in: bufio.NewReader(strings.NewReader("y\nsecret\n")), out: &out}
+	ui = &terminalUI{prompt: &prompt{in: bufio.NewReader(strings.NewReader("y\nsecret\n")), out: &out}}
 	if err := login(context.Background(), a, "pt-app", ui); err != nil {
 		t.Fatal(err)
 	}
 	// Signed in, it isn't shown again.
 	out.Reset()
-	ui = &terminalUI{in: bufio.NewReader(strings.NewReader("other\n")), out: &out}
+	ui = &terminalUI{prompt: &prompt{in: bufio.NewReader(strings.NewReader("other\n")), out: &out}}
 	_ = login(context.Background(), a, "pt-app", ui)
 	if strings.Contains(out.String(), "Create the app") {
 		t.Errorf("preparation shown once signed in:\n%s", out.String())
@@ -499,7 +499,7 @@ func TestSetupInteractiveBackend(t *testing.T) {
 		"    2. claude-api   Anthropic's API, paid per token\n",
 		"    3. local        Your own model server, e.g. Ollama (experimental, untested)\n",
 		"    4. codex        OpenAI's Codex CLI (experimental, untested)\n",
-		`"9" isn't one of them: a number from 1 to 4, or a name`,
+		"9 isn't one of them: a number from 1 to 4, or a name",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)

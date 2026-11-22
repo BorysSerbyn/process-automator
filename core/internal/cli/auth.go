@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -32,14 +30,10 @@ func newAuthLoginCmd() *cobra.Command {
 			"(or read from stdin), or with --browser entered on a local page that stores them straight in the " +
 			"system's secret store (for frontends without a terminal).",
 		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
-			ui := &terminalUI{in: bufio.NewReader(cmd.InOrStdin()), out: cmd.OutOrStdout(), browser: browser}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			ui := &terminalUI{prompt: newPrompt(cmd), browser: browser}
 			return login(cmd.Context(), a, args[0], ui)
-		},
+		}),
 	}
 	cmd.Flags().BoolVar(&browser, "browser", false, "enter keys and tokens on a local page in the browser instead of the terminal")
 	return cmd
@@ -118,8 +112,7 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 // terminalUI signs in from a terminal: secrets are pasted (or piped) in, or
 // entered on a local browser page with --browser.
 type terminalUI struct {
-	in      *bufio.Reader
-	out     io.Writer
+	*prompt
 	browser bool
 	steps   string // what to do first, also shown on the secret page
 }
@@ -130,9 +123,7 @@ func (t *terminalUI) Prepare(_ context.Context, server, steps string) error {
 	if t.browser {
 		return nil // the secret page shows them too
 	}
-	fmt.Fprint(t.out, "\nDone? [y/N] ")
-	line, _ := t.in.ReadString('\n')
-	if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
+	if !t.Confirm("\nDone?", false) {
 		return fmt.Errorf("sign in to %s once that's done", server)
 	}
 	return nil
@@ -171,13 +162,9 @@ func newAuthLogoutCmd() *cobra.Command {
 		Use:   "logout <server|anthropic|claude-code|local>",
 		Short: "Forget a server's stored credentials",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(_ *cobra.Command, a *engine.App, args []string) error {
 			return logout(a, args[0])
-		},
+		}),
 	}
 }
 
@@ -201,18 +188,13 @@ type AuthStatus struct {
 }
 
 func newAuthStatusCmd() *cobra.Command {
-	var asJSON bool
 	cmd := &cobra.Command{
 		Use:         "status",
 		Annotations: readOnly(),
 		Short:       "Show which servers have credentials stored",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			a, err := loadApp(cmd)
-			if err != nil {
-				return err
-			}
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			rows := authStatuses(a)
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), rows)
 			}
 			for _, r := range rows {
@@ -223,9 +205,9 @@ func newAuthStatusCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "%-10s %-7s %s\n", r.Server, r.Kind, state)
 			}
 			return nil
-		},
+		}),
 	}
-	jsonFlag(cmd.Flags(), &asJSON, []AuthStatus{})
+	jsonFlag(cmd.Flags(), []AuthStatus{})
 	return cmd
 }
 

@@ -38,7 +38,6 @@ func newSettingsCmd() *cobra.Command {
 		Use:   "settings",
 		Short: "Read and change settings (see contracts/settings.schema.json)",
 	}
-	var asJSON bool
 	var scope, routine string
 
 	list := &cobra.Command{
@@ -82,7 +81,7 @@ func newSettingsCmd() *cobra.Command {
 				}
 				all = kept
 			}
-			if asJSON {
+			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), all)
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
@@ -157,8 +156,8 @@ func newSettingsCmd() *cobra.Command {
 		},
 	}
 	// get, set and reset print one setting; list (its own --json) prints them all.
-	jsonFlag(cmd.PersistentFlags(), &asJSON, settings.State{})
-	jsonFlag(list.Flags(), &asJSON, []settings.State{})
+	jsonFlag(cmd.PersistentFlags(), settings.State{})
+	jsonFlag(list.Flags(), []settings.State{})
 	cmd.AddCommand(list, get, set, reset)
 	return cmd
 }
@@ -190,9 +189,6 @@ func routineExists(cmd *cobra.Command, name string) (routines.Routine, error) {
 	if err != nil {
 		return routines.Routine{}, err
 	}
-	set, err := routines.Load(a.Layout.Routines())
-	if err != nil {
-		return routines.Routine{}, err
-	}
-	return set.Find(name)
+	r, _, err := a.Routine(name)
+	return r, err
 }
