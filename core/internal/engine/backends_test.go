@@ -122,3 +122,30 @@ func TestBuiltinToolsPerBackend(t *testing.T) {
 		t.Errorf("codex, Claude Code's tools: %q", p)
 	}
 }
+
+// What each backend says it takes (the guide lists it) is what it takes:
+// its model providers, and its built-in tool names.
+func TestBackendVocabulary(t *testing.T) {
+	a := testApp(t)
+	for name, def := range Backends {
+		if len(def.ModelProviders) == 0 || def.DefaultModel == "" {
+			t.Errorf("%s: no model providers or default model", name)
+		}
+		for _, p := range def.ModelProviders {
+			if _, err := def.AgentModel(a, p+"/some-model"); err != nil {
+				t.Errorf("%s refuses %s/<model>: %v", name, p, err)
+			}
+		}
+		if _, err := def.AgentModel(a, "nobody/some-model"); err == nil && name != "local" {
+			t.Errorf("%s takes a provider it doesn't list", name)
+		}
+		if (def.Builtins == nil) != (def.CheckBuiltinTools == nil) {
+			t.Errorf("%s: built-in tool names and their check disagree", name)
+		}
+		if def.Builtins != nil {
+			if err := def.CheckBuiltinTools(def.Builtins.Names()); err != nil {
+				t.Errorf("%s refuses its own built-in tools: %v", name, err)
+			}
+		}
+	}
+}

@@ -157,13 +157,14 @@ func checkInputSchema(schema any) error {
 // manifestFile describes how to start a plugin folder's server.
 const manifestFile = "plugin.yaml"
 
-// pluginManifest is a plugin folder's plugin.yaml.
+// pluginManifest is a plugin folder's plugin.yaml. Each field's guide tag is
+// what it means, for `guide plugins`.
 type pluginManifest struct {
-	Description string            `yaml:"description"`
-	Command     string            `yaml:"command"`
-	Args        []string          `yaml:"args"`
-	Env         map[string]string `yaml:"env"`
-	Pairing     string            `yaml:"pairing"`
+	Description string            `yaml:"description" guide:"What the server is for, shown by plugins list."`
+	Command     string            `yaml:"command" guide:"Required. The command that starts the server (stdio). A relative path (./server) resolves inside the folder; otherwise an absolute path, or a command on PATH such as python3 or npx."`
+	Args        []string          `yaml:"args" guide:"The command's arguments."`
+	Env         map[string]string `yaml:"env" guide:"Its environment, NAME: value. A value may reference a secret as {key}, which auth login <name> asks for."`
+	Pairing     string            `yaml:"pairing" guide:"For a server that issues its own credential on first contact (an approval dialog, then a key shown once): what to do to approve it. auth login then starts the server first, shows this, and asks for the credential, which must be a secret its env references."`
 }
 
 func readManifest(dir string) (pluginManifest, error) {

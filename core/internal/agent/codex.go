@@ -62,29 +62,13 @@ func FindCodex() (string, error) {
 // reaches Codex in (bearer_token_env_var), so it's never on the command line.
 const CodexTokenEnv = "AUTOMATOR_MCP_TOKEN"
 
-// Codex's built-in tool names in builtinTools, and what each allows.
-const (
-	codexShell     = "shell"      // its shell tool: commands run in the sandbox
-	codexWrite     = "write"      // the sandbox may write in the run's folder (commands and file edits)
-	codexNetwork   = "network"    // commands in the sandbox may reach the network (with write)
-	codexWebSearch = "web_search" // its web search tool
-	codexViewImage = "view_image" // looking at image files
-)
-
-// CodexBuiltinTools are the names builtinTools takes on the codex backend.
-var CodexBuiltinTools = []string{codexShell, codexWrite, codexNetwork, codexWebSearch, codexViewImage}
-
-// codexReadOnlyBuiltins can't change anything (the sandbox stays read-only
-// without write): the only ones a dry run gets.
-var codexReadOnlyBuiltins = map[string]bool{codexShell: true, codexWebSearch: true, codexViewImage: true}
-
 // codexBuiltins validates the routine's builtinTools for Codex and, in a dry
 // run, keeps only those that can't change anything.
 func codexBuiltins(names []string, dryRun bool) (map[string]bool, error) {
 	allowed := map[string]bool{}
 	for _, n := range names {
-		if !slices.Contains(CodexBuiltinTools, n) {
-			return nil, fmt.Errorf("builtinTools: %q isn't a Codex built-in tool (%s)", n, strings.Join(CodexBuiltinTools, ", "))
+		if !CodexBuiltins.known(n) {
+			return nil, fmt.Errorf("builtinTools: %q isn't a Codex built-in tool (%s)", n, strings.Join(CodexBuiltins.Names(), ", "))
 		}
 		allowed[n] = true
 	}
@@ -93,7 +77,7 @@ func codexBuiltins(names []string, dryRun bool) (map[string]bool, error) {
 	}
 	if dryRun {
 		for n := range allowed {
-			if !codexReadOnlyBuiltins[n] {
+			if !CodexBuiltins.readOnly(n) {
 				delete(allowed, n)
 			}
 		}
@@ -107,6 +91,10 @@ func CheckCodexBuiltins(names []string) error {
 	return err
 }
 
+// OpenAIProvider names OpenAI's models in a routine's model (openai/<model>),
+// the only ones Codex runs.
+const OpenAIProvider = "openai"
+
 // CodexModel maps a Genkit model name ("openai/gpt-5.5") to a Codex model ID.
 // Empty means Codex's default.
 func CodexModel(name string) (string, error) {
@@ -117,8 +105,8 @@ func CodexModel(name string) (string, error) {
 	if !ok {
 		return name, nil
 	}
-	if provider != "openai" {
-		return "", fmt.Errorf("the codex backend runs only OpenAI models (openai/<model>), not %q", name)
+	if provider != OpenAIProvider {
+		return "", fmt.Errorf("the codex backend runs only OpenAI models (%s/<model>), not %q", OpenAIProvider, name)
 	}
 	return id, nil
 }

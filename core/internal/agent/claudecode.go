@@ -114,10 +114,6 @@ func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// claudeReadOnlyBuiltins are Claude Code's built-in tools that can't change
-// anything: the only ones a dry run gets.
-var claudeReadOnlyBuiltins = map[string]bool{"Read": true, "Glob": true, "Grep": true, "WebSearch": true, "WebFetch": true}
-
 var builtinNameRE = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 
 // claudeBuiltins validates the routine's built-in tool names and, in a dry
@@ -129,7 +125,7 @@ func claudeBuiltins(names []string, dryRun bool) ([]string, error) {
 		if !builtinNameRE.MatchString(n) {
 			return nil, fmt.Errorf("builtinTools: %q isn't a Claude Code tool name (e.g. Read, Grep, Bash)", n)
 		}
-		if dryRun && !claudeReadOnlyBuiltins[n] {
+		if dryRun && !ClaudeBuiltins.readOnly(n) {
 			continue
 		}
 		out = append(out, n)
@@ -269,7 +265,7 @@ func ClaudeModel(name string) (string, error) {
 	if !ok {
 		return name, nil
 	}
-	if provider != "anthropic" {
+	if provider != AnthropicProvider {
 		return "", fmt.Errorf("the claude-code backend runs only Claude models, not %q", name)
 	}
 	return id, nil

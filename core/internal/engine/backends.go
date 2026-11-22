@@ -34,6 +34,13 @@ type BackendDef struct {
 	// the llm.budget.* budgets apply. A backend neither priced nor with
 	// PlanUsage has no usage limit in the app.
 	Priced bool
+	// ModelProviders are the providers a routine's model may name on it
+	// (<provider>/<model>); DefaultModel says in words what runs when a
+	// routine names none. A test checks AgentModel takes each provider.
+	ModelProviders []string
+	DefaultModel   string
+	// Builtins are the names a routine's builtinTools take on it (nil: none).
+	Builtins *agent.BuiltinSet
 	// CheckBuiltinTools says whether a routine's builtinTools are names the
 	// backend's agent CLI takes; nil for a backend that takes none (its runs
 	// refuse any).
@@ -76,9 +83,11 @@ var Backends = map[string]BackendDef{
 			}
 			return model, err
 		},
-		Priced:       true,
-		ModelProblem: apiModelProblem,
-		ReachModel:   apiReachModel,
+		ModelProviders: []string{agent.AnthropicProvider, agent.LocalProvider},
+		DefaultModel:   "none: name one",
+		Priced:         true,
+		ModelProblem:   apiModelProblem,
+		ReachModel:     apiReachModel,
 		Ready: func(a *App) (string, string) {
 			_, stored, err := secrets.Lookup(a.Connector.Secrets, AnthropicKey)
 			switch {
@@ -103,6 +112,9 @@ var Backends = map[string]BackendDef{
 			return &agent.CLI{Tool: &agent.ClaudeCode{Path: path, OAuthToken: token}}, nil
 		},
 		AgentModel:        func(_ *App, model string) (string, error) { return agent.ClaudeModel(model) },
+		ModelProviders:    []string{agent.AnthropicProvider},
+		DefaultModel:      "Claude Code's default",
+		Builtins:          &agent.ClaudeBuiltins,
 		CheckBuiltinTools: agent.CheckClaudeBuiltins,
 		PlanUsage: func(ctx context.Context, a *App) ([]usage.Limit, error) {
 			path, err := agent.FindClaude()
@@ -128,11 +140,13 @@ var Backends = map[string]BackendDef{
 		Settings: []string{LocalURLSetting, LocalModelSetting},
 		// Routine files name Claude models: they run on llm.local.model
 		// unless they name local/<model>.
-		AgentModel:   func(a *App, model string) (string, error) { return agent.LocalModel(model, a.localModel()), nil },
-		Experimental: true, // tried only with a fake server
-		ModelProblem: localModelProblem,
-		ReachModel:   localReachModel,
-		Ready:        localReady,
+		AgentModel:     func(a *App, model string) (string, error) { return agent.LocalModel(model, a.localModel()), nil },
+		ModelProviders: []string{agent.LocalProvider},
+		DefaultModel:   "llm.local.model, which also runs every model that isn't local/<model>",
+		Experimental:   true, // tried only with a fake server
+		ModelProblem:   localModelProblem,
+		ReachModel:     localReachModel,
+		Ready:          localReady,
 	},
 	"codex": {
 		New: func(*App) (agent.Backend, error) {
@@ -143,6 +157,9 @@ var Backends = map[string]BackendDef{
 			return &agent.CLI{Tool: &agent.Codex{Path: path}}, nil
 		},
 		AgentModel:        func(_ *App, model string) (string, error) { return agent.CodexModel(model) },
+		ModelProviders:    []string{agent.OpenAIProvider},
+		DefaultModel:      "Codex's default",
+		Builtins:          &agent.CodexBuiltins,
 		CheckBuiltinTools: agent.CheckCodexBuiltins,
 		Experimental:      true, // tried only with a fake model provider
 		Ready: func(a *App) (string, string) {
