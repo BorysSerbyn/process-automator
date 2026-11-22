@@ -10,6 +10,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
@@ -40,7 +41,7 @@ func testServer(t *testing.T, sse bool, wantKey, wantValue string) string {
 
 func connectAndPing(t *testing.T, spec pluginapi.ServerSpec, store secrets.Store) error {
 	t.Helper()
-	if err := spec.Validate("t"); err != nil {
+	if err := config.ValidateServer("t", spec); err != nil {
 		t.Fatal(err)
 	}
 	c := &Connector{Name: "test", Servers: map[string]pluginapi.ServerSpec{"t": spec}, Secrets: store}

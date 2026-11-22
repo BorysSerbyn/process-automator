@@ -10,30 +10,33 @@ import (
 	"sync"
 	"testing"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func notesPlugin() pluginapi.Plugin {
 	return pluginapi.Plugin{
-		Name:    "notes",
-		Secrets: []pluginapi.SecretSpec{{Name: "api-key", Prompt: "Token"}},
-		Serve: func(h pluginapi.Host) (*sdk.Server, error) {
-			var cfg struct {
-				Space string `yaml:"space"`
-			}
-			return sdk.NewServer(&sdk.Implementation{Name: "notes"}, nil), h.Config(&cfg)
+		Name: "notes",
+		InProcess: &pluginapi.InProcess{
+			Secrets: []pluginapi.SecretSpec{{Name: "api-key", Prompt: "Token"}},
+			Serve: func(h pluginapi.Host) (*sdk.Server, error) {
+				var cfg struct {
+					Space string `yaml:"space"`
+				}
+				return sdk.NewServer(&sdk.Implementation{Name: "notes"}, nil), h.Config(&cfg)
+			},
 		},
 	}
 }
 
 func TestHostSecretsAreScopedToDeclaredNames(t *testing.T) {
 	store := secrets.NewMemory()
-	_ = store.Set(pluginapi.SecretKey("notes", "api-key"), "tok")
-	_ = store.Set(pluginapi.SecretKey("other", "api-key"), "not-yours")
+	_ = store.Set(PluginSecretKey("notes", "api-key"), "tok")
+	_ = store.Set(PluginSecretKey("other", "api-key"), "not-yours")
 	h := &host{plugin: notesPlugin(), conn: &mcp.Connector{Secrets: store}}
 
 	if v, err := h.Secret("api-key"); err != nil || v != "tok" {
@@ -42,7 +45,7 @@ func TestHostSecretsAreScopedToDeclaredNames(t *testing.T) {
 	if _, err := h.Secret("password"); err == nil {
 		t.Fatal("undeclared secret readable")
 	}
-	_ = store.Delete(pluginapi.SecretKey("notes", "api-key"))
+	_ = store.Delete(PluginSecretKey("notes", "api-key"))
 	if _, err := h.Secret("api-key"); !errors.Is(err, mcp.ErrNeedsReauth) {
 		t.Fatalf("missing secret should need re-auth, got %v", err)
 	}
@@ -80,7 +83,7 @@ func TestRunReach(t *testing.T) {
 	seen := map[string]string{}
 	var mu sync.Mutex
 	probe := func(name, next string) pluginapi.Plugin {
-		return pluginapi.Plugin{Name: name, RoutineSection: true, Serve: func(h pluginapi.Host) (*sdk.Server, error) {
+		return pluginapi.Plugin{Name: name, InProcess: &pluginapi.InProcess{RoutineSection: true, Serve: func(h pluginapi.Host) (*sdk.Server, error) {
 			mu.Lock()
 			seen[name] = h.Run().Folder
 			mu.Unlock()
@@ -97,7 +100,7 @@ func TestRunReach(t *testing.T) {
 					return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "ok"}}}, nil
 				})
 			return s, nil
-		}}
+		}}}
 	}
 	a, err := Load(filepath.Join(t.TempDir(), "config.yaml"), []pluginapi.Plugin{probe("outer", "inner"), probe("inner", "")}, secrets.NewMemory())
 	if err != nil {
@@ -120,7 +123,7 @@ func TestRunReach(t *testing.T) {
 func TestRoutineEnvironmentRules(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	a, err := Load(cfg, []pluginapi.Plugin{
-		{Name: "noop", Serve: func(pluginapi.Host) (*sdk.Server, error) { return nil, nil }},
+		{Name: "noop", InProcess: &pluginapi.InProcess{Serve: func(pluginapi.Host) (*sdk.Server, error) { return nil, nil }}},
 		{Name: "remote", External: &pluginapi.ServerSpec{URL: "https://example.com/mcp"}},
 	}, secrets.NewMemory())
 	if err != nil {
@@ -144,8 +147,8 @@ func TestRoutineEnvironmentRules(t *testing.T) {
 // A routine's servers include those its plugins connect to.
 func TestServersFollowPlugins(t *testing.T) {
 	a := &App{Plugins: []pluginapi.Plugin{
-		{Name: "reader", Uses: func(pluginapi.Host) []string { return []string{"source"} }},
-		{Name: "source", Uses: func(pluginapi.Host) []string { return []string{"reader"} }}, // cycles end
+		{Name: "reader", InProcess: &pluginapi.InProcess{Uses: func(pluginapi.Host) []string { return []string{"source"} }}},
+		{Name: "source", InProcess: &pluginapi.InProcess{Uses: func(pluginapi.Host) []string { return []string{"reader"} }}}, // cycles end
 	}}
 	got := a.Servers(routines.Routine{Servers: []string{"remote", "reader"}})
 	if want := []string{"remote", "reader", "source"}; !slices.Equal(got, want) {

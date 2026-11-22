@@ -1,6 +1,7 @@
-// Package yamlfile edits a YAML file in place: the file is loaded as a node
-// tree, changed, and written back atomically, so everything else in it
-// (other sections, comments, order) is preserved.
+// Package yamlfile reads and edits the app's YAML files: strict decoding,
+// and editing a file in place (loaded as a node tree, changed, and written
+// back atomically, so everything else in it, other sections, comments and
+// order, is preserved).
 package yamlfile
 
 import (

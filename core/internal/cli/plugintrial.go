@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -16,11 +14,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v3"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/internal/yamlfile"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
@@ -71,7 +70,7 @@ func tryPlugin(ctx context.Context, a *engine.App, name string, spec *pluginapi.
 	if errors.Is(err, mcp.ErrNeedsReauth) {
 		t.NeedsSignIn = true
 		// Not signed in yet, so the server can't be tried; at least its URL must answer.
-		if spec != nil && spec.Remote() {
+		if spec != nil && config.Remote(*spec) {
 			if err := probeURL(ctx, spec.URL); err != nil {
 				return t, fmt.Errorf("can't reach %s: %w", spec.URL, err)
 			}
@@ -173,9 +172,7 @@ func readManifest(dir string) (pluginManifest, error) {
 	if err != nil {
 		return m, fmt.Errorf("a plugin folder needs a %s (command, args, env, description): %w", manifestFile, err)
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-	dec.KnownFields(true)
-	if err := dec.Decode(&m); err != nil && !errors.Is(err, io.EOF) {
+	if err := yamlfile.DecodeStrict(raw, &m); err != nil {
 		return m, fmt.Errorf("%s: %w", manifestFile, err)
 	}
 	if m.Command == "" {
@@ -210,7 +207,7 @@ func managed(a *engine.App, s pluginapi.ServerSpec) bool {
 		return false
 	}
 	dir := filepath.Clean(s.Dir)
-	return filepath.Dir(dir) == a.Layout.Plugins() && pluginapi.ValidName(filepath.Base(dir))
+	return filepath.Dir(dir) == a.Layout.Plugins() && config.ValidName(filepath.Base(dir))
 }
 
 // installFolder copies a plugin folder to a staging copy, tries it from
@@ -240,7 +237,7 @@ func installFolder(ctx context.Context, a *engine.App, name, src string) (spec p
 		return spec, trial, nil, fmt.Errorf("copy %s: %w", src, err)
 	}
 	staged := m.spec(staging)
-	if err := staged.Validate(name); err != nil {
+	if err := config.ValidateServer(name, staged); err != nil {
 		return spec, trial, nil, err
 	}
 	if trial, err = tryPlugin(ctx, a, name, &staged, true); err != nil {
@@ -347,7 +344,7 @@ func newPluginsCheckCmd() *cobra.Command {
 				names = args
 			} else {
 				for _, p := range a.Plugins {
-					if p.Serve != nil {
+					if p.InProcess != nil {
 						names = append(names, p.Name)
 					}
 				}
@@ -360,7 +357,7 @@ func newPluginsCheckCmd() *cobra.Command {
 			failed := 0
 			for _, name := range names {
 				p, found := a.FindPlugin(name)
-				inProcess := found && p.Serve != nil
+				inProcess := found && p.InProcess != nil
 				spec, configured := a.Config.MCPServers[name]
 				row := PluginCheck{Plugin: name}
 				switch {

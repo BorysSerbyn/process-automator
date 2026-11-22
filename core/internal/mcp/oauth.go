@@ -17,6 +17,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"golang.org/x/oauth2"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
@@ -159,7 +160,7 @@ func (c *Connector) Login(ctx context.Context, name string, openURL func(string)
 	if !ok {
 		return fmt.Errorf("unknown mcp server %q", name)
 	}
-	if srv.AuthMode() != pluginapi.AuthOAuth {
+	if !config.OAuth(srv) {
 		return fmt.Errorf("%s doesn't use OAuth sign-in", name)
 	}
 	port := 0

@@ -13,7 +13,6 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
-	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // script is a fake model: it calls the job's tools in order, then stops.
@@ -81,7 +80,7 @@ func testAgent(failPosts int, dryRun bool, s script) *Agent {
 		return srv, nil
 	}
 	return &Agent{
-		Connector: &mcp.Connector{Builtins: map[string]func(pluginapi.Run) (*sdk.Server, error){"chat": func(pluginapi.Run) (*sdk.Server, error) { return newServer() }}},
+		Connector: &mcp.Connector{Builtins: map[string]func(mcp.Run) (*sdk.Server, error){"chat": func(mcp.Run) (*sdk.Server, error) { return newServer() }}},
 		Backend:   s, DryRun: dryRun,
 	}
 }

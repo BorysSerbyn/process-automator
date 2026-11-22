@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
@@ -47,6 +48,15 @@ func (e *NeedsReauthError) Unwrap() error { return e.Cause }
 // Session is an open connection to one MCP server.
 type Session = sdk.ClientSession
 
+// Run is the routine run an in-process server's session serves (zero
+// outside a run): what its plugin sees (pluginapi.Run), plus the routine's
+// automator.plugins sections, by plugin name, from which the engine gives
+// each plugin its own.
+type Run struct {
+	pluginapi.Run
+	Plugins map[string]any
+}
+
 // Connector opens sessions to configured servers.
 type Connector struct {
 	Servers map[string]pluginapi.ServerSpec
@@ -56,7 +66,7 @@ type Connector struct {
 	// Builtins are in-process servers, by name, reached over in-memory
 	// transports. Each session builds its server for the run it serves
 	// (zero outside a run).
-	Builtins map[string]func(run pluginapi.Run) (*sdk.Server, error)
+	Builtins map[string]func(run Run) (*sdk.Server, error)
 	// LockDir holds the per-credential locks that serialize OAuth refreshes
 	// across processes; "" disables them (tests).
 	LockDir string
@@ -65,12 +75,12 @@ type Connector struct {
 // Connect opens a session to the named server without user interaction,
 // for no routine run. Remote servers must have been signed in with Login first.
 func (c *Connector) Connect(ctx context.Context, name string) (*Session, error) {
-	return c.ConnectFor(ctx, name, pluginapi.Run{})
+	return c.ConnectFor(ctx, name, Run{})
 }
 
 // ConnectFor opens a session to the named server for a routine's run: an
 // in-process server is built for that run (external servers can't be told).
-func (c *Connector) ConnectFor(ctx context.Context, name string, run pluginapi.Run) (*Session, error) {
+func (c *Connector) ConnectFor(ctx context.Context, name string, run Run) (*Session, error) {
 	if newServer, ok := c.Builtins[name]; ok {
 		srv, err := newServer(run)
 		if err != nil {
@@ -87,9 +97,9 @@ func (c *Connector) ConnectFor(ctx context.Context, name string, run pluginapi.R
 		return nil, fmt.Errorf("unknown plugin %q", name)
 	}
 	var transport sdk.Transport
-	if srv.Remote() {
+	if config.Remote(srv) {
 		var handler auth.OAuthHandler
-		if srv.AuthMode() == pluginapi.AuthOAuth {
+		if config.OAuth(srv) {
 			h, err := c.unattendedAuth(name, srv)
 			if err != nil {
 				return nil, err
@@ -116,7 +126,7 @@ func (c *Connector) ConnectFor(ctx context.Context, name string, run pluginapi.R
 // approve this client. The session is closed again.
 func (c *Connector) Pair(ctx context.Context, name string) error {
 	srv, ok := c.Servers[name]
-	if !ok || srv.Remote() {
+	if !ok || config.Remote(srv) {
 		return fmt.Errorf("%s is not a local server", name)
 	}
 	cmd := exec.Command(srv.Command, srv.Args...)
@@ -173,7 +183,7 @@ func (t headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // expand fills a spec value's {secret-key} references from the secrets store;
 // a missing secret means the server needs signing in.
 func (c *Connector) expand(name, v string) (string, error) {
-	return pluginapi.ExpandSecrets(v, func(key string) (string, error) {
+	return config.ExpandSecrets(v, func(key string) (string, error) {
 		val, err := c.Secrets.Get(key)
 		if errors.Is(err, secrets.ErrNotFound) {
 			return "", &NeedsReauthError{Server: name, Cause: fmt.Errorf("secret %q not set", key)}

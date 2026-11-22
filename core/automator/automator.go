@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/cli"
+	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/templates"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
@@ -102,7 +103,7 @@ func (a App) validate() error {
 		errs = append(errs, errors.New("no Name"))
 	}
 	for field, v := range map[string]string{"Command": a.Command, "Folder": a.Folder} {
-		if !pluginapi.ValidName(v) {
+		if !config.ValidName(v) {
 			errs = append(errs, fmt.Errorf("%s %q: use lowercase letters, digits and dashes", field, v))
 		}
 	}
@@ -112,7 +113,7 @@ func (a App) validate() error {
 	if owner, name, ok := strings.Cut(a.ReleaseRepo, "/"); !ok || owner == "" || name == "" || strings.Contains(name, "/") {
 		errs = append(errs, fmt.Errorf("ReleaseRepo %q: expected owner/name", a.ReleaseRepo))
 	}
-	if err := pluginapi.Validate(a.Plugins); err != nil {
+	if err := config.ValidatePlugins(a.Plugins); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

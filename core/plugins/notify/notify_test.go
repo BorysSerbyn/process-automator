@@ -7,22 +7,8 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/BorysSerbyn/process-automator/core/pluginapi"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi/plugintest"
 )
-
-// host is a pluginapi.Host for one test: notify only asks the app's name.
-type host struct{}
-
-func (host) Connect(context.Context, string) (*sdk.ClientSession, error) {
-	return nil, errors.New("none")
-}
-func (host) ConnectApp(context.Context) (*sdk.ClientSession, error) { return nil, errors.New("none") }
-func (host) AppName() string                                        { return "Test App" }
-func (host) Config(any) error                                       { return nil }
-func (host) Secret(string) (string, error)                          { return "", errors.New("none") }
-func (host) DataDir() (string, error)                               { return "", errors.New("none") }
-func (host) RoutineConfig(any) error                                { return nil }
-func (host) Run() pluginapi.Run                                     { return pluginapi.Run{} }
 
 // notify_me shows the notification through the OS (replaced here: tests
 // never show one), as the app, and refuses an empty title.
@@ -32,20 +18,8 @@ func TestNotifyMe(t *testing.T) {
 	Deliver = func(n Note) error { shown = append(shown, n); return nil }
 	t.Cleanup(func() { Deliver = orig })
 
-	srv, err := Plugin().Serve(host{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	cs := plugintest.Serve(t, Plugin(), &plugintest.Host{})
 	ctx := context.Background()
-	ct, st := sdk.NewInMemoryTransports()
-	if _, err := srv.Connect(ctx, st, nil); err != nil {
-		t.Fatal(err)
-	}
-	cs, err := sdk.NewClient(&sdk.Implementation{Name: "test"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = cs.Close() }()
 	call := func(args map[string]any) *sdk.CallToolResult {
 		res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me", Arguments: args})
 		if err != nil {

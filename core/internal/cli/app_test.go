@@ -10,17 +10,21 @@ import (
 	"strings"
 	"testing"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func notesPlugin() pluginapi.Plugin {
 	return pluginapi.Plugin{
-		Name:    "notes",
-		Secrets: []pluginapi.SecretSpec{{Name: "api-key", Prompt: "Token"}},
-		Serve: func(pluginapi.Host) (*sdk.Server, error) {
-			return sdk.NewServer(&sdk.Implementation{Name: "notes"}, nil), nil
+		Name: "notes",
+		InProcess: &pluginapi.InProcess{
+			Secrets: []pluginapi.SecretSpec{{Name: "api-key", Prompt: "Token"}},
+			Serve: func(pluginapi.Host) (*sdk.Server, error) {
+				return sdk.NewServer(&sdk.Implementation{Name: "notes"}, nil), nil
+			},
 		},
 	}
 }
@@ -31,13 +35,13 @@ func TestLogoutForgetsInProcessPluginSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := secrets.NewMemory()
-	_ = store.Set(pluginapi.SecretKey("notes", "api-key"), "tok")
+	_ = store.Set(engine.PluginSecretKey("notes", "api-key"), "tok")
 	a.Connector.Secrets = store
 
 	if err := logout(a, "notes"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Get(pluginapi.SecretKey("notes", "api-key")); !errors.Is(err, secrets.ErrNotFound) {
+	if _, err := store.Get(engine.PluginSecretKey("notes", "api-key")); !errors.Is(err, secrets.ErrNotFound) {
 		t.Fatalf("secret still stored: %v", err)
 	}
 }
@@ -97,7 +101,7 @@ func TestPluginConnectsToTheApp(t *testing.T) {
 		err   error
 	}
 	got := make(chan seen, 1)
-	probe := pluginapi.Plugin{Name: "probe", Serve: func(h pluginapi.Host) (*sdk.Server, error) {
+	probe := pluginapi.Plugin{Name: "probe", InProcess: &pluginapi.InProcess{Serve: func(h pluginapi.Host) (*sdk.Server, error) {
 		var s seen
 		defer func() { got <- s }()
 		ctx := context.Background()
@@ -121,7 +125,7 @@ func TestPluginConnectsToTheApp(t *testing.T) {
 			s.runs = pluginapi.ResultText(res)
 		}
 		return sdk.NewServer(&sdk.Implementation{Name: "probe"}, nil), nil
-	}}
+	}}}
 	a, err := loadTest(filepath.Join(t.TempDir(), "config.yaml"), []pluginapi.Plugin{probe})
 	if err != nil {
 		t.Fatal(err)

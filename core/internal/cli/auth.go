@@ -12,10 +12,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
+	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
-	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 func newAuthCmd() *cobra.Command {
@@ -127,19 +127,19 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 		}
 		return false
 	}
-	if p, ok := a.FindPlugin(name); ok && p.Serve != nil {
-		if len(p.Secrets) == 0 {
+	if p, ok := a.InProcess(name); ok {
+		if len(p.InProcess.Secrets) == 0 {
 			return fmt.Errorf("%s needs no sign-in", name)
 		}
 		var keys []string
-		for _, s := range p.Secrets {
-			keys = append(keys, pluginapi.SecretKey(name, s.Name))
+		for _, s := range p.InProcess.Secrets {
+			keys = append(keys, engine.PluginSecretKey(name, s.Name))
 		}
 		if err := prepare(missing(keys...)); err != nil {
 			return err
 		}
-		for _, s := range p.Secrets {
-			if err := ask(pluginapi.SecretKey(name, s.Name), s.Prompt); err != nil {
+		for _, s := range p.InProcess.Secrets {
+			if err := ask(engine.PluginSecretKey(name, s.Name), s.Prompt); err != nil {
 				return err
 			}
 		}
@@ -150,7 +150,7 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 	if !ok {
 		return fmt.Errorf("unknown plugin %q (sign-in names: %s)", name, strings.Join(signInNames(a), ", "))
 	}
-	if srv.AuthMode() == pluginapi.AuthOAuth && srv.Remote() {
+	if config.OAuth(srv) {
 		// A pre-registered app's client credentials are asked for the first time.
 		if oc := srv.OAuthClient; oc != nil {
 			if err := prepare(missing(oc.ClientIDKey, oc.ClientSecretKey)); err != nil {
@@ -175,7 +175,7 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 		ui.Say("Signed in to %s.", name)
 		return nil
 	}
-	keys := srv.SecretKeys()
+	keys := config.SecretKeys(srv)
 	if len(keys) == 0 {
 		return fmt.Errorf("%s needs no sign-in", name)
 	}
@@ -278,9 +278,9 @@ func logout(a *engine.App, name string) error {
 		}
 		return nil
 	}
-	if p, ok := a.FindPlugin(name); ok && p.Serve != nil {
-		for _, s := range p.Secrets {
-			if err := a.Connector.Secrets.Delete(pluginapi.SecretKey(p.Name, s.Name)); err != nil {
+	if p, ok := a.InProcess(name); ok {
+		for _, s := range p.InProcess.Secrets {
+			if err := a.Connector.Secrets.Delete(engine.PluginSecretKey(p.Name, s.Name)); err != nil {
 				return err
 			}
 		}
@@ -290,14 +290,14 @@ func logout(a *engine.App, name string) error {
 	if !ok {
 		return fmt.Errorf("unknown server %q", name)
 	}
-	if srv.AuthMode() == pluginapi.AuthOAuth {
+	if config.OAuth(srv) {
 		if err := a.Connector.Logout(name); err != nil {
 			return err
 		}
 	}
 	// Secrets are referenced by key, so other servers may share one: those stay.
 	shared := secretKeysUsedBy(a, name)
-	for _, key := range srv.SecretKeys() {
+	for _, key := range config.SecretKeys(srv) {
 		if shared[key] {
 			continue
 		}
@@ -316,7 +316,7 @@ func secretKeysUsedBy(a *engine.App, except string) map[string]bool {
 		if name == except {
 			continue
 		}
-		for _, k := range s.SecretKeys() {
+		for _, k := range config.SecretKeys(s) {
 			used[k] = true
 		}
 		if oc := s.OAuthClient; oc != nil {
@@ -374,28 +374,28 @@ func authStatuses(a *engine.App) ([]AuthStatus, error) {
 	var rows []AuthStatus
 	for name, srv := range a.Config.MCPServers {
 		row := AuthStatus{Server: name, Kind: "local", SignedIn: true}
-		if srv.Remote() {
+		if config.Remote(srv) {
 			row.Kind = "remote"
 		}
-		if srv.AuthMode() == pluginapi.AuthOAuth {
+		if config.OAuth(srv) {
 			signedIn, err := a.Connector.SignedIn(name)
 			if err != nil {
 				return nil, err
 			}
 			row.SignedIn = signedIn
 		}
-		for _, key := range srv.SecretKeys() {
+		for _, key := range config.SecretKeys(srv) {
 			row.check(a, key)
 		}
 		rows = append(rows, row)
 	}
 	for _, p := range a.Plugins {
-		if p.Serve == nil || len(p.Secrets) == 0 {
+		if p.InProcess == nil || len(p.InProcess.Secrets) == 0 {
 			continue
 		}
 		row := AuthStatus{Server: p.Name, Kind: "in-process", SignedIn: true}
-		for _, s := range p.Secrets {
-			row.check(a, pluginapi.SecretKey(p.Name, s.Name))
+		for _, s := range p.InProcess.Secrets {
+			row.check(a, engine.PluginSecretKey(p.Name, s.Name))
 		}
 		rows = append(rows, row)
 	}
@@ -443,7 +443,7 @@ func signInNames(a *engine.App) []string {
 		names = append(names, name)
 	}
 	for _, p := range a.Plugins {
-		if p.Serve != nil && len(p.Secrets) > 0 {
+		if p.InProcess != nil && len(p.InProcess.Secrets) > 0 {
 			names = append(names, p.Name)
 		}
 	}

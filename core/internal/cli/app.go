@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/spf13/cobra"
+
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
-	"github.com/spf13/cobra"
 )
 
 // secretStore is where the app keeps secrets (tests swap in a memory store).

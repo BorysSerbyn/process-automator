@@ -357,8 +357,10 @@ func TestPlanUsageFallback(t *testing.T) {
 // is asked for.
 func TestSignInPrepares(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
-	p := pluginapi.Plugin{Name: "pt-app", Serve: func(pluginapi.Host) (*sdk.Server, error) { return nil, nil },
-		Secrets: []pluginapi.SecretSpec{{Name: "token", Prompt: "the token"}}, Prepare: "1. Create the app."}
+	p := pluginapi.Plugin{Name: "pt-app", Prepare: "1. Create the app.", InProcess: &pluginapi.InProcess{
+		Serve:   func(pluginapi.Host) (*sdk.Server, error) { return nil, nil },
+		Secrets: []pluginapi.SecretSpec{{Name: "token", Prompt: "the token"}},
+	}}
 	a := enginetest.Load(t, cfg, p)
 	var out bytes.Buffer
 	ui := &terminalUI{in: bufio.NewReader(strings.NewReader("n\n")), out: &out}

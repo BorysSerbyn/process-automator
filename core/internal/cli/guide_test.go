@@ -146,14 +146,14 @@ func TestGuideExamplesWork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	notify := pluginapi.Plugin{Name: "notify", Serve: func(pluginapi.Host) (*sdk.Server, error) {
+	notify := pluginapi.Plugin{Name: "notify", InProcess: &pluginapi.InProcess{Serve: func(pluginapi.Host) (*sdk.Server, error) {
 		s := sdk.NewServer(&sdk.Implementation{Name: "notify", Version: "1"}, nil)
 		s.AddTool(&sdk.Tool{Name: "notify_me", InputSchema: map[string]any{"type": "object"}, Annotations: &sdk.ToolAnnotations{}},
 			func(context.Context, *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 				return &sdk.CallToolResult{}, nil
 			})
 		return s, nil
-	}}
+	}}}
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	run := func(args ...string) string {
 		t.Helper()

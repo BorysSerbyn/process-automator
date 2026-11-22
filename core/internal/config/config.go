@@ -4,10 +4,8 @@
 package config
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -57,9 +55,7 @@ func Load(path string, base map[string]pluginapi.ServerSpec) (Config, error) {
 	// Strict: a misspelled or retired field (e.g. a server's old envSecrets) is
 	// an error, not silently ignored.
 	var file Config
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-	dec.KnownFields(true)
-	if err := dec.Decode(&file); err != nil && !errors.Is(err, io.EOF) {
+	if err := yamlfile.DecodeStrict(raw, &file); err != nil {
 		return cfg, fmt.Errorf("config %s: %w", path, err)
 	}
 	for name, s := range file.MCPServers {
@@ -75,7 +71,7 @@ func Load(path string, base map[string]pluginapi.ServerSpec) (Config, error) {
 func (c Config) Validate() error {
 	var errs []error
 	for name, s := range c.MCPServers {
-		errs = append(errs, s.Validate(name))
+		errs = append(errs, ValidateServer(name, s))
 	}
 	return errors.Join(errs...)
 }
@@ -87,13 +83,7 @@ func (c Config) DecodePlugin(name string, v any) error {
 	if !ok {
 		return nil
 	}
-	raw, err := yaml.Marshal(&n)
-	if err != nil {
-		return err
-	}
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-	dec.KnownFields(true)
-	if err := dec.Decode(v); err != nil {
+	if err := yamlfile.DecodeStrict(&n, v); err != nil {
 		return fmt.Errorf("config plugins.%s: %w", name, err)
 	}
 	return nil
@@ -106,7 +96,7 @@ const serversKey = "mcpServers"
 // it, replacing an entry of the same name (and, for a built-in preset's name,
 // overriding the preset). The rest of the file is preserved.
 func SetServer(path, name string, s pluginapi.ServerSpec) error {
-	if err := s.Validate(name); err != nil {
+	if err := ValidateServer(name, s); err != nil {
 		return err
 	}
 	return yamlfile.EditSection(path, serversKey, func(section *yaml.Node) error {

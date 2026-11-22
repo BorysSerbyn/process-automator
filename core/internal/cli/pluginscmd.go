@@ -113,10 +113,10 @@ func newPluginsAddCmd() *cobra.Command {
 			}
 			defer unlock()
 			name := args[0]
-			if !pluginapi.ValidName(name) {
+			if !config.ValidName(name) {
 				return fmt.Errorf("%q can't name a plugin: lowercase letters, digits and dashes", name)
 			}
-			if p, ok := a.FindPlugin(name); ok && p.Serve != nil {
+			if _, ok := a.InProcess(name); ok {
 				return fmt.Errorf("%q is a built-in plugin; choose another name", name)
 			}
 			prev, exists := a.Config.MCPServers[name]
@@ -143,7 +143,7 @@ func newPluginsAddCmd() *cobra.Command {
 				if spec.Headers, err = keyValues("--header", headers); err != nil {
 					return err
 				}
-				if err := spec.Validate(name); err != nil {
+				if err := config.ValidateServer(name, spec); err != nil {
 					return err
 				}
 				if trial, err = tryPlugin(cmd.Context(), a, name, &spec, false); err != nil {
@@ -160,7 +160,7 @@ func newPluginsAddCmd() *cobra.Command {
 				_ = os.RemoveAll(prev.Dir)
 			}
 			kind, ep := "local", spec.Command
-			if spec.Remote() {
+			if config.Remote(spec) {
 				kind, ep = "remote", spec.URL
 			}
 			out := PluginChange{Plugin: name, Kind: kind, Endpoint: ep, Trial: &trial}
@@ -240,7 +240,7 @@ func newPluginsRemoveCmd() *cobra.Command {
 			defer unlock()
 			name := args[0]
 			p, bundled := a.FindPlugin(name)
-			if bundled && p.Serve != nil {
+			if bundled && p.InProcess != nil {
 				return fmt.Errorf("%q is a built-in plugin; it can't be removed", name)
 			}
 			spec := a.Config.MCPServers[name]
@@ -269,7 +269,7 @@ func newPluginsRemoveCmd() *cobra.Command {
 			msg := fmt.Sprintf("Removed %s.", name)
 			if bundled && p.External != nil {
 				out.Kind, out.Endpoint = "local", p.External.Command
-				if p.External.Remote() {
+				if config.Remote(*p.External) {
 					out.Kind, out.Endpoint = "remote", p.External.URL
 				}
 				msg = fmt.Sprintf("Removed the config override of %s; the built-in preset applies again.", name)
@@ -283,7 +283,7 @@ func newPluginsRemoveCmd() *cobra.Command {
 
 func kindOf(a *engine.App, name string) (kind, endpoint string) {
 	s := a.Config.MCPServers[name]
-	if s.Remote() {
+	if config.Remote(s) {
 		return "remote", s.URL
 	}
 	return "local", s.Command

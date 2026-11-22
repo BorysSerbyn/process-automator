@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"text/tabwriter"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/spf13/cobra"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 )
 
 // PathsOutput is `paths --json`: where the app keeps its files. Frontends

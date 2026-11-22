@@ -59,7 +59,7 @@ func (a *App) RoutineConfig(r routines.Routine) (RoutineConfig, error) {
 		}
 	}
 	for name := range r.Plugins {
-		if p, ok := a.FindPlugin(name); !ok || p.Serve == nil || !p.RoutineSection {
+		if p, ok := a.InProcess(name); !ok || !p.InProcess.RoutineSection {
 			return c, fmt.Errorf("automator.plugins.%s: the %s plugin takes no settings from routines", name, name)
 		}
 	}

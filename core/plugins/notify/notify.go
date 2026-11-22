@@ -39,28 +39,30 @@ func Plugin() pluginapi.Plugin {
 	return pluginapi.Plugin{
 		Name:        Name,
 		Description: "Lets routines notify me (notify_me) with a desktop notification",
-		Serve: func(h pluginapi.Host) (*sdk.Server, error) {
-			s := sdk.NewServer(&sdk.Implementation{Name: Name, Version: "1"}, nil)
-			type in struct {
-				Title  string `json:"title" jsonschema:"short, like a headline"`
-				Body   string `json:"body,omitempty" jsonschema:"a sentence or two"`
-				Urgent bool   `json:"urgent,omitempty" jsonschema:"only for something I must see now: it breaks through focus modes"`
-			}
-			sdk.AddTool(s, &sdk.Tool{
-				Name: "notify_me",
-				Description: "Notify me with a desktop notification. Keep it brief; use it for what needs my attention, " +
-					"not for routine progress. Clicking it does nothing, so say what to look at.",
-				Annotations: &sdk.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: new(false), OpenWorldHint: new(false)},
-			}, func(_ context.Context, _ *sdk.CallToolRequest, args in) (*sdk.CallToolResult, any, error) {
-				if strings.TrimSpace(args.Title) == "" {
-					return nil, nil, errors.New("title is required")
-				}
-				if err := Deliver(Note{App: h.AppName(), Title: args.Title, Body: args.Body, Urgent: args.Urgent}); err != nil {
-					return nil, nil, err
-				}
-				return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "Shown."}}}, nil, nil
-			})
-			return s, nil
-		},
+		InProcess:   &pluginapi.InProcess{Serve: serve},
 	}
+}
+
+func serve(h pluginapi.Host) (*sdk.Server, error) {
+	s := sdk.NewServer(&sdk.Implementation{Name: Name, Version: "1"}, nil)
+	type in struct {
+		Title  string `json:"title" jsonschema:"short, like a headline"`
+		Body   string `json:"body,omitempty" jsonschema:"a sentence or two"`
+		Urgent bool   `json:"urgent,omitempty" jsonschema:"only for something I must see now: it breaks through focus modes"`
+	}
+	sdk.AddTool(s, &sdk.Tool{
+		Name: "notify_me",
+		Description: "Notify me with a desktop notification. Keep it brief; use it for what needs my attention, " +
+			"not for routine progress. Clicking it does nothing, so say what to look at.",
+		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: new(false), OpenWorldHint: new(false)},
+	}, func(_ context.Context, _ *sdk.CallToolRequest, args in) (*sdk.CallToolResult, any, error) {
+		if strings.TrimSpace(args.Title) == "" {
+			return nil, nil, errors.New("title is required")
+		}
+		if err := Deliver(Note{App: h.AppName(), Title: args.Title, Body: args.Body, Urgent: args.Urgent}); err != nil {
+			return nil, nil, err
+		}
+		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "Shown."}}}, nil, nil
+	})
+	return s, nil
 }

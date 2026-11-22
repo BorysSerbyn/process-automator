@@ -1,46 +1,23 @@
-// Package pluginapi is the contract between the engine and plugins, and the
-// engine's only view of integrations. It is a leaf package: it depends on the
-// MCP SDK and nothing else in the engine.
-//
-// A plugin is a named MCP server that routines list in automator.servers. It is
-// either external (a remote URL or a local command, see ServerSpec) or in-process
-// (Go code that builds an MCP server, see Plugin.Serve).
+// Package pluginapi is how an app compiles integrations into the engine. A
+// plugin is a named MCP server that routines list in automator.servers: an
+// external one the app presets (External: a remote URL or a local command),
+// or Go code that builds one in-process (InProcess), which gets a Host from
+// the engine. It is a leaf package: it depends on the MCP SDK and nothing
+// else in the engine.
 package pluginapi
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"fmt"
-	"io"
-	"regexp"
-	"sort"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"go.yaml.in/yaml/v3"
 )
 
-// Plugin is one integration. Set exactly one of External or Serve.
+// Plugin is one integration. Set exactly one of External or InProcess.
 type Plugin struct {
-	// Name is what routines use (automator.servers) and the plugin's config key.
+	// Name is what routines use (automator.servers) and the plugin's config
+	// key: lowercase letters, digits and dashes.
 	Name        string
 	Description string
-
-	// External describes an external MCP server. The config file's
-	// mcpServers.<name> entry, if present, replaces it.
-	External *ServerSpec
-
-	// Serve builds an in-process MCP server. It runs once per session, so keep it
-	// cheap. Tools must declare readOnlyHint accurately: dry-run intercepts every
-	// tool that isn't read-only.
-	Serve func(h Host) (*sdk.Server, error)
-	// Secrets an in-process plugin needs (e.g. an API key). `auth login <name>`
-	// asks for each; Host.Secret reads them.
-	Secrets []SecretSpec
-	// RoutineSection says the plugin reads a section from the routines that
-	// use it (Host.RoutineConfig). Routines may only write automator.plugins.<name>
-	// for plugins that do.
-	RoutineSection bool
 	// Prepare is what I do outside the app before signing in to it the first
 	// time (e.g. create a Slack app), as numbered steps in plain words: shown,
 	// and confirmed, before any credential is asked for. Web addresses and
@@ -48,6 +25,27 @@ type Plugin struct {
 	// text and its address), so a long prefilled address can hide behind a few
 	// words.
 	Prepare string
+
+	// External presets an external MCP server. The config file's
+	// mcpServers.<name> entry, if present, replaces it.
+	External *ServerSpec
+	// InProcess is a server built by Go code compiled into the app.
+	InProcess *InProcess
+}
+
+// InProcess is an in-process plugin: Go code that builds an MCP server.
+type InProcess struct {
+	// Serve builds the server. It runs once per session, so keep it cheap.
+	// Tools must declare readOnlyHint accurately: dry-run intercepts every
+	// tool that isn't read-only.
+	Serve func(h Host) (*sdk.Server, error)
+	// Secrets it needs (e.g. an API key). `auth login <name>` asks for each;
+	// Host.Secret reads them.
+	Secrets []SecretSpec
+	// RoutineSection says it reads a section from the routines that use it
+	// (Host.RoutineConfig). Routines may only write automator.plugins.<name>
+	// for plugins that do.
+	RoutineSection bool
 	// Uses names the other plugins it connects to through Host.Connect (as its
 	// config says), so whatever a routine using it needs from those (a
 	// sign-in) counts as the routine's too.
@@ -75,9 +73,9 @@ type Host interface {
 	// Automator"), for what the plugin shows as the app's, such as a desktop
 	// notification's sender.
 	AppName() string
-	// Config decodes this plugin's config section (plugins.<name>) into v, keeping
-	// v's values for absent fields. Unknown fields are an error. Like
-	// RoutineConfig, it decodes by yaml tags.
+	// Config decodes this plugin's config section (plugins.<name>) into v by
+	// its yaml tags, keeping v's values for absent fields. Unknown fields are
+	// an error.
 	Config(v any) error
 	// Secret returns one of this plugin's declared secrets.
 	Secret(name string) (string, error)
@@ -91,8 +89,7 @@ type Host interface {
 	// mcp tools`). Unknown fields are an error. Only plugins with
 	// RoutineSection set get one.
 	RoutineConfig(v any) error
-	// Run is the routine run this session serves (its Plugins left out:
-	// RoutineConfig reads this plugin's section); zero when there's none.
+	// Run is the routine run this session serves; zero when there's none.
 	Run() Run
 }
 
@@ -107,8 +104,6 @@ type Run struct {
 	ID string
 	// Folder is the routine's folder (automator.folder); "" when it has none.
 	Folder string
-	// Plugins are the routine's automator.plugins sections, by plugin name.
-	Plugins map[string]any
 }
 
 // ServerSpec is an external MCP server: a local stdio command or a remote URL.
@@ -163,7 +158,7 @@ type OAuthClient struct {
 	RedirectPort int `yaml:"redirectPort"`
 }
 
-// Auth modes and transports.
+// Auth modes and transports (ServerSpec.Auth, ServerSpec.Transport).
 const (
 	AuthOAuth   = "oauth"
 	AuthHeaders = "headers"
@@ -172,170 +167,3 @@ const (
 	TransportStreamable = "streamable"
 	TransportSSE        = "sse"
 )
-
-// Remote reports whether the server is reached over HTTP.
-func (s ServerSpec) Remote() bool { return s.URL != "" }
-
-// AuthMode is the remote server's effective auth mode ("" for local servers).
-func (s ServerSpec) AuthMode() string {
-	switch {
-	case !s.Remote():
-		return ""
-	case s.Auth == "":
-		return AuthOAuth
-	default:
-		return s.Auth
-	}
-}
-
-var secretRef = regexp.MustCompile(`\{([a-z0-9][a-z0-9/-]*)\}`)
-
-// SecretKeys lists the stored secrets the server needs, in a stable order:
-// those referenced in Env or Headers (OAuth tokens and client credentials are
-// handled by the OAuth sign-in).
-func (s ServerSpec) SecretKeys() []string {
-	seen := map[string]bool{}
-	var keys []string
-	for _, m := range []map[string]string{s.Env, s.Headers} {
-		names := make([]string, 0, len(m))
-		for k := range m {
-			names = append(names, k)
-		}
-		sort.Strings(names)
-		for _, k := range names {
-			for _, ref := range secretRef.FindAllStringSubmatch(m[k], -1) {
-				if !seen[ref[1]] {
-					seen[ref[1]] = true
-					keys = append(keys, ref[1])
-				}
-			}
-		}
-	}
-	return keys
-}
-
-// ExpandSecrets replaces {secret-key} references in v with values from get.
-func ExpandSecrets(v string, get func(key string) (string, error)) (string, error) {
-	var firstErr error
-	out := secretRef.ReplaceAllStringFunc(v, func(ref string) string {
-		val, err := get(ref[1 : len(ref)-1])
-		if err != nil && firstErr == nil {
-			firstErr = err
-		}
-		return val
-	})
-	return out, firstErr
-}
-
-// Validate checks a server spec.
-func (s ServerSpec) Validate(name string) error {
-	bad := func(format string, args ...any) error {
-		return fmt.Errorf("server %q: "+format, append([]any{name}, args...)...)
-	}
-	if (s.Command == "") == (s.URL == "") {
-		return bad("set exactly one of command or url")
-	}
-	if !s.Remote() {
-		if s.Transport != "" || s.Auth != "" || len(s.Headers) > 0 || len(s.Scopes) > 0 || s.OAuthClient != nil {
-			return bad("transport, auth, headers, scopes and oauthClient are for url servers")
-		}
-		if s.Pairing != "" && len(s.SecretKeys()) == 0 {
-			return bad("pairing needs a secret referenced in env")
-		}
-		return nil
-	}
-	if len(s.Args) > 0 || len(s.Env) > 0 || s.Pairing != "" || s.Dir != "" {
-		return bad("args, env, dir and pairing are for command servers")
-	}
-	switch s.Transport {
-	case "", TransportStreamable, TransportSSE:
-	default:
-		return bad("transport must be streamable or sse")
-	}
-	refs := len(s.SecretKeys()) > 0
-	switch s.AuthMode() {
-	case AuthOAuth:
-		if s.Transport == TransportSSE {
-			return bad("oauth isn't supported over sse; use auth: headers or none")
-		}
-		if c := s.OAuthClient; c != nil && (c.ClientIDKey == "" || c.RedirectPort <= 0) {
-			return bad("oauthClient needs clientIdKey and redirectPort")
-		}
-	case AuthHeaders:
-		if !refs {
-			return bad("auth: headers needs a secret referenced in headers, e.g. Authorization: \"Bearer {my-api-key}\"")
-		}
-	case AuthNone:
-		if refs {
-			return bad("auth: none can't reference secrets; use auth: headers")
-		}
-	default:
-		return bad("auth must be oauth, headers or none")
-	}
-	if s.AuthMode() != AuthOAuth && (len(s.Scopes) > 0 || s.OAuthClient != nil) {
-		return bad("scopes and oauthClient are for auth: oauth")
-	}
-	return nil
-}
-
-// SecretKey is the secrets-store key of an in-process plugin's secret.
-func SecretKey(plugin, name string) string { return "plugin/" + plugin + "/" + name }
-
-var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
-// ValidName reports whether name can name a plugin: lowercase letters, digits
-// and dashes. Names become config keys, keychain keys and folder names.
-func ValidName(name string) bool { return nameRE.MatchString(name) }
-
-// Validate checks a plugin definition.
-func (p Plugin) Validate() error {
-	if !nameRE.MatchString(p.Name) {
-		return fmt.Errorf("plugin %q: names are lowercase letters, digits and dashes", p.Name)
-	}
-	switch {
-	case (p.External == nil) == (p.Serve == nil):
-		return fmt.Errorf("plugin %q: set exactly one of External or Serve", p.Name)
-	case p.External != nil && len(p.Secrets) > 0:
-		return fmt.Errorf("plugin %q: external plugins reference secrets in External (env, headers, oauthClient)", p.Name)
-	case p.External != nil:
-		return p.External.Validate(p.Name)
-	}
-	for _, s := range p.Secrets {
-		if !nameRE.MatchString(s.Name) {
-			return fmt.Errorf("plugin %q: secret %q: names are lowercase letters, digits and dashes", p.Name, s.Name)
-		}
-	}
-	return nil
-}
-
-// Validate checks a set of plugins: each well-formed, names unique.
-func Validate(ps []Plugin) error {
-	seen := map[string]bool{}
-	var errs []error
-	for _, p := range ps {
-		if err := p.Validate(); err != nil {
-			errs = append(errs, err)
-		}
-		if seen[p.Name] {
-			errs = append(errs, fmt.Errorf("plugin %q registered twice", p.Name))
-		}
-		seen[p.Name] = true
-	}
-	return errors.Join(errs...)
-}
-
-// DecodeSection decodes a plugin's section (as read from YAML: a config
-// section or a routine's automator.plugins.<name>) into v, by its yaml tags,
-// keeping v's values for absent fields. Unknown fields are an error.
-func DecodeSection(section, v any) error {
-	raw, err := yaml.Marshal(section)
-	if err != nil {
-		return err
-	}
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-	dec.KnownFields(true)
-	if err := dec.Decode(v); err != nil && !errors.Is(err, io.EOF) {
-		return err
-	}
-	return nil
-}

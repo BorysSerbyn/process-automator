@@ -52,6 +52,21 @@ The identity is said three times (the `App`, `install.sh` and the Makefile) beca
 - **Link-time values set by the app in internal packages** (`-X …/internal/…`): a renamed variable is silently ignored by the linker, across two repositories
 - **Templates compiled into the binary**: `paths`, `uninstall` and frontends use the templates folder, and a shipped folder keeps templates readable and editable in a checkout
 
+## Decision: pluginapi holds only what a plugin is written against
+`pluginapi` has what an app's author writes: a `Plugin` that is either a preset external server (`External`) or Go code (`InProcess`, the fields that only Go code has), the `Host` the engine gives Go code, the run it serves, the server spec, two helpers for calling another server's tools, and `plugintest` for tests. Validating specs and plugins, expanding secret references and naming secrets in the store are the engine's (`internal/config`, `internal/engine`), so they change without breaking an app, and an app's plugins are checked once, when `automator.Main` starts. The engine's own record of a run (with every plugin's routine section) is internal too: a plugin only ever sees its own section.
+
+### Rejected
+- **One struct with every field, checked by hand**: which fields apply to which kind was only in `Validate`, and every caller asked `Serve != nil` again
+- **Validation and secret expansion as methods on the public types**: every change to them would have been a breaking change for every app
+- **A test host in each app**: each app wrote the same fake `Host`, and could drift from how the engine decodes sections
+
+## Decision: in-process plugins' secrets are their own; external servers' are shared keys
+An in-process plugin declares its secrets by name, with a prompt, and they're stored under `plugin/<name>/<secret>`: only that plugin reads them (`Host.Secret` refuses others), and `auth logout <name>` forgets them all. An external server references keys in its spec (`{key}` in `env` or `headers`), which are global: two servers for the same service share a key, and `auth logout` keeps a key another server still references. Both are signed in to with `auth login <name>`.
+
+### Rejected
+- **Namespacing external servers' keys too**: a key referenced by two servers would be asked for twice, and specs written for other MCP clients name keys freely
+- **Global keys for in-process plugins**: a plugin could read any secret by guessing its key; declared, namespaced ones keep it to its own
+
 ## Decision: MCP connections use the official Go SDK directly
 MCP sessions are opened with `modelcontextprotocol/go-sdk`; Genkit gets thin tool wrappers over them, limited to each routine's allowlist. This gives full control over the unattended path (a run never opens a browser; an expired or revoked credential is a distinct `needs-reauth`), and the allowlist and dry-run interception happen in my code.
 

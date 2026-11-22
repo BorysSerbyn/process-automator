@@ -48,8 +48,8 @@ type Request struct {
 	Tools []string
 	// Servers are the MCP servers the tools come from.
 	Servers []string
-	// Run is the routine run in-process servers serve (their pluginapi.Host.Run).
-	Run pluginapi.Run
+	// Run is the routine run in-process servers serve (see mcp.Run).
+	Run mcp.Run
 	// Partials are snippets available to the prompt as {{> name}}.
 	Partials map[string]string
 	// Effort is how hard the model thinks (low … max); "" or "default" leaves
@@ -272,7 +272,7 @@ func (e *ToolsError) Error() string { return e.msg }
 // discover connects to the servers and finds each allowed tool. Every allowed
 // name must be offered by exactly one server. Sessions are returned even on
 // error, for the caller to close.
-func discover(ctx context.Context, conn *mcp.Connector, run pluginapi.Run, servers, allowed []string) (map[string]discovered, []*sdk.ClientSession, error) {
+func discover(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, allowed []string) (map[string]discovered, []*sdk.ClientSession, error) {
 	want := map[string]bool{}
 	for _, n := range allowed {
 		want[n] = true
@@ -320,7 +320,7 @@ type CheckedTool struct {
 
 // CheckTools connects to the servers and confirms each allowed tool is offered
 // by exactly one of them, as a run would, without calling the model or any tool.
-func CheckTools(ctx context.Context, conn *mcp.Connector, run pluginapi.Run, servers, allowed []string) ([]CheckedTool, error) {
+func CheckTools(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, allowed []string) ([]CheckedTool, error) {
 	found, sessions, err := discover(ctx, conn, run, servers, allowed)
 	for _, s := range sessions {
 		_ = s.Close()
@@ -337,7 +337,7 @@ func CheckTools(ctx context.Context, conn *mcp.Connector, run pluginapi.Run, ser
 }
 
 // gateway connects to the servers and wraps each allowed tool (see discover).
-func (a *Agent) gateway(ctx context.Context, run pluginapi.Run, servers, allowed []string, res *Result) ([]Tool, []*sdk.ClientSession, error) {
+func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []string, res *Result) ([]Tool, []*sdk.ClientSession, error) {
 	byName, sessions, err := discover(ctx, a.Connector, run, servers, allowed)
 	if err != nil {
 		return nil, sessions, err

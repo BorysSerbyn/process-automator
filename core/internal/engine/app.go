@@ -23,6 +23,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
+	"github.com/BorysSerbyn/process-automator/core/internal/yamlfile"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
@@ -47,9 +48,6 @@ const ClaudeCodeTokenKey = "claude-code-oauth-token"
 // engine adds none); secrets is where secrets are kept.
 func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App, error) {
 	files := LayoutOf(path)
-	if err := pluginapi.Validate(plugins); err != nil {
-		return nil, err
-	}
 	base := map[string]pluginapi.ServerSpec{}
 	for _, p := range plugins {
 		if p.External != nil {
@@ -61,7 +59,7 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 		return nil, err
 	}
 	for _, p := range plugins {
-		if _, clash := cfg.MCPServers[p.Name]; clash && p.Serve != nil {
+		if _, clash := cfg.MCPServers[p.Name]; clash && p.InProcess != nil {
 			return nil, fmt.Errorf("config mcpServers.%s clashes with the in-process %s plugin; use another name", p.Name, p.Name)
 		}
 	}
@@ -70,16 +68,16 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 		Secrets:  secrets,
 		Name:     product.Command,
 		Version:  product.Version,
-		Builtins: map[string]func(pluginapi.Run) (*sdk.Server, error){},
+		Builtins: map[string]func(mcp.Run) (*sdk.Server, error){},
 		LockDir:  files.Locks(),
 	}
 	for _, p := range plugins {
-		if p.Serve == nil {
+		if p.InProcess == nil {
 			continue
 		}
 		dataDir := files.PluginData(p.Name)
-		conn.Builtins[p.Name] = func(run pluginapi.Run) (*sdk.Server, error) {
-			return p.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, config: path, run: run})
+		conn.Builtins[p.Name] = func(run mcp.Run) (*sdk.Server, error) {
+			return p.InProcess.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, config: path, run: run})
 		}
 	}
 	return &App{Config: cfg, Layout: files, Connector: conn, Plugins: plugins}, nil
@@ -113,15 +111,12 @@ func LoadForEdit(path string, plugins []pluginapi.Plugin, secrets secrets.Store)
 }
 
 // Servers is every server a routine reaches: its own, and those its plugins
-// connect to (pluginapi.Plugin.Uses), followed through.
+// connect to (pluginapi.InProcess.Uses), followed through.
 func (a *App) Servers(r routines.Routine) []string {
 	out := slices.Clone(r.Servers)
 	for i := 0; i < len(out); i++ { // out grows as plugins add theirs
-		for _, p := range a.Plugins {
-			if p.Name != out[i] || p.Uses == nil {
-				continue
-			}
-			for _, s := range p.Uses(a.pluginHost(p)) {
+		if p, ok := a.InProcess(out[i]); ok && p.InProcess.Uses != nil {
+			for _, s := range p.InProcess.Uses(a.pluginHost(p)) {
 				if s != "" && !slices.Contains(out, s) {
 					out = append(out, s)
 				}
@@ -152,13 +147,13 @@ type host struct {
 	conn    *mcp.Connector
 	dataDir string
 	config  string // the config file, for ConnectApp
-	run     pluginapi.Run
+	run     mcp.Run
 }
 
 // RunOf is the run plugin sessions serve for r working in folder; id is the
 // run's history ID ("" when the routine is being checked, not run).
-func RunOf(r routines.Routine, folder, id string) pluginapi.Run {
-	return pluginapi.Run{Routine: r.Name, ID: id, Folder: folder, Plugins: r.Plugins}
+func RunOf(r routines.Routine, folder, id string) mcp.Run {
+	return mcp.Run{Run: pluginapi.Run{Routine: r.Name, ID: id, Folder: folder}, Plugins: r.Plugins}
 }
 
 func (h *host) DataDir() (string, error) {
@@ -168,18 +163,16 @@ func (h *host) DataDir() (string, error) {
 	return h.dataDir, nil
 }
 
-func (h *host) Run() pluginapi.Run {
-	run := h.run
-	run.Plugins = nil // each plugin reads its own section (RoutineConfig)
-	return run
-}
+// Run is the run without the routine's plugin sections: each plugin reads
+// its own (RoutineConfig).
+func (h *host) Run() pluginapi.Run { return h.run.Run }
 
 func (h *host) RoutineConfig(v any) error {
 	section, ok := h.run.Plugins[h.plugin.Name]
 	if !ok {
 		return nil
 	}
-	if err := pluginapi.DecodeSection(section, v); err != nil {
+	if err := yamlfile.DecodeStrict(section, v); err != nil {
 		return fmt.Errorf("automator.plugins.%s: %w", h.plugin.Name, err)
 	}
 	return nil
@@ -224,9 +217,9 @@ func (h *host) AppName() string { return product.Name }
 // Secret returns a secret the plugin declared; undeclared names are refused so a
 // plugin can only read its own secrets.
 func (h *host) Secret(name string) (string, error) {
-	for _, s := range h.plugin.Secrets {
+	for _, s := range h.plugin.InProcess.Secrets {
 		if s.Name == name {
-			v, err := h.conn.Secrets.Get(pluginapi.SecretKey(h.plugin.Name, name))
+			v, err := h.conn.Secrets.Get(PluginSecretKey(h.plugin.Name, name))
 			if errors.Is(err, secrets.ErrNotFound) {
 				return "", &mcp.NeedsReauthError{Server: h.plugin.Name, Cause: fmt.Errorf("secret %q not set", name)}
 			}
@@ -240,6 +233,16 @@ func (h *host) Secret(name string) (string, error) {
 // config file now.
 func (a *App) Settings() (settings.Values, error) {
 	return (settings.Store{Path: a.Layout.Config()}).Values()
+}
+
+// PluginSecretKey is the secrets-store key of an in-process plugin's
+// secret: namespaced by plugin, unlike the keys external servers reference.
+func PluginSecretKey(plugin, name string) string { return "plugin/" + plugin + "/" + name }
+
+// InProcess returns an in-process plugin by name.
+func (a *App) InProcess(name string) (pluginapi.Plugin, bool) {
+	p, ok := a.FindPlugin(name)
+	return p, ok && p.InProcess != nil
 }
 
 // FindPlugin returns an installed plugin by name.
