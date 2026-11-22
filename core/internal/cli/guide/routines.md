@@ -14,6 +14,7 @@ A Dotprompt file: YAML frontmatter, then a Handlebars prompt. The file name is t
 - Parameters: `name`, `type` (%{paramTypes}), `description`, optional `default`; used as `{{name}}`
 - `{{> memories}}` adds my memories; `notify_me` (server `notify`) notifies me
 
+## Keys
 %{table:fields}
 
 ## Inputs
@@ -22,6 +23,7 @@ A Dotprompt file: YAML frontmatter, then a Handlebars prompt. The file name is t
 ## Backends and models
 %{table:backends}
 
+Built-in tools:
 %{table:builtins}
 
 ## After writing it
