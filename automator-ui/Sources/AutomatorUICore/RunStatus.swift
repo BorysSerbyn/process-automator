@@ -42,3 +42,29 @@ extension RunStatus {
         }
     }
 }
+
+/// One reason the dot is red, in the core's words.
+public typealias RunStatusReason = Components.Schemas.RunStatusReason
+
+extension RunStatusReason {
+    /// What choosing a reason opens.
+    public enum Target: Equatable, Sendable {
+        /// A watcher's window: what's wrong is the watcher's, for every hook on it.
+        case watcher(String)
+        /// A hook's window, on its run if it names one.
+        case hook(String, run: String?)
+        /// The run's report.
+        case run(String)
+        /// A routine's window (nothing ran: it isn't trusted, say).
+        case routine(String)
+    }
+
+    /// What choosing it opens, from what it's about (nil: nothing).
+    public var target: Target? {
+        if let watcher, !watcher.isEmpty { return .watcher(watcher) }
+        if hook == true, let routine, !routine.isEmpty { return .hook(routine, run: run) }
+        if let run, !run.isEmpty { return .run(run) }
+        if let routine, !routine.isEmpty { return .routine(routine) }
+        return nil
+    }
+}

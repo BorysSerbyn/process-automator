@@ -107,6 +107,31 @@ import Testing
     #expect(ok.summary == "All good")
 }
 
+@Test func eachReasonOpensWhatItsAbout() throws {
+    // Two hooks on one failing watcher: one reason, about the watcher, which
+    // opens the watcher's window; the others open their run, hook or routine.
+    let json = """
+        {"schemaVersion":1,"updatedAt":"2026-11-22T14:55:10Z","health":"error","busy":false,"routines":[],
+         "hooks":[{"name":"home-joke","enabled":true,"watcher":"home-key",
+                   "watcherProblem":"home-key is failing: can't listen to the keyboard",
+                   "problem":"its watcher home-key is failing: can't listen to the keyboard","health":"error"}],
+         "reasons":[{"watcher":"home-key",
+                     "text":"home-key is failing: can't listen to the keyboard (home-joke and say-hi listen to it)"},
+                    {"routine":"say-hi","hook":true,"text":"say-hi failed","run":"say-hi/r1"},
+                    {"routine":"wave","hook":true,"text":"wave can't run","detail":"it isn't trusted"},
+                    {"routine":"standup","text":"standup failed","run":"standup/r2"},
+                    {"routine":"digest","text":"digest can't be scheduled"},
+                    {"text":"The scheduler can't work"}]}
+        """
+    let status = try RunStatus.decode(Data(json.utf8))
+    #expect(
+        status.reasons?.map(\.target) == [
+            .watcher("home-key"), .hook("say-hi", run: "say-hi/r1"), .hook("wave", run: nil), .run("standup/r2"),
+            .routine("digest"), nil,
+        ])
+    #expect(status.hook("home-joke")?.watcher == "home-key")
+}
+
 @Test func pulsesOnlyWhileTheCoreSaysBusyAndResponds() throws {
     func status(busy: Bool, validUntil: String) throws -> RunStatus {
         try RunStatus.decode(

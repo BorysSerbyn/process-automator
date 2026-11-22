@@ -65,33 +65,98 @@ func record(path, name string, hook bool, run Run, now time.Time) error {
 type Setup struct {
 	Enabled   bool
 	NextRunAt *time.Time
-	Problem   string
-	// Hook lists it among the hooks.
-	Hook bool
+	// Problem is what keeps it from running; a hook's, besides its
+	// watcher's (WatcherProblem).
+	Problem string
+	// Hook lists it among the hooks; Watcher is the watcher it listens to,
+	// and WatcherProblem what's wrong with that watcher, said about it.
+	Hook                    bool
+	Watcher, WatcherProblem string
 }
 
 // Sync makes the file list exactly the routines and hooks set up on the
-// device, keeping their last runs. Removed ones (and their old failures)
-// drop out.
+// device, keeping their last runs (and when their health was reset).
+// Removed ones (and their old failures) drop out.
 func Sync(path string, setups map[string]Setup, now time.Time) error {
 	return update(path, now, func(s *Status) {
-		last := map[string]*Run{}
+		prev := map[string]Routine{}
 		for _, r := range append(slices.Clone(s.Routines), s.Hooks...) {
-			last[r.Name] = r.LastRun
+			prev[r.Name] = r
 		}
 		s.Routines, s.Hooks = s.Routines[:0], nil
 		for name, setup := range setups {
 			entry := Routine{
 				Name: name, Enabled: setup.Enabled, Problem: setup.Problem,
-				NextRunAt: setup.NextRunAt, LastRun: last[name],
+				NextRunAt: setup.NextRunAt, LastRun: prev[name].LastRun, HealthResetAt: prev[name].HealthResetAt,
 			}
 			if setup.Hook {
+				entry.Watcher, entry.WatcherProblem = setup.Watcher, setup.WatcherProblem
+				if setup.WatcherProblem != "" {
+					entry.Problem = joinProblems(setup.Problem, watcherPart(setup.WatcherProblem))
+				}
 				s.Hooks = append(s.Hooks, entry)
 			} else {
 				s.Routines = append(s.Routines, entry)
 			}
 		}
 	})
+}
+
+// watcherPart is a hook's problem about its watcher, as its Problem ends.
+func watcherPart(watcherProblem string) string { return "its watcher " + watcherProblem }
+
+// joinProblems is problems in one line, leaving out empty ones.
+func joinProblems(problems ...string) string {
+	var out []string
+	for _, p := range problems {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, "; ")
+}
+
+// ownProblem is what keeps a hook from running besides its watcher (all
+// of a routine's Problem).
+func ownProblem(r Routine) string {
+	if r.WatcherProblem == "" {
+		return r.Problem
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(r.Problem, watcherPart(r.WatcherProblem)), "; ")
+}
+
+// ResetHealth resets the health of the routines and hooks named (others
+// are left alone): what ran before now no longer counts toward it, until
+// they run again. Their runs stay recorded as they were. The scheduler
+// calls it when a permission one needs changes.
+func ResetHealth(path string, names []string, now time.Time) error {
+	return update(path, now, func(s *Status) {
+		for _, list := range [][]Routine{s.Routines, s.Hooks} {
+			for i := range list {
+				if slices.Contains(names, list[i].Name) {
+					at := now
+					list[i].HealthResetAt = &at
+				}
+			}
+		}
+	})
+}
+
+// reset reports whether a routine's health was reset since its last run
+// started (or it has none since): that run no longer counts toward its
+// health. A run still going, or waiting for its turn, is current.
+func reset(r Routine) bool {
+	if r.HealthResetAt == nil {
+		return false
+	}
+	run := r.LastRun
+	if run == nil {
+		return true
+	}
+	if run.Outcome == OutcomeRunning || run.Outcome == OutcomeQueued {
+		return false
+	}
+	return run.StartedAt.Before(*r.HealthResetAt)
 }
 
 // Heartbeat says the scheduler is alive: the status holds until now+ttl.
@@ -132,9 +197,21 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 		}
 		verdict = HealthOK
 	}
+	// A watcher's problem is one reason, naming the hooks that listen to it;
+	// theirs say only what else is wrong.
+	listeners, watcherProblems := map[string][]string{}, map[string]string{}
+	var failing []string
 	for _, h := range s.Hooks {
 		if !h.Enabled {
 			continue
+		}
+		if h.WatcherProblem != "" {
+			if _, seen := watcherProblems[h.Watcher]; !seen {
+				failing = append(failing, h.Watcher)
+				watcherProblems[h.Watcher] = h.WatcherProblem
+			}
+			listeners[h.Watcher] = append(listeners[h.Watcher], h.Name)
+			h.Problem = ownProblem(h)
 		}
 		if why := whyUnhealthy(h, now); why.Text != "" {
 			why.Hook = true
@@ -145,10 +222,27 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 		}
 		verdict = HealthOK
 	}
+	sort.Strings(failing)
+	for _, w := range failing {
+		hooks, verb := listeners[w], "listens"
+		if len(hooks) > 1 {
+			verb = "listen"
+		}
+		reasons = append(reasons, Reason{Watcher: w,
+			Text: fmt.Sprintf("%s (%s %s to it)", watcherProblems[w], andList(hooks), verb)})
+	}
 	if len(reasons) > 0 {
 		return HealthError, reasons
 	}
 	return verdict, reasons
+}
+
+// andList is names as said: "a", "a and b", "a, b and c".
+func andList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // summary is the state in a few words when there are no reasons.
@@ -165,6 +259,12 @@ func summary(h Health) string {
 
 // routineState is a routine's own health and summary.
 func routineState(r Routine, now time.Time) (Health, string) {
+	return entryState(r, now, "Runs by hand")
+}
+
+// entryState is a routine's or a hook's own health and summary; idle is
+// its summary with nothing scheduled.
+func entryState(r Routine, now time.Time, idle string) (Health, string) {
 	if !r.Enabled {
 		return HealthNone, "Paused"
 	}
@@ -179,19 +279,21 @@ func routineState(r Routine, now time.Time) (Health, string) {
 			return HealthOK, "Waiting for its turn"
 		}
 	}
+	summary := idle
 	if r.NextRunAt != nil {
-		return HealthOK, "Next: " + when(*r.NextRunAt, now)
+		summary = "Next: " + when(*r.NextRunAt, now)
 	}
-	return HealthOK, "Runs by hand"
+	if reset(r) {
+		// Neither red nor green from before: it hasn't run since.
+		return HealthNone, "Permissions changed; " + strings.ToLower(summary[:1]) + summary[1:]
+	}
+	return HealthOK, summary
 }
 
 // hookState is a hook's own health and summary: as a routine's, but it
 // runs when its events come.
 func hookState(h Routine, now time.Time) (Health, string) {
-	health, summary := routineState(h, now)
-	if summary == "Runs by hand" {
-		return health, "Waiting for events"
-	}
+	health, summary := entryState(h, now, "Waiting for events")
 	if health == HealthError && h.Problem != "" {
 		return health, h.Name + " can't run"
 	}
@@ -249,7 +351,7 @@ func whyUnhealthy(r Routine, now time.Time) Reason {
 		return why
 	}
 	run := r.LastRun
-	if run == nil {
+	if run == nil || reset(r) {
 		return why
 	}
 	if run.Outcome != OutcomeRunning {

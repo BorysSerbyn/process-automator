@@ -1795,6 +1795,12 @@ components:
             Text is a short headline ("standup failed"); Detail the full story (the
             run's reason), for frontends to show on demand.
           type: string
+        watcher:
+          description: |-
+            Watcher is the watcher it's about, when what's wrong is a watcher's
+            (failing, untrusted, paused, a permission it needs): one reason for
+            it, naming the hooks that listen to it, and Routine is empty.
+          type: string
       required:
         - text
       type: object
@@ -1807,7 +1813,16 @@ components:
         health:
           description: |-
             Health is the routine's own verdict: error when it makes the app's
-            health error, ok while it's enabled and fine, none while it's paused.
+            health error, ok while it's enabled and fine, none while it's paused
+            or, after a health reset, until it runs again.
+          type: string
+        healthResetAt:
+          description: |-
+            HealthResetAt is when the scheduler last found that a permission it
+            needs changed (its state, or which ones it needs): a run that started
+            before then no longer counts toward its health, which is none until it
+            runs again. Its runs stay in history as they were.
+          format: date-time
           type: string
         lastRun:
           $ref: '#/components/schemas/RunStatusRun'
@@ -1823,12 +1838,24 @@ components:
         problem:
           description: |-
             Problem says why the routine can't be scheduled (e.g. its file doesn't
-            parse). It's current state, cleared as soon as the routine is fixed.
+            parse). It's current state, cleared as soon as the routine is fixed. A
+            hook's ends with what's wrong with its watcher, when something is:
+            "its watcher " and WatcherProblem.
           type: string
         summary:
           description: |-
             Summary is its state in a few words ("Next: tomorrow 09:20", "standup
             failed", "Paused"), for frontends to show as is.
+          type: string
+        watcher:
+          description: |-
+            Watcher is the watcher a hook listens to, and WatcherProblem what's
+            wrong with it that keeps the hook from hearing its events (failing,
+            untrusted, paused, a permission it needs), said about the watcher
+            ("keys is failing: …"): the same for every hook on it, so it's one
+            reason, about the watcher, not one per hook.
+          type: string
+        watcherProblem:
           type: string
       required:
         - name
@@ -2503,7 +2530,8 @@ components:
         error:
           description: |-
             Error is why its last poll failed or its stream last ended early
-            (cleared once it works again), and ErrorAt when.
+            (cleared once it works again, or a permission it needs changes), and
+            ErrorAt when.
           type: string
         errorAt:
           format: date-time
@@ -2597,7 +2625,8 @@ components:
         error:
           description: |-
             Error is why its last poll failed or its stream last ended early
-            (cleared once it works again), and ErrorAt when.
+            (cleared once it works again, or a permission it needs changes), and
+            ErrorAt when.
           type: string
         errorAt:
           format: date-time

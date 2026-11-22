@@ -4,6 +4,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,12 +15,15 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
+	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
@@ -153,7 +157,7 @@ func TestPromptNeedsItsPluginsPermissions(t *testing.T) {
 		t.Fatalf("not checked yet isn't a problem: %+v", probs)
 	}
 
-	if err := a.RecordPermissions(time.Now()); err != nil {
+	if _, err := a.RecordPermissions(time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if got := needNames(a.Permissions(x)); got != "input-monitoring=missing(plugin:keys) calendars=granted(plugin:cal)" {
@@ -173,7 +177,7 @@ func TestPromptNeedsItsPluginsPermissions(t *testing.T) {
 	}
 	// One that can't be checked is never taken for missing.
 	fake.set("input-monitoring", permissions.Unknown)
-	_ = a.RecordPermissions(time.Now())
+	_, _ = a.RecordPermissions(time.Now())
 	if probs := problemsAbout(a.Assess(x)); len(probs) != 0 {
 		t.Fatalf("an unknown permission is a problem: %+v", probs)
 	}
@@ -192,7 +196,7 @@ func TestMissingPermissionIsAScheduleProblem(t *testing.T) {
 	if err := a.InitTrust(); err != nil {
 		t.Fatal(err)
 	}
-	_ = a.RecordPermissions(time.Now())
+	_, _ = a.RecordPermissions(time.Now())
 	if _, err := (settings.Store{Path: a.Layout.Config(), Extra: x.Settings()}).Set("routines.digest.enabled", "true"); err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +228,7 @@ func TestHookNeedsItsActionsAndWatchersPermissions(t *testing.T) {
 	if probs := problemsAbout(a.Assess(click)); len(probs) != 0 {
 		t.Fatalf("not checked yet isn't a problem: %+v", probs)
 	}
-	if err := a.RecordPermissions(time.Now()); err != nil {
+	if _, err := a.RecordPermissions(time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	probs := problemsAbout(a.Assess(click))
@@ -324,7 +328,7 @@ func TestWatcherWaitsForItsPermissions(t *testing.T) {
 	addWatcher(t, a, "keys", "executable: ./watch\nmode: poll\ninterval: 5s\npermissions: [input-monitoring]\n",
 		`echo '{"id":"k1","type":"key.pressed"}'`+"\n")
 	addHook(t, a, "on-key", hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: keys}\n", "cat >> got.jsonl\n")
-	_ = a.RecordPermissions(time.Now())
+	_, _ = a.RecordPermissions(time.Now())
 	e, stop := startEvents(t, a)
 	defer stop()
 	running := func() bool {
@@ -341,12 +345,13 @@ func TestWatcherWaitsForItsPermissions(t *testing.T) {
 		t.Fatalf("the hook's problem: %+v", probs)
 	}
 	setups := hookSetups(a)
-	if !strings.Contains(setups["on-key"].Problem, "Input Monitoring") {
+	if setups["on-key"].Watcher != "keys" || !strings.HasPrefix(setups["on-key"].WatcherProblem, "keys needs the Input Monitoring permission") ||
+		setups["on-key"].Problem != "" {
 		t.Fatalf("run status: %+v", setups["on-key"])
 	}
 
 	fake.set("input-monitoring", permissions.Granted)
-	_ = a.RecordPermissions(time.Now())
+	_, _ = a.RecordPermissions(time.Now())
 	e.sync(context.Background(), a)
 	if !running() {
 		t.Fatal("not started once granted")
@@ -378,7 +383,7 @@ func TestPermissionReport(t *testing.T) {
 		n.NeededBy[0].By[0] != (PermissionSource{SourcePlugin, "notify"}) {
 		t.Fatalf("%+v", n)
 	}
-	_ = a.RecordPermissions(time.Now())
+	_, _ = a.RecordPermissions(time.Now())
 	if r, _ = a.PermissionReport(true); r.CheckedAt == nil || len(r.Permissions) != len(permissions.All) {
 		t.Fatalf("all: %+v", r)
 	}
@@ -411,7 +416,7 @@ func TestRequestPermission(t *testing.T) {
 	if err := runstatus.Heartbeat(a.Layout.RunStatus(), time.Now(), time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	go servePermissionRequests(ctx, a, func() (*App, error) { return a, nil })
+	go servePermissionRequests(ctx, a, newEvents(a, nil), func() (*App, error) { return a, nil })
 	out, err = a.RequestPermission(ctx, "input-monitoring", time.Now())
 	if err != nil || !out.Asked || out.State != permissions.Granted {
 		t.Fatalf("asked: %+v %v", out, err)
@@ -422,5 +427,151 @@ func TestRequestPermission(t *testing.T) {
 	out, err = a.RequestPermission(ctx, "full-disk-access", time.Now())
 	if err != nil || out.Asked || out.Why != "no way to ask" {
 		t.Fatalf("one the OS can't be asked for: %+v %v", out, err)
+	}
+}
+
+// reasonTexts are run status's reasons, after bringing it up to date.
+func reasonTexts(t *testing.T, a *App) (*runstatus.Status, []string) {
+	t.Helper()
+	if err := a.SyncStatus(time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s, err := runstatus.Load(a.Layout.RunStatus())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, r := range s.Reasons {
+		out = append(out, r.Text)
+	}
+	return s, out
+}
+
+// Input Monitoring taken away, then given back: each change resets the
+// health of the watcher that needs it and the hooks listening (its error
+// cleared, their last runs no longer counted), so once it's granted again
+// they're neutral, not red from before; while it's missing, that's the one
+// problem. Their runs stay in history. A failure after turns them red again.
+func TestAPermissionChangeResetsHealth(t *testing.T) {
+	fake := fakePermissions(t, map[string]permissions.Status{"input-monitoring": permissions.Granted})
+	a := testApp(t)
+	addWatcher(t, a, "home-key", "executable: ./watch\nmode: stream\npermissions: [input-monitoring]\n", "sleep 60\n")
+	addHook(t, a, "home-joke", hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: home-key}\n", "true\n")
+	addHook(t, a, "say-hi", hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: home-key}\n", "true\n")
+	e := newEvents(a, func() (*App, error) { return a, nil }) // its watchers aren't started: failures are given
+	ctx := context.Background()
+	recordPermissions(a, e, time.Now()) // the first check: nothing to compare with
+	if _, reasons := reasonTexts(t, a); len(reasons) != 0 {
+		t.Fatalf("at first: %v", reasons)
+	}
+	before := time.Now().Add(-time.Second)
+	recordRun(a, "home-joke", trigger.Occurrence{Trigger: trigger.Event, At: before}, runstatus.Run{
+		StartedAt: before, FinishedAt: &before, Outcome: runstatus.OutcomeFailed, Reason: "not allowed to listen"}, nil)
+	keyboard := errors.New("its stream ended: can't listen to the keyboard")
+	e.handle(ctx, "home-key", nil, nil, keyboard)
+	failing := "home-key is failing: " + keyboard.Error()
+	s, reasons := reasonTexts(t, a)
+	if !slices.Equal(reasons, []string{"home-joke failed", failing + " (home-joke and say-hi listen to it)"}) {
+		t.Fatalf("failing: %q", reasons)
+	}
+	if r := s.Reasons[1]; r.Watcher != "home-key" || r.Routine != "" {
+		t.Fatalf("the watcher's reason: %+v", r)
+	}
+	// Each hook still says it waits on its watcher, and why.
+	for _, name := range []string{"home-joke", "say-hi"} {
+		x, _ := a.FindHook(name)
+		if probs := a.Assess(x).All(); len(probs) != 1 || probs[0].Text != "its watcher "+failing || probs[0].Watcher != "home-key" {
+			t.Fatalf("%s's problems: %+v", name, probs)
+		}
+		for _, h := range s.Hooks {
+			if h.Name == name && h.Problem != "its watcher "+failing {
+				t.Fatalf("%s in run status: %q", name, h.Problem)
+			}
+		}
+	}
+
+	// Taken away: the watcher's error and the hook's failed run are from
+	// before; what's missing now is the one problem.
+	fake.set("input-monitoring", permissions.Missing)
+	recordPermissions(a, e, time.Now())
+	s, reasons = reasonTexts(t, a)
+	if len(reasons) != 1 || !strings.HasPrefix(reasons[0], "home-key needs the Input Monitoring permission") ||
+		!strings.HasSuffix(reasons[0], "(home-joke and say-hi listen to it)") || s.Health != runstatus.HealthError {
+		t.Fatalf("taken away: %s %q", s.Health, reasons)
+	}
+	if st, _ := watchers.LoadState(a.Layout.WatcherState()); st.Watchers["home-key"].Error != "" {
+		t.Fatalf("the watcher's error stayed: %q", st.Watchers["home-key"].Error)
+	}
+
+	// Given back: neutral, until something happens.
+	fake.set("input-monitoring", permissions.Granted)
+	recordPermissions(a, e, time.Now())
+	s, reasons = reasonTexts(t, a)
+	if len(reasons) != 0 || s.Health != runstatus.HealthOK {
+		t.Fatalf("given back: %s %q", s.Health, reasons)
+	}
+	for _, h := range s.Hooks {
+		if h.Health != runstatus.HealthNone || h.Summary != "Permissions changed; waiting for events" {
+			t.Errorf("%s: %s %q, want neutral", h.Name, h.Health, h.Summary)
+		}
+	}
+	// The run stays, in run status and history.
+	if last := s.LastRun("home-joke"); last == nil || last.Outcome != runstatus.OutcomeFailed || last.Reason != "not allowed to listen" {
+		t.Fatalf("its last run: %+v", last)
+	}
+	if runs, err := history.List(a.Layout.History(), history.Filter{Routine: "home-joke"}); err != nil || len(runs) != 1 || runs[0].Outcome != runstatus.OutcomeFailed {
+		t.Fatalf("history: %+v %v", runs, err)
+	}
+	// Nothing changed since: the next check resets nothing.
+	if changed, _ := a.RecordPermissions(time.Now()); len(changed) != 0 {
+		t.Fatalf("no change, but %v", changed)
+	}
+
+	// A failure after the reset counts: the watcher's, and a run's.
+	e.handle(ctx, "home-key", nil, nil, keyboard)
+	time.Sleep(time.Millisecond)
+	now := time.Now()
+	recordRun(a, "say-hi", trigger.Occurrence{Trigger: trigger.Event, At: now}, runstatus.Run{
+		StartedAt: now, FinishedAt: &now, Outcome: runstatus.OutcomeFailed, Reason: "it broke"}, nil)
+	if _, reasons = reasonTexts(t, a); !slices.Equal(reasons, []string{"say-hi failed", failing + " (home-joke and say-hi listen to it)"}) {
+		t.Fatalf("failing again: %q", reasons)
+	}
+}
+
+// Another set of permissions (a program's file now declares one) resets
+// its health as a change of state does.
+func TestDeclaringAnotherPermissionResetsHealth(t *testing.T) {
+	fakePermissions(t, map[string]permissions.Status{"screen-recording": permissions.Granted})
+	a := testApp(t)
+	if err := a.InitTrust(); err != nil {
+		t.Fatal(err)
+	}
+	src := t.TempDir()
+	writeExe(t, src, "prog", "true\n")
+	desc := filepath.Join(src, programs.DescriptionFile)
+	add := func(file string, update bool) {
+		_ = os.WriteFile(desc, []byte(file), 0o600)
+		if _, err := programs.Add(a.Layout.Programs(), "snap", desc, update); err != nil {
+			t.Fatal(err)
+		}
+		p, _ := a.Find("snap")
+		if err := a.Trust(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("executable: ./prog\nwrites: false\n", false)
+	e := newEvents(a, func() (*App, error) { return a, nil })
+	recordPermissions(a, e, time.Now())
+	then := time.Now().Add(-time.Second)
+	recordRun(a, "snap", trigger.Occurrence{Trigger: trigger.Manual, At: then}, runstatus.Run{
+		StartedAt: then, FinishedAt: &then, Outcome: runstatus.OutcomeFailed, Reason: "the screen was black"}, nil)
+	if _, reasons := reasonTexts(t, a); !slices.Equal(reasons, []string{"snap failed"}) {
+		t.Fatalf("before: %q", reasons)
+	}
+	add("executable: ./prog\nwrites: false\npermissions: [screen-recording]\n", true)
+	recordPermissions(a, e, time.Now())
+	s, reasons := reasonTexts(t, a)
+	if len(reasons) != 0 || s.Routines[0].Health != runstatus.HealthNone || s.Routines[0].HealthResetAt == nil {
+		t.Fatalf("after: %q %+v", reasons, s.Routines)
 	}
 }

@@ -34,8 +34,8 @@ type WatcherState struct {
 	// LastEventAt is when it last printed a new event.
 	LastEventAt *time.Time `json:"lastEventAt,omitempty"`
 	// Error is why its last poll failed, or its stream last ended (cleared
-	// by the next poll that works, or a stream that keeps running); ErrorAt
-	// is when.
+	// by the next poll that works, or a stream that keeps running, and when
+	// a permission it needs changes); ErrorAt is when.
 	Error   string     `json:"error,omitempty"`
 	ErrorAt *time.Time `json:"errorAt,omitempty"`
 }

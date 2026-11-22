@@ -53,7 +53,8 @@ type WatcherInfo struct {
 	StartedAt   *time.Time `json:"startedAt,omitempty"`
 	LastEventAt *time.Time `json:"lastEventAt,omitempty"`
 	// Error is why its last poll failed or its stream last ended early
-	// (cleared once it works again), and ErrorAt when.
+	// (cleared once it works again, or a permission it needs changes), and
+	// ErrorAt when.
 	Error   string     `json:"error,omitempty"`
 	ErrorAt *time.Time `json:"errorAt,omitempty"`
 	// Permissions are what the OS must allow it, as its file declares, with

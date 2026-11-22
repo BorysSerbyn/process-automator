@@ -104,7 +104,6 @@ type reviewer interface{ Review() }
 type statusFollower interface{ Update(*cli.RunStatus) }
 
 func run(dir string, which tray.Window) error {
-	kind := which.Kind
 	exe, err := os.Executable()
 	if err == nil {
 		exe, err = filepath.EvalSymlinks(exe)
@@ -133,67 +132,12 @@ func run(dir string, which tray.Window) error {
 	c := cli.CLI{Path: info.CLI, Command: info.Command}
 	ui.AppName = info.Name
 	a := fyneapp.NewWithID(id + ".windows")
-	var w fyne.Window
-	var view content
-	size := fyne.NewSize(640, 680)
 	open := func(win tray.Window) {
 		if err := tray.OpenWindow(info.CLI, win); err != nil {
 			log.Print(err)
 		}
 	}
-	switch kind {
-	case tray.SetupWindow:
-		w = a.NewWindow(info.Name + " Setup")
-		view = ui.NewSetup(c, w, ui.Background, func(routine string) {
-			open(tray.Window{Kind: tray.RoutineWindow, Routine: routine})
-		})
-	case tray.SettingsWindow:
-		w = a.NewWindow(info.Name + " Settings")
-		s := ui.NewSettings(c, w, ui.Background, info.Name)
-		// While it shows, read usage again now and then.
-		go func() {
-			for range time.Tick(ui.UsageEvery) {
-				fyne.Do(s.LoadUsage)
-			}
-		}()
-		view = s
-	case tray.RoutinesWindow:
-		w = a.NewWindow("Routines")
-		size = fyne.NewSize(600, 460)
-		view = ui.NewRoutines(c, ui.Background,
-			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name}) },
-			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name, Review: true}) },
-			func() { open(tray.Window{Kind: tray.SetupWindow}) },
-			func() { open(tray.Window{Kind: tray.SettingsWindow}) })
-	case tray.RoutineWindow:
-		w = a.NewWindow(which.Routine)
-		size = fyne.NewSize(680, 760)
-		view = ui.NewRoutine(c, w, ui.Background, which.Routine, func() { w.Close() })
-	case tray.HooksWindow:
-		w = a.NewWindow("Hooks")
-		size = fyne.NewSize(620, 520)
-		view = ui.NewHooks(c, ui.Background,
-			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) },
-			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name, Review: true}) },
-			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
-	case tray.HookWindow:
-		w = a.NewWindow(which.Routine)
-		size = fyne.NewSize(680, 760)
-		view = ui.NewHook(c, w, ui.Background, which.Routine, func() { w.Close() },
-			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
-	case tray.WatcherWindow:
-		w = a.NewWindow(which.Routine)
-		size = fyne.NewSize(640, 680)
-		view = ui.NewWatcher(c, w, ui.Background, which.Routine, func() { w.Close() },
-			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) })
-	case tray.UpdateWindow, tray.ConfirmUpdateWindow:
-		w = a.NewWindow("Updating")
-		if kind == tray.ConfirmUpdateWindow {
-			w.SetTitle(info.Name + " Update")
-		}
-		size = fyne.NewSize(460, 240)
-		view = ui.NewUpdate(c, ui.Background, kind == tray.ConfirmUpdateWindow, func() { w.Close() })
-	}
+	w, view, size := newWindow(a, c, info.Name, which, open)
 	// The Routines and Hooks windows, and a routine's, hook's or watcher's,
 	// show run status as it changes.
 	if f, ok := view.(statusFollower); ok {
@@ -250,4 +194,65 @@ func run(dir string, which tray.Window) error {
 	view.Load()
 	w.ShowAndRun()
 	return nil
+}
+
+// newWindow is the window which names, in a (appName's), with what it
+// shows and its size; open opens another window (a routine's from Setup, a watcher's
+// from a hook's).
+func newWindow(a fyne.App, c cli.CLI, appName string, which tray.Window, open func(tray.Window)) (w fyne.Window, view content, size fyne.Size) {
+	size = fyne.NewSize(640, 680)
+	switch kind := which.Kind; kind {
+	case tray.SetupWindow:
+		w = a.NewWindow(appName + " Setup")
+		view = ui.NewSetup(c, w, ui.Background, func(routine string) {
+			open(tray.Window{Kind: tray.RoutineWindow, Routine: routine})
+		})
+	case tray.SettingsWindow:
+		w = a.NewWindow(appName + " Settings")
+		s := ui.NewSettings(c, w, ui.Background, appName)
+		// While it shows, read usage again now and then.
+		go func() {
+			for range time.Tick(ui.UsageEvery) {
+				fyne.Do(s.LoadUsage)
+			}
+		}()
+		view = s
+	case tray.RoutinesWindow:
+		w = a.NewWindow("Routines")
+		size = fyne.NewSize(600, 460)
+		view = ui.NewRoutines(c, ui.Background,
+			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name}) },
+			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name, Review: true}) },
+			func() { open(tray.Window{Kind: tray.SetupWindow}) },
+			func() { open(tray.Window{Kind: tray.SettingsWindow}) })
+	case tray.RoutineWindow:
+		w = a.NewWindow(which.Routine)
+		size = fyne.NewSize(680, 760)
+		view = ui.NewRoutine(c, w, ui.Background, which.Routine, func() { w.Close() })
+	case tray.HooksWindow:
+		w = a.NewWindow("Hooks")
+		size = fyne.NewSize(620, 520)
+		view = ui.NewHooks(c, ui.Background,
+			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) },
+			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name, Review: true}) },
+			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
+	case tray.HookWindow:
+		w = a.NewWindow(which.Routine)
+		size = fyne.NewSize(680, 760)
+		view = ui.NewHook(c, w, ui.Background, which.Routine, func() { w.Close() },
+			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
+	case tray.WatcherWindow:
+		w = a.NewWindow(which.Routine)
+		size = fyne.NewSize(640, 680)
+		view = ui.NewWatcher(c, w, ui.Background, which.Routine, func() { w.Close() },
+			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) })
+	case tray.UpdateWindow, tray.ConfirmUpdateWindow:
+		w = a.NewWindow("Updating")
+		if kind == tray.ConfirmUpdateWindow {
+			w.SetTitle(appName + " Update")
+		}
+		size = fyne.NewSize(460, 240)
+		view = ui.NewUpdate(c, ui.Background, kind == tray.ConfirmUpdateWindow, func() { w.Close() })
+	}
+	return w, view, size
 }

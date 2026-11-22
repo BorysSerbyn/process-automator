@@ -21,13 +21,15 @@ const (
 		`{"text":"Setup isn't finished"}]}`
 	lineNone = `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","validUntil":"2026-11-17T08:06:00Z","health":"none","busy":false,` +
 		`"summary":"No routines enabled","routines":[]}`
-	// lineHooks has hooks beside the routines, and a reason about one.
+	// lineHooks has hooks beside the routines, reasons about them, and one
+	// about the watcher they listen to.
 	lineHooks = `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","validUntil":"2026-11-17T08:06:00Z","health":"error","busy":false,` +
 		`"routines":[{"name":"standup","enabled":true,"health":"ok","summary":"Next: tomorrow 09:20"}],` +
 		`"hooks":[{"name":"brief","enabled":false,"health":"none","summary":"Paused"},` +
 		`{"name":"open-meet","enabled":true,"health":"error","summary":"open-meet can't run"}],` +
-		`"reasons":[{"routine":"open-meet","hook":true,"text":"open-meet can't run","detail":"its watcher cal is paused"},` +
+		`"reasons":[{"routine":"open-meet","hook":true,"text":"open-meet can't run","detail":"it isn't trusted"},` +
 		`{"routine":"brief","hook":true,"text":"brief failed","run":"brief/r1"},` +
+		`{"watcher":"cal","text":"cal is failing: no network (open-meet and brief listen to it)"},` +
 		`{"routine":"standup","text":"standup can't be scheduled","detail":"it isn't trusted"}]}`
 	// lineNoHeartbeat has no validUntil: the scheduler never said it's up.
 	lineNoHeartbeat = `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","health":"ok","busy":true,"routines":[]}`
@@ -152,10 +154,11 @@ func TestTheMenu(t *testing.T) {
 		}, tail(
 			MenuItem{Text: "standup — standup failed", Health: "error", Action: review(RoutineWindow, "standup")},
 		)...)},
-		{"hooks: their own submenu after Routines ›; a reason about one opens its window, or its run", lineHooks, fresh, append([]MenuItem{
+		{"hooks: their own submenu after Routines ›; a reason about one opens its window, or its run; one about a watcher, the watcher's window", lineHooks, fresh, append([]MenuItem{
 			version,
 			{Text: "open-meet can't run", Action: review(HookWindow, "open-meet")},
 			{Text: "brief failed", Action: Action{Kind: OpenRun, Run: "brief/r1"}},
+			{Text: "cal is failing: no network (open-meet and brief listen to it)", Action: window(WatcherWindow, "cal")},
 			{Text: "standup can't be scheduled", Action: review(RoutineWindow, "standup")},
 		}, withHooks(tail(
 			MenuItem{Text: "standup — Next: tomorrow 09:20", Health: "ok", Action: review(RoutineWindow, "standup")},

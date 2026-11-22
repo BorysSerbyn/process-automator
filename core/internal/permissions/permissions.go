@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -137,6 +138,30 @@ type State struct {
 	// Requests are the latest request for each permission it took
 	// (`permissions request`), by permission.
 	Requests map[string]Request `json:"requests,omitempty"`
+	// Needs are, by name, what each routine, program, hook and watcher
+	// needed at that check, with each permission's status then (empty for
+	// one that needs none): when one's differs at the next check, its
+	// health is reset. Absent until the first check that records them.
+	Needs map[string]map[string]Status `json:"needs,omitempty"`
+}
+
+// Changed are the names whose needs differ between before and after:
+// another status for a permission, or another set of permissions. Names in
+// only one of them (added, removed) haven't changed; with nothing before
+// (the first check), nothing has.
+func Changed(before, after map[string]map[string]Status) []string {
+	var out []string
+	if before == nil {
+		return nil
+	}
+	for name, now := range after {
+		was, ok := before[name]
+		if ok && !maps.Equal(was, now) {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Request is how the scheduler took a request to ask the OS for a

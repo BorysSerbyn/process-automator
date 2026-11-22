@@ -294,3 +294,107 @@ func TestSetupLeft(t *testing.T) {
 		t.Errorf("finished setup: %s %v", s.Health, s.SetupLeft)
 	}
 }
+
+// A health reset (a permission it needs changed): the last run no longer
+// counts, red or green, until it runs again; the run itself stays recorded,
+// and Sync keeps when the reset was. A run since counts again; one still
+// going is current.
+func TestResetHealth(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run-status.json")
+	next := at(time.Hour)
+	_ = Sync(path, map[string]Setup{"standup": {Enabled: true, NextRunAt: next}, "digest": {Enabled: true}}, t0)
+	failed := Run{ID: "standup/1", StartedAt: t0.Add(-time.Hour), Outcome: OutcomeFailed, Reason: "no permission"}
+	_ = Record(path, "standup", failed, t0)
+	_ = Record(path, "digest", Run{StartedAt: t0.Add(-time.Hour), Outcome: OutcomeSuccess}, t0)
+	if s := load(t, path); s.Health != HealthError {
+		t.Fatalf("before: %s", s.Health)
+	}
+	if err := ResetHealth(path, []string{"standup", "digest", "not-here"}, t0); err != nil {
+		t.Fatal(err)
+	}
+	_ = Sync(path, map[string]Setup{"standup": {Enabled: true, NextRunAt: next}, "digest": {Enabled: true}}, t0)
+	s := load(t, path)
+	if s.Health != HealthOK || len(s.Reasons) != 0 {
+		t.Fatalf("a reset failure still counts: %s %+v", s.Health, s.Reasons)
+	}
+	for _, r := range s.Routines {
+		if r.Health != HealthNone || !strings.HasPrefix(r.Summary, "Permissions changed; ") || r.HealthResetAt == nil {
+			t.Errorf("%s: %s %q, want neutral", r.Name, r.Health, r.Summary)
+		}
+	}
+	if r := s.Routines[1]; r.Name != "standup" || r.LastRun == nil || r.LastRun.ID != "standup/1" || r.LastRun.Outcome != OutcomeFailed {
+		t.Fatalf("the run itself changed: %+v", r.LastRun)
+	}
+	// It runs again: that run counts, failed or not.
+	_ = Record(path, "standup", Run{StartedAt: t0.Add(time.Minute), Outcome: OutcomeFailed}, t0.Add(time.Minute))
+	_ = Record(path, "digest", Run{StartedAt: t0.Add(time.Minute), Outcome: OutcomeSuccess}, t0.Add(time.Minute))
+	s = load(t, path)
+	if s.Health != HealthError || len(s.Reasons) != 1 || s.Reasons[0].Text != "standup failed" {
+		t.Fatalf("a failure since the reset: %s %+v", s.Health, s.Reasons)
+	}
+	if d := s.Routines[0]; d.Health != HealthOK || d.Summary != "Runs by hand" {
+		t.Fatalf("a success since the reset: %s %q", d.Health, d.Summary)
+	}
+	// A still-missing permission is a problem of its own, reset or not.
+	_ = ResetHealth(path, []string{"standup"}, t0.Add(2*time.Minute))
+	_ = Sync(path, map[string]Setup{"standup": {Enabled: true, Problem: "it needs the Input Monitoring permission"}, "digest": {Enabled: true}}, t0)
+	if s = load(t, path); s.Health != HealthError || len(s.Reasons) != 1 || s.Reasons[0].Text != "standup can't be scheduled" {
+		t.Fatalf("a missing permission after a reset: %s %+v", s.Health, s.Reasons)
+	}
+	// A run still going started before the reset is current.
+	r := Routine{Name: "a", Enabled: true, HealthResetAt: at(0), LastRun: &Run{StartedAt: t0.Add(-time.Minute), Outcome: OutcomeRunning}}
+	if h, sum := routineState(r, t0); h != HealthOK || !strings.HasPrefix(sum, "Running since") {
+		t.Fatalf("running: %s %q", h, sum)
+	}
+	if h, sum := hookState(Routine{Name: "h", Enabled: true, HealthResetAt: at(0)}, t0); h != HealthNone || sum != "Permissions changed; waiting for events" {
+		t.Fatalf("a hook: %s %q", h, sum)
+	}
+}
+
+// Hooks sharing a watcher that's wrong: one reason, about the watcher,
+// naming them; each hook's own problem still says it waits on its watcher,
+// and a hook with something else wrong has its own reason for that alone.
+func TestOneReasonPerWatcher(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run-status.json")
+	failing := "home-key is failing: can't listen to the keyboard"
+	_ = Sync(path, map[string]Setup{
+		"home-joke": {Hook: true, Enabled: true, Watcher: "home-key", WatcherProblem: failing},
+		"say-hi":    {Hook: true, Enabled: true, Watcher: "home-key", WatcherProblem: failing},
+		"wave":      {Hook: true, Enabled: true, Watcher: "home-key", WatcherProblem: failing, Problem: "it isn't trusted"},
+		"off":       {Hook: true, Watcher: "home-key", WatcherProblem: failing},
+		"cal-brief": {Hook: true, Enabled: true, Watcher: "cal"},
+	}, t0)
+	s := load(t, path)
+	if s.Health != HealthError || len(s.Reasons) != 2 {
+		t.Fatalf("reasons: %s %+v", s.Health, s.Reasons)
+	}
+	own, watcher := s.Reasons[0], s.Reasons[1]
+	if !own.Hook || own.Routine != "wave" || own.Text != "wave can't run" || own.Detail != "it isn't trusted" {
+		t.Errorf("the hook's own reason: %+v", own)
+	}
+	if watcher.Watcher != "home-key" || watcher.Routine != "" || watcher.Hook ||
+		watcher.Text != failing+" (home-joke, say-hi and wave listen to it)" {
+		t.Errorf("the watcher's reason: %+v", watcher)
+	}
+	for _, h := range s.Hooks {
+		switch h.Name {
+		case "home-joke", "say-hi":
+			if h.Problem != "its watcher "+failing || h.Health != HealthError || h.Summary != h.Name+" can't run" {
+				t.Errorf("%s: %+v", h.Name, h)
+			}
+		case "wave":
+			if h.Problem != "it isn't trusted; its watcher "+failing {
+				t.Errorf("%s: %q", h.Name, h.Problem)
+			}
+		case "cal-brief":
+			if h.Health != HealthOK || h.Problem != "" || h.Watcher != "cal" {
+				t.Errorf("%s: %+v", h.Name, h)
+			}
+		}
+	}
+	// One hook: it listens.
+	_ = Sync(path, map[string]Setup{"home-joke": {Hook: true, Enabled: true, Watcher: "home-key", WatcherProblem: "home-key is paused"}}, t0)
+	if s = load(t, path); len(s.Reasons) != 1 || s.Reasons[0].Text != "home-key is paused (home-joke listens to it)" {
+		t.Fatalf("one hook: %+v", s.Reasons)
+	}
+}

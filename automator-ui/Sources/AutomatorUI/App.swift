@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             openRun: { [weak self] id in self?.openRun(id) },
             openHooks: { [weak self] in self?.routineWindows?.showHooks() },
             openHook: { [weak self] name, run in self?.routineWindows?.showHook(name, run: run, review: run == nil) },
+            openWatcher: { [weak self] name in self?.routineWindows?.showWatcher(name) },
             openSetup: { [weak self] in self?.setupWindow?.show() })
         notifier.setUp(cli: cli) { [weak self] click in self?.show(click) }
         followStatus()

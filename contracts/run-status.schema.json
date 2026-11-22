@@ -52,7 +52,19 @@
           },
           "problem": {
             "type": "string",
-            "description": "Problem says why the routine can't be scheduled (e.g. its file doesn't\nparse). It's current state, cleared as soon as the routine is fixed."
+            "description": "Problem says why the routine can't be scheduled (e.g. its file doesn't\nparse). It's current state, cleared as soon as the routine is fixed. A\nhook's ends with what's wrong with its watcher, when something is:\n\"its watcher \" and WatcherProblem."
+          },
+          "watcher": {
+            "type": "string",
+            "description": "Watcher is the watcher a hook listens to, and WatcherProblem what's\nwrong with it that keeps the hook from hearing its events (failing,\nuntrusted, paused, a permission it needs), said about the watcher\n(\"keys is failing: …\"): the same for every hook on it, so it's one\nreason, about the watcher, not one per hook."
+          },
+          "watcherProblem": {
+            "type": "string"
+          },
+          "healthResetAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "HealthResetAt is when the scheduler last found that a permission it\nneeds changed (its state, or which ones it needs): a run that started\nbefore then no longer counts toward its health, which is none until it\nruns again. Its runs stay in history as they were."
           },
           "nextRunAt": {
             "type": "string",
@@ -130,7 +142,7 @@
           },
           "health": {
             "type": "string",
-            "description": "Health is the routine's own verdict: error when it makes the app's\nhealth error, ok while it's enabled and fine, none while it's paused."
+            "description": "Health is the routine's own verdict: error when it makes the app's\nhealth error, ok while it's enabled and fine, none while it's paused\nor, after a health reset, until it runs again."
           },
           "summary": {
             "type": "string",
@@ -158,7 +170,19 @@
           },
           "problem": {
             "type": "string",
-            "description": "Problem says why the routine can't be scheduled (e.g. its file doesn't\nparse). It's current state, cleared as soon as the routine is fixed."
+            "description": "Problem says why the routine can't be scheduled (e.g. its file doesn't\nparse). It's current state, cleared as soon as the routine is fixed. A\nhook's ends with what's wrong with its watcher, when something is:\n\"its watcher \" and WatcherProblem."
+          },
+          "watcher": {
+            "type": "string",
+            "description": "Watcher is the watcher a hook listens to, and WatcherProblem what's\nwrong with it that keeps the hook from hearing its events (failing,\nuntrusted, paused, a permission it needs), said about the watcher\n(\"keys is failing: …\"): the same for every hook on it, so it's one\nreason, about the watcher, not one per hook."
+          },
+          "watcherProblem": {
+            "type": "string"
+          },
+          "healthResetAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "HealthResetAt is when the scheduler last found that a permission it\nneeds changed (its state, or which ones it needs): a run that started\nbefore then no longer counts toward its health, which is none until it\nruns again. Its runs stay in history as they were."
           },
           "nextRunAt": {
             "type": "string",
@@ -236,7 +260,7 @@
           },
           "health": {
             "type": "string",
-            "description": "Health is the routine's own verdict: error when it makes the app's\nhealth error, ok while it's enabled and fine, none while it's paused."
+            "description": "Health is the routine's own verdict: error when it makes the app's\nhealth error, ok while it's enabled and fine, none while it's paused\nor, after a health reset, until it runs again."
           },
           "summary": {
             "type": "string",
@@ -264,6 +288,10 @@
           "hook": {
             "type": "boolean",
             "description": "Hook is true when Routine names a hook, not a routine."
+          },
+          "watcher": {
+            "type": "string",
+            "description": "Watcher is the watcher it's about, when what's wrong is a watcher's\n(failing, untrusted, paused, a permission it needs): one reason for\nit, naming the hooks that listen to it, and Routine is empty."
           },
           "text": {
             "type": "string",

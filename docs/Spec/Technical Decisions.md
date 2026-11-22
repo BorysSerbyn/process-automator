@@ -705,3 +705,21 @@ A routine's, a program's, a hook's or a watcher's approval includes the permissi
 ### Rejected
 - **Every routine untrusted after the update**: notify now declaring notifications would have untrusted every routine using it, asking me again about what I'd already approved and stopping them all until I did
 - **Ignoring permissions in trust**: a plugin could start needing Screen Recording and every routine using it would keep running without my seeing it
+
+## Decision: a permission change starts health afresh, recorded as a reset time, not by changing runs
+After I took Input Monitoring away and gave it back, the key watcher restarted fine, but both hooks on it stayed red with its old error until a key event came, which might be never. What a run or a watcher's last attempt says was found under the permissions it had then; once they change, it no longer says how things go now. So the scheduler records, with each check, what each routine, program, hook and watcher needs and each one's status (`needs` in `permissions.json`); one whose entry changed (allowed, taken away, or another set of permissions declared) gets a `healthResetAt` in run status, and a watcher's last error is cleared. Health then skips a last run that started before it: neither red nor green, until it runs again. A hook needs its watcher's permissions too, so a change to the watcher's resets the hooks on it. A permission still missing is readiness, not a past run, so a revoke still turns it red, with only that. The reset is judged against when the run started, not when it finished: a run that started before the change ran with the old permissions, however long it took.
+
+### Rejected
+- **Deleting or rewriting the runs**: history is what happened, and `runs` and the run's report would lose the failure I may want to read
+- **Clearing a watcher's error on a timer** (a stream still running a minute after it starts): I turned it down; a watcher's error clears as it always has, once it works again (a poll that works, a stream printing an event), and now also when a permission it needs changes
+- **Detecting the change from the state alone** (granted before, missing now): a program or plugin declaring another permission changes what it needs too, and comparing each thing's own needs covers both
+- **Resetting everything on any change**: a routine that doesn't need the permission keeps a failure that's still true
+- **Green after a reset**: a success from before the change says no more than a failure does
+
+## Decision: a watcher's problem is one reason, naming the hooks on it
+A watcher shared by several hooks put its error in the red dot's reasons once per hook: two hooks on the key watcher listed the same "can't listen to the keyboard" twice, which read as two problems, or as the app's own fault. A watcher's problem (failing, untrusted, paused, a permission only it needs) is one problem however many hooks share it, so run status keeps it apart on each hook (`watcherProblem`, said about the watcher) and makes one reason of it, naming the hooks that listen, with the watcher's name so choosing it opens the watcher's window, where it's fixed. Health is red once for it. Each hook's own `problem`, its window and `hooks show` still say it's waiting on its watcher and why; the hook's own reason says only what else is wrong with it. A missing watcher, or one that doesn't load, stays each hook's: there's no watcher window to open.
+
+### Rejected
+- **Keeping one reason per hook**: the same problem repeated, and each opened a hook's window, one step from where it's fixed
+- **Dropping the watcher's problem from the hooks**: a hook's window would look fine while it hears nothing
+- **Frontends grouping reasons themselves**: that's a decision about health, which is the core's

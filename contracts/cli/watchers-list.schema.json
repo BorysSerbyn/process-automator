@@ -97,7 +97,7 @@
       },
       "error": {
         "type": "string",
-        "description": "Error is why its last poll failed or its stream last ended early\n(cleared once it works again), and ErrorAt when."
+        "description": "Error is why its last poll failed or its stream last ended early\n(cleared once it works again, or a permission it needs changes), and\nErrorAt when."
       },
       "errorAt": {
         "type": "string",

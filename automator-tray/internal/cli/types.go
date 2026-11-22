@@ -30,6 +30,9 @@ type Reason struct {
 	// Routine is the routine it's about; a hook's name when Hook is true.
 	Routine string `json:"routine,omitempty"`
 	Hook    bool   `json:"hook,omitempty"`
+	// Watcher is the watcher it's about (its hooks hear nothing while it's
+	// wrong), when it's one's.
+	Watcher string `json:"watcher,omitempty"`
 }
 
 // RoutineStatus is one routine's entry in the status.

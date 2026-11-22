@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 )
@@ -58,6 +59,19 @@ type Problem struct {
 	// address of the OS's settings page that turns it on ("" where there's
 	// none) and `permissions request <permission>` asks for it.
 	Permission, Open string
+	// Watcher is a hook's watcher, when it's that watcher that's wrong
+	// (failing, untrusted, paused, a permission only it needs): Text then
+	// says it about the hook, "its watcher <name> …" (see AboutWatcher).
+	Watcher string
+}
+
+// AboutWatcher is a problem with a hook's watcher said about the watcher
+// ("keys is paused", not "its watcher keys is paused"); "" for any other.
+func (p Problem) AboutWatcher() string {
+	if p.Watcher == "" {
+		return ""
+	}
+	return strings.TrimPrefix(p.Text, "its watcher ")
 }
 
 // Assess checks what can be checked without connecting to anything: its

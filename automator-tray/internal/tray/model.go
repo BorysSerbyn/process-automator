@@ -149,7 +149,8 @@ func Menu(name, version string, s *cli.RunStatus, now time.Time, update MenuItem
 
 // statusItems are what the status is, in the core's words: why it's red
 // (each reason opens the run it's about; one about a routine or hook with
-// no run, its window on its Turn On review), or its summary.
+// no run, its window on its Turn On review; one about a watcher, its
+// window), or its summary.
 func statusItems(s *cli.RunStatus, now time.Time) []MenuItem {
 	if !Responding(s, now) {
 		return []MenuItem{{Text: "Not responding"}}
@@ -161,6 +162,8 @@ func statusItems(s *cli.RunStatus, now time.Time) []MenuItem {
 	for _, r := range s.Reasons {
 		item := MenuItem{Text: shorten(r.Text)}
 		switch {
+		case r.Watcher != "":
+			item.Action = Action{Kind: ShowWindow, Window: Window{Kind: WatcherWindow, Routine: r.Watcher}}
 		case r.Run != "":
 			item.Action = Action{Kind: OpenRun, Run: r.Run}
 		case r.Hook && r.Routine != "":

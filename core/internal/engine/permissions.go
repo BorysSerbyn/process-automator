@@ -195,6 +195,9 @@ func PermissionProblems(self string, needs []PermissionNeed) []Problem {
 		who := whoNeeds(self, n.By)
 		p := Problem{Permission: n.Permission, Open: n.SettingsURL, Fix: PermissionFix(n),
 			Text: fmt.Sprintf("%s needs the %s permission, which isn't allowed for %s", who, n.Label, product.Name)}
+		if len(n.By) == 1 && n.By[0].Kind == SourceWatcher && n.By[0].Name != self {
+			p.Watcher = n.By[0].Name // only a hook's watcher needs it
+		}
 		out = append(out, p)
 	}
 	return out
@@ -236,12 +239,70 @@ func whoNeeds(self string, by []PermissionSource) string {
 // RecordPermissions checks every permission with the OS and records what
 // it found: the scheduler does, on each pass (macOS attributes its checks
 // to the app). Every permission, not only the ones things declare now, so
-// a review of something just added has an answer.
-func (a *App) RecordPermissions(now time.Time) error {
+// a review of something just added has an answer. With them it records
+// what each routine, program, hook and watcher needs, and returns the
+// names of those whose needs changed since the last check (a permission's
+// state, or which ones): the scheduler resets their health.
+func (a *App) RecordPermissions(now time.Time) ([]string, error) {
 	found := checkAll()
-	return permissions.Update(a.Layout.Permissions(), func(s *permissions.State) {
+	declared := a.allNeeds()
+	var changed []string
+	err := permissions.Update(a.Layout.Permissions(), func(s *permissions.State) {
 		s.CheckedAt, s.Permissions = now, found
+		needs := map[string]map[string]permissions.Status{}
+		for name, perms := range declared {
+			needs[name] = map[string]permissions.Status{}
+			for _, p := range perms {
+				needs[name][p] = s.Of(p)
+			}
+		}
+		changed = permissions.Changed(s.Needs, needs)
+		s.Needs = needs
 	})
+	return changed, err
+}
+
+// allNeeds is the permissions each routine, program, hook and watcher
+// needs, by name. One that doesn't load is left out.
+func (a *App) allNeeds() map[string][]string {
+	out := map[string][]string{}
+	add := func(name string, ns []need) { out[name] = permissionNames(ns) }
+	if all, _, err := a.All(); err == nil {
+		for _, x := range all {
+			add(x.Name(), x.needs(a))
+		}
+	}
+	if all, _, err := a.Hooks(); err == nil {
+		for _, x := range all {
+			add(x.Name(), x.needs(a))
+		}
+	}
+	if ws, _, err := a.Watchers(); err == nil {
+		for _, w := range ws {
+			add(w.Name, watcherNeeds(w))
+		}
+	}
+	return out
+}
+
+// recordPermissions records what the OS allows (RecordPermissions) and
+// resets the health of what needs a permission whose state changed, or
+// whose permissions did: their last runs stop counting toward health (in
+// run status) and a watcher's last error is cleared. What's still missing
+// stays a problem of its own.
+func recordPermissions(a *App, ev *events, now time.Time) {
+	changed, err := a.RecordPermissions(now)
+	if err != nil {
+		logf("permissions: %v", err)
+	}
+	if len(changed) == 0 {
+		return
+	}
+	logf("permissions: changed for %s; their health starts afresh", strings.Join(changed, ", "))
+	if err := runstatus.ResetHealth(a.Layout.RunStatus(), changed, now); err != nil {
+		logf("run status: %v", err)
+	}
+	ev.permissionsChanged(changed)
 }
 
 // PermissionsProbeEnv makes the app's binary, when it's set in its environment, print
@@ -387,7 +448,7 @@ func waitFor(ctx context.Context, d time.Duration, done func() bool) bool {
 // servePermissionRequests takes requests to ask the OS for a permission
 // (RequestPermission) until ctx ends: it asks, from the daemon, and records
 // what the OS says once it has answered, with run status brought up to date.
-func servePermissionRequests(ctx context.Context, a *App, reload func() (*App, error)) {
+func servePermissionRequests(ctx context.Context, a *App, ev *events, reload func() (*App, error)) {
 	t := time.NewTicker(requestPoll)
 	defer t.Stop()
 	dir := a.Layout.PermissionRequests()
@@ -439,9 +500,7 @@ func servePermissionRequests(ctx context.Context, a *App, reload func() (*App, e
 					logf("permissions: %v", err)
 					return
 				}
-				if err := cur.RecordPermissions(time.Now()); err != nil {
-					logf("permissions: %v", err)
-				}
+				recordPermissions(cur, ev, time.Now())
 				logf("permissions: %s is %s", name, cur.PermissionState().Of(name))
 				if err := cur.SyncStatus(time.Now()); err != nil {
 					logf("run status: %v", err)

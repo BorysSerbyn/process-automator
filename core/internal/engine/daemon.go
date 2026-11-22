@@ -93,10 +93,9 @@ func (a *App) Daemon(ctx context.Context) error {
 			if err != nil {
 				return nil, err
 			}
-			// What the OS allows the app, before anything is judged by it.
-			if err := cur.RecordPermissions(time.Now()); err != nil {
-				logf("permissions: %v", err)
-			}
+			// What the OS allows the app, before anything is judged by it
+			// (what a change affects starts afresh).
+			recordPermissions(cur, ev, time.Now())
 			jobs, problems, err := scheduledJobs(cur)
 			if err != nil {
 				return nil, err
@@ -159,7 +158,7 @@ func (a *App) Daemon(ctx context.Context) error {
 	}
 
 	go stopWaiting(ctx, a, s, ev.disp)
-	go servePermissionRequests(ctx, a, reload)
+	go servePermissionRequests(ctx, a, ev, reload)
 
 	lastPrune := time.Time{}
 	lastTick := time.Now()

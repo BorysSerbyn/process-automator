@@ -540,6 +540,24 @@ func (e *events) queued(d dispatch.Due) {
 	writeStatus(a, d.Target, forOccurrence(runstatus.Run{StartedAt: *d.QueuedAt, QueuedAt: d.QueuedAt, Outcome: runstatus.OutcomeQueued}, d.Occurrence))
 }
 
+// permissionsChanged clears the last error of the watchers among names,
+// whose permissions changed: how it went before no longer says how it
+// goes, until it works or fails again.
+func (e *events) permissionsChanged(names []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	cleared := false
+	for _, name := range names {
+		if ws := e.state.Watchers[name]; ws != nil && ws.Error != "" {
+			ws.Worked()
+			cleared = true
+		}
+	}
+	if cleared {
+		e.save()
+	}
+}
+
 // stop stops the watchers and waits for them and the hooks' runs.
 func (e *events) stop() {
 	e.mu.Lock()
@@ -552,9 +570,12 @@ func (e *events) stop() {
 	e.disp.Wait()
 }
 
-// hookSetups is how each hook is set up, for run status: enabled, and why it
-// can't run when it's on (its settings, its action's problems, its watcher
-// missing, untrusted or failing, or it isn't trusted).
+// hookSetups is how each hook is set up, for run status: enabled, the
+// watcher it listens to, and why it can't run when it's on (its settings,
+// its action's problems, its watcher missing, or it isn't trusted), with
+// what's wrong with its watcher apart (failing, untrusted, paused, a
+// permission it needs), said about the watcher: every hook on it says the
+// same, and run status makes it one reason.
 func hookSetups(a *App) map[string]runstatus.Setup {
 	out := map[string]runstatus.Setup{}
 	all, broken, err := a.Hooks()
@@ -566,16 +587,21 @@ func hookSetups(a *App) map[string]runstatus.Setup {
 	}
 	for _, x := range all {
 		rd := a.Assess(x)
-		setup := runstatus.Setup{Hook: true, Enabled: rd.Config.Enabled}
+		h, _ := AsHook(x)
+		setup := runstatus.Setup{Hook: true, Enabled: rd.Config.Enabled, Watcher: h.On.Watcher}
 		switch {
 		case rd.ConfigErr != nil:
 			setup.Enabled, setup.Problem = true, rd.ConfigErr.Error()
 		case rd.Config.Enabled:
-			var why []string
+			var own, watcher []string
 			for _, p := range rd.All() {
-				why = append(why, p.Text)
+				if about := p.AboutWatcher(); about != "" {
+					watcher = append(watcher, about)
+				} else {
+					own = append(own, p.Text)
+				}
 			}
-			setup.Problem = strings.Join(why, "; ")
+			setup.Problem, setup.WatcherProblem = strings.Join(own, "; "), strings.Join(watcher, "; ")
 		}
 		out[x.Name()] = setup
 	}

@@ -85,6 +85,10 @@ type Reason struct {
 	Routine string `json:"routine,omitempty"`
 	// Hook is true when Routine names a hook, not a routine.
 	Hook bool `json:"hook,omitempty"`
+	// Watcher is the watcher it's about, when what's wrong is a watcher's
+	// (failing, untrusted, paused, a permission it needs): one reason for
+	// it, naming the hooks that listen to it, and Routine is empty.
+	Watcher string `json:"watcher,omitempty"`
 	// Text is a short headline ("standup failed"); Detail the full story (the
 	// run's reason), for frontends to show on demand.
 	Text   string `json:"text"`
@@ -99,15 +103,30 @@ type Routine struct {
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
 	// Problem says why the routine can't be scheduled (e.g. its file doesn't
-	// parse). It's current state, cleared as soon as the routine is fixed.
+	// parse). It's current state, cleared as soon as the routine is fixed. A
+	// hook's ends with what's wrong with its watcher, when something is:
+	// "its watcher " and WatcherProblem.
 	Problem string `json:"problem,omitempty"`
+	// Watcher is the watcher a hook listens to, and WatcherProblem what's
+	// wrong with it that keeps the hook from hearing its events (failing,
+	// untrusted, paused, a permission it needs), said about the watcher
+	// ("keys is failing: …"): the same for every hook on it, so it's one
+	// reason, about the watcher, not one per hook.
+	Watcher        string `json:"watcher,omitempty"`
+	WatcherProblem string `json:"watcherProblem,omitempty"`
+	// HealthResetAt is when the scheduler last found that a permission it
+	// needs changed (its state, or which ones it needs): a run that started
+	// before then no longer counts toward its health, which is none until it
+	// runs again. Its runs stay in history as they were.
+	HealthResetAt *time.Time `json:"healthResetAt,omitempty"`
 	// NextRunAt is the next slot the scheduler will handle (enabled, scheduled
 	// routines only). The scheduler moves it forward as soon as it picks a slot
 	// up, so one more than SchedulerGrace in the past means it didn't.
 	NextRunAt *time.Time `json:"nextRunAt,omitempty"`
 	LastRun   *Run       `json:"lastRun,omitempty"`
 	// Health is the routine's own verdict: error when it makes the app's
-	// health error, ok while it's enabled and fine, none while it's paused.
+	// health error, ok while it's enabled and fine, none while it's paused
+	// or, after a health reset, until it runs again.
 	Health Health `json:"health,omitempty"`
 	// Summary is its state in a few words ("Next: tomorrow 09:20", "standup
 	// failed", "Paused"), for frontends to show as is.
