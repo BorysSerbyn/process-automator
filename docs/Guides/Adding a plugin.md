@@ -6,7 +6,13 @@ A plugin is any MCP server: one that exists, or one you write. How to add one is
 procauto guide plugins
 ```
 
-It covers the three ways `procauto plugins add <name>` adds a server (a remote `--url`, a local `--command`, or a plugin folder with `--dir`), writing your own server (a minimal one in Go) and its `plugin.yaml`, what `plugins add` checks before adding anything, secrets, and using it in a routine. `procauto plugins remove <name>` takes one out again and forgets its credentials. Names are lowercase letters, digits and dashes; `notify` is taken by the plugin the app ships with.
+It covers the three ways `procauto plugins add <name>` adds a server (`--url`, `--command`, `--dir`), a minimal plugin folder with its `plugin.yaml`, the annotation and secret rules, and the commands to check it. `plugins add --help` lists every flag. `procauto plugins remove <name>` takes a server out again and forgets its credentials. Names are lowercase letters, digits and dashes; `notify` is taken by the plugin the app ships with.
+
+## Plugin folders
+- The folder is copied into the app, so where it was written doesn't matter; the server runs from the copy, which is its working directory. `--replace` installs a new version (the old one stays if the new one fails its trial); `plugins remove` deletes the copy
+- `plugins add` tries the server first: it must start, complete the MCP handshake and offer at least one tool, each with an object input schema and a name used once. Other servers' tools without annotations are only a warning, and count as writes
+- A server that needs credentials is tried as far as it can be; sign in with `auth login <name>`, then `plugins check <name>` tries it fully
+- `pairing` is for local apps that approve clients themselves and then show a credential once: `auth login` connects first so the app can ask, then asks you to paste the credential
 
 ## In the config file
 Servers can also be written by hand under `mcpServers` in the config file (`procauto paths` shows where). Unknown or misspelled fields are an error, so a typo shows up immediately instead of being ignored. Secrets are `{secret-key}` references in `env` or `headers`, asked for by `procauto auth login <name>`; then `procauto plugins check <name>` tries the server.
@@ -22,8 +28,6 @@ mcpServers:
       NOTES_TOKEN: "{notes-token}"   # asked for by `auth login notes`
       NOTES_MODE: fast               # plain values are fine too
 ```
-
-Local apps that approve clients themselves and then show a credential once also set `pairing: "<what to click>"`: `auth login` connects first so the app can ask, then asks you to paste the credential.
 
 ### Remote server
 
