@@ -2,7 +2,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## Platforms
 - **macOS and Linux**: the same CLI, scheduler and routines on both
-- **A menu bar app on macOS, a tray on Linux**: macOS's menu bar app (automator-ui) has the windows too; Linux's tray has the same icon, menu and notifications and the same Setup and Settings windows, and opens the other windows as their CLI commands in my terminal
+- **A menu bar app on macOS, a tray on Linux**: macOS's menu bar app (automator-ui) has the windows too; Linux's tray has the same icon, menu and notifications and the same windows
 
 ## Routines
 - **Routines are files on my device**: the app ships with none; a routine is added or changed by adding or editing its file in the routines folder, with no app update
@@ -54,7 +54,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Notifications
 - **From routines** (the notify plugin): a routine can send me a short desktop notification, a title and a message, shown by the plugin itself through the OS (macOS, as the app; Linux, through the desktop's notification service), not by the menu bar app. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade. Clicking one does nothing. It has no settings, app-wide or per routine
 - **The app's own**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app on macOS and the tray on Linux; clicking one opens the app: on the run it's about, in its routine's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
-- **On Linux** clicking one opens its run's report, or (an update's) the routines list in a terminal
+- **On Linux** clicking one opens its run's report, or (an update's) the Routines window
 
 ## Status indicator
 - **Icon** in the macOS menu bar, or the Linux tray, with a status dot:
@@ -81,7 +81,7 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 - **Settings window**: start at login, LLM usage, and every app-wide setting with a control for its type
 - **Updates**: see whether a newer release exists, and install it
 - **Start at login**: on or off
-- **Linux tray**: the same menu, updates and notifications, and the same Setup and Settings windows (with no display to show them on, or without the windows app, they're their CLI commands in my terminal: `setup`; `settings list --scope app`); the other windows are their CLI commands run in my terminal (Routines: `routines list`; a routine: `routines show <routine>`; Updating: `update progress`), and installing an update is confirmed in a notification (in my terminal where notifications have no buttons)
+- **Linux tray**: the same menu, updates, notifications and windows (Setup, Settings, Routines, a routine's, Updating); a routine's schedule is edited as its cron setting, with no days-and-time picker. Installing an update is confirmed in a notification (where notifications have no buttons, in a window that asks). With no display to show a window on, or without the windows app, a window is its CLI command in my terminal (Setup: `setup`; Settings: `settings list --scope app`; Routines: `routines list`; a routine: `routines show <routine>`; Updating: `update progress`; asking before an update: `update --ask`)
 
 ## CLI
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each

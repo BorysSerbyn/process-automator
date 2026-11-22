@@ -46,16 +46,18 @@ What routines tell you with `notify_me` isn't the menu bar app's: the `notify` p
 macOS asks once whether the app may show notifications (for both); until you allow it, the app's own wait.
 
 ## The Linux tray
-In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the routines list. It starts at login. **Quit** stops it and the scheduler, as on macOS, until you open the app again or log in again. The app is in your desktop's app menu (search for **Process Automator**): opening it starts the scheduler and brings the tray back, or, while the tray runs, opens Setup or Settings as on macOS. The tray's log is `frontend.log` in the data folder (see [[Guides/Troubleshooting#Logs|Logs]]).
+In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the Routines window. It starts at login. **Quit** stops it and the scheduler, as on macOS, until you open the app again or log in again. The app is in your desktop's app menu (search for **Process Automator**): opening it starts the scheduler and brings the tray back, or, while the tray runs, opens Setup or Settings as on macOS. The tray's log is `frontend.log` in the data folder (see [[Guides/Troubleshooting#Logs|Logs]]).
 
-**Finish Setup…** and **Settings** open the same Setup and Settings windows as on macOS ([[#Setup window]], [[#Settings window]]); opening one again brings it to the front. The other windows aren't on Linux yet: those menu items run their `procauto` command in your terminal (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`), which stays open until you press Enter:
+Its windows are the menu bar app's: [[#Routines window]], [[#A routine's window]], [[#Setup window]], [[#Settings window]] and Updating; opening one again brings it to the front. A routine's window has the same controls and tabs (**Overview**, **Runs**, **Memories**, **Settings**), but no days-and-time picker: its schedule is its `schedule` setting, in cron, under **Settings**. A paused routine that isn't trusted has **Turn On** in its review: it's trusted and resumed together.
 
-| Menu item | Runs |
+A window opens in your terminal instead (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`, kept open until you press Enter) when it can't open: no display, no OpenGL, or a package built without the windows app. The tray's log says why:
+
+| Window | Runs |
 |---|---|
-| **All Routines…** | `procauto routines list` |
+| Setup | `procauto setup` |
+| Settings | `procauto settings list --scope app` |
+| Routines | `procauto routines list` |
 | A routine | `procauto routines show <routine>` |
-| **Updating to X…** | `procauto update progress` |
+| Updating | `procauto update progress` |
 
-Setup and Settings open in a terminal too (`procauto setup`, `procauto settings list --scope app`) when their window can't open: no display, no OpenGL, or a package built without the windows app.
-
-**Update to X…** asks in a notification, with **Update** and **Later** (where notifications have no buttons, in your terminal: `procauto update --ask`). On GNOME the tray needs the AppIndicator extension (Ubuntu has it on); see [[Guides/Getting started#On Linux|On Linux]].
+**Update to X…** asks in a notification, with **Update** and **Later** (where notifications have no buttons, in a window). On GNOME the tray needs the AppIndicator extension (Ubuntu has it on); see [[Guides/Getting started#On Linux|On Linux]].

@@ -65,7 +65,7 @@ Setup takes you through what the app needs, in order:
 6. **Sign-ins**: each server your routines use. One that needs something set up first walks you through it before asking for anything ([[Guides/Plugins and sign-ins|Plugins and sign-ins]])
 7. **Turn on routines**: what each routine can reach, for you to approve; one yes trusts it and runs it on its schedule ([[Guides/Routines#Turn it on|Turn it on]])
 
-Run it in a terminal with `procauto setup`, which asks before each step and skips what's done, or open **Finish Setup…** from the menu bar or the Linux tray (on macOS also **Setup** in the Routines window), which shows every step with a button for each. Run it again any time, e.g. after adding a routine. Until the required steps are done, the menu bar dot is red with "Setup isn't finished".
+Run it in a terminal with `procauto setup`, which asks before each step and skips what's done, or open **Finish Setup…** from the menu bar or the Linux tray (also **Setup** in the Routines window), which shows every step with a button for each. Run it again any time, e.g. after adding a routine. Until the required steps are done, the menu bar dot is red with "Setup isn't finished".
 
 ## Update
 `procauto update` installs the latest release if it's newer (`--check` only reports; `update progress` says what one installing is doing). It verifies the download like the installer, replaces the app where it is and restarts it. The menu bar app and the Linux tray offer it too (**Update to X…**, or **Check for Updates**), and show its progress. Your routines, settings and sign-ins are kept.
