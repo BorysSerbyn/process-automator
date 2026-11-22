@@ -158,3 +158,63 @@ import Testing
     #expect(tree[0].groups[0].entries.map(\.label) == ["window", "weekly-usd"])
     #expect(tree[1].entries.map(\.item) == ["history.retention-days"])
 }
+
+/// A stand-in for the core's CLI: a script that logs each command it's
+/// given, and fails `login-items stop` when told to, with the core's error object.
+private func fakeCLI(failStop: Bool = false) throws -> (CLI, URL) {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "automator-ui-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let log = dir.appending(path: "log")
+    let script = dir.appending(path: "procauto")
+    let fail =
+        failStop
+        ? #"[ "$*" = "login-items stop --json" ] && { echo '{"error":"launchctl bootout failed"}'; exit 1; }"# : ""
+    try """
+    #!/bin/sh
+    echo "$*" >> '\(log.path)'
+    \(fail)
+    echo '{"scheduler":"running","changed":true}'
+    """.write(to: script, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    return (CLI(executable: script), log)
+}
+
+private func ran(_ log: URL) -> [String] {
+    ((try? String(contentsOf: log, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+}
+
+@Test func reopeningShowsSetupWhileSetupIsLeftElseSettings() throws {
+    func status(_ setupLeft: String) throws -> RunStatus {
+        try RunStatus.decode(
+            Data(
+                """
+                {"schemaVersion":1,"updatedAt":"2026-11-18T09:30:00Z","health":"ok","busy":false,"routines":[]\(setupLeft)}
+                """.utf8))
+    }
+    #expect(Lifecycle.reopenWindow(for: try status(#","setupLeft":["backend"]"#)) == .setup)
+    #expect(Lifecycle.reopenWindow(for: try status(#","setupLeft":[]"#)) == .settings)
+    #expect(Lifecycle.reopenWindow(for: try status("")) == .settings)
+    #expect(Lifecycle.reopenWindow(for: nil) == .settings)
+}
+
+@Test func openingTheAppStartsTheScheduler() async throws {
+    let (cli, log) = try fakeCLI()
+    #expect(await Lifecycle.opened(cli) == nil)
+    #expect(ran(log) == ["login-items start --json"])
+}
+
+@MainActor
+@Test func quitStopsTheSchedulerThenTerminates() async throws {
+    var events: [String] = []
+    let (cli, log) = try fakeCLI()
+    await Lifecycle.quit(
+        cli, failed: { events.append("failed: \($0.message)") }, terminate: { events.append("terminate") })
+    #expect(ran(log) == ["login-items stop --json"])
+    #expect(events == ["terminate"])
+    // Stopping fails: why, then it terminates anyway.
+    events = []
+    let (failing, _) = try fakeCLI(failStop: true)
+    await Lifecycle.quit(
+        failing, failed: { events.append("failed: \($0.message)") }, terminate: { events.append("terminate") })
+    #expect(events == ["failed: launchctl bootout failed", "terminate"])
+}

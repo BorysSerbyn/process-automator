@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 openSetup: { [weak self] in self?.setupWindow?.show() })
         }
         indicator = Indicator(
-            updates: updates,
+            updates: updates, quit: { [weak self] in self?.quit() },
             openSettings: { [weak self] in self?.openSettings() },
             openRoutines: { [weak self] in self?.routineWindows?.showList() },
             openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name) },
@@ -50,6 +50,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         notifier.setUp(cli: cli) { [weak self] click in self?.show(click) }
         followStatus()
         updates.start()
+        startScheduler()
+    }
+
+    // MARK: Opening and quitting
+
+    /// Opening the app starts the scheduler if it isn't running, so opening
+    /// it after a Quit brings everything back.
+    private func startScheduler() {
+        guard let cli else { return }
+        Task {
+            if let failure = await Lifecycle.opened(cli) {
+                NSLog("Couldn't start the scheduler: %@", failure.message)
+            }
+        }
+    }
+
+    /// Opened again while running (from Finder, Spotlight or Launchpad): the
+    /// scheduler started, and Setup while setup isn't done, else Settings.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        startScheduler()
+        switch Lifecycle.reopenWindow(for: status) {
+        case .setup: setupWindow?.show()
+        case .settings: openSettings()
+        }
+        return false
+    }
+
+    /// Quit: the scheduler stops too (both start again at the next login).
+    /// The menu bar icon goes at once; when stopping fails, it says why, and
+    /// quits anyway.
+    private func quit() {
+        indicator.hide()
+        Task {
+            await Lifecycle.quit(
+                cli, failed: { showAlert("Couldn't stop the scheduler", $0.message) },
+                terminate: { NSApp.terminate(nil) })
+        }
     }
 
     // MARK: Settings

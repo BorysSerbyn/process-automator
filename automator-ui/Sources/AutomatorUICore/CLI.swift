@@ -161,6 +161,18 @@ public struct CLI: Sendable {
         call(Components.Schemas.LoginItemsOutput.self, ["login-items", on ? "enable" : "disable"])
     }
 
+    /// Starts the scheduler if it isn't running (`login-items start`):
+    /// opening the app does.
+    public func startScheduler() -> Result<Components.Schemas.RunningOutput, Failure> {
+        call(Components.Schemas.RunningOutput.self, ["login-items", "start"])
+    }
+
+    /// Stops the scheduler, and any other menu bar app running (`login-items
+    /// stop`, which leaves the one that ran it to quit): Quit does, then quits.
+    public func stopApp() -> Result<Components.Schemas.RunningOutput, Failure> {
+        call(Components.Schemas.RunningOutput.self, ["login-items", "stop"])
+    }
+
     /// Opens a readable report of a run (the core writes and opens it).
     public func openRun(_ id: String) -> Failure? {
         perform(["runs", "show", id, "--open"])

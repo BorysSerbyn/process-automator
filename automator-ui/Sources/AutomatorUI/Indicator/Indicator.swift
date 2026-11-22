@@ -11,6 +11,7 @@ final class Indicator: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let dotView = NSImageView()
     private let updates: Updates
+    private let quit: () -> Void
     private let openSettings: () -> Void
     private let openRoutines: () -> Void
     private let openRoutine: (String) -> Void
@@ -24,12 +25,14 @@ final class Indicator: NSObject, NSMenuDelegate {
     private static let pulseKey = "pulse"
 
     init(
-        updates: Updates, openSettings: @escaping () -> Void, openRoutines: @escaping () -> Void,
+        updates: Updates, quit: @escaping () -> Void, openSettings: @escaping () -> Void,
+        openRoutines: @escaping () -> Void,
         openRoutine: @escaping (String) -> Void, openRun: @escaping (String) -> Void,
         openSetup: @escaping () -> Void
     ) {
         self.openSetup = openSetup
         self.updates = updates
+        self.quit = quit
         self.openSettings = openSettings
         self.openRoutines = openRoutines
         self.openRoutine = openRoutine
@@ -73,10 +76,18 @@ final class Indicator: NSObject, NSMenuDelegate {
         settings.target = self
         menu.addItem(settings)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let quit = NSMenuItem(title: "Quit", action: #selector(quitChosen), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
     }
 
     @objc private func settingsChosen() { openSettings() }
+
+    /// Quit stops the scheduler too, then quits (the app's quit).
+    @objc private func quitChosen() { quit() }
+
+    /// Takes the icon out of the menu bar (quitting).
+    func hide() { statusItem.isVisible = false }
 
     @objc private func setupChosen() { openSetup() }
 
