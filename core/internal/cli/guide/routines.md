@@ -85,7 +85,7 @@ output:
     reason?: string, why it didn't
 ```
 
-The run fails if the result doesn't match; a valid one is stored with the run.
+The run fails if the result doesn't match; a valid one is stored with the run, and stands for reporting `done` when the routine reported nothing.
 
 ## Notifying me
 With the `notify` plugin (when the app has it: see Servers and tools), add `notify` to `automator.servers` and `notify_me` to `tools`. The model can then send me a desktop notification: a `title`, a `body`, and `urgent` for something I must see now (it breaks through focus modes). Clicking it does nothing, so the text should say what to look at. It's a write: dry runs intercept it.
