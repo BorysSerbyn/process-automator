@@ -3,7 +3,8 @@ import OpenAPIRuntime
 import SwiftUI
 
 /// The routine's run history, newest first: each run opens to what it did
-/// (its final text, writes, tokens and cost), read from `runs show`.
+/// (its final text, writes, tokens and cost; a program's exit code and
+/// output), read from `runs show`.
 struct RoutineRunsView: View {
     @ObservedObject var model: RoutineModel
 
@@ -89,7 +90,8 @@ struct RunRow: View {
     }
 }
 
-/// What a run did: the agent's final text, its writes, and its tokens.
+/// What a run did: the agent's final text, its writes, and its tokens; a
+/// program's summary, exit code and output.
 struct RunDetail: View {
     let entry: RunEntry?
     let error: String?
@@ -104,6 +106,9 @@ struct RunDetail: View {
                     resultView(result)
                 } else if let text = entry.reason ?? entry.error {
                     Text(text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                }
+                if let program = entry.program {
+                    ProgramRunView(run: program, finishedAt: entry.finishedAt)
                 }
                 HStack {
                     if let result = entry.result {
@@ -164,6 +169,60 @@ struct RunDetail: View {
         (try? AttributedString(
             markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             ?? AttributedString(text)
+    }
+}
+
+/// What a program did in a run: its exit code, whether it was a dry run,
+/// when it finished, and what it printed (monospace; long output scrolls),
+/// saying so when the core kept only its start and end.
+struct ProgramRunView: View {
+    let run: Components.Schemas.Execution
+    let finishedAt: Date?
+
+    /// Output longer than this many lines scrolls in a box of its own.
+    private static let scrollingLines = 24
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Tag(text: "exit \(run.exitCode)")
+            if run.dryRun { Tag(text: "dry run", tint: .blue) }
+            Spacer(minLength: 8)
+            if let finishedAt {
+                Text("Finished \(Formats.when(finishedAt))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if let output = run.output, !output.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                outputBox(output)
+                if let note = run.truncatedText {
+                    Label(note, systemImage: "scissors")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            Text("It printed nothing.").font(.subheadline).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private func outputBox(_ output: String) -> some View {
+        let text = Text(output)
+            .font(.caption.monospaced())
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        if output.split(separator: "\n", omittingEmptySubsequences: false).count > Self.scrollingLines {
+            ScrollView { text }
+                .frame(height: 320)
+                .background(Color.primary.opacity(0.035), in: shape)
+        } else {
+            text.background(Color.primary.opacity(0.035), in: shape)
+        }
     }
 }
 

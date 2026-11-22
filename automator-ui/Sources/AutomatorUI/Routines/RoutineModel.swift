@@ -39,6 +39,9 @@ final class RoutineModel: ObservableObject {
     @Published var trustReview: TrustReview?
     @Published var trustError: String?
     @Published var accessOpen = false
+    /// A program's sign-in (`auth login <program> --browser`) is waiting for me.
+    @Published var signingIn = false
+    @Published var signInError: String?
     /// Why the last control (run, stop, pause, delete) failed.
     @Published var actionError: String?
     /// A control is waiting for the core.
@@ -279,6 +282,20 @@ final class RoutineModel: ObservableObject {
             case .failure(let failure):
                 trustError = failure.message
             }
+        }
+    }
+
+    /// Signs in to a program's secrets: the core opens a page in the browser
+    /// to enter them, as setup's sign-in step does. Then what's stored is
+    /// read again.
+    func signIn() {
+        signingIn = true
+        Task {
+            let failure = await cli.background { [name] in $0.signIn(name) }
+            signingIn = false
+            signInError = failure?.message
+            loadDetail()
+            if trustReview != nil { loadTrust() }
         }
     }
 

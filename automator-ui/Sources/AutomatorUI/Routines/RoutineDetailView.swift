@@ -2,7 +2,8 @@ import AutomatorUICore
 import SwiftUI
 
 /// One routine's window: its state and controls on top, then Overview
-/// (status, schedule, what it can reach), Runs, Memories and Settings.
+/// (status, schedule, what it can reach), Runs, Memories and Settings. A
+/// program's has what it runs in place of what it can reach, and no Memories.
 struct RoutineDetailView: View {
     @ObservedObject var model: RoutineModel
     @State private var confirmingDelete = false
@@ -101,16 +102,21 @@ struct RoutineDetailView: View {
             Menu {
                 Button("Dry Run") { model.runNow(dryRun: true) }
                     .help(
-                        model.isProgram
-                            ? "Run it as a dry run: a program that writes is told to change nothing (--dry-run)"
-                            : "Run it with every write intercepted: nothing is posted or changed")
+                        model.detail?.program?.dryRunText
+                            ?? "Run it with every write intercepted: nothing is posted or changed")
+                if let program = model.detail?.program {
+                    // What a program's dry run is, under it: it depends on whether it writes.
+                    Divider()
+                    Text(program.dryRunText)
+                    Text(ProgramInfo.dryRunTrust)
+                }
             } label: {
                 Label("Run Now", systemImage: "play.fill")
             } primaryAction: {
                 model.runNow(dryRun: false)
             }
             .fixedSize()
-            .help("Run it now, in the background. The arrow offers a dry run.")
+            .help(runHelp)
         }
         if let enabled = model.detail?.enabled {
             Button {
@@ -129,6 +135,13 @@ struct RoutineDetailView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("More")
+    }
+
+    private var runHelp: String {
+        guard let program = model.detail?.program else {
+            return "Run it now, in the background. The arrow offers a dry run."
+        }
+        return "Run it now, in the background. The arrow offers a dry run: \(program.dryRunText)"
     }
 }
 
@@ -203,7 +216,10 @@ struct RoutineAccess: View {
     let detail: RoutineDetail
 
     var body: some View {
-        DisclosureRow(open: model.accessOpen, help: "what it can reach", toggle: model.toggleAccess) {
+        DisclosureRow(
+            open: model.accessOpen, help: detail.isProgram ? "what it runs" : "what it can reach",
+            toggle: model.toggleAccess
+        ) {
             Image(systemName: "lock.shield").foregroundStyle(.secondary).frame(width: 16)
             Text(detail.isProgram ? "What it runs" : "What it can reach").font(.headline)
             Spacer(minLength: 8)
@@ -219,15 +235,18 @@ struct RoutineAccess: View {
         }
     }
 
-    /// The review's surface once it's read, else the routine's own.
+    /// The review's surface once it's read, else the routine's own. A
+    /// program's secrets that aren't stored can be signed in to here.
     private var review: TrustReviewView {
         let surface = model.trustReview?.surface
         let trust: (() -> Void)? = detail.trusted ? nil : { [model] in model.trust() }
-        return TrustReviewView(
+        var view = TrustReviewView(
             servers: surface?.servers ?? detail.servers, tools: surface?.tools ?? detail.tools,
             builtinTools: surface?.builtinTools ?? detail.builtinTools, folder: surface?.folder ?? detail.folder,
             program: model.trustReview?.program ?? detail.program,
             review: model.trustReview, error: model.trustError, trust: trust, working: model.working)
+        view.signIn = SignInAction(working: model.signingIn, error: model.signInError) { [model] in model.signIn() }
+        return view
     }
 }
 
@@ -249,6 +268,9 @@ struct TrustReviewView: View {
     /// is asked elsewhere, as setup does).
     var actionTitle = "Trust"
     var note: String? = "Trusting it lets it run for real with what's listed above. Dry runs never need it."
+    /// A program's sign-in to its secrets that aren't stored (none: setup has
+    /// its own sign-in step).
+    var signIn: SignInAction?
 
     init(
         servers: [String], tools: [String], builtinTools: [String]?, folder: String?, program: ProgramInfo? = nil,
@@ -280,7 +302,7 @@ struct TrustReviewView: View {
 
     var body: some View {
         if let program {
-            ProgramRows(program: program)
+            ProgramRows(program: program, signIn: signIn)
         } else {
             InfoRow(label: "Servers") { names(servers) }
             InfoRow(label: "Tools") {
@@ -360,21 +382,18 @@ struct RoutineSettingsView: View {
             }
             if let detail = model.detail {
                 SettingsCard {
-                    CardTitle(detail.isProgram ? "Program file" : "Routine file", systemImage: "doc.text")
-                    Divider().padding(.leading, SettingsMetrics.rowInset)
-                    if !detail.isProgram {
+                    if detail.isProgram {
+                        ProgramFile(detail: detail)
+                    } else {
+                        CardTitle("Routine file", systemImage: "doc.text")
+                        Divider().padding(.leading, SettingsMetrics.rowInset)
                         InfoRow(label: "Model") {
                             Text(detail.agentModel ?? detail.model ?? "The backend's default")
                                 .foregroundStyle(detail.agentModel ?? detail.model == nil ? .secondary : .primary)
                         }
+                        InfoRow(label: "File") { PathText(path: detail.path) }
+                            .padding(.bottom, 4)
                     }
-                    InfoRow(label: "File") {
-                        Text(detail.path)
-                            .font(.callout.monospaced())
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.bottom, 4)
                 }
             }
         }
@@ -388,22 +407,96 @@ struct RoutineSettingsView: View {
     }
 }
 
-/// What a program runs, as trust approves it: its executable (the app's
-/// copy, by checksum), whether it writes, its arguments and secrets.
-struct ProgramRows: View {
-    let program: ProgramInfo
+/// A path, in monospace, selectable and wrapping.
+struct PathText: View {
+    let path: String
 
     var body: some View {
-        InfoRow(label: "Executable") {
-            Text(program.executable)
+        Text(path)
+            .font(.callout.monospaced())
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// A program's description file, as the app keeps it: what it says it does,
+/// where it is, its data folder, and its text (read-only: a program is
+/// updated from a terminal).
+struct ProgramFile: View {
+    let detail: RoutineDetail
+
+    var body: some View {
+        CardTitle("Program file", systemImage: "doc.text")
+        Divider().padding(.leading, SettingsMetrics.rowInset)
+        if let description = detail.description, !description.isEmpty {
+            InfoRow(label: "Description") {
+                Text(description).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        InfoRow(label: "File") { PathText(path: detail.path) }
+        if let folder = detail.folder, !folder.isEmpty {
+            InfoRow(label: "Data folder") {
+                PathText(path: folder)
+                Text("Where it works: kept between runs, and when it's deleted.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        VStack(alignment: .leading, spacing: 6) {
+            Text(detail.source.isEmpty ? " " : detail.source)
                 .font(.callout.monospaced())
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            if let checksum = program.checksum, !checksum.isEmpty {
-                Text("SHA-256 \(checksum)")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text("Read-only: the app's copy. Update it from a terminal (`\(AppInfo.command) routines update`).")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, SettingsMetrics.rowInset)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+    }
+}
+
+/// Signing in to a program's secrets (`auth login <program> --browser`):
+/// what starts it, whether it's waiting for me, and why it failed.
+struct SignInAction {
+    var working: Bool
+    var error: String?
+    var start: () -> Void
+}
+
+/// What a program runs, as trust approves it: its executable (the app's
+/// copy, by checksum: shortened, copied whole), whether it writes, its
+/// arguments, and its secrets (each with the variable it's passed as and
+/// whether it's stored; Sign In… when one isn't).
+struct ProgramRows: View {
+    let program: ProgramInfo
+    var signIn: SignInAction?
+
+    var body: some View {
+        InfoRow(label: "Executable") {
+            PathText(path: program.executable)
+            if let short = program.shortChecksum, let checksum = program.checksum {
+                HStack(spacing: 4) {
+                    Text("SHA-256 \(short)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .help(checksum)
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(checksum, forType: .string)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .help("Copy the whole SHA-256")
+                }
             }
         }
         InfoRow(label: "Writes") {
@@ -418,11 +511,34 @@ struct ProgramRows: View {
             InfoRow(label: "Secrets") {
                 ForEach(program.secrets, id: \.name) { secret in
                     HStack(spacing: 6) {
-                        Text("\(secret.name) (as $\(secret.env))")
-                        if !secret.stored { Tag(text: "Not stored", tint: .orange) }
+                        Text(secret.name).font(.callout.monospaced())
+                        Text("as $\(secret.env)").foregroundStyle(.secondary)
+                        if secret.stored {
+                            Tag(text: "Stored", tint: .green)
+                        } else {
+                            Tag(text: "Not stored", tint: .orange)
+                        }
                     }
+                }
+                if let signIn, program.needsSignIn {
+                    signInRow(signIn)
                 }
             }
         }
+    }
+
+    @ViewBuilder private func signInRow(_ signIn: SignInAction) -> some View {
+        HStack(spacing: 8) {
+            if signIn.working {
+                ProgressView().controlSize(.small)
+                Text("Enter them on the page in your browser…").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                Button("Sign In…", action: signIn.start)
+                    .help("Enter its secrets on a page in your browser; they're stored in the Keychain")
+                Text("Opens your browser to enter them.").font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.top, 2)
+        if let error = signIn.error { RowError(message: error) }
     }
 }

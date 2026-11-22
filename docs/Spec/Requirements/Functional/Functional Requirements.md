@@ -92,7 +92,13 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
   - its runs: what each did, its tool calls and writes, and its output
   - controls: run now or dry run, stop, pause/resume, delete
   - its memories (see, add, remove) and its own settings
-  - for a program: what it runs (its executable, whether it writes, its arguments and secrets) in place of what it can reach, and no memories or model
+  - for a program, the same window with only these differences:
+    - what it runs, in place of what it can reach: its executable (its SHA-256, copyable), whether it writes, its arguments, and its secrets, each with its variable and whether it's stored; signing in to the ones that aren't
+    - what a dry run does with it, beside the controls
+    - each run's exit code and output, saying when the output was cut down
+    - its description file, read-only, with its description and data folder
+    - deleting it says its run history and data folder are kept
+    - no memories or model
 - **Setup window**: every setup step with a button for each
 - **Settings window**: start at login, LLM usage, and every app-wide setting with a control for its type
 - **Updates**: see whether a newer release exists, and install it

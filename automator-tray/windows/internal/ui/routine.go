@@ -47,7 +47,7 @@ type Routine struct {
 	deleted func()
 
 	tab       string
-	detail    *cli.RoutineInfo
+	detail    *cli.RoutineDetail
 	loadError string
 	status    *cli.RunStatus
 
@@ -70,6 +70,10 @@ type Routine struct {
 	review     *cli.TrustOutput
 	trustError string
 	accessOpen bool
+
+	// signingIn is a program's sign-in to its secrets, waiting for me.
+	signingIn   bool
+	signInError string
 
 	// actionError is why the last control failed; working, that one waits
 	// for the core.
@@ -426,6 +430,47 @@ func (r *Routine) loadTrust() {
 	})
 }
 
+// signIn signs in to a program's secrets (`auth login <program>
+// --browser`): the core opens a page in the browser to enter them, as
+// setup's sign-in step does. Then what's stored is read again.
+func (r *Routine) signIn() {
+	r.signingIn = true
+	r.refresh()
+	r.async(func() func() {
+		err := r.cli.SignIn(r.name)
+		return func() {
+			r.signingIn, r.signInError = false, ""
+			if err != nil {
+				r.signInError = err.Error()
+			}
+			r.loadDetail()
+			if r.review != nil {
+				r.loadTrust()
+			}
+			r.refresh()
+		}
+	})
+}
+
+// signInRow is Sign In… under a program's secrets while one isn't stored
+// (or the wait for it, and why it failed); nil when none is missing.
+func (r *Routine) signInRow(p *cli.ProgramInfo) fyne.CanvasObject {
+	if !needsSignIn(p) && r.signInError == "" {
+		return nil
+	}
+	box := container.NewVBox()
+	switch {
+	case r.signingIn:
+		box.Add(container.NewHBox(spinner(), quiet("Enter them on the page in your browser…")))
+	case needsSignIn(p):
+		box.Add(container.NewHBox(widget.NewButton("Sign In…", r.signIn), quiet("Opens your browser to enter them.")))
+	}
+	if r.signInError != "" {
+		box.Add(errorRow(r.signInError))
+	}
+	return box
+}
+
 // trust trusts the routine with what it can reach; turnOn also has it run
 // on its schedule (a paused routine), as setup's Turn On does.
 func (r *Routine) trust(turnOn bool) {
@@ -459,6 +504,13 @@ func (r *Routine) refresh() {
 
 func (r *Routine) render() fyne.CanvasObject {
 	box := container.NewVBox(r.header())
+	if d := r.detail; d != nil && d.Program != nil && !r.running() {
+		// What Dry Run does with a program depends on whether it writes.
+		note := widget.NewRichText(&widget.TextSegment{Text: dryRunNote(*d.Program), Style: widget.RichTextStyle{
+			ColorName: theme.ColorNamePlaceHolder, SizeName: theme.SizeNameCaptionText, Alignment: fyne.TextAlignTrailing}})
+		note.Wrapping = fyne.TextWrapWord
+		box.Add(note)
+	}
 	if r.actionError != "" {
 		box.Add(errorRow(r.actionError))
 	}
@@ -619,6 +671,10 @@ func (r *Routine) access() []fyne.CanvasObject {
 	if r.review != nil {
 		review = *r.review
 	}
+	var signIn fyne.CanvasObject
+	if review.Program != nil {
+		signIn = r.signInRow(review.Program)
+	}
 	var do func()
 	action, note := "Trust", "Trusting it lets it run for real with what's listed above. Dry runs never need it."
 	if d.IsProgram() {
@@ -634,7 +690,7 @@ func (r *Routine) access() []fyne.CanvasObject {
 		}
 		do = func() { r.trust(turnOn) }
 	}
-	objects = append(objects, trustReview(review, action, note, do, r.working)...)
+	objects = append(objects, trustReview(review, action, note, do, r.working, signIn)...)
 	if r.trustError != "" {
 		objects = append(objects, padded(0, 8, rowInset, rowInset, errorRow(r.trustError)))
 	}
@@ -696,7 +752,8 @@ func (r *Routine) runRow(run cli.RunSummary) fyne.CanvasObject {
 }
 
 // runDetail is what a run did: its report (done, nothing to do), its final
-// text, every tool call (writes tinted) and its tokens; Open Report.
+// text, every tool call (writes tinted) and its tokens; a program's summary,
+// exit code and output; Open Report.
 func (r *Routine) runDetail(id string) fyne.CanvasObject {
 	if msg, ok := r.runErrors[id]; ok {
 		return errorRow(msg)
@@ -731,17 +788,7 @@ func (r *Routine) runDetail(id string) fyne.CanvasObject {
 			box.Add(text(t))
 		}
 		if p := e.Program; p != nil {
-			tags := container.NewHBox(tag(fmt.Sprintf("exit %d", p.ExitCode), ""))
-			if p.DryRun {
-				tags.Add(tag("dry run", theme.ColorNamePrimary))
-			}
-			box.Add(tags)
-			if p.Output != "" {
-				out := text(p.Output)
-				out.Selectable = true
-				out.TextStyle = fyne.TextStyle{Monospace: true}
-				box.Add(card(true, padded(4, 4, 6, 6, out)))
-			}
+			box.Add(programRun(*p, e.FinishedAt, r.now()))
 		}
 		box.Add(right(report))
 	}
@@ -857,7 +904,8 @@ func (r *Routine) memoriesView() fyne.CanvasObject {
 	return card(false, objects...)
 }
 
-// Settings: its own settings, as the Settings window's rows, and its file.
+// Settings: its own settings, as the Settings window's rows, and its file
+// (a program's: its description file, read-only).
 
 func (r *Routine) settingsView() fyne.CanvasObject {
 	objects := []fyne.CanvasObject{cardTitle("Settings")}
@@ -868,20 +916,17 @@ func (r *Routine) settingsView() fyne.CanvasObject {
 	}
 	box := container.NewVBox(card(false, objects...))
 	if d := r.detail; d != nil {
+		if d.IsProgram() {
+			box.Add(programFile(*d, r.cli.Command))
+			return box
+		}
 		model := firstNonEmpty(d.AgentModel, d.Model)
 		var modelLabel fyne.CanvasObject = widget.NewLabel(model)
 		if model == "" {
 			modelLabel = quiet("The backend's default")
 		}
-		path := widget.NewLabelWithStyle(d.Path, fyne.TextAlignLeading, fyne.TextStyle{Monospace: true})
-		path.Wrapping = fyne.TextWrapBreak
-		if d.IsProgram() {
-			box.Add(card(false, cardTitle("Program file"), divider(), infoRow("File", path),
-				padded(0, 6, 0, 0, container.NewHBox())))
-		} else {
-			box.Add(card(false, cardTitle("Routine file"), divider(), infoRow("Model", modelLabel), infoRow("File", path),
-				padded(0, 6, 0, 0, container.NewHBox())))
-		}
+		box.Add(card(false, cardTitle("Routine file"), divider(), infoRow("Model", modelLabel), infoRow("File", mono(d.Path)),
+			padded(0, 6, 0, 0, container.NewHBox())))
 	}
 	return box
 }

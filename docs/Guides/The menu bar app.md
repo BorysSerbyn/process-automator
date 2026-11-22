@@ -30,6 +30,13 @@ Every routine with its health, schedule in words, last run and status. Its toolb
 - **Memories**: what this routine is told to remember; add and remove them
 - **Settings**: its own settings (timeout, effort, folder, parameters, …)
 
+A program's window (see [[Guides/Writing a program|Writing a program]]) is the same, but:
+- **Dry Run** says what it does with this program, under it in the arrow's menu: one that writes is passed `--dry-run`; one that doesn't runs as it is. Either way it needs trusting first
+- **What it runs**, in place of what it can reach: the app's copy of its executable and its SHA-256 (the copy button copies all of it), whether it writes, its arguments, and its secrets, each with the variable it's passed as and whether it's stored. **Sign In…**, while one isn't, opens your browser to enter them
+- **Runs**: each run's summary, exit code, whether it was a dry run, when it finished, and what it printed; past a limit, only its start and end are kept, and it says so
+- **Settings**: fewer settings of its own (no model, effort or folder); then its description file, read-only (`procauto routines update` changes it), with its description and data folder, where it works
+- No **Memories**; **Delete…** removes its copy, settings, trust and secrets, and keeps its run history and data folder
+
 What each of these means is in [[Guides/Routines|Routines]].
 
 ## Setup window
@@ -48,7 +55,7 @@ macOS asks once whether the app may show notifications (for both); until you all
 ## The Linux tray
 In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the Routines window. It starts at login. **Quit** stops it and the scheduler, as on macOS, until you open the app again or log in again. The app is in your desktop's app menu (search for **Process Automator**): opening it starts the scheduler and brings the tray back, or, while the tray runs, opens Setup or Settings as on macOS. The tray's log is `frontend.log` in the data folder (see [[Guides/Troubleshooting#Logs|Logs]]).
 
-Its windows are the menu bar app's: [[#Routines window]], [[#A routine's window]], [[#Setup window]], [[#Settings window]] and Updating; opening one again brings it to the front. A routine's window has the same controls and tabs (**Overview**, **Runs**, **Memories**, **Settings**), but no days-and-time picker: its schedule is its `schedule` setting, in cron, under **Settings**. A paused routine that isn't trusted has **Turn On** in its review: it's trusted and resumed together.
+Its windows are the menu bar app's: [[#Routines window]], [[#A routine's window]], [[#Setup window]], [[#Settings window]] and Updating; opening one again brings it to the front. A routine's window has the same controls and tabs (**Overview**, **Runs**, **Memories**, **Settings**), but no days-and-time picker: its schedule is its `schedule` setting, in cron, under **Settings**. A program's is the menu bar app's too; what **Dry Run** does with it is written under the controls. A paused routine that isn't trusted has **Turn On** in its review: it's trusted and resumed together.
 
 A window opens in your terminal instead (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`, kept open until you press Enter) when it can't open: no display, no OpenGL, or a package built without the windows app. The tray's log says why:
 

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
@@ -234,27 +236,105 @@ func TestARoutinesSettings(t *testing.T) {
 	f.mustHaveRun(t, "settings set routines.standup.timeout 20m --json")
 }
 
-// A program's window: no Memories tab or model; what it runs, in place of
-// what it can reach; its runs with their exit code and output.
+var backupReplies = map[string]string{
+	"routines show backup --json":               "@routine-backup.json",
+	"routines trust backup --check --json":      "@trust-backup.json",
+	"settings list --routine backup --json":     "[]",
+	"runs backup --limit 50 --json":             "@runs-backup.json",
+	"runs show backup/2026-11-21T090000 --json": "@run-backup.json",
+}
+
+// A program's window: no Memories tab or model; what Dry Run does with it,
+// by the controls; what it runs, in place of what it can reach, with its
+// checksum shortened and copied whole, and Sign In… for a secret that isn't
+// stored; its delete says what's kept.
 func TestAProgramsWindow(t *testing.T) {
-	r, f, _ := newRoutineFor(t, "backup", map[string]string{
-		"routines show backup --json":               "@routine-backup.json",
-		"routines trust backup --check --json":      "@trust-backup.json",
-		"settings list --routine backup --json":     "[]",
-		"runs backup --limit 50 --json":             "@runs-backup.json",
-		"runs show backup/2026-11-21T090000 --json": "@run-backup.json",
-	})
+	r, f, _ := newRoutineFor(t, "backup", backupReplies)
 	c := r.Content()
-	mustShow(t, c, "What it runs", "Executable", "/home/me/.config/acme/programs/backup/backup", "SHA-256 9f86d081884c7d65",
-		"a dry run passes it --dry-run", "api-token (as $API_TOKEN), not stored", "--quiet")
+	mustShow(t, c, "What it runs", "Executable", "/home/me/.config/acme/programs/backup/backup", "SHA-256 9f86d081884c…",
+		"a dry run passes it --dry-run", "api-token", "as $API_TOKEN", "Not stored", "--quiet",
+		"Dry Run passes it --dry-run: it's told to change nothing. Like a real run, a dry run needs it trusted.")
 	mustNotShow(t, c, "Memories")
 	mustNotShow(t, c, "Servers")
-	r.ShowTab(SettingsTab)
-	mustShow(t, r.Content(), "Program file")
-	mustNotShow(t, r.Content(), "Model")
-	r.ShowTab(RunsTab)
-	mustShow(t, r.Content(), "Copied 3 files", "exit 0", "copying notes.md")
+	test.Tap(button(t, c, "Copy"))
+	if got := fyne.CurrentApp().Clipboard().Content(); got != "9f86d081884c7d65" {
+		t.Errorf("copied %q", got)
+	}
+	test.Tap(button(t, r.Content(), "Sign In…"))
+	f.mustHaveRun(t, "auth login backup --browser")
+	if f.count("routines show backup --json") < 2 || f.count("routines trust backup --check --json") < 2 {
+		t.Error("what's stored wasn't read again after signing in")
+	}
+	var asked string
+	r.confirm = func(_, message, _ string, _ func()) { asked = message }
+	test.Tap(button(t, r.Content(), "Delete…"))
+	if asked != "Its copy, settings, trust and secrets are deleted. Its run history and data folder are kept." {
+		t.Errorf("asked %q", asked)
+	}
 	if f.count("memory list --routine backup --json") != 0 {
 		t.Error("asked for a program's memories")
+	}
+}
+
+// A program that doesn't write: Dry Run runs it as it is; its secrets are
+// stored, so there's nothing to sign in to.
+func TestAProgramThatDoesntWrite(t *testing.T) {
+	reads := strings.NewReplacer(`"writes": true`, `"writes": false`, `"stored": false`, `"stored": true`)
+	replies := map[string]string{}
+	for k, v := range backupReplies {
+		replies[k] = v
+	}
+	for _, k := range []string{"routines show backup --json", "routines trust backup --check --json"} {
+		b, err := os.ReadFile(filepath.Join("testdata", strings.TrimPrefix(replies[k], "@")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		replies[k] = reads.Replace(string(b))
+	}
+	r, _, _ := newRoutineFor(t, "backup", replies)
+	c := r.Content()
+	mustShow(t, c, "It doesn't write: Dry Run runs it as it is.", "No: a dry run runs it as it is", "Stored")
+	if len(buttons(c, "Sign In…")) != 0 {
+		t.Error("Sign In… with every secret stored")
+	}
+}
+
+// A program's runs: its summary, exit code, whether it was a dry run, when
+// it finished, and its output, saying when it was cut down.
+func TestAProgramsRuns(t *testing.T) {
+	r, _, _ := newRoutineFor(t, "backup", backupReplies)
+	r.ShowTab(RunsTab)
+	c := r.Content()
+	mustShow(t, c, "1 run", "Copied 3 files", "exit 0", "dry run", "Finished Today at", "copying notes.md",
+		"[… 40 KiB of output left out …]", "It printed more than is kept")
+	mustNotShow(t, c, "tool call")
+}
+
+// A program's settings: its description file, read-only, with what it
+// says it does and its data folder; no model.
+func TestAProgramsFile(t *testing.T) {
+	r, _, _ := newRoutineFor(t, "backup", backupReplies)
+	r.ShowTab(SettingsTab)
+	c := r.Content()
+	mustShow(t, c, "Program file", "Backs up my notes", "/home/me/.config/acme/programs/backup/program.yaml",
+		"Data folder", "/home/me/.config/acme/program-data/backup", "executable: ./backup", "Read-only",
+		"acme-auto routines update")
+	mustNotShow(t, c, "Model")
+	if len(all[*widget.Entry](c)) != 0 {
+		t.Error("its file can be edited")
+	}
+}
+
+// Long output scrolls in a box of its own; short output doesn't.
+func TestAProgramsLongOutputScrolls(t *testing.T) {
+	window(t) // a test app, for the theme
+	scrolls := func(output string) bool {
+		return len(all[*container.Scroll](programRun(cli.ProgramRun{Output: output}, nil, noon()))) > 0
+	}
+	if scrolls("one line") {
+		t.Error("a line scrolls")
+	}
+	if !scrolls(strings.Repeat("line\n", outputLines+1)) {
+		t.Error("long output doesn't scroll")
 	}
 }

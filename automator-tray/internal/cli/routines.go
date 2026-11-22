@@ -30,6 +30,15 @@ type RoutineInfo struct {
 	LastRun    *LastRun   `json:"lastRun,omitempty"`
 	// Program is a program's own: what runs.
 	Program *ProgramInfo `json:"program,omitempty"`
+	// Description is what its file says it does.
+	Description string `json:"description,omitempty"`
+}
+
+// RoutineDetail is a routine in full (`routines show --json`): its row, and
+// its file as written (a program's: its description file).
+type RoutineDetail struct {
+	RoutineInfo
+	Source string `json:"source"`
 }
 
 // IsProgram is whether it's a program (an executable), not an LLM routine:
@@ -84,11 +93,12 @@ type RunSummary struct {
 
 // RunEntry is one run in full (`runs show <id> --json`).
 type RunEntry struct {
-	ID      string     `json:"id"`
-	Outcome string     `json:"outcome"`
-	Reason  string     `json:"reason,omitempty"`
-	Error   string     `json:"error,omitempty"`
-	Result  *RunResult `json:"result,omitempty"`
+	ID         string     `json:"id"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	Outcome    string     `json:"outcome"`
+	Reason     string     `json:"reason,omitempty"`
+	Error      string     `json:"error,omitempty"`
+	Result     *RunResult `json:"result,omitempty"`
 	// Program is a program's run (an LLM routine's is Result).
 	Program *ProgramRun `json:"program,omitempty"`
 }
@@ -97,8 +107,11 @@ type RunEntry struct {
 type ProgramRun struct {
 	ExitCode int    `json:"exitCode"`
 	Summary  string `json:"summary,omitempty"`
-	Output   string `json:"output,omitempty"`
-	DryRun   bool   `json:"dryRun"`
+	// Output is what it printed: all of it, or its first and last part with
+	// what was left out marked between them (OutputTruncated).
+	Output          string `json:"output,omitempty"`
+	OutputTruncated bool   `json:"outputTruncated,omitempty"`
+	DryRun          bool   `json:"dryRun"`
 }
 
 // RunResult is what the model did in a run.
@@ -145,8 +158,8 @@ func (c CLI) Routines() ([]RoutineInfo, error) {
 }
 
 // Routine is one routine in full (`routines show`).
-func (c CLI) Routine(name string) (RoutineInfo, error) {
-	var out RoutineInfo
+func (c CLI) Routine(name string) (RoutineDetail, error) {
+	var out RoutineDetail
 	return out, c.call(&out, "routines", "show", name)
 }
 

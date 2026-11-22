@@ -236,3 +236,55 @@ private func ran(_ log: URL) -> [String] {
     #expect(rows[1].program?.writes == true)
     #expect(rows[1].program?.secrets.first?.env == "API_TOKEN")
 }
+
+@Test func decodesAProgramsDetailAndRun() throws {
+    // `routines show <program>`: its description file's text, description and data folder.
+    let detail = """
+        {"name":"backup","kind":"program","path":"/p/backup/program.yaml","description":"Backs up my notes",
+         "servers":[],"tools":[],"enabled":true,"timeout":"20m","effort":"","session":"","builtinTools":[],
+         "folder":"/d/backup","trusted":true,"source":"executable: ./backup\\nwrites: true\\n",
+         "program":{"executable":"/p/backup/backup","checksum":"9f86d081884c7d659a2feaa0c55ad015","args":["--quiet"],
+           "writes":true,"secrets":[{"name":"api-token","env":"API_TOKEN","stored":true}]}}
+        """
+    let d = try CoreJSON.decoder().decode(Components.Schemas.RoutineDetail.self, from: Data(detail.utf8))
+    #expect(d.kind == .program)
+    #expect(d.description == "Backs up my notes")
+    #expect(d.folder == "/d/backup")
+    #expect(d.source.hasPrefix("executable: ./backup"))
+    // `runs show <id>`: its exit code, output (cut down, and saying so) and when it finished.
+    let run = """
+        {"id":"backup/2026-11-21T090000","routine":"backup","kind":"program","trigger":"manual",
+         "startedAt":"2026-11-21T09:00:00Z","finishedAt":"2026-11-21T09:00:04Z","outcome":"failed","reason":"exit 2",
+         "program":{"exitCode":2,"output":"start\\n[… 40 KiB of output left out …]\\nend","outputTruncated":true,
+           "dryRun":true,"checksum":"9f86"}}
+        """
+    let e = try CoreJSON.decoder().decode(Components.Schemas.Entry.self, from: Data(run.utf8))
+    #expect(e.result == nil)
+    #expect(e.program?.exitCode == 2)
+    #expect(e.program?.dryRun == true)
+    #expect(e.program?.truncatedText != nil)
+    #expect(e.finishedAt == CoreJSON.parseDate("2026-11-21T09:00:04Z"))
+}
+
+@Test func putsAProgramsFactsInWords() {
+    typealias Program = Components.Schemas.ProgramInfo
+    typealias Secret = Components.Schemas.ProgramSecret
+    let writes = Program(
+        args: [], checksum: "9f86d081884c7d659a2f", executable: "/p/b",
+        secrets: [Secret(env: "A", name: "a", stored: true), Secret(env: "B", name: "b", stored: false)], writes: true)
+    #expect(writes.dryRunText.contains("--dry-run"))
+    #expect(writes.shortChecksum == "9f86d081884c…")
+    #expect(writes.needsSignIn)
+    let reads = Program(args: [], checksum: "", executable: "/p/b", secrets: [], writes: false)
+    #expect(reads.dryRunText == "It doesn't write: Dry Run runs it as it is.")
+    #expect(reads.shortChecksum == nil)
+    #expect(!reads.needsSignIn)
+    #expect(Components.Schemas.Execution(dryRun: false, exitCode: 0, output: "ok").truncatedText == nil)
+}
+
+@Test func signingInToAProgramRunsAuthLogin() throws {
+    // A program's window signs in to its secrets as setup's sign-in step does.
+    let (cli, log) = try fakeCLI()
+    #expect(cli.signIn("backup") == nil)
+    #expect(ran(log) == ["auth login backup --browser"])
+}

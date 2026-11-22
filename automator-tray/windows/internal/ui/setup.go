@@ -561,7 +561,7 @@ func (s *Setup) action(step cli.SetupStep) fyne.CanvasObject {
 			if !step.Done {
 				turnOn = func() { s.turnOn(step) }
 			}
-			return card(true, trustReview(r, "Turn On", "", turnOn, s.working[id])...)
+			return card(true, trustReview(r, "Turn On", "", turnOn, s.working[id], nil)...)
 		}
 		if s.errors[id] == "" {
 			return spinner()
@@ -891,10 +891,11 @@ func (s *Setup) preparation(step cli.SetupStep, prepare string) fyne.CanvasObjec
 // trustReview is what a routine can reach: its servers, tools (writes
 // tinted), built-in tools, folder, and what changed since it was trusted;
 // with a button (action: Turn On, Trust) when do is given, and the note
-// beside it, if any.
-func trustReview(r cli.TrustOutput, action, note string, do func(), working bool) []fyne.CanvasObject {
+// beside it, if any. A program's is what it runs, with signIn (when given)
+// under its secrets.
+func trustReview(r cli.TrustOutput, action, note string, do func(), working bool, signIn fyne.CanvasObject) []fyne.CanvasObject {
 	if r.Program != nil {
-		return reviewButton(append(programRows(*r.Program), changedRows(r.Changes)...), action, note, do, working)
+		return reviewButton(append(programRows(*r.Program, signIn), changedRows(r.Changes)...), action, note, do, working)
 	}
 	writes := map[string]bool{}
 	for _, t := range r.Tools {
@@ -932,39 +933,6 @@ func changedRows(changed []string) []fyne.CanvasObject {
 		changes = append(changes, text(c))
 	}
 	return []fyne.CanvasObject{infoRow("Changed", changes...)}
-}
-
-// programRows are what a program runs, as trust approves it: its
-// executable (the app's copy, by checksum), whether it writes, its
-// arguments and secrets.
-func programRows(p cli.ProgramInfo) []fyne.CanvasObject {
-	exe := widget.NewLabel(p.Executable)
-	exe.TextStyle = fyne.TextStyle{Monospace: true}
-	exe.Wrapping = fyne.TextWrapBreak
-	exeRows := []fyne.CanvasObject{exe}
-	if p.Checksum != "" {
-		exeRows = append(exeRows, secondary("SHA-256 "+p.Checksum))
-	}
-	writes := "No: a dry run runs it as it is"
-	if p.Writes {
-		writes = "Yes: a dry run passes it --dry-run"
-	}
-	objects := []fyne.CanvasObject{padded(6, 0, 0, 0, infoRow("Executable", exeRows...)), infoRow("Writes", text(writes))}
-	if len(p.Args) > 0 {
-		objects = append(objects, infoRow("Arguments", text(strings.Join(p.Args, " "))))
-	}
-	if len(p.Secrets) > 0 {
-		var secrets []fyne.CanvasObject
-		for _, s := range p.Secrets {
-			line := s.Name + " (as $" + s.Env + ")"
-			if !s.Stored {
-				line += ", not stored"
-			}
-			secrets = append(secrets, text(line))
-		}
-		objects = append(objects, infoRow("Secrets", secrets...))
-	}
-	return objects
 }
 
 // reviewButton adds the review's button (when do is given) and the note

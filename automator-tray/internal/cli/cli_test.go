@@ -210,7 +210,7 @@ func TestTypesMatchTheContracts(t *testing.T) {
 		"login-items-stop.schema.json":   RunningOutput{},
 		"paths.schema.json":              Paths{},
 		"routines-list.schema.json":      []RoutineInfo{},
-		"routines-show.schema.json":      RoutineInfo{},
+		"routines-show.schema.json":      RoutineDetail{},
 		"runs.schema.json":               []RunSummary{},
 		"runs-show.schema.json":          RunEntry{},
 		"memory-list.schema.json":        []Memory{},
@@ -241,6 +241,10 @@ func checkFields(t *testing.T, where string, typ reflect.Type, node map[string]a
 	props, _ := node["properties"].(map[string]any)
 	for i := range typ.NumField() {
 		f := typ.Field(i)
+		if f.Anonymous {
+			checkFields(t, where, f.Type, node) // its fields are the struct's own
+			continue
+		}
 		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 		prop, ok := props[name].(map[string]any)
 		if !ok {
