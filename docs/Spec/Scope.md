@@ -19,7 +19,7 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 - Memories are mine: routines never write them
 
 ## Not in scope
-- **Event triggers**: routines started by something happening (a new email, a file appearing), not only by time. Runs already carry what triggered them, so this would be an addition
+- **Hooks**: a prompt or a program run when something happens (a meeting starting, a new email), not on a schedule, with a menu item of their own. A hook declares its action and its trigger: a watcher, polled or streaming events, that the scheduler's daemon runs. Under the hood a schedule is one more trigger: runs already carry what triggered them
 - **Programs compiled into a build**: programs a plugin registers as Go functions, beside the executables I add
 - **A program's result starting an LLM routine**: a program handing what it found to a routine to act on
 - **Install links**: one-click links that pre-fill installing a template or a plugin, still reviewed and approved by me
