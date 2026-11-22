@@ -152,7 +152,7 @@ func routineInfo(cmd *cobra.Command, a *engine.App, def engine.BackendDef, statu
 		row.ScheduleText = schedule.Text(c.Schedule)
 	}
 	var err error
-	if row.AgentModel, err = def.AgentModel(r.Model); err != nil {
+	if row.AgentModel, err = def.AgentModel(a, r.Model); err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: %v\n", r.Name, err)
 	}
 	if c.Effort != "default" {

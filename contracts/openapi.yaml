@@ -1188,6 +1188,11 @@ components:
       additionalProperties: false
       description: State is a setting with its effective value.
       properties:
+        alsoBackend:
+          description: |-
+            AlsoBackend is another llm.backend it applies to, for some routines
+            (llm.local.url: claude-api's local/<model> routines).
+          type: string
         backend:
           description: 'Backend is the llm.backend it applies to; empty: every backend.'
           type: string

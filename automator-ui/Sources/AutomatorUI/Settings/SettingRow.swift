@@ -16,7 +16,7 @@ struct SettingRow: View {
 
     private var notImplemented: Bool { setting.notImplemented == true }
     /// Why it doesn't apply to the backend in use, as the core says ("only
-    /// used with llm.backend api"); nil when it does.
+    /// used with llm.backend claude-api"); nil when it does.
     private var inactive: String? { setting.inactive.flatMap { $0.isEmpty ? nil : $0 } }
 
     var body: some View {

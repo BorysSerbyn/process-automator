@@ -110,7 +110,7 @@ func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine,
 }
 
 // CheckModel connects to the server that runs the routine's model, on a
-// backend that has one to reach (the claude-api backend's OpenAI-compatible server),
+// backend that has one to reach (the local server),
 // and adds why the model can't run there. It's skipped when Assess found its
 // provider isn't set up.
 func (rd *Readiness) CheckModel(ctx context.Context, a *App, r routines.Routine) {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
@@ -228,13 +229,33 @@ func backendStep(a *engine.App) (SetupStep, error) {
 	if b.SignIn != "" {
 		st.Commands = append(st.Commands, product.Command+" auth login "+b.SignIn+" --browser")
 	}
-	// The claude-api backend's other provider, offered for the routines that name it.
-	compat, _ := settings.Lookup(engine.OpenAICompatURLSetting)
+	// The local backend's server and model (claude-api runs local/<model>
+	// routines on that server too).
+	url, _ := settings.Lookup(engine.LocalURLSetting)
+	vals, err := a.Settings()
+	if err != nil {
+		return SetupStep{}, err
+	}
+	now := vals.String(engine.LocalURLSetting)
+	if b.Name == agent.LocalBackend && b.Problem != "" {
+		st.Ask += fmt.Sprintf("\nOn local: which model should routines run on (its name on your server, e.g. qwen3:8b; "+
+			"`ollama list` shows the ones pulled)? And is the server at %s%s, or where is it?", now, ollamaNote(now, url.Default))
+	}
 	st.Commands = append(st.Commands,
-		fmt.Sprintf("%s settings set %s <url>   # claude-api only, experimental and untested: for routines whose model is openai-compat/<model>, on an OpenAI-compatible server other than the default (%v, Ollama on this machine)",
-			product.Command, compat.Key, compat.Default),
-		product.Command+" auth login openai-compat --browser   # claude-api only, experimental and untested: when that OpenAI-compatible server needs an API key (hosted ones do; Ollama doesn't)")
+		fmt.Sprintf("%s settings set %s <url>   # local only, experimental and untested: when the server isn't at %s%s",
+			product.Command, engine.LocalURLSetting, now, ollamaNote(now, url.Default)),
+		fmt.Sprintf("%s settings set %s <model>   # local only: the model routines run on, its name on the server (e.g. qwen3:8b)",
+			product.Command, engine.LocalModelSetting),
+		product.Command+" auth login local --browser   # local only: when the server needs an API key (doctor says so; hosted ones do, Ollama doesn't)")
 	return st, nil
+}
+
+// ollamaNote names Ollama on this machine when url is the default one.
+func ollamaNote(url string, def any) string {
+	if url == fmt.Sprint(def) {
+		return " (Ollama on this machine)"
+	}
+	return ""
 }
 
 // usageStep is there while the app can't read the Claude plan's usage from

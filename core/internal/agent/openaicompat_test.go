@@ -107,7 +107,7 @@ func (f *fakeOpenAI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-const compatRoutine = "---\nmodel: openai-compat/qwen3:1.7b\n---\n{{role \"system\"}}You post updates.\n{{role \"user\"}}Post today's update."
+const compatRoutine = "---\nmodel: local/qwen3:1.7b\n---\n{{role \"system\"}}You post updates.\n{{role \"user\"}}Post today's update."
 
 // runCompat runs compatRoutine with the chat plugin's tools on the fake.
 func runCompat(t *testing.T, f *fakeOpenAI, key string, dryRun bool) (*Result, error) {
@@ -115,7 +115,7 @@ func runCompat(t *testing.T, f *fakeOpenAI, key string, dryRun bool) (*Result, e
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
 	ag := testAgent(0, dryRun, nil)
-	ag.Backend = &Genkit{OpenAICompat: OpenAICompat{BaseURL: srv.URL + "/v1", APIKey: key}}
+	ag.Backend = &Genkit{Local: OpenAICompat{BaseURL: srv.URL + "/v1", APIKey: key}}
 	return ag.Run(context.Background(), Request{Name: "r", Source: compatRoutine, Servers: []string{"chat"}, Tools: []string{"read", "post"}})
 }
 
@@ -239,7 +239,7 @@ func TestOpenAICompatServerError(t *testing.T) {
 	f := &fakeOpenAI{t: t, fail: http.StatusInternalServerError}
 	_, err := runCompat(t, f, "", false)
 	if err == nil || !strings.Contains(err.Error(), "answered with an error (HTTP 500): model runner has crashed") ||
-		!strings.Contains(err.Error(), "OpenAI-compatible server at http://127.0.0.1:") {
+		!strings.Contains(err.Error(), "local server at http://127.0.0.1:") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -247,9 +247,9 @@ func TestOpenAICompatServerError(t *testing.T) {
 func TestOpenAICompatUnreachable(t *testing.T) {
 	url := closedURL(t)
 	ag := testAgent(0, false, nil)
-	ag.Backend = &Genkit{OpenAICompat: OpenAICompat{BaseURL: url + "/v1"}}
+	ag.Backend = &Genkit{Local: OpenAICompat{BaseURL: url + "/v1"}}
 	_, err := ag.Run(context.Background(), Request{Name: "r", Source: compatRoutine, Servers: []string{"chat"}, Tools: []string{"read"}})
-	if err == nil || !strings.Contains(err.Error(), "the OpenAI-compatible server at "+url+"/v1 isn't answering") {
+	if err == nil || !strings.Contains(err.Error(), "the local server at "+url+"/v1 isn't answering") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -276,7 +276,8 @@ func TestGenkitRoutesByProvider(t *testing.T) {
 	}
 	for model, want := range map[string]string{
 		"anthropic/claude-sonnet-5-5": "needs an Anthropic API key, and none is stored",
-		"openai-compat/qwen3":         "needs the OpenAI-compatible server's URL",
+		"local/qwen3":                 "needs the local server's URL",
+		"openai-compat/qwen3":         "needs the local server's URL",
 		"openai/gpt-5.5":              "isn't one the claude-api backend runs",
 		"claude-sonnet-5-5":           "names no provider",
 	} {
@@ -287,8 +288,8 @@ func TestGenkitRoutesByProvider(t *testing.T) {
 	if err := run(&Genkit{}, ""); err == nil || !strings.Contains(err.Error(), "names no model") {
 		t.Errorf("no model: %v", err)
 	}
-	// An Anthropic model goes to the Anthropic API, even with an
-	// OpenAI-compatible server set up.
+	// An Anthropic model goes to the Anthropic API, even with the local
+	// server set up.
 	anthropicAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	}))
@@ -297,11 +298,15 @@ func TestGenkitRoutesByProvider(t *testing.T) {
 	compat := &fakeOpenAI{t: t}
 	srv := httptest.NewServer(compat)
 	defer srv.Close()
-	b := &Genkit{APIKey: "sk-ant-test", OpenAICompat: OpenAICompat{BaseURL: srv.URL + "/v1"}}
+	b := &Genkit{APIKey: "sk-ant-test", Local: OpenAICompat{BaseURL: srv.URL + "/v1"}}
 	if err := run(b, "anthropic/claude-sonnet-5-5"); err == nil || !strings.Contains(err.Error(), "418") || len(compat.requests) != 0 {
 		t.Errorf("anthropic model: %v, %d requests to the OpenAI-compatible server", err, len(compat.requests))
 	}
-	if err := run(b, "openai-compat/qwen3"); err != nil || len(compat.requests) != 1 || compat.requests[0].Model != "qwen3" {
+	if err := run(b, "local/qwen3"); err != nil || len(compat.requests) != 1 || compat.requests[0].Model != "qwen3" {
+		t.Errorf("local model: %v, %+v", err, compat.requests)
+	}
+	// openai-compat/<model> is local/<model>'s former name.
+	if err := run(b, "openai-compat/qwen3:8b"); err != nil || len(compat.requests) != 2 || compat.requests[1].Model != "qwen3:8b" {
 		t.Errorf("openai-compat model: %v, %+v", err, compat.requests)
 	}
 }
@@ -341,7 +346,7 @@ func TestOpenAICompatProbe(t *testing.T) {
 	}))
 	defer keyed.Close()
 	for key, want := range map[string]string{
-		"":      "needs an API key (HTTP 401): `procauto auth login openai-compat`",
+		"":      "needs an API key (HTTP 401): `procauto auth login local`",
 		"wrong": "refuses its API key (HTTP 401)",
 		"right": "",
 	} {
@@ -377,5 +382,60 @@ func TestOpenAICompatToolErrorsGoBackToTheModel(t *testing.T) {
 	}
 	if told != 2 {
 		t.Errorf("%d tool errors sent back, want 2: %+v", told, f.requests[1].Messages)
+	}
+}
+
+// The local backend runs every routine on its model (llm.local.model),
+// whatever model the routine names, unless it names local/<model>; it sends
+// the server's key only when one is stored.
+func TestLocalBackendRunsItsModel(t *testing.T) {
+	f := &fakeOpenAI{t: t}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	run := func(b *Genkit, model string) error {
+		src := "---\nmodel: " + model + "\n---\nGo."
+		if model == "" {
+			src = "Go."
+		}
+		_, err := b.Run(context.Background(), Job{Name: "r", Source: src, MaxTurns: 3})
+		return err
+	}
+	b := &Genkit{Backend: LocalBackend, Local: OpenAICompat{BaseURL: srv.URL + "/v1"}, LocalModel: "qwen3:8b"}
+	if b.Name() != "local" {
+		t.Errorf("name %q", b.Name())
+	}
+	for model, want := range map[string]string{
+		"anthropic/claude-sonnet-5-5": "qwen3:8b",
+		"":                            "qwen3:8b",
+		"openai/gpt-5.5":              "qwen3:8b",
+		"local/llama3.2:3b":           "llama3.2:3b",
+		"openai-compat/llama3.2:3b":   "llama3.2:3b",
+	} {
+		f.requests = nil
+		if err := run(b, model); err != nil || len(f.requests) != 1 || f.requests[0].Model != want {
+			t.Errorf("%q: %v, %+v, want %s", model, err, f.requests, want)
+		}
+	}
+	for _, h := range f.auth {
+		if h != "" {
+			t.Errorf("Authorization without a key = %q", h)
+		}
+	}
+	f.auth = nil
+	keyed := *b
+	keyed.Local.APIKey = "sk-local"
+	if err := run(&keyed, "anthropic/claude-haiku-5-5"); err != nil || len(f.auth) != 1 || f.auth[0] != "Bearer sk-local" {
+		t.Errorf("with a key: %v, %q", err, f.auth)
+	}
+
+	none := &Genkit{Backend: LocalBackend, Local: OpenAICompat{BaseURL: srv.URL + "/v1"}}
+	if err := run(none, "anthropic/claude-sonnet-5-5"); err == nil || !strings.Contains(err.Error(), "settings set llm.local.model <model>") {
+		t.Errorf("no model set: %v", err)
+	}
+	if err := run(none, "local/qwen3"); err != nil {
+		t.Errorf("no model set, a routine naming its own: %v", err)
+	}
+	if err := run(&Genkit{Backend: LocalBackend, LocalModel: "qwen3"}, ""); err == nil || !strings.Contains(err.Error(), "settings set llm.local.url <url>") {
+		t.Errorf("no URL: %v", err)
 	}
 }

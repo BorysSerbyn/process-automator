@@ -75,7 +75,11 @@ func markInactive(states []State) {
 		}
 	}
 	for i, st := range states {
-		if st.Backend != "" && st.Backend != backend {
+		switch {
+		case st.Backend == "" || st.Backend == backend || st.AlsoBackend == backend:
+		case st.AlsoBackend != "":
+			states[i].Inactive = "only used with llm.backend " + st.Backend + " or " + st.AlsoBackend
+		default:
 			states[i].Inactive = "only used with llm.backend " + st.Backend
 		}
 	}

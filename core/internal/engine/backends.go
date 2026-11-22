@@ -19,8 +19,8 @@ type BackendDef struct {
 	Name string
 	New  func(a *App) (agent.Backend, error)
 	// AgentModel maps a routine's model (as written in its file) to what the
-	// backend's agent CLI takes; "" means the CLI's default.
-	AgentModel func(model string) (string, error)
+	// backend's agent CLI takes, or Genkit runs; "" means the CLI's default.
+	AgentModel func(a *App, model string) (string, error)
 	// Ready says what keeps it from running routines, in plain words ("" when
 	// nothing does), and the sign-in that fixes it, when one does (setup).
 	Ready func(a *App) (problem, signIn string)
@@ -60,14 +60,17 @@ var Backends = map[string]BackendDef{
 			if err != nil {
 				return nil, fmt.Errorf("can't read the Anthropic API key: %w", err)
 			}
-			compat, err := a.OpenAICompat()
+			local, err := a.Local()
 			if err != nil {
 				return nil, err
 			}
-			return &agent.Genkit{APIKey: key, OpenAICompat: compat}, nil
+			return &agent.Genkit{Backend: agent.ClaudeAPIBackend, APIKey: key, Local: local}, nil
 		},
-		AgentModel: func(model string) (string, error) { // Genkit takes the file's names
-			_, err := agent.APIModel(model)
+		AgentModel: func(_ *App, model string) (string, error) { // Genkit takes the file's names
+			provider, err := agent.APIModel(model)
+			if provider == agent.LocalProvider {
+				model = agent.LocalModel(model, "")
+			}
 			return model, err
 		},
 		Priced:       true,
@@ -78,7 +81,7 @@ var Backends = map[string]BackendDef{
 			switch {
 			case err != nil:
 				return "the Anthropic API key can't be read: " + err.Error(), ""
-			case stored || onlyOpenAICompat(a):
+			case stored || onlyLocal(a):
 				return "", ""
 			}
 			return "no Anthropic API key is stored", "anthropic"
@@ -96,7 +99,7 @@ var Backends = map[string]BackendDef{
 			}
 			return &agent.CLI{Tool: &agent.ClaudeCode{Path: path, OAuthToken: token}}, nil
 		},
-		AgentModel:        agent.ClaudeModel,
+		AgentModel:        func(_ *App, model string) (string, error) { return agent.ClaudeModel(model) },
 		CheckBuiltinTools: agent.CheckClaudeBuiltins,
 		PlanUsage: func(ctx context.Context, a *App) ([]usage.Limit, error) {
 			path, err := agent.FindClaude()
@@ -117,6 +120,16 @@ var Backends = map[string]BackendDef{
 			return "", ""
 		},
 	},
+	"local": {
+		New: newLocal,
+		// Routine files name Claude models: they run on llm.local.model
+		// unless they name local/<model>.
+		AgentModel:   func(a *App, model string) (string, error) { return agent.LocalModel(model, a.localModel()), nil },
+		Experimental: true, // tried only with a fake server
+		ModelProblem: localModelProblem,
+		ReachModel:   localReachModel,
+		Ready:        localReady,
+	},
 	"codex": {
 		New: func(*App) (agent.Backend, error) {
 			path, err := agent.FindCodex()
@@ -125,7 +138,7 @@ var Backends = map[string]BackendDef{
 			}
 			return &agent.CLI{Tool: &agent.Codex{Path: path}}, nil
 		},
-		AgentModel:        agent.CodexModel,
+		AgentModel:        func(_ *App, model string) (string, error) { return agent.CodexModel(model) },
 		CheckBuiltinTools: agent.CheckCodexBuiltins,
 		Experimental:      true, // tried only with a fake model provider
 		Ready: func(a *App) (string, string) {

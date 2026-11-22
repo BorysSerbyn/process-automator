@@ -476,7 +476,7 @@ func TestSetupInteractiveBackend(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetIn(strings.NewReader("9\n3\n\n\n\n\n\n"))
+	cmd.SetIn(strings.NewReader("9\n4\n\n\n\n\n\n"))
 	if err := setupInteractive(cmd, a); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
@@ -484,15 +484,16 @@ func TestSetupInteractiveBackend(t *testing.T) {
 	for _, want := range []string{
 		"    1. claude-code  Claude Code on your Claude subscription (recommended)\n",
 		"    2. claude-api   Anthropic's API, paid per token\n",
-		"    3. codex        OpenAI's Codex CLI (experimental, untested)\n",
-		`"9" isn't one of them: a number from 1 to 3, or a name`,
+		"    3. local        Your own model server, e.g. Ollama (experimental, untested)\n",
+		"    4. codex        OpenAI's Codex CLI (experimental, untested)\n",
+		`"9" isn't one of them: a number from 1 to 4, or a name`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
 	if v, _ := cli(t, cfg, "settings", "get", "llm.backend"); !strings.Contains(v, "codex") {
-		t.Errorf("backend after choosing 3: %s", v)
+		t.Errorf("backend after choosing 4: %s", v)
 	}
 }
 

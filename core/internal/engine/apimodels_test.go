@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func problemsOf(a *App, r routines.Routine) string {
 	return strings.Join(out, "; ")
 }
 
-// On the api backend, an Anthropic API key is needed only when a routine
+// On the claude-api backend, an Anthropic API key is needed only when a routine
 // runs an Anthropic model (or there are no routines yet, the usual way);
 // each routine's model needs its own provider set up.
 func TestAPIReadiness(t *testing.T) {
@@ -66,9 +67,9 @@ func TestAPIReadiness(t *testing.T) {
 	if b, err := a.BackendReady(); err != nil || b.Problem != "no Anthropic API key is stored" || b.SignIn != "anthropic" {
 		t.Errorf("no routines: %+v %v", b, err)
 	}
-	local := writeRoutine(t, a, "local", "openai-compat/qwen3:8b")
+	local := writeRoutine(t, a, "local", "local/qwen3:8b")
 	if b, _ := a.BackendReady(); b.Problem != "" || b.Status() != "Runs with claude-api, ready" {
-		t.Errorf("only an OpenAI-compatible model, no key: %+v", b)
+		t.Errorf("only a local model, no key: %+v", b)
 	}
 	if p := problemsOf(a, local); p != "" {
 		t.Errorf("local: %s", p)
@@ -96,12 +97,16 @@ func TestAPIReadiness(t *testing.T) {
 		t.Errorf("with a key: %s", p)
 	}
 
-	setSetting(t, a, OpenAICompatURLSetting, "")
-	if p := problemsOf(a, local); !strings.Contains(p, "its model openai-compat/qwen3:8b needs the OpenAI-compatible server (experimental, untested), but no URL is set") ||
-		!strings.Contains(p, "fix: procauto settings set llm.openai-compat.base-url <url>") {
+	setSetting(t, a, LocalURLSetting, "")
+	if p := problemsOf(a, local); !strings.Contains(p, "its model local/qwen3:8b needs the local server (experimental, untested), but no URL is set") ||
+		!strings.Contains(p, "fix: procauto settings set llm.local.url <url>") {
 		t.Errorf("no URL: %s", p)
 	}
-	setSetting(t, a, OpenAICompatURLSetting, "localhost:11434")
+	former := writeRoutine(t, a, "former", "openai-compat/qwen3:8b") // local's former name
+	if p := problemsOf(a, former); !strings.Contains(p, "needs the local server") {
+		t.Errorf("openai-compat, no URL: %s", p)
+	}
+	setSetting(t, a, LocalURLSetting, "localhost:11434")
 	if p := problemsOf(a, local); !strings.Contains(p, `its URL "localhost:11434" isn't an http(s) URL`) {
 		t.Errorf("not a URL: %s", p)
 	}
@@ -120,7 +125,19 @@ func TestAPIReadiness(t *testing.T) {
 // fakeOllama serves an OpenAI-compatible API: its models, and a model that
 // reports done, then answers.
 func fakeOllama(t *testing.T, models ...string) *httptest.Server {
+	srv, _ := fakeOllamaSeen(t, models...)
+	return srv
+}
+
+// seenRequest is a chat completion request the fake server got: the model it
+// asked for, and its Authorization header.
+type seenRequest struct{ model, auth string }
+
+// fakeOllamaSeen is fakeOllama, and the chat completion requests it got.
+func fakeOllamaSeen(t *testing.T, models ...string) (*httptest.Server, func() []seenRequest) {
 	t.Helper()
+	var mu sync.Mutex
+	var seen []seenRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/models" {
@@ -138,6 +155,9 @@ func fakeOllama(t *testing.T, models ...string) *httptest.Server {
 			} `json:"messages"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		mu.Lock()
+		seen = append(seen, seenRequest{req.Model, r.Header.Get("Authorization")})
+		mu.Unlock()
 		msg := map[string]any{"role": "assistant", "content": "Done."}
 		if req.Messages[len(req.Messages)-1].Role != "tool" {
 			msg = map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{{
@@ -152,7 +172,11 @@ func fakeOllama(t *testing.T, models ...string) *httptest.Server {
 		})
 	}))
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, func() []seenRequest {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]seenRequest(nil), seen...)
+	}
 }
 
 // Doctor and routines check ask the server whether it answers and has the
@@ -160,7 +184,7 @@ func fakeOllama(t *testing.T, models ...string) *httptest.Server {
 func TestAPIReachModel(t *testing.T) {
 	a := testApp(t)
 	srv := fakeOllama(t, "qwen3:8b")
-	setSetting(t, a, OpenAICompatURLSetting, srv.URL+"/v1")
+	setSetting(t, a, LocalURLSetting, srv.URL+"/v1")
 	reach := func(r routines.Routine) string {
 		rd := a.Assess(r)
 		rd.CheckModel(context.Background(), a, r)
@@ -170,35 +194,38 @@ func TestAPIReachModel(t *testing.T) {
 		}
 		return strings.Join(out, "; ")
 	}
-	if p := reach(writeRoutine(t, a, "local", "openai-compat/qwen3:8b")); p != "" {
+	if p := reach(writeRoutine(t, a, "local", "local/qwen3:8b")); p != "" {
 		t.Errorf("the server has it: %s", p)
 	}
-	missing := writeRoutine(t, a, "missing", "openai-compat/qwen3:32b")
-	if p := reach(missing); !strings.HasPrefix(p, "its model openai-compat/qwen3:32b needs the OpenAI-compatible server: the server at "+srv.URL+"/v1 doesn't have the model qwen3:32b") {
+	if p := reach(writeRoutine(t, a, "former", "openai-compat/qwen3:8b")); p != "" {
+		t.Errorf("the server has it (former name): %s", p)
+	}
+	missing := writeRoutine(t, a, "missing", "local/qwen3:32b")
+	if p := reach(missing); !strings.HasPrefix(p, "its model local/qwen3:32b needs the local server: the server at "+srv.URL+"/v1 doesn't have the model qwen3:32b") {
 		t.Errorf("not on the server: %s", p)
 	}
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	down := "http://" + l.Addr().String() + "/v1"
 	_ = l.Close()
-	setSetting(t, a, OpenAICompatURLSetting, down)
-	if p := reach(missing); p != "its model openai-compat/qwen3:32b needs the OpenAI-compatible server: nothing answers at "+down {
+	setSetting(t, a, LocalURLSetting, down)
+	if p := reach(missing); p != "its model local/qwen3:32b needs the local server: nothing answers at "+down {
 		t.Errorf("down: %s", p)
 	}
 	if p := problemsOf(a, missing); p != "" {
 		t.Errorf("Assess connected: %s", p)
 	}
-	if p := reach(writeRoutine(t, a, "claude", "anthropic/claude-haiku-5-5")); strings.Contains(p, "OpenAI-compatible") {
-		t.Errorf("an Anthropic model reached for the OpenAI-compatible server: %s", p)
+	if p := reach(writeRoutine(t, a, "claude", "anthropic/claude-haiku-5-5")); strings.Contains(p, "local server") {
+		t.Errorf("an Anthropic model reached for the local server: %s", p)
 	}
 }
 
-// A run on the OpenAI-compatible server has no list price: it's recorded
+// A run on the local server has no list price: it's recorded
 // without a cost, and the API budgets count only what Anthropic runs spent.
-func TestOpenAICompatRunsArentPriced(t *testing.T) {
+func TestLocalRunsArentPriced(t *testing.T) {
 	a := testApp(t)
 	srv := fakeOllama(t)
-	setSetting(t, a, OpenAICompatURLSetting, srv.URL+"/v1")
-	r := writeRoutine(t, a, "local", "openai-compat/qwen3:8b")
+	setSetting(t, a, LocalURLSetting, srv.URL+"/v1")
+	r := writeRoutine(t, a, "local", "local/qwen3:8b")
 	set, err := routines.Load(a.Layout.Routines())
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +276,7 @@ func TestUnreadableSecrets(t *testing.T) {
 	if _, err := Backends["claude-api"].New(a); err == nil || !strings.Contains(err.Error(), "can't read the Anthropic API key") {
 		t.Errorf("claude-api run: %v", err)
 	}
-	if _, err := a.OpenAICompat(); err == nil || !strings.Contains(err.Error(), "can't read the OpenAI-compatible server's API key") {
-		t.Errorf("openai-compat: %v", err)
+	if _, err := a.Local(); err == nil || !strings.Contains(err.Error(), "can't read the local server's API key") {
+		t.Errorf("local: %v", err)
 	}
 }

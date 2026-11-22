@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
@@ -26,10 +27,10 @@ func newAuthCmd() *cobra.Command {
 func newAuthLoginCmd() *cobra.Command {
 	var browser bool
 	cmd := &cobra.Command{
-		Use: "login <server|anthropic|claude-code|openai-compat>",
+		Use: "login <server|anthropic|claude-code|local>",
 		Short: "Sign in to a server (browser for remote servers; paste credentials for local ones; " +
 			"`anthropic` stores the API key; `claude-code` stores a `claude setup-token` token, optional; " +
-			"`openai-compat` stores the OpenAI-compatible server's API key, for one that needs it (experimental, untested); " +
+			"`local` stores the local model server's API key, for one that needs it (experimental, untested); " +
 			"codex keeps its own sign-in: `codex login`)",
 		Long: "Signs in to a server. OAuth servers open the browser. Keys and tokens are pasted into the terminal " +
 			"(or read from stdin), or with --browser entered on a local page that stores them straight in the " +
@@ -62,6 +63,15 @@ type loginUI interface {
 	Say(format string, args ...any)
 }
 
+// localName is the sign-in name for the local server: openai-compat is its
+// former name, still taken.
+func localName(name string) string {
+	if name == agent.FormerLocalProvider {
+		return agent.LocalProvider
+	}
+	return name
+}
+
 // login signs in to a server, plugin, or the model engine.Backends.
 func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 	ask := func(key, label string) error {
@@ -77,7 +87,7 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 		}
 		return a.Connector.Secrets.Set(key, v)
 	}
-	switch name {
+	switch name = localName(name); name {
 	case "anthropic":
 		if err := ask(engine.AnthropicKey, "your Anthropic API key"); err != nil {
 			return err
@@ -90,11 +100,11 @@ func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 		}
 		ui.Say("Saved the Claude Code token.")
 		return nil
-	case "openai-compat":
-		if err := ask(engine.OpenAICompatKey, "the OpenAI-compatible server's API key"); err != nil {
+	case "local":
+		if err := ask(engine.LocalKey, "the local model server's API key"); err != nil {
 			return err
 		}
-		ui.Say("Saved the OpenAI-compatible server's API key.")
+		ui.Say("Saved the local model server's API key.")
 		return nil
 	case "codex":
 		return errors.New("the codex backend uses Codex's own sign-in: run `codex login` in a terminal")
@@ -240,7 +250,7 @@ func (t *terminalUI) Say(format string, args ...any) { fmt.Fprintf(t.out, format
 
 func newAuthLogoutCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "logout <server|anthropic|claude-code|openai-compat>",
+		Use:   "logout <server|anthropic|claude-code|local>",
 		Short: "Forget a server's stored credentials",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -255,13 +265,18 @@ func newAuthLogoutCmd() *cobra.Command {
 
 // logout forgets a server's or plugin's stored credentials.
 func logout(a *engine.App, name string) error {
-	switch name {
+	switch name = localName(name); name {
 	case "anthropic":
 		return a.Connector.Secrets.Delete(engine.AnthropicKey)
 	case "claude-code":
 		return a.Connector.Secrets.Delete(engine.ClaudeCodeTokenKey)
-	case "openai-compat":
-		return a.Connector.Secrets.Delete(engine.OpenAICompatKey)
+	case "local":
+		for _, k := range engine.LocalKeys {
+			if err := a.Connector.Secrets.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	if p, ok := a.FindPlugin(name); ok && p.Serve != nil {
 		for _, s := range p.Secrets {
@@ -389,13 +404,21 @@ func authStatuses(a *engine.App) ([]AuthStatus, error) {
 	rows = append(rows, anthropic)
 	// The token is optional (without it Claude Code uses its own login), and so
 	// is this key (local servers need none): listed when stored, or unreadable.
-	for _, o := range []AuthStatus{{Server: "claude-code", Kind: "token"}, {Server: "openai-compat", Kind: "api-key"}} {
-		key := map[string]string{"claude-code": engine.ClaudeCodeTokenKey, "openai-compat": engine.OpenAICompatKey}[o.Server]
-		_, stored, err := secrets.Lookup(a.Connector.Secrets, key)
-		if stored || err != nil {
-			o.SignedIn = true
-			o.check(a, key)
-			rows = append(rows, o)
+	optional := []struct {
+		row  AuthStatus
+		keys []string
+	}{
+		{AuthStatus{Server: "claude-code", Kind: "token"}, []string{engine.ClaudeCodeTokenKey}},
+		{AuthStatus{Server: "local", Kind: "api-key"}, engine.LocalKeys}, // under its former key too
+	}
+	for _, o := range optional {
+		for _, key := range o.keys {
+			if _, stored, err := secrets.Lookup(a.Connector.Secrets, key); stored || err != nil {
+				o.row.SignedIn = true
+				o.row.check(a, key)
+				rows = append(rows, o.row)
+				break
+			}
 		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Server < rows[j].Server })
@@ -415,7 +438,7 @@ func (r *AuthStatus) check(a *engine.App, key string) {
 
 // signInNames is everything `auth login` accepts.
 func signInNames(a *engine.App) []string {
-	names := []string{"anthropic", "claude-code", "openai-compat"}
+	names := []string{"anthropic", "claude-code", "local"}
 	for name := range a.Config.MCPServers {
 		names = append(names, name)
 	}

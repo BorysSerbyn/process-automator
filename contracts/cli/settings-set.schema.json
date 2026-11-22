@@ -54,6 +54,10 @@
       "type": "string",
       "description": "Backend is the llm.backend it applies to; empty: every backend."
     },
+    "alsoBackend": {
+      "type": "string",
+      "description": "AlsoBackend is another llm.backend it applies to, for some routines\n(llm.local.url: claude-api's local/\u003cmodel\u003e routines)."
+    },
     "value": true,
     "isDefault": {
       "type": "boolean"

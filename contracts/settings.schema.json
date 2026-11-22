@@ -97,6 +97,7 @@
       "enum": [
         "claude-code",
         "claude-api",
+        "local",
         "codex"
       ],
       "type": "string",
@@ -124,9 +125,15 @@
       "x-type": "number",
       "x-unit": "USD"
     },
-    "llm.openai-compat.base-url": {
+    "llm.local.model": {
+      "default": "",
+      "description": "The model the local backend runs routines on: its name on the server (e.g. qwen3:8b; `ollama list` shows the ones pulled). It replaces the model a routine names, unless that's local/<model>, another model on the same server.",
+      "type": "string",
+      "x-type": "string"
+    },
+    "llm.local.url": {
       "default": "http://localhost:11434/v1",
-      "description": "Experimental, untested: the OpenAI-compatible server that runs routines whose model is openai-compat/<model> (e.g. openai-compat/qwen3:8b). The default is Ollama on this machine; llama.cpp's llama-server, vLLM, LM Studio and hosted APIs such as DeepSeek, Qwen (DashScope) or Kimi (Moonshot) work too. A server that needs an API key gets it with `auth login openai-compat`. Its runs have no list price, so they don't count toward the llm.budget.* budgets.",
+      "description": "Experimental, untested: the OpenAI-compatible server the local backend runs routines on, and claude-api runs routines whose model is local/<model> on. The default is Ollama on this machine; llama.cpp's llama-server, vLLM, LM Studio and hosted APIs such as DeepSeek, Qwen (DashScope) or Kimi (Moonshot) work too. A server that needs an API key gets it with `auth login local`. Its runs have no list price, so they don't count toward the llm.budget.* budgets.",
       "type": "string",
       "x-type": "string"
     },
@@ -164,7 +171,8 @@
   "type": "object",
   "x-order": [
     "llm.backend",
-    "llm.openai-compat.base-url",
+    "llm.local.url",
+    "llm.local.model",
     "llm.usage-limit",
     "llm.budget.window",
     "llm.budget.window-usd",

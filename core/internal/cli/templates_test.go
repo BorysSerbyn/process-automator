@@ -119,6 +119,12 @@ func TestTemplateBackends(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(filepath.Dir(cfg), "routines", "sweep.prompt")); !os.IsNotExist(err) {
 		t.Fatal("a refused install left a routine behind")
 	}
+	if _, err := cli(t, cfg, "settings", "set", "llm.backend", "local"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = cli(t, cfg, "templates", "install", "personal/sweep"); err == nil || !strings.Contains(err.Error(), "and llm.backend is local") {
+		t.Fatalf("install on local: %v", err)
+	}
 	if _, err := cli(t, cfg, "settings", "set", "llm.backend", "claude-code"); err != nil {
 		t.Fatal(err)
 	}

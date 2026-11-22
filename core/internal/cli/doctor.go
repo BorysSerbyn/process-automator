@@ -36,7 +36,7 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Explain a red indicator: check the scheduler, enabled routines, their plugins and last runs",
 		Long: "Checks what can make the status red, without calling the model or any tool: the scheduler is " +
 			"running; each enabled routine loads, its settings resolve, its folder exists, it's trusted, its " +
-			"servers connect (signed in) and offer its tools, its model's provider is set up (an OpenAI-compatible " +
+			"servers connect (signed in) and offer its tools, its model's provider is set up (the local " +
 			"server answers and has the model); and its last run didn't fail. Each problem comes " +
 			"with what fixes it. Fails if there are any.",
 		Annotations: readOnly(),

@@ -61,6 +61,9 @@ type Setting struct {
 	NotImplemented bool `json:"notImplemented,omitempty"`
 	// Backend is the llm.backend it applies to; empty: every backend.
 	Backend string `json:"backend,omitempty"`
+	// AlsoBackend is another llm.backend it applies to, for some routines
+	// (llm.local.url: claude-api's local/<model> routines).
+	AlsoBackend string `json:"alsoBackend,omitempty"`
 }
 
 func ptr(f float64) *float64 { return &f }
@@ -68,21 +71,29 @@ func ptr(f float64) *float64 { return &f }
 // Registry lists every setting. Keys are dotted, lowercase, kebab-case segments.
 var Registry = []Setting{
 	{
-		Key: "llm.backend", Type: TypeEnum, Default: "claude-api", Enum: []string{"claude-code", "claude-api", "codex"},
+		Key: "llm.backend", Type: TypeEnum, Default: "claude-api", Enum: []string{"claude-code", "claude-api", "local", "codex"},
 		Description: "What runs your routines.",
 		EnumHelp: map[string]string{
 			"claude-code": "Claude Code on your Claude subscription (recommended)",
 			"claude-api":  "Anthropic's API, paid per token",
+			"local":       "Your own model server, e.g. Ollama (experimental, untested)",
 			"codex":       "OpenAI's Codex CLI (experimental, untested)",
 		},
 		EnumAliases: map[string]string{"api": "claude-api"},
 	},
 	{
-		Key: "llm.openai-compat.base-url", Type: TypeString, Default: "http://localhost:11434/v1", Backend: "claude-api",
-		Description: "Experimental, untested: the OpenAI-compatible server that runs routines whose model is openai-compat/<model> " +
-			"(e.g. openai-compat/qwen3:8b). The default is Ollama on this machine; llama.cpp's llama-server, vLLM, LM Studio and hosted APIs " +
-			"such as DeepSeek, Qwen (DashScope) or Kimi (Moonshot) work too. A server that needs an API key gets it with `auth login openai-compat`. " +
-			"Its runs have no list price, so they don't count toward the llm.budget.* budgets.",
+		Key: "llm.local.url", Type: TypeString, Default: "http://localhost:11434/v1", Backend: "local", AlsoBackend: "claude-api",
+		Description: "Experimental, untested: the OpenAI-compatible server the local backend runs routines on, and claude-api " +
+			"runs routines whose model is local/<model> on. The default is Ollama on this machine; llama.cpp's llama-server, " +
+			"vLLM, LM Studio and hosted APIs such as DeepSeek, Qwen (DashScope) or Kimi (Moonshot) work too. A server that " +
+			"needs an API key gets it with `auth login local`. Its runs have no list price, so they don't count toward the " +
+			"llm.budget.* budgets.",
+	},
+	{
+		Key: "llm.local.model", Type: TypeString, Default: "", Backend: "local",
+		Description: "The model the local backend runs routines on: its name on the server (e.g. qwen3:8b; `ollama list` " +
+			"shows the ones pulled). It replaces the model a routine names, unless that's local/<model>, another model on " +
+			"the same server.",
 	},
 	{
 		Key: "llm.usage-limit", Type: TypePercent, Default: 90.0, Min: ptr(0), Max: ptr(100), Unit: "%", Backend: "claude-code",
@@ -129,6 +140,9 @@ var Retired = map[string]string{
 	"notifications.failures": "runs.failure-notifications",
 	// Clicking a notification always shows its run.
 	"notifications.on-click": "",
+	// The local backend's server, which claude-api's local/<model> (formerly
+	// openai-compat/<model>) routines run on too.
+	"llm.openai-compat.base-url": "llm.local.url",
 }
 
 // RoutineField is a per-routine setting. A routine file sets it in its
