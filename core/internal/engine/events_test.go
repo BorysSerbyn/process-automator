@@ -197,6 +197,35 @@ exit 1
 	}
 }
 
+// A stream that failed and then keeps running counts as working again,
+// though it prints nothing: its hooks lose the "failing" problem.
+func TestStreamRecoversWithoutEvents(t *testing.T) {
+	a := testApp(t)
+	// Fails on its first start, then runs quietly (as a key watcher waiting
+	// for a press does).
+	addWatcher(t, a, "keys", "executable: ./watch\nmode: stream\n", `
+if [ ! -f started ]; then touch started; echo "no permission" >&2; exit 1; fi
+exec sleep 30
+`)
+	addHook(t, a, "on-key", hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: keys}\n", "true\n")
+	x, _ := a.FindHook("on-key")
+	failing := func() bool {
+		for _, p := range a.Assess(x).Problems {
+			if strings.Contains(p.Text, "its watcher keys is failing") {
+				return true
+			}
+		}
+		return false
+	}
+	e := newEvents(a, func() (*App, error) { return a, nil })
+	e.awakePoll, e.minBackoff, e.up = 20*time.Millisecond, 20*time.Millisecond, 300*time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	e.sync(ctx, a)
+	defer func() { cancel(); e.stop() }()
+	waitUntil(t, "the first start's failure", failing)
+	waitUntil(t, "the failure to clear while it runs", func() bool { return !failing() })
+}
+
 // An event older than the hook's staleness is dropped; a watcher isn't
 // polled in a maintenance wake.
 func TestStaleEventsAndDarkWake(t *testing.T) {

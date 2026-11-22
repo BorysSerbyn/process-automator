@@ -60,10 +60,10 @@ type events struct {
 	reload func() (*App, error)
 	layout Layout
 	disp   *dispatch.Dispatcher
-	// minBackoff is the first pause before a stream is started again, and
-	// awakePoll how often one waiting for a full wake checks (variables for
-	// tests).
-	minBackoff, awakePoll time.Duration
+	// minBackoff is the first pause before a stream is started again,
+	// awakePoll how often one waiting for a full wake checks, and up how
+	// long a stream must run to count as working (variables for tests).
+	minBackoff, awakePoll, up time.Duration
 
 	mu        sync.Mutex
 	state     *watchers.State
@@ -98,7 +98,7 @@ func newEvents(a *App, reload func() (*App, error)) *events {
 		st, _ = watchers.LoadState("")
 	}
 	e := &events{
-		reload: reload, layout: a.Layout, state: st, minBackoff: time.Second, awakePoll: awakePoll,
+		reload: reload, layout: a.Layout, state: st, minBackoff: time.Second, awakePoll: awakePoll, up: streamUp,
 		running: map[string]*watcherRun{}, listening: map[string][]listener{},
 		attempts: map[string][]time.Time{}, started: map[string][]time.Time{}, lastStart: map[string]time.Time{},
 	}
@@ -261,9 +261,21 @@ func (e *events) stream(ctx context.Context, a *App, w watchers.Watcher) {
 			at := started
 			e.state.Of(w.Name).StartedAt = &at
 			e.mu.Unlock()
+			// Still running after a while, it works, events or not (one
+			// that listens for key presses may print nothing for hours): an
+			// earlier failure is over.
+			working := time.AfterFunc(e.up, func() {
+				e.mu.Lock()
+				defer e.mu.Unlock()
+				if ws := e.state.Of(w.Name); ws.Error != "" {
+					ws.Worked()
+					e.save()
+				}
+			})
 			err = watchers.Stream(ctx, w, inv, e.cursor(w.Name),
 				func(ev watchers.Event) { e.handle(ctx, w.Name, []watchers.Event{ev}, nil, nil) },
 				func(c string) { e.setCursor(w.Name, c) })
+			working.Stop()
 			if err == nil {
 				err = errors.New("it ended")
 			}
@@ -272,7 +284,7 @@ func (e *events) stream(ctx context.Context, a *App, w watchers.Watcher) {
 		if ctx.Err() != nil {
 			return
 		}
-		if time.Since(started) >= streamUp {
+		if time.Since(started) >= e.up {
 			backoff = e.minBackoff // it was working: start it again now
 			logf("watcher %s: %v; starting it again", w.Name, err)
 			e.mu.Lock()
