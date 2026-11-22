@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -14,22 +13,27 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
 
-// RoutineDetail is `routines show --json`: a routine with its file's source.
+// RoutineDetail is `routines show --json`: a routine of either kind with its
+// file's source.
 type RoutineDetail struct {
 	RoutineInfo
-	// Source is the routine file as written (frontmatter and prompt).
+	// Source is its file as written: an LLM routine's frontmatter and
+	// prompt, a program's description file.
 	Source string `json:"source"`
 }
 
 // RoutineChange is the output of `routines create/update/delete --json`.
 type RoutineChange struct {
 	Routine string `json:"routine"`
-	Path    string `json:"path"`
+	// Kind is program for a program; absent for an LLM routine (llm).
+	Kind string `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
+	Path string `json:"path"`
 	// Enabled is whether the routine runs on its schedule after the change
 	// (created routines start disabled; absent for deletes).
 	Enabled *bool `json:"enabled,omitempty"`
@@ -38,21 +42,23 @@ type RoutineChange struct {
 // RoutineCheck is one row of `routines check --json`.
 type RoutineCheck struct {
 	Routine string `json:"routine"`
-	OK      bool   `json:"ok"`
+	// Kind is program for a program; absent for an LLM routine (llm).
+	Kind string `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
+	OK   bool   `json:"ok"`
 	// Problem is why the routine wouldn't run (file, settings, servers or tools).
 	Problem string `json:"problem,omitempty"`
-	// Tools are its allowlisted tools and the server offering each.
+	// Tools are an LLM routine's allowlisted tools and the server offering each.
 	Tools []agent.CheckedTool `json:"tools,omitempty"`
 }
 
 func newRoutinesShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "show <routine>",
-		Short:       "Show a routine: its file, effective settings and last run",
+		Short:       "Show a routine of either kind: its file, effective settings and last run",
 		Annotations: readOnly(),
 		Args:        cobra.ExactArgs(1),
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
-			r, _, err := a.Routine(args[0])
+			x, err := a.Find(args[0])
 			if err != nil {
 				return err
 			}
@@ -64,7 +70,7 @@ func newRoutinesShowCmd() *cobra.Command {
 			if err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: can't read run status: %v\n", err)
 			}
-			d := RoutineDetail{RoutineInfo: routineInfo(cmd, a, def, status, r, time.Now()), Source: r.Source}
+			d := RoutineDetail{RoutineInfo: routineInfo(cmd, a, def, status, x, time.Now()), Source: x.Source()}
 			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), d)
 			}
@@ -73,7 +79,13 @@ func newRoutinesShowCmd() *cobra.Command {
 			if d.Schedule != "" {
 				fmt.Fprintf(out, "  schedule  %s (staleness %s)\n", d.Schedule, d.Staleness)
 			}
-			fmt.Fprintf(out, "  timeout   %s\n  effort    %s\n", d.Timeout, d.Effort)
+			fmt.Fprintf(out, "  timeout   %s\n", d.Timeout)
+			if d.Effort != "" {
+				fmt.Fprintf(out, "  effort    %s\n", d.Effort)
+			}
+			if p := d.Program; p != nil {
+				fmt.Fprintf(out, "  program   %s (writes: %v)\n", p.Executable, p.Writes)
+			}
 			if l := d.LastRun; l != nil {
 				fmt.Fprintf(out, "  last run  %s %s\n", l.Outcome, l.StartedAt.Local().Format("Mon Jan 2 15:04"))
 			}
@@ -89,7 +101,7 @@ func newRoutinesShowCmd() *cobra.Command {
 type sourceFlags struct{ from, source string }
 
 func (f *sourceFlags) add(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.from, "from", "", "read the routine file from this path (- for stdin)")
+	cmd.Flags().StringVar(&f.from, "from", "", "read the routine file from this path (- for stdin); a program's description file, from its path")
 	cmd.Flags().StringVar(&f.source, "source", "", "the routine file's content (frontmatter and prompt)")
 	// Over MCP the content comes as --source; reading paths would let a client
 	// copy any file it names into a routine and read it back.
@@ -114,15 +126,27 @@ func (f *sourceFlags) read(in io.Reader) (string, error) {
 
 func newRoutinesCreateCmd() *cobra.Command {
 	var src sourceFlags
+	var kind string
 	cmd := &cobra.Command{
 		Use:   "create <routine>",
-		Short: "Add a routine file, validated first; it starts disabled",
+		Short: "Add a routine (an LLM routine; --kind program: a program), validated first; it starts disabled",
 		Long: "Writes <routine>.prompt to the routines folder after validating it like any routine (never over an " +
-			"existing one). The routine starts paused and untrusted: try it with `run <routine> --dry-run`, then turn " +
-			"it on with `routines trust <routine> --resume`. How to write the file: `" + product.Command + " guide routines`.",
-		Example: "  " + product.Command + " routines create standup --from ./standup.prompt",
-		Args:    cobra.ExactArgs(1),
+			"existing one, of either kind). The routine starts paused and untrusted: try it with `run <routine> --dry-run`, then turn " +
+			"it on with `routines trust <routine> --resume`. How to write the file: `" + product.Command + " guide routines`.\n\n" +
+			"With --kind program it adds a program instead: --from is its description file (program.yaml), and the " +
+			"executable it names is copied with it into the app's programs folder; that copy is what runs. It starts " +
+			"paused and untrusted too, and runs only once trusted, dry runs included.",
+		Example: "  " + product.Command + " routines create standup --from ./standup.prompt\n" +
+			"  " + product.Command + " routines create backup --kind program --from ./backup/program.yaml",
+		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			k, err := engine.ParseKind(kind)
+			if err != nil {
+				return err
+			}
+			if k == engine.KindProgram {
+				return addProgram(cmd, a, args[0], src, false)
+			}
 			source, err := src.read(cmd.InOrStdin())
 			if err != nil {
 				return err
@@ -136,7 +160,7 @@ func newRoutinesCreateCmd() *cobra.Command {
 				return err
 			}
 			// Disabled before the file exists, so the scheduler never sees it enabled.
-			undo, err := disableNew(a, dir, parsed)
+			undo, err := disableNew(a, parsed.Name, parsed.Settings())
 			if err != nil {
 				return err
 			}
@@ -153,6 +177,9 @@ func newRoutinesCreateCmd() *cobra.Command {
 		}),
 	}
 	src.add(cmd)
+	cmd.Flags().StringVar(&kind, "kind", "", "llm (the default), or program")
+	// Adding a program is mine: over MCP, only LLM routines are created.
+	hideFromMCP(cmd, "kind")
 	jsonFlag(cmd.Flags(), RoutineChange{})
 	return cmd
 }
@@ -194,16 +221,17 @@ func checkRoutineTools(cmd *cobra.Command, a *engine.App, r routines.Routine) er
 	return nil
 }
 
-// disableNew stores routines.<name>.enabled = false for a routine about to be
-// written to dir, so it doesn't run on its schedule until it's enabled on
-// purpose. It refuses a name already taken (whose setting isn't ours to
-// change); undo removes the setting again if writing the routine fails.
-func disableNew(a *engine.App, dir string, r routines.Routine) (undo func(), err error) {
-	if _, err := os.Stat(filepath.Join(dir, r.Name+routines.Ext)); err == nil {
-		return nil, fmt.Errorf("routine %q already exists", r.Name)
+// disableNew stores routines.<name>.enabled = false for a routine of either
+// kind about to be written (defs are its settings), so it doesn't run on its
+// schedule until it's enabled on purpose. It refuses a name already taken by
+// either kind (whose setting isn't ours to change); undo removes the setting
+// again if writing the routine fails.
+func disableNew(a *engine.App, name string, defs []settings.Setting) (undo func(), err error) {
+	if why := a.NameTaken(name); why != "" {
+		return nil, errors.New(why)
 	}
-	st := settings.Store{Path: a.Layout.Config(), Extra: r.Settings()}
-	key := "routines." + r.Name + ".enabled"
+	st := settings.Store{Path: a.Layout.Config(), Extra: defs}
+	key := "routines." + name + ".enabled"
 	if _, err := st.Set(key, "false"); err != nil {
 		return nil, err
 	}
@@ -214,11 +242,16 @@ func newRoutinesUpdateCmd() *cobra.Command {
 	var src sourceFlags
 	cmd := &cobra.Command{
 		Use:   "update <routine>",
-		Short: "Replace a routine's file, validated first (its settings are kept)",
+		Short: "Replace a routine's file, validated first (its settings are kept); a program's from its description file",
 		Long: "Replaces <routine>.prompt after validating it like any routine. Its settings are kept; changing what " +
-			"it can reach takes its trust away. How to write the file: `" + product.Command + " guide routines`.",
+			"it can reach takes its trust away. How to write the file: `" + product.Command + " guide routines`.\n\n" +
+			"For a program, --from is its description file's path: it and the executable it names are copied again; " +
+			"a changed executable or description file takes its trust away.",
 		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			if programs.Exists(a.Layout.Programs(), args[0]) {
+				return addProgram(cmd, a, args[0], src, true)
+			}
 			source, err := src.read(cmd.InOrStdin())
 			if err != nil {
 				return err
@@ -253,9 +286,14 @@ func newRoutinesUpdateCmd() *cobra.Command {
 func newRoutinesDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <routine>",
-		Short: "Delete a routine's file, its settings, trust and memories (run history is kept)",
-		Args:  cobra.ExactArgs(1),
+		Short: "Delete a routine of either kind: its file, settings, trust and memories (run history is kept)",
+		Long: "Deletes the routine's file, its settings, trust and memories; its run history is kept. A program's " +
+			"copy is deleted with its settings, trust and secrets; its run history and data folder are kept.",
+		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			if programs.Exists(a.Layout.Programs(), args[0]) {
+				return deleteProgram(cmd, a, args[0])
+			}
 			path, err := routines.Delete(a.Layout.Routines(), args[0])
 			if err != nil {
 				return err
@@ -278,6 +316,7 @@ func newRoutinesDeleteCmd() *cobra.Command {
 }
 
 func newRoutinesCheckCmd() *cobra.Command {
+	var kind string
 	cmd := &cobra.Command{
 		Use:   "check [<routine>]",
 		Short: "Check routines would run: file, settings, servers connect, allowlisted tools exist",
@@ -285,20 +324,16 @@ func newRoutinesCheckCmd() *cobra.Command {
 			"parameters set, folder exists), checks every server it uses is provided, connects to its servers and " +
 			"confirms each allowlisted tool is offered by exactly one of them, as a run would, checks the servers " +
 			"its plugins reach are signed in, and checks its model's provider is set up (a model on the local server: the server is asked for " +
-			"its models). Fails if any routine has a problem.",
+			"its models). A program: its description file and settings, and its secrets stored. Without a routine, " +
+			"it checks the LLM routines (--kind program or all: programs too). Fails if any routine has a problem.",
 		Annotations: readOnly(),
 		Args:        cobra.MaximumNArgs(1),
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
-			set, err := routines.Load(a.Layout.Routines())
-			if err != nil {
-				return err
-			}
 			var rows []RoutineCheck
-			add := func(r routines.Routine) {
-				row := RoutineCheck{Routine: r.Name}
-				rd := a.Assess(r)
-				rd.CheckTools(cmd.Context(), a, r)
-				rd.CheckModel(cmd.Context(), a, r)
+			add := func(x engine.Runnable) {
+				row := RoutineCheck{Routine: x.Name(), Kind: x.Kind().Written()}
+				rd := a.Assess(x)
+				rd.Check(cmd.Context(), a, x)
 				if rd.ConfigErr != nil || len(rd.Problems) > 0 {
 					row.Problem = rd.All()[0].Text
 				} else {
@@ -308,28 +343,40 @@ func newRoutinesCheckCmd() *cobra.Command {
 				rows = append(rows, row)
 			}
 			if len(args) == 1 {
-				r, err := set.Find(args[0])
+				x, err := a.Find(args[0])
 				if err != nil {
 					rows = append(rows, RoutineCheck{Routine: args[0], Problem: err.Error()})
 				} else {
-					add(r)
+					add(x)
 				}
 			} else {
-				for _, e := range set.Errors {
-					rows = append(rows, RoutineCheck{Routine: e.Path, Problem: e.Err.Error()})
+				kinds, err := listedKinds(kind)
+				if err != nil {
+					return err
 				}
-				for _, r := range set.Routines {
-					add(r)
+				all, broken, err := a.All(kinds...)
+				if err != nil {
+					return err
+				}
+				for _, b := range broken {
+					rows = append(rows, RoutineCheck{Routine: b.Path, Kind: b.Kind.Written(), Problem: b.Err.Error()})
+				}
+				for _, x := range all {
+					add(x)
 				}
 			}
 			return reportChecks(cmd, rows, "routines", func(r RoutineCheck) (bool, string) {
 				if r.OK {
+					if r.Kind != "" {
+						return true, fmt.Sprintf("ok    %s (%s)", r.Routine, r.Kind)
+					}
 					return true, fmt.Sprintf("ok    %s (%d tools)", r.Routine, len(r.Tools))
 				}
 				return false, fmt.Sprintf("FAIL  %s: %s", r.Routine, r.Problem)
 			})
 		}),
 	}
+	cmd.Flags().StringVar(&kind, "kind", "", "without a routine: llm (the default), program, or all")
 	jsonFlag(cmd.Flags(), []RoutineCheck{})
 	return cmd
 }

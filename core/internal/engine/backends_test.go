@@ -100,7 +100,7 @@ func TestBuiltinToolsPerBackend(t *testing.T) {
 	claude, codex := write("claudeish", "Read, Bash"), write("codexish", "shell, web_search")
 	problems := func(r routines.Routine) string {
 		var out []string
-		for _, p := range a.Assess(r).Problems {
+		for _, p := range a.Assess(a.LLM(r, nil)).Problems {
 			out = append(out, p.Text)
 		}
 		return strings.Join(out, "; ")

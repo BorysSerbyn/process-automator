@@ -94,21 +94,52 @@
     },
     "reason": {
       "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is program for a program; absent for an LLM routine (llm)."
+    },
+    "program": {
+      "properties": {
+        "exitCode": {
+          "type": "integer",
+          "description": "ExitCode is the code it exited with (-1 when it was killed)."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Summary is the line it wrote to $PA_RESULT, if it wrote one."
+        },
+        "output": {
+          "type": "string",
+          "description": "Output is what it printed (stdout and stderr), up to the first 64 KiB."
+        },
+        "outputTruncated": {
+          "type": "boolean",
+          "description": "OutputTruncated is true when it printed more than Output holds."
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum is the SHA-256 of the executable that ran."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "exitCode",
+        "dryRun"
+      ],
+      "description": "Program is a program's run: its exit code, summary and output."
     }
   },
   "additionalProperties": false,
   "type": "object",
-  "required": [
-    "text",
-    "writes",
-    "dryRun",
-    "backend",
-    "toolCalls",
-    "inputTokens",
-    "outputTokens",
-    "cachedTokens",
-    "promptSource"
-  ],
   "title": "procauto run --json",
-  "description": "Result of a run."
+  "description": "RunOutput is `run --json`: how the run went."
 }

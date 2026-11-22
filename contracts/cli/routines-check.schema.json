@@ -6,6 +6,14 @@
       "routine": {
         "type": "string"
       },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "llm",
+          "program"
+        ],
+        "description": "Kind is program for a program; absent for an LLM routine (llm)."
+      },
       "ok": {
         "type": "boolean"
       },
@@ -36,7 +44,7 @@
           "description": "CheckedTool is an allowlisted tool as a routine would get it."
         },
         "type": "array",
-        "description": "Tools are its allowlisted tools and the server offering each."
+        "description": "Tools are an LLM routine's allowlisted tools and the server offering each."
       }
     },
     "additionalProperties": false,

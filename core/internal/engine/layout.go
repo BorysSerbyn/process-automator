@@ -3,6 +3,7 @@ package engine
 import (
 	"path/filepath"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 )
 
@@ -25,6 +26,12 @@ func (l Layout) in(elem ...string) string {
 
 // Routines is the routines folder.
 func (l Layout) Routines() string { return routines.Dir(l.Data()) }
+
+// Programs is the programs folder: the app's copies of the programs added.
+func (l Layout) Programs() string { return programs.Dir(l.Data()) }
+
+// ProgramData is a program's own folder, where its runs work.
+func (l Layout) ProgramData(program string) string { return l.in("program-data", program) }
 
 // RunStatus is the run-status file frontends watch.
 func (l Layout) RunStatus() string { return l.in("run-status.json") }

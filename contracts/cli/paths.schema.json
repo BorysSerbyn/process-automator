@@ -11,6 +11,10 @@
     "routines": {
       "type": "string"
     },
+    "programs": {
+      "type": "string",
+      "description": "Programs is the programs folder: the app's copies of the programs added."
+    },
     "runStatus": {
       "type": "string"
     },

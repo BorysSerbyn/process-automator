@@ -14,7 +14,6 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/memory"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 )
 
 // Memories are mine: I add them (the CLI, a frontend, or Claude with my
@@ -33,11 +32,7 @@ func (f *scopeFlag) scope(a *engine.App) (string, error) {
 	if f.routine == "" {
 		return memory.Global, nil
 	}
-	set, err := routines.Load(a.Layout.Routines())
-	if err != nil {
-		return "", err
-	}
-	if _, err := set.Find(f.routine); err != nil {
+	if _, _, err := a.Routine(f.routine, "memories"); err != nil {
 		return "", err
 	}
 	return f.routine, nil
@@ -75,6 +70,11 @@ func newMemoryListCmd() *cobra.Command {
 				return err
 			}
 			if sf.routine != "" {
+				if x, err := a.Find(sf.routine); err == nil {
+					if _, _, err := engine.AsRoutine(x, "memories"); err != nil {
+						return err
+					}
+				}
 				scopes = []string{sf.routine}
 			}
 			all := []memory.Memory{}

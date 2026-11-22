@@ -10,7 +10,6 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 )
 
@@ -36,7 +35,7 @@ func newDoctorCmd() *cobra.Command {
 		Long: "Checks what can make the status red, without calling the model or any tool: the scheduler is " +
 			"running; each enabled routine loads, its settings resolve, its folder exists, it's trusted, its " +
 			"servers connect (signed in) and offer its tools, its model's provider is set up (the local " +
-			"server answers and has the model); and its last run didn't fail. Each problem comes " +
+			"server answers and has the model) or, for a program, its secrets are stored; and its last run didn't fail. Each problem comes " +
 			"with what fixes it. Fails if there are any.",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
@@ -101,31 +100,31 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		add("usage", "LLM usage limit", "scheduled runs don't start: "+r.Reason, fix)
 	}
 
-	set, err := routines.Load(a.Layout.Routines())
+	all, broken, err := a.All()
 	if err != nil {
 		add("routine", "routines folder", err.Error(), "")
 		return findings
 	}
-	for _, e := range set.Errors {
-		add("routine", e.Path, e.Err.Error(), "fix the file, or `"+product.Command+" routines delete` it")
+	for _, b := range broken {
+		add("routine", b.Path, b.Err.Error(), "fix the file, or `"+product.Command+" routines delete "+b.Name+"` it")
 	}
-	for _, r := range set.Routines {
-		rd := a.Assess(r)
+	for _, x := range all {
+		rd := a.Assess(x)
 		if rd.ConfigErr == nil && !rd.Config.Enabled {
 			continue // can't make anything red
 		}
-		rd.CheckTools(cmd.Context(), a, r)
-		rd.CheckModel(cmd.Context(), a, r)
+		rd.Check(cmd.Context(), a, x)
+		name := x.Name()
 		for _, p := range rd.All() {
-			add("routine", r.Name, p.Text, p.Fix)
+			add("routine", name, p.Text, p.Fix)
 		}
-		if run := status.LastRun(r.Name); run != nil && rd.ConfigErr == nil {
+		if run := status.LastRun(name); run != nil && rd.ConfigErr == nil {
 			switch run.Outcome {
 			case runstatus.OutcomeFailed, runstatus.OutcomeMissed:
-				add("run", r.Name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason),
-					"see it: "+product.Command+" runs show "+history.RunID(r.Name, run.StartedAt))
+				add("run", name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason),
+					"see it: "+product.Command+" runs show "+history.RunID(name, run.StartedAt))
 			case runstatus.OutcomeNeedsReauth:
-				add("run", r.Name, "its last run needed a sign-in: "+run.Reason, product.Command+" auth status shows which one")
+				add("run", name, "its last run needed a sign-in: "+run.Reason, product.Command+" auth status shows which one")
 			}
 		}
 	}

@@ -132,7 +132,7 @@ func newTemplatesInstallCmd() *cobra.Command {
 			rdir := a.Layout.Routines()
 			r := t.Routine
 			r.Name = name
-			if _, err = disableNew(a, rdir, r); err != nil {
+			if _, err = disableNew(a, name, r.Settings()); err != nil {
 				return err
 			}
 			undo := func() { _ = (settings.Store{Path: a.Layout.Config()}).ResetPrefix("routines." + name + ".") }

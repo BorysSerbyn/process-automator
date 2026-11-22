@@ -9,6 +9,14 @@
       "routine": {
         "type": "string"
       },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "llm",
+          "program"
+        ],
+        "description": "Kind is the routine's kind: program for a program; absent for an LLM\nroutine (llm)."
+      },
       "trigger": {
         "type": "string"
       },

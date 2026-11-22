@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
@@ -114,7 +113,10 @@ func (a *App) Setup() (SetupOutput, error) {
 	} else if ok {
 		steps = append(steps, st)
 	}
-	loaded, problems := a.loadRoutines(set)
+	loaded, problems, err := a.loadRoutines()
+	if err != nil {
+		return SetupOutput{}, err
+	}
 	steps = append(steps, problems...)
 	steps = append(steps, a.signInSteps(loaded)...)
 	turnOns, err := a.turnOnSteps(loaded)
@@ -275,16 +277,21 @@ func (a *App) MCPStep() (SetupStep, bool, error) {
 	return st, true, nil
 }
 
-// loadedRoutine is a routine whose settings resolve.
+// loadedRoutine is a routine of either kind whose settings resolve.
 type loadedRoutine struct {
-	routines.Routine
-	cfg RoutineConfig
+	Runnable
+	cfg RunConfig
 }
 
-// loadRoutines resolves each routine's settings; a routine file that doesn't
-// load, settings that don't resolve, a missing folder or a server no plugin
-// provides is a step to fix (it would fail every run).
-func (a *App) loadRoutines(set *routines.Set) ([]loadedRoutine, []SetupStep) {
+// loadRoutines resolves each routine's settings, of either kind; a routine
+// that doesn't load, settings that don't resolve, or what keeps it from
+// running whether trusted or not (a missing folder or server) is a step to
+// fix (it would fail every run).
+func (a *App) loadRoutines() ([]loadedRoutine, []SetupStep, error) {
+	all, broken, err := a.All()
+	if err != nil {
+		return nil, nil, err
+	}
 	var loaded []loadedRoutine
 	var problems []SetupStep
 	fix := func(name, problem string) {
@@ -292,30 +299,30 @@ func (a *App) loadRoutines(set *routines.Set) ([]loadedRoutine, []SetupStep) {
 			Status:   Capitalize(problem),
 			Commands: []string{product.Command + " doctor   # says what's wrong and how to fix it"}})
 	}
-	for _, e := range set.Errors {
-		fix(strings.TrimSuffix(filepath.Base(e.Path), routines.Ext), e.Err.Error())
+	for _, b := range broken {
+		fix(b.Name, b.Err.Error())
 	}
-	for _, r := range set.Routines {
-		rd := a.Assess(r)
+	for _, x := range all {
+		rd := a.Assess(x)
 		if rd.ConfigErr != nil {
-			fix(r.Name, rd.ConfigErr.Error())
+			fix(x.Name(), rd.ConfigErr.Error())
 			continue
 		}
 		for _, p := range rd.Problems {
-			fix(r.Name, p.Text)
+			fix(x.Name(), p.Text)
 		}
-		loaded = append(loaded, loadedRoutine{r, rd.Config})
+		loaded = append(loaded, loadedRoutine{x, rd.Config})
 	}
-	return loaded, problems
+	return loaded, problems, nil
 }
 
-// signInSteps is one step per server the routines reach (through plugins
-// too) that signs in, done or not.
+// signInSteps is one step per sign-in the routines need (the servers they
+// reach, through plugins too; a program's own secrets), done or not.
 func (a *App) signInSteps(loaded []loadedRoutine) []SetupStep {
-	users := map[string][]string{} // server -> routines reaching it
+	users := map[string][]string{} // sign-in -> routines needing it
 	for _, r := range loaded {
-		for _, s := range a.Servers(r.Routine) {
-			users[s] = append(users[s], r.Name)
+		for _, s := range r.reaches(a) {
+			users[s] = append(users[s], r.Name())
 		}
 	}
 	var steps []SetupStep
@@ -345,24 +352,25 @@ func (a *App) signInSteps(loaded []loadedRoutine) []SetupStep {
 func (a *App) turnOnSteps(loaded []loadedRoutine) ([]SetupStep, error) {
 	untrusted := map[string]string{}
 	for _, r := range loaded {
-		why, _, err := a.TrustProblem(r.Routine, r.cfg)
+		why, _, err := a.TrustProblem(r)
 		if err != nil {
 			return nil, err
 		}
 		if why != "" {
-			untrusted[r.Name] = why
+			untrusted[r.Name()] = why
 		}
 	}
 	steps := make([]SetupStep, 0, len(loaded))
 	for _, r := range loaded {
-		why, words := untrusted[r.Name], schedule.Text(r.cfg.Schedule)
+		name := r.Name()
+		why, words := untrusted[name], schedule.Text(r.cfg.Schedule)
 		paused := r.cfg.Schedule != "" && !r.cfg.Enabled
-		st := SetupStep{Step: StepTurnOn, Subject: r.Name, Title: "Turn on " + r.Name, Done: why == "" && !paused,
-			Commands: []string{product.Command + " routines trust " + r.Name + " --yes --resume"}}
+		st := SetupStep{Step: StepTurnOn, Subject: name, Title: "Turn on " + name, Done: why == "" && !paused,
+			Commands: []string{product.Command + " routines trust " + name + " --yes --resume"}}
 		switch {
 		case why != "":
 			st.Status = Capitalize(why)
-			st.Ask = "Trust " + r.Name + " to run for real with what it can reach"
+			st.Ask = "Trust " + name + " to run for real with what it can reach"
 			switch {
 			case paused:
 				st.Status += "; paused (" + words + ")"
@@ -371,13 +379,13 @@ func (a *App) turnOnSteps(loaded []loadedRoutine) ([]SetupStep, error) {
 				st.Status += ", so it can't run on its schedule (" + words + ")"
 			}
 			st.Ask += "?"
-			st.Commands = append([]string{product.Command + " routines trust " + r.Name + " --check --json   # show me what it can reach before asking"}, st.Commands...)
+			st.Commands = append([]string{product.Command + " routines trust " + name + " --check --json   # show me what it can reach before asking"}, st.Commands...)
 		case paused:
 			// Trusted, it was turned on once: paused is my choice, never
 			// unfinished setup (nor red), so resuming it is only offered.
 			st.Optional = true
 			st.Status = "Trusted, but paused: it doesn't run on its schedule (" + words + ")"
-			st.Ask = "Run " + r.Name + " on its schedule (" + words + ")?"
+			st.Ask = "Run " + name + " on its schedule (" + words + ")?"
 		case r.cfg.Schedule != "":
 			st.Status = "Trusted; runs on its schedule: " + words
 		default:

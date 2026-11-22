@@ -6,6 +6,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 )
 
@@ -17,7 +18,7 @@ type SignIn struct {
 	Name string
 	// Kind is what it is, as `auth status` shows it: remote or local (a
 	// configured server), in-process (a plugin), api-key or token (a model
-	// backend's).
+	// backend's), program (a program's secrets).
 	Kind    string
 	Secrets []Secret
 	// OAuth is a remote server's browser sign-in, after Secrets (a
@@ -45,8 +46,8 @@ type Secret struct {
 }
 
 // SignIns is every name `auth login` takes, by name: the model backends'
-// keys, the configured servers, and the in-process plugins that declare
-// secrets.
+// keys, the configured servers, the in-process plugins that declare secrets,
+// and the programs that do.
 func (a *App) SignIns() []SignIn {
 	out := []SignIn{
 		{Name: "anthropic", Kind: "api-key", Secrets: []Secret{{Key: AnthropicKey, Label: "your Anthropic API key"}}},
@@ -80,6 +81,18 @@ func (a *App) SignIns() []SignIn {
 			s.Secrets = append(s.Secrets, Secret{Key: PluginSecretKey(p.Name, sec.Name), Label: sec.Prompt})
 		}
 		out = append(out, s)
+	}
+	if set, err := programs.Load(a.Layout.Programs()); err == nil {
+		for _, p := range set.Programs {
+			if len(p.Secrets) == 0 {
+				continue
+			}
+			s := SignIn{Name: p.Name, Kind: "program"}
+			for _, sec := range p.Secrets {
+				s.Secrets = append(s.Secrets, (&program{p: p}).secret(sec))
+			}
+			out = append(out, s)
+		}
 	}
 	for i := range out {
 		if p, ok := a.FindPlugin(out[i].Name); ok {

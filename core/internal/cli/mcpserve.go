@@ -384,7 +384,9 @@ var mcpInstructions = product.Command + " runs scheduled LLM routines (Dotprompt
 	"an MCP server, guide with topic plugins. Routines start paused and untrusted: dry-run one (run_dry_run), then " +
 	"the user trusts and resumes it themselves (`" + product.Command + " routines trust <name> --resume`; it isn't " +
 	"a tool). Sign-ins are done by the user in their browser (auth_login opens it); never ask them to paste a " +
-	"secret into the chat."
+	"secret into the chat. Programs are routines that run an executable instead of a model (kind program; " +
+	"routines_list with kind all lists them with the LLM routines): run, stop, pause and read their runs like " +
+	"any routine's, but adding or trusting one is the user's own, in a terminal."
 
 // build makes the MCP server.
 func (s *automatorServer) build() (*sdk.Server, error) {

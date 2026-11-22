@@ -11,6 +11,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/scheduler"
@@ -85,13 +86,13 @@ func TestScheduledJobsReportsProblems(t *testing.T) {
 func TestRunOutcomeMapsEveryError(t *testing.T) {
 	t0 := time.Date(2026, 11, 19, 9, 20, 0, 0, time.UTC)
 	for name, tc := range map[string]struct {
-		res    *agent.Result
+		res    *RunResult
 		err    error
 		want   runstatus.Outcome
 		reason string
 	}{
-		"done":            {res: &agent.Result{Outcome: agent.OutcomeDone}, want: runstatus.OutcomeSuccess},
-		"nothing to do":   {res: &agent.Result{Outcome: agent.OutcomeNothingToDo, Reason: "already posted"}, want: runstatus.OutcomeSuccess, reason: "nothing to do: already posted"},
+		"done":            {res: &RunResult{Agent: &agent.Result{Outcome: agent.OutcomeDone}}, want: runstatus.OutcomeSuccess},
+		"nothing to do":   {res: &RunResult{Note: "nothing to do: already posted"}, want: runstatus.OutcomeSuccess, reason: "nothing to do: already posted"},
 		"routine failed":  {err: &agent.RoutineFailedError{Reason: "send_message failed: refused"}, want: runstatus.OutcomeFailed, reason: "send_message failed: refused"},
 		"backend error":   {err: errors.New("claude: max turns"), want: runstatus.OutcomeFailed, reason: "claude: max turns"},
 		"sign-in expired": {err: &mcp.NeedsReauthError{Server: "chat"}, want: runstatus.OutcomeNeedsReauth},
@@ -209,5 +210,43 @@ func TestStopWaitingInDaemonQueue(t *testing.T) {
 	waitOutcome(t, a, "second", runstatus.OutcomeStopped)
 	if _, _, ok := s.Drop("second"); ok {
 		t.Fatal("still queued after being stopped")
+	}
+}
+
+// The scheduler runs programs too, outside the run queue; an untrusted one
+// isn't scheduled, saying why.
+func TestScheduledJobsHavePrograms(t *testing.T) {
+	a := testApp(t)
+	if err := a.InitTrust(); err != nil {
+		t.Fatal(err)
+	}
+	add := func(name string) {
+		t.Helper()
+		src := t.TempDir()
+		_ = os.WriteFile(filepath.Join(src, "prog"), []byte("#!/bin/sh\ntrue\n"), 0o755)
+		desc := filepath.Join(src, programs.DescriptionFile)
+		_ = os.WriteFile(desc, []byte("executable: ./prog\nwrites: false\nschedule: \"0 9 * * *\"\n"), 0o600)
+		if _, err := programs.Add(a.Layout.Programs(), name, desc, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("trusted")
+	add("fresh")
+	x, err := a.Find("trusted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Trust(x); err != nil {
+		t.Fatal(err)
+	}
+	jobs, problems, err := scheduledJobs(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].Name != "trusted" || !jobs[0].Parallel || jobs[0].Schedule != "0 9 * * *" {
+		t.Fatalf("jobs = %+v", jobs)
+	}
+	if !strings.Contains(problems["fresh"], "not trusted yet") {
+		t.Fatalf("problems = %v", problems)
 	}
 }

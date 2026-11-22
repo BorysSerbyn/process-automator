@@ -53,7 +53,7 @@ func setSetting(t *testing.T, a *App, key, value string) {
 
 func problemsOf(a *App, r routines.Routine) string {
 	var out []string
-	for _, p := range a.Assess(r).Problems {
+	for _, p := range a.Assess(a.LLM(r, nil)).Problems {
 		out = append(out, p.Text+" [fix: "+p.Fix+"]")
 	}
 	return strings.Join(out, "; ")
@@ -186,7 +186,7 @@ func TestAPIReachModel(t *testing.T) {
 	srv := fakeOllama(t, "qwen3:8b")
 	setSetting(t, a, LocalURLSetting, srv.URL+"/v1")
 	reach := func(r routines.Routine) string {
-		rd := a.Assess(r)
+		rd := a.Assess(a.LLM(r, nil))
 		rd.CheckModel(context.Background(), a, r)
 		var out []string
 		for _, p := range rd.Problems {

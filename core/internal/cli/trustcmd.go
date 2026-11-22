@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -21,10 +22,17 @@ import (
 // A routine runs for real only while what it can reach is what I trusted
 // (see package trust). Dry runs never need trust.
 
-// TrustOutput is `routines trust --json`.
+// TrustOutput is `routines trust --json`. For a program, its surface is
+// empty (it reaches no servers or tools through the app) and its program
+// section says what trusting it approves.
 type TrustOutput struct {
-	Routine string        `json:"routine"`
+	Routine string `json:"routine"`
+	// Kind is program for a program; absent for an LLM routine (llm).
+	Kind    string        `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
 	Surface trust.Surface `json:"surface"`
+	// Program is what trusting a program approves: the executable that
+	// runs (by checksum, with its description file), what it declares.
+	Program *ProgramInfo `json:"program,omitempty"`
 	// Tools are its allowlisted tools with the server offering each and
 	// whether it's read-only (absent when its servers couldn't be reached).
 	Tools []agent.CheckedTool `json:"tools,omitempty"`
@@ -47,17 +55,21 @@ func newRoutinesTrustCmd() *cobra.Command {
 			"and what changed since you last trusted it, then asks. A routine runs for real only while what it can " +
 			"reach is what you trusted; a change to it (a new server or tool, another folder, ...) takes the trust " +
 			"away until you trust it again. Its prompt, schedule and other settings don't. Dry runs never need it. " +
+			"A program shows the executable that runs (its checksum), whether it writes, its arguments and secrets; " +
+			"another executable or a changed description file takes the trust away, and it runs only while trusted, " +
+			"dry runs included. " +
 			"With --resume it also lets the routine run on its schedule (as `routines resume` does), in the same " +
 			"yes: turning a routine on is one step.",
 		Example: "  " + product.Command + " routines trust digest --check --json   # review only\n" +
 			"  " + product.Command + " routines trust digest --yes --resume    # trust it and run it on its schedule",
 		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
-			r, _, err := a.Routine(args[0])
+			x, err := a.Find(args[0])
 			if err != nil {
 				return err
 			}
-			c, err := a.RoutineConfig(r)
+			name := x.Name()
+			c, err := a.RunConfig(x)
 			if err != nil {
 				return err
 			}
@@ -65,31 +77,45 @@ func newRoutinesTrustCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := TrustOutput{Routine: r.Name, Surface: engine.SurfaceOf(r, c).Normalized(), Changes: []string{}}
-			if rec, ok := f.Routines[r.Name]; ok {
-				out.Changes = append(out.Changes, out.Surface.Changes(rec.Surface)...)
-				out.Trusted = len(out.Changes) == 0
+			approval, err := a.Approval(x)
+			if err != nil {
+				return err
+			}
+			out := TrustOutput{Routine: name, Kind: x.Kind().Written(), Surface: trust.Surface{}.Normalized(), Changes: []string{}}
+			if approval.Surface != nil {
+				out.Surface = approval.Surface.Normalized()
+			}
+			if rec, ok := f.Routines[name]; ok {
+				out.Changes = append(out.Changes, approval.Changes(rec.Approval)...)
+				out.Trusted = approval.Equal(rec.Approval)
 			}
 			// Only a paused routine with a schedule has anything to resume.
 			resuming := resume && !c.Enabled && c.Schedule != ""
-			question := "Trust " + r.Name + " to run for real with this"
+			question := "Trust " + name + " to run for real with this"
 			if resuming {
 				question += ", and run it on its schedule (" + schedule.Text(c.Schedule) + ")"
 			}
 			switch {
 			case out.Trusted && !check && !resuming:
-				return emit(cmd, out, r.Name+" is already trusted with what it can reach now.")
+				return emit(cmd, out, name+" is already trusted with what it can reach now.")
 			case out.Trusted && !check:
 				// Nothing to review: only the schedule to turn on.
 				if !wantsJSON(cmd) {
-					fmt.Fprintln(cmd.OutOrStdout(), r.Name+" is already trusted with what it can reach now.")
+					fmt.Fprintln(cmd.OutOrStdout(), name+" is already trusted with what it can reach now.")
 				}
-				question = "Run " + r.Name + " on its schedule (" + schedule.Text(c.Schedule) + ")"
+				question = "Run " + name + " on its schedule (" + schedule.Text(c.Schedule) + ")"
 			default:
-				tools, toolsErr := agent.CheckTools(cmd.Context(), a.Connector, engine.RunOf(r, c.WorkFolder, ""), r.Servers, r.Tools)
-				out.Tools = tools
-				if toolsErr != nil {
-					out.ToolsError = toolsErr.Error()
+				// What each kind shows for review.
+				var toolsErr error
+				if r, _, err := engine.AsRoutine(x, ""); err == nil {
+					rc, _ := a.RoutineConfig(r)
+					out.Tools, toolsErr = agent.CheckTools(cmd.Context(), a.Connector, engine.RunOf(r, rc.WorkFolder, ""), r.Servers, r.Tools)
+					if toolsErr != nil {
+						out.ToolsError = toolsErr.Error()
+					}
+				}
+				if p, err := engine.AsProgram(x); err == nil {
+					out.Program = programInfo(a, p)
 				}
 				if !wantsJSON(cmd) {
 					describeSurface(cmd, out, toolsErr)
@@ -113,19 +139,20 @@ func newRoutinesTrustCmd() *cobra.Command {
 			}
 			var done []string
 			if !out.Trusted {
-				if err := a.TrustStore().Trust(map[string]trust.Surface{r.Name: engine.SurfaceOf(r, c)}, time.Now()); err != nil {
+				// What was shown is what's trusted.
+				if err := a.TrustStore().Trust(map[string]trust.Approval{name: approval}, time.Now()); err != nil {
 					return err
 				}
 				out.Trusted = true
-				done = append(done, "Trusted "+r.Name)
+				done = append(done, "Trusted "+name)
 			}
 			if resuming {
-				st := settings.Store{Path: a.Layout.Config(), Extra: r.Settings()}
-				if _, err := st.Set("routines."+r.Name+".enabled", "true"); err != nil {
+				st := settings.Store{Path: a.Layout.Config(), Extra: x.Settings()}
+				if _, err := st.Set("routines."+name+".enabled", "true"); err != nil {
 					return err
 				}
 				out.Resumed = true
-				done = append(done, "Resumed "+r.Name+": it runs on its schedule")
+				done = append(done, "Resumed "+name+": it runs on its schedule")
 			}
 			return emit(cmd, out, strings.Join(done, ". ")+".")
 		}),
@@ -142,6 +169,10 @@ func newRoutinesTrustCmd() *cobra.Command {
 // describeSurface prints what a routine can reach, writes first.
 func describeSurface(cmd *cobra.Command, out TrustOutput, toolsErr error) {
 	w := cmd.OutOrStdout()
+	if out.Program != nil {
+		describeProgram(w, out)
+		return
+	}
 	fmt.Fprintf(w, "%s can reach:\n", out.Routine)
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	none := func(l []string) string {
@@ -175,6 +206,26 @@ func describeSurface(cmd *cobra.Command, out TrustOutput, toolsErr error) {
 	fmt.Fprintf(tw, "  folder\t%s\n", folder)
 	for name, section := range out.Surface.Plugins {
 		fmt.Fprintf(tw, "  %s plugin\t%v\n", name, section)
+	}
+	_ = tw.Flush()
+	if len(out.Changes) > 0 {
+		fmt.Fprintf(w, "\nSince you last trusted it, it %s.\n", strings.Join(out.Changes, "; "))
+	}
+}
+
+// describeProgram prints what trusting a program approves.
+func describeProgram(w io.Writer, out TrustOutput) {
+	p := out.Program
+	fmt.Fprintf(w, "%s is a program; trusting it lets it run:\n", out.Routine)
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "  executable\t%s\n", p.Executable)
+	fmt.Fprintf(tw, "  sha-256\t%s\n", p.Checksum)
+	fmt.Fprintf(tw, "  writes\t%v\n", p.Writes)
+	if len(p.Args) > 0 {
+		fmt.Fprintf(tw, "  arguments\t%s\n", strings.Join(p.Args, " "))
+	}
+	for _, s := range p.Secrets {
+		fmt.Fprintf(tw, "  secret\t%s (as $%s)\n", s.Name, s.Env)
 	}
 	_ = tw.Flush()
 	if len(out.Changes) > 0 {

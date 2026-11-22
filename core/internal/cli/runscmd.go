@@ -79,7 +79,7 @@ func newRunsShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "show <id>",
 		Annotations: readOnly(),
-		Short:       "Show one run in full: what it covered, how it ended, its tool calls and writes, and its final text",
+		Short:       "Show one run in full: what it covered, how it ended, its tool calls and writes, and its final text (a program's: its exit code, summary and output)",
 		Args:        cobra.ExactArgs(1),
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			if open {
@@ -133,6 +133,18 @@ func printRun(w io.Writer, e *history.Entry) {
 	for _, k := range []string{"today", "since"} {
 		if v, ok := e.Inputs[k]; ok {
 			fmt.Fprintf(w, "  %-9s %v\n", k, v)
+		}
+	}
+	if p := e.Program; p != nil {
+		fmt.Fprintf(w, "\n[program · exit %d]\n", p.ExitCode)
+		if p.Summary != "" {
+			fmt.Fprintf(w, "  summary   %s\n", p.Summary)
+		}
+		if out := strings.TrimSpace(p.Output); out != "" {
+			fmt.Fprintf(w, "\n%s\n", out)
+		}
+		if p.OutputTruncated {
+			fmt.Fprintln(w, "[output past this isn't kept]")
 		}
 	}
 	r := e.Result

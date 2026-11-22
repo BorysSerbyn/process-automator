@@ -183,7 +183,7 @@ commands:
     jsonOutput: cli/notifications-open.schema.json
   - command: paths
     usage: procauto paths [flags]
-    summary: Show where the app keeps its config, routines, run status and history
+    summary: Show where the app keeps its config, routines, programs, run status and history
     flags:
       - name: --json
         type: bool
@@ -266,25 +266,33 @@ commands:
       - name: --json
         type: bool
         usage: machine-readable output
+      - name: --kind
+        type: string
+        usage: 'without a routine: llm (the default), program, or all'
     jsonOutput: cli/routines-check.schema.json
   - command: routines create
     usage: procauto routines create <routine> [flags]
-    summary: Add a routine file, validated first; it starts disabled
-    example: procauto routines create standup --from ./standup.prompt
+    summary: 'Add a routine (an LLM routine; --kind program: a program), validated first; it starts disabled'
+    example: |-
+      procauto routines create standup --from ./standup.prompt
+      procauto routines create backup --kind program --from ./backup/program.yaml
     flags:
       - name: --from
         type: string
-        usage: read the routine file from this path (- for stdin)
+        usage: read the routine file from this path (- for stdin); a program's description file, from its path
       - name: --json
         type: bool
         usage: machine-readable output
+      - name: --kind
+        type: string
+        usage: llm (the default), or program
       - name: --source
         type: string
         usage: the routine file's content (frontmatter and prompt)
     jsonOutput: cli/routines-create.schema.json
   - command: routines delete
     usage: procauto routines delete <routine> [flags]
-    summary: Delete a routine's file, its settings, trust and memories (run history is kept)
+    summary: 'Delete a routine of either kind: its file, settings, trust and memories (run history is kept)'
     flags:
       - name: --json
         type: bool
@@ -292,11 +300,14 @@ commands:
     jsonOutput: cli/routines-delete.schema.json
   - command: routines list
     usage: procauto routines list [flags]
-    summary: List routine files with their schedule and enabled state
+    summary: List routines with their schedule and enabled state (LLM routines; --kind program or all for programs)
     flags:
       - name: --json
         type: bool
         usage: machine-readable output
+      - name: --kind
+        type: string
+        usage: llm (the default), program, or all
     jsonOutput: cli/routines-list.schema.json
   - command: routines pause
     usage: procauto routines pause <routine> [flags]
@@ -316,7 +327,7 @@ commands:
     jsonOutput: cli/routines-resume.schema.json
   - command: routines show
     usage: procauto routines show <routine> [flags]
-    summary: 'Show a routine: its file, effective settings and last run'
+    summary: 'Show a routine of either kind: its file, effective settings and last run'
     flags:
       - name: --json
         type: bool
@@ -344,11 +355,11 @@ commands:
     jsonOutput: cli/routines-trust.schema.json
   - command: routines update
     usage: procauto routines update <routine> [flags]
-    summary: Replace a routine's file, validated first (its settings are kept)
+    summary: Replace a routine's file, validated first (its settings are kept); a program's from its description file
     flags:
       - name: --from
         type: string
-        usage: read the routine file from this path (- for stdin)
+        usage: read the routine file from this path (- for stdin); a program's description file, from its path
       - name: --json
         type: bool
         usage: machine-readable output
@@ -358,7 +369,7 @@ commands:
     jsonOutput: cli/routines-update.schema.json
   - command: run
     usage: procauto run <routine> [flags]
-    summary: Run a routine from the routines folder now (ignores its schedule and enabled flag)
+    summary: Run a routine of either kind now (ignores its schedule and enabled flag)
     example: |-
       procauto run standup --dry-run   # everything except posting
       procauto run standup
@@ -369,7 +380,7 @@ commands:
         usage: 'run as of this day, YYYY-MM-DD (today or earlier): a backfill'
       - name: --dry-run
         type: bool
-        usage: intercept every side-effecting tool call (nothing is posted or written)
+        usage: intercept every side-effecting tool call (nothing is posted or written); a program that writes gets --dry-run
       - name: --json
         type: bool
         usage: machine-readable output
@@ -395,7 +406,7 @@ commands:
     jsonOutput: cli/runs.schema.json
   - command: runs show
     usage: procauto runs show <id> [flags]
-    summary: 'Show one run in full: what it covered, how it ended, its tool calls and writes, and its final text'
+    summary: 'Show one run in full: what it covered, how it ended, its tool calls and writes, and its final text (a program''s: its exit code, summary and output)'
     flags:
       - name: --json
         type: bool
@@ -480,11 +491,11 @@ commands:
     jsonOutput: cli/setup.schema.json
   - command: start
     usage: procauto start <routine> [flags]
-    summary: 'Start a routine''s run in the background and return at once (frontends: run now)'
+    summary: 'Start a routine''s run (either kind) in the background and return at once (frontends: run now)'
     flags:
       - name: --dry-run
         type: bool
-        usage: intercept every side-effecting tool call (nothing is posted or written)
+        usage: intercept every side-effecting tool call (nothing is posted or written); a program that writes gets --dry-run
       - name: --json
         type: bool
         usage: machine-readable output

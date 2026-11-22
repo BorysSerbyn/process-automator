@@ -11,26 +11,57 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
 
-// settingsStore includes the per-routine settings of every routine file on this device.
+// settingsStore includes the per-routine settings of every routine on this
+// device, of either kind.
 func settingsStore(cmd *cobra.Command) (settings.Store, error) {
 	path, err := configPath(cmd)
 	if err != nil {
 		return settings.Store{}, err
 	}
-	set, err := routines.Load(engine.LayoutOf(path).Routines())
+	layout := engine.LayoutOf(path)
+	set, err := routines.Load(layout.Routines())
 	if err != nil {
 		return settings.Store{}, err
 	}
-	warnBroken(cmd, set)
+	progs, err := programs.Load(layout.Programs())
+	if err != nil {
+		return settings.Store{}, err
+	}
+	for _, e := range set.Errors {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: skipping %v\n", e)
+	}
+	for _, e := range progs.Errors {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: skipping %v\n", e)
+	}
 	st := settings.Store{Path: path}
 	for _, r := range set.Routines {
 		st.Extra = append(st.Extra, r.Settings()...)
 	}
+	for _, p := range progs.Programs {
+		st.Extra = append(st.Extra, p.Settings()...)
+	}
 	return st, nil
+}
+
+// programKey refuses an LLM routine's setting (routines.<program>.effort)
+// for a program, saying so, rather than calling the key unknown.
+func programKey(cmd *cobra.Command, key string) error {
+	rest, ok := strings.CutPrefix(key, "routines.")
+	if !ok {
+		return nil
+	}
+	name, field, _ := strings.Cut(rest, ".")
+	field, _, _ = strings.Cut(field, ".")
+	path, err := configPath(cmd)
+	if err != nil || !programs.Exists(engine.LayoutOf(path).Programs(), name) || slices.Contains(settings.ProgramFields, field) {
+		return nil
+	}
+	return fmt.Errorf("%s is a program: %s is an LLM routine's setting (a program's are %s)", name, field, strings.Join(settings.ProgramFields, ", "))
 }
 
 func newSettingsCmd() *cobra.Command {
@@ -111,6 +142,9 @@ func newSettingsCmd() *cobra.Command {
 		Short:       "Print one setting's value",
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := programKey(cmd, args[0]); err != nil {
+				return err
+			}
 			st, err := settingsStore(cmd)
 			if err != nil {
 				return err
@@ -128,6 +162,9 @@ func newSettingsCmd() *cobra.Command {
 		Example: "  " + product.Command + " settings set llm.backend claude-code\n  " + product.Command + " settings set routines.standup.enabled false",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := programKey(cmd, args[0]); err != nil {
+				return err
+			}
 			st, err := settingsStore(cmd)
 			if err != nil {
 				return err
@@ -144,6 +181,9 @@ func newSettingsCmd() *cobra.Command {
 		Short: "Remove an override so the default applies",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := programKey(cmd, args[0]); err != nil {
+				return err
+			}
 			st, err := settingsStore(cmd)
 			if err != nil {
 				return err
@@ -182,13 +222,12 @@ func format(v any, s settings.Setting) string {
 	return fmt.Sprint(v)
 }
 
-// routineExists checks a routine is installed (settings for one that isn't
-// would never be used).
-func routineExists(cmd *cobra.Command, name string) (routines.Routine, error) {
+// routineExists checks a routine of either kind is installed (settings for
+// one that isn't would never be used).
+func routineExists(cmd *cobra.Command, name string) (engine.Runnable, error) {
 	a, err := loadApp(cmd)
 	if err != nil {
-		return routines.Routine{}, err
+		return nil, err
 	}
-	r, _, err := a.Routine(name)
-	return r, err
+	return a.Find(name)
 }

@@ -1,8 +1,9 @@
-// Package trust records which routines I trusted, and what they could reach
-// when I did: their surface (servers, allowlisted tools, built-in tools,
-// plugin sections, folder). A routine runs for real only while its surface is
-// the one I trusted; any change that widens or alters what it can reach takes
-// the trust away until I review it again. Prompt text, schedule, model and the
+// Package trust records which routines I trusted, and with what: an LLM
+// routine's surface (servers, allowlisted tools, built-in tools, plugin
+// sections, folder), or a program's executable and description file. A
+// routine runs for real only while that is what I trusted; any change that
+// widens or alters what it can reach or run takes the trust away until I
+// review it again. An LLM routine's prompt text, its schedule, model and the
 // like don't.
 package trust
 
@@ -98,9 +99,100 @@ func (s Surface) Changes(old Surface) []string {
 	return out
 }
 
-// Record is one trusted routine.
+// Program is what a program was trusted with: its executable and its
+// description file (its arguments, writes and secrets with it), by checksum,
+// and what the file declares, to say what changed.
+type Program struct {
+	// Executable and Description are the SHA-256 of its executable and of
+	// its description file.
+	Executable  string `json:"executable"`
+	Description string `json:"description"`
+	Writes      bool   `json:"writes"`
+	// Secrets are the secrets it's given.
+	Secrets []string `json:"secrets,omitempty"`
+}
+
+// Approval is what a routine is trusted with: an LLM routine's surface, or a
+// program's section.
+type Approval struct {
+	Surface *Surface `json:"surface,omitempty"`
+	Program *Program `json:"program,omitempty"`
+}
+
+// Normalized sorts what's listed, so equal approvals compare equal.
+func (a Approval) Normalized() Approval {
+	if a.Surface != nil {
+		s := a.Surface.Normalized()
+		a.Surface = &s
+	}
+	if a.Program != nil {
+		p := *a.Program
+		p.Secrets = slices.Clone(p.Secrets)
+		sort.Strings(p.Secrets)
+		if len(p.Secrets) == 0 {
+			p.Secrets = nil
+		}
+		a.Program = &p
+	}
+	return a
+}
+
+// Equal reports whether two approvals are the same.
+func (a Approval) Equal(o Approval) bool {
+	x, _ := json.Marshal(a.Normalized())
+	y, _ := json.Marshal(o.Normalized())
+	return string(x) == string(y)
+}
+
+// Changes describes how a differs from the trusted approval old.
+func (a Approval) Changes(old Approval) []string {
+	a, old = a.Normalized(), old.Normalized()
+	switch {
+	case a.Program != nil && old.Program == nil:
+		return []string{"is a program now, not an LLM routine"}
+	case a.Program == nil && old.Program != nil:
+		return []string{"is an LLM routine now, not a program"}
+	case a.Program != nil:
+		return a.Program.changes(*old.Program)
+	case a.Surface != nil && old.Surface != nil:
+		return a.Surface.Changes(*old.Surface)
+	case a.Surface != nil:
+		return a.Surface.Changes(Surface{})
+	}
+	return nil
+}
+
+func (p Program) changes(old Program) []string {
+	var out []string
+	if p.Executable != old.Executable {
+		out = append(out, "has another executable")
+	}
+	if p.Writes != old.Writes {
+		if p.Writes {
+			out = append(out, "now writes")
+		} else {
+			out = append(out, "no longer writes")
+		}
+	}
+	for _, s := range p.Secrets {
+		if !slices.Contains(old.Secrets, s) {
+			out = append(out, "adds secret "+s)
+		}
+	}
+	for _, s := range old.Secrets {
+		if !slices.Contains(p.Secrets, s) {
+			out = append(out, "drops secret "+s)
+		}
+	}
+	if len(out) == 0 && p.Description != old.Description {
+		out = append(out, "changes its description file")
+	}
+	return out
+}
+
+// Record is one trusted routine: what it was trusted with, and when.
 type Record struct {
-	Surface   Surface   `json:"surface"`
+	Approval
 	TrustedAt time.Time `json:"trustedAt"`
 }
 
@@ -132,11 +224,11 @@ func (st Store) Load() (f *File, ok bool, err error) {
 	return f, true, nil
 }
 
-// Trust records routines as trusted with their surfaces.
-func (st Store) Trust(surfaces map[string]Surface, now time.Time) error {
+// Trust records routines as trusted with what they're approved for.
+func (st Store) Trust(approvals map[string]Approval, now time.Time) error {
 	return st.update(func(f *File) {
-		for name, s := range surfaces {
-			f.Routines[name] = Record{Surface: s.Normalized(), TrustedAt: now}
+		for name, a := range approvals {
+			f.Routines[name] = Record{Approval: a.Normalized(), TrustedAt: now}
 		}
 	})
 }
@@ -148,14 +240,14 @@ func (st Store) Forget(name string) error {
 
 // Init trusts the given routines if there's no trust file yet: what was
 // installed before trust existed keeps running.
-func (st Store) Init(current map[string]Surface, now time.Time) error {
+func (st Store) Init(current map[string]Approval, now time.Time) error {
 	return atomicfile.Locked(st.Path, func() error {
 		f, ok, err := st.Load()
 		if err != nil || ok {
 			return err
 		}
-		for name, s := range current {
-			f.Routines[name] = Record{Surface: s.Normalized(), TrustedAt: now}
+		for name, a := range current {
+			f.Routines[name] = Record{Approval: a.Normalized(), TrustedAt: now}
 		}
 		return st.write(f)
 	})

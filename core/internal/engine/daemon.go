@@ -12,7 +12,6 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/scheduler"
 	"github.com/BorysSerbyn/process-automator/core/internal/sysenv"
@@ -64,7 +63,7 @@ func (a *App) Daemon(ctx context.Context) error {
 		if run.For != nil {
 			occ.At = *run.For
 		}
-		recordRun(a, name, occ, nil, run, nil)
+		recordRun(a, name, occ, run, nil)
 	}
 	go heartbeat(ctx, statusPath)
 	// Started by the OS with a minimal PATH: add the login shell's, so the
@@ -110,14 +109,14 @@ func (a *App) Daemon(ctx context.Context) error {
 				logf("%s: %v", name, err)
 				run := runOutcome(occ.At, time.Now(), nil, err)
 				run.QueuedAt = queuedAt
-				recordRun(a, name, occ, nil, run, nil)
+				recordRun(a, name, occ, run, nil)
 			}
 			cur, err := reload()
 			if err != nil {
 				fail(err)
 				return
 			}
-			r, set, err := cur.Routine(name)
+			x, err := cur.Find(name)
 			if err != nil {
 				fail(err)
 				return
@@ -127,14 +126,14 @@ func (a *App) Daemon(ctx context.Context) error {
 				return
 			}
 			logf("%s: running (slot %s)", name, occ.At.Format("Mon 15:04"))
-			res, err := cur.Execute(ctx, set, r, RunOptions{
+			res, err := cur.Run(ctx, x, RunOptions{
 				Occurrence: occ, QueuedAt: queuedAt, StaleAfter: occ.At.Add(j.Staleness), Log: logWriter{name},
 			})
 			if err != nil {
 				logf("%s: failed: %v", name, err)
 				return
 			}
-			logf("%s: done [%s]", name, res.Summary())
+			logf("%s: done [%s]", name, res.Line)
 		},
 		Queued: func(name string, occ trigger.Occurrence, at time.Time) {
 			logf("%s: queued behind another run (slot %s)", name, occ.At.Format("Mon 15:04"))
@@ -142,7 +141,7 @@ func (a *App) Daemon(ctx context.Context) error {
 		},
 		Missed: func(name string, occ trigger.Occurrence, late time.Duration) {
 			logf("%s: missed the %s slot (%s late)", name, occ.At.Format("Mon 15:04"), late.Round(time.Minute))
-			recordRun(a, name, occ, nil, runstatus.Run{
+			recordRun(a, name, occ, runstatus.Run{
 				StartedAt: occ.At, Outcome: runstatus.OutcomeMissed,
 				Reason: fmt.Sprintf("not run at %s (computer asleep or off?); %s late is past the staleness window",
 					occ.At.Format("Mon 15:04"), late.Round(time.Minute)),
@@ -276,29 +275,30 @@ func statusSetups(jobs []scheduler.Job, problems map[string]string, now time.Tim
 	return setups
 }
 
-// scheduledJobs is every routine with its effective settings, plus why the
-// others can't be scheduled (by routine name). Jobs always have valid schedules.
+// scheduledJobs is every routine of either kind with its effective
+// settings, plus why the others can't be scheduled (by routine name). Jobs
+// always have valid schedules.
 func scheduledJobs(a *App) ([]scheduler.Job, map[string]string, error) {
 	if err := a.InitTrust(); err != nil {
 		return nil, nil, err
 	}
-	set, err := routines.Load(a.Layout.Routines())
+	all, broken, err := a.All()
 	if err != nil {
 		return nil, nil, err
 	}
 	problems := map[string]string{}
-	for _, e := range set.Errors {
-		problems[strings.TrimSuffix(filepath.Base(e.Path), routines.Ext)] = e.Err.Error()
+	for _, b := range broken {
+		problems[b.Name] = b.Err.Error()
 	}
-	jobs := make([]scheduler.Job, 0, len(set.Routines))
-	for _, r := range set.Routines {
-		rd := a.Assess(r)
+	jobs := make([]scheduler.Job, 0, len(all))
+	for _, x := range all {
+		rd := a.Assess(x)
 		if problem := scheduleProblem(rd); problem != "" {
-			problems[r.Name] = problem
+			problems[x.Name()] = problem
 			continue
 		}
 		c := rd.Config
-		jobs = append(jobs, scheduler.Job{Name: r.Name, Enabled: c.Enabled, Schedule: c.Schedule, Staleness: c.Staleness, Parallel: c.Parallel})
+		jobs = append(jobs, scheduler.Job{Name: x.Name(), Enabled: c.Enabled, Schedule: c.Schedule, Staleness: c.Staleness, Parallel: !c.Queued})
 	}
 	return jobs, problems, nil
 }
@@ -386,7 +386,7 @@ func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler) {
 			_ = os.Remove(filepath.Join(dir, name))
 			logf("%s: stopped while waiting for its turn", name)
 			now := time.Now()
-			recordRun(a, name, occ, nil, runstatus.Run{
+			recordRun(a, name, occ, runstatus.Run{
 				StartedAt: now, FinishedAt: &now, QueuedAt: queuedAt,
 				Outcome: runstatus.OutcomeStopped, Reason: "stopped on request (" + product.Command + " stop) while waiting for its turn",
 			}, nil)

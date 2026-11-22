@@ -143,14 +143,29 @@ components:
         inputs:
           description: 'Inputs the routine ran with (e.g. today, since): what the run covered.'
           type: object
+        kind:
+          description: |-
+            Kind is the routine's kind: program for a program; absent for an LLM
+            routine (llm).
+          enum:
+            - llm
+            - program
+          type: string
         outcome:
           description: Outcome and Reason are the run's result, as recorded in run status.
           type: string
+        program:
+          $ref: '#/components/schemas/Execution'
+          description: |-
+            Program is how a program's run went, for runs that got as far as
+            starting it.
         reason:
           type: string
         result:
           $ref: '#/components/schemas/Result'
-          description: Result is the agent's result, for runs that got as far as the model.
+          description: |-
+            Result is the agent's result, for an LLM routine's runs that got as
+            far as the model.
         routine:
           type: string
         sessionId:
@@ -184,6 +199,31 @@ components:
           type: string
       required:
         - error
+      type: object
+    Execution:
+      additionalProperties: false
+      description: 'Execution is how a program''s run went: the program''s section of its run''s record.'
+      properties:
+        checksum:
+          description: Checksum is the SHA-256 of the executable that ran.
+          type: string
+        dryRun:
+          type: boolean
+        exitCode:
+          description: ExitCode is the code it exited with (-1 when it was killed).
+          type: integer
+        output:
+          description: Output is what it printed (stdout and stderr), up to the first 64 KiB.
+          type: string
+        outputTruncated:
+          description: OutputTruncated is true when it printed more than Output holds.
+          type: boolean
+        summary:
+          description: Summary is the line it wrote to $PA_RESULT, if it wrote one.
+          type: string
+      required:
+        - exitCode
+        - dryRun
       type: object
     Finding:
       additionalProperties: false
@@ -513,6 +553,9 @@ components:
         notifications:
           description: Notifications is the app's own notifications file.
           type: string
+        programs:
+          description: 'Programs is the programs folder: the app''s copies of the programs added.'
+          type: string
         routines:
           type: string
         runStatus:
@@ -655,6 +698,51 @@ components:
             type: string
           type: array
       type: object
+    ProgramInfo:
+      additionalProperties: false
+      description: 'ProgramInfo is a program''s section of its routine row: the copy of its executable the app runs, and what its description file declares.'
+      properties:
+        args:
+          items:
+            type: string
+          type: array
+        checksum:
+          description: Checksum is the executable's SHA-256 (trust is keyed to it).
+          type: string
+        executable:
+          description: Executable is the app's copy, the one that runs.
+          type: string
+        secrets:
+          items:
+            $ref: '#/components/schemas/ProgramSecret'
+          type: array
+        writes:
+          description: |-
+            Writes is whether it can change anything: a dry run passes it
+            --dry-run; one that doesn't write runs as it is.
+          type: boolean
+      required:
+        - executable
+        - args
+        - writes
+        - secrets
+      type: object
+    ProgramSecret:
+      additionalProperties: false
+      description: ProgramSecret is a secret a program declares, and whether it's stored (`auth login <program>` stores it).
+      properties:
+        env:
+          description: Env is the environment variable it's passed as.
+          type: string
+        name:
+          type: string
+        stored:
+          type: boolean
+      required:
+        - name
+        - env
+        - stored
+      type: object
     Report:
       additionalProperties: false
       description: Report is usage against the limit, for the backend in use.
@@ -774,6 +862,12 @@ components:
             Enabled is whether the routine runs on its schedule after the change
             (created routines start disabled; absent for deletes).
           type: boolean
+        kind:
+          description: Kind is program for a program; absent for an LLM routine (llm).
+          enum:
+            - llm
+            - program
+          type: string
         path:
           type: string
         routine:
@@ -786,6 +880,12 @@ components:
       additionalProperties: false
       description: RoutineCheck is one row of `routines check --json`.
       properties:
+        kind:
+          description: Kind is program for a program; absent for an LLM routine (llm).
+          enum:
+            - llm
+            - program
+          type: string
         ok:
           type: boolean
         problem:
@@ -794,7 +894,7 @@ components:
         routine:
           type: string
         tools:
-          description: Tools are its allowlisted tools and the server offering each.
+          description: Tools are an LLM routine's allowlisted tools and the server offering each.
           items:
             $ref: '#/components/schemas/CheckedTool'
           type: array
@@ -804,7 +904,7 @@ components:
       type: object
     RoutineDetail:
       additionalProperties: false
-      description: 'RoutineDetail is `routines show --json`: a routine with its file''s source.'
+      description: 'RoutineDetail is `routines show --json`: a routine of either kind with its file''s source.'
       properties:
         agentEffort:
           type: string
@@ -820,15 +920,26 @@ components:
           items:
             type: string
           type: array
+        description:
+          description: Description is what its file says it does.
+          type: string
         effort:
-          description: Effort is the routine's effort setting ("default" leaves it to the backend).
+          description: |-
+            Effort is the routine's effort setting ("default" leaves it to the
+            backend); empty for a program.
           type: string
         enabled:
           type: boolean
         folder:
           description: |-
-            Folder is where its runs work (absent: a temporary folder); frontends
-            can filter routines by it.
+            Folder is where its runs work (absent: a temporary folder; a
+            program's data folder); frontends can filter routines by it.
+          type: string
+        kind:
+          description: Kind is program for a program; absent for an LLM routine (llm).
+          enum:
+            - llm
+            - program
           type: string
         lastRun:
           $ref: '#/components/schemas/RunStatusRun'
@@ -843,7 +954,13 @@ components:
           format: date-time
           type: string
         path:
+          description: |-
+            Path is its file: an LLM routine's .prompt file, a program's
+            description file (in the app's copy).
           type: string
+        program:
+          $ref: '#/components/schemas/ProgramInfo'
+          description: 'Program is a program''s own: what runs and with what.'
         schedule:
           description: Schedule is the cron schedule; absent for routines run only by hand.
           type: string
@@ -855,10 +972,14 @@ components:
             type: string
           type: array
         session:
-          description: Session is "save" when runs keep their agent CLI session, else "discard".
+          description: |-
+            Session is "save" when runs keep their agent CLI session, else
+            "discard"; empty for a program.
           type: string
         source:
-          description: Source is the routine file as written (frontmatter and prompt).
+          description: |-
+            Source is its file as written: an LLM routine's frontmatter and
+            prompt, a program's description file.
           type: string
         staleness:
           type: string
@@ -890,7 +1011,7 @@ components:
       type: object
     RoutineInfo:
       additionalProperties: false
-      description: 'RoutineInfo is one row of `routines list --json`: a routine with its effective settings (file values overridden by settings).'
+      description: 'RoutineInfo is one row of `routines list --json`: a routine of either kind with its effective settings (file values overridden by settings).'
       properties:
         agentEffort:
           type: string
@@ -906,15 +1027,26 @@ components:
           items:
             type: string
           type: array
+        description:
+          description: Description is what its file says it does.
+          type: string
         effort:
-          description: Effort is the routine's effort setting ("default" leaves it to the backend).
+          description: |-
+            Effort is the routine's effort setting ("default" leaves it to the
+            backend); empty for a program.
           type: string
         enabled:
           type: boolean
         folder:
           description: |-
-            Folder is where its runs work (absent: a temporary folder); frontends
-            can filter routines by it.
+            Folder is where its runs work (absent: a temporary folder; a
+            program's data folder); frontends can filter routines by it.
+          type: string
+        kind:
+          description: Kind is program for a program; absent for an LLM routine (llm).
+          enum:
+            - llm
+            - program
           type: string
         lastRun:
           $ref: '#/components/schemas/RunStatusRun'
@@ -929,7 +1061,13 @@ components:
           format: date-time
           type: string
         path:
+          description: |-
+            Path is its file: an LLM routine's .prompt file, a program's
+            description file (in the app's copy).
           type: string
+        program:
+          $ref: '#/components/schemas/ProgramInfo'
+          description: 'Program is a program''s own: what runs and with what.'
         schedule:
           description: Schedule is the cron schedule; absent for routines run only by hand.
           type: string
@@ -941,7 +1079,9 @@ components:
             type: string
           type: array
         session:
-          description: Session is "save" when runs keep their agent CLI session, else "discard".
+          description: |-
+            Session is "save" when runs keep their agent CLI session, else
+            "discard"; empty for a program.
           type: string
         staleness:
           type: string
@@ -969,6 +1109,64 @@ components:
         - session
         - builtinTools
         - trusted
+      type: object
+    RunOutput:
+      additionalProperties: false
+      description: 'RunOutput is `run --json`: how the run went.'
+      properties:
+        backend:
+          type: string
+        cachedTokens:
+          type: integer
+        calls:
+          description: |-
+            Calls are every tool call, in order (absent in records from before
+            they were kept).
+          items:
+            $ref: '#/components/schemas/Call'
+          type: array
+        costUsd:
+          description: |-
+            CostUSD is the run's cost at API list prices: claude-api runs only (agent CLI
+            runs are on the CLI's own plan, and the app never works out a cost for them).
+          type: number
+        dryRun:
+          type: boolean
+        inputTokens:
+          type: integer
+        kind:
+          description: Kind is program for a program; absent for an LLM routine (llm).
+          enum:
+            - llm
+            - program
+          type: string
+        outcome:
+          description: |-
+            Outcome is the routine's own report when the run succeeded: done or
+            nothing_to_do (a failed report fails the run). Reason says why.
+          type: string
+        output:
+          description: |-
+            Output is the result in the shape the routine declared (Dotprompt
+            output: schema), validated; absent for routines without one.
+        outputTokens:
+          type: integer
+        program:
+          $ref: '#/components/schemas/Execution'
+          description: 'Program is a program''s run: its exit code, summary and output.'
+        promptSource:
+          description: the routine file
+          type: string
+        reason:
+          type: string
+        text:
+          type: string
+        toolCalls:
+          type: integer
+        writes:
+          items:
+            $ref: '#/components/schemas/Write'
+          type: array
       type: object
     RunStatus:
       additionalProperties: false
@@ -1418,6 +1616,14 @@ components:
           type: string
         id:
           type: string
+        kind:
+          description: |-
+            Kind is the routine's kind: program for a program; absent for an LLM
+            routine (llm).
+          enum:
+            - llm
+            - program
+          type: string
         outcome:
           type: string
         reason:
@@ -1541,6 +1747,17 @@ components:
           items:
             type: string
           type: array
+        kind:
+          description: Kind is program for a program; absent for an LLM routine (llm).
+          enum:
+            - llm
+            - program
+          type: string
+        program:
+          $ref: '#/components/schemas/ProgramInfo'
+          description: |-
+            Program is what trusting a program approves: the executable that
+            runs (by checksum, with its description file), what it declares.
         resumed:
           description: Resumed is true when --resume turned its schedule on (it was paused).
           type: boolean

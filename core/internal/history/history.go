@@ -17,6 +17,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 )
 
@@ -34,6 +35,9 @@ type Entry struct {
 	// ID is "<routine>/<started>", e.g. "standup/2026-11-19T092022".
 	ID      string `json:"id"`
 	Routine string `json:"routine"`
+	// Kind is the routine's kind: program for a program; absent for an LLM
+	// routine (llm).
+	Kind string `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
 	// Trigger is what started the run: "schedule", "manual" or "backfill".
 	Trigger string `json:"trigger"`
 	// TriggerID identifies the occurrence, e.g. "schedule:2026-11-19T09:20:00".
@@ -55,16 +59,23 @@ type Entry struct {
 	Reason  string            `json:"reason,omitempty"`
 	// Inputs the routine ran with (e.g. today, since): what the run covered.
 	Inputs map[string]any `json:"inputs,omitempty"`
-	// Result is the agent's result, for runs that got as far as the model.
+	// Result is the agent's result, for an LLM routine's runs that got as
+	// far as the model.
 	Result *agent.Result `json:"result,omitempty"`
+	// Program is how a program's run went, for runs that got as far as
+	// starting it.
+	Program *programs.Execution `json:"program,omitempty"`
 	// Error is how records written before outcomes were recorded said a run failed.
 	Error string `json:"error,omitempty"`
 }
 
 // Summary is an entry without the agent result, for listings.
 type Summary struct {
-	ID         string            `json:"id"`
-	Routine    string            `json:"routine"`
+	ID      string `json:"id"`
+	Routine string `json:"routine"`
+	// Kind is the routine's kind: program for a program; absent for an LLM
+	// routine (llm).
+	Kind       string            `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
 	Trigger    string            `json:"trigger"`
 	For        *time.Time        `json:"for,omitempty"`
 	SessionID  string            `json:"sessionId,omitempty"`
@@ -115,7 +126,7 @@ func List(dir string, f Filter) ([]Summary, error) {
 			continue
 		}
 		s := Summary{
-			ID: e.ID, Routine: e.Routine, Trigger: e.Trigger, For: e.For, SessionID: e.SessionID, Folder: e.Folder, StartedAt: e.StartedAt,
+			ID: e.ID, Routine: e.Routine, Kind: e.Kind, Trigger: e.Trigger, For: e.For, SessionID: e.SessionID, Folder: e.Folder, StartedAt: e.StartedAt,
 			FinishedAt: e.FinishedAt, Outcome: e.Outcome, Reason: e.Reason,
 		}
 		if e.Result != nil {

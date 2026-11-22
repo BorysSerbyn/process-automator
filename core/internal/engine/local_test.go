@@ -122,7 +122,7 @@ func TestLocalReachModel(t *testing.T) {
 	setSetting(t, a, LocalURLSetting, srv.URL+"/v1")
 	setSetting(t, a, LocalModelSetting, "qwen3:8b")
 	reach := func(r routines.Routine) string {
-		rd := a.Assess(r)
+		rd := a.Assess(a.LLM(r, nil))
 		rd.CheckModel(context.Background(), a, r)
 		var out []string
 		for _, p := range rd.Problems {

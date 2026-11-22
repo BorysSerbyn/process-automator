@@ -23,18 +23,18 @@ func newStartCmd() *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "start <routine>",
-		Short: "Start a routine's run in the background and return at once (frontends: run now)",
+		Short: "Start a routine's run (either kind) in the background and return at once (frontends: run now)",
 		Long: "Runs the routine as `run` does, detached, so it keeps going whatever started it. Follow it in run " +
 			"status (running, queued) and the run history; `stop` stops it.",
 		Annotations: map[string]string{annNotReadOnly: "it runs a routine"},
 		Args:        cobra.ExactArgs(1),
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
-			r, _, err := a.Routine(args[0])
+			x, err := a.Find(args[0])
 			if err != nil {
 				return err
 			}
-			out := StartOutput{Routine: r.Name, DryRun: dryRun, Log: a.Layout.StartLog()}
-			if err := startDetachedRun(a, r.Name, dryRun, out.Log); err != nil {
+			out := StartOutput{Routine: x.Name(), DryRun: dryRun, Log: a.Layout.StartLog()}
+			if err := startDetachedRun(a, x.Name(), dryRun, out.Log); err != nil {
 				return err
 			}
 			if wantsJSON(cmd) {
@@ -44,11 +44,11 @@ func newStartCmd() *cobra.Command {
 			if dryRun {
 				kind = "Started a dry run of"
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s %s in the background (log: %s).\n", kind, r.Name, out.Log)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s in the background (log: %s).\n", kind, x.Name(), out.Log)
 			return nil
 		}),
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "intercept every side-effecting tool call (nothing is posted or written)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "intercept every side-effecting tool call (nothing is posted or written); a program that writes gets --dry-run")
 	jsonFlag(cmd.Flags(), StartOutput{})
 	return cmd
 }

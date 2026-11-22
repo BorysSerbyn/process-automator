@@ -5,8 +5,21 @@
     "name": {
       "type": "string"
     },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is program for a program; absent for an LLM routine (llm)."
+    },
     "path": {
-      "type": "string"
+      "type": "string",
+      "description": "Path is its file: an LLM routine's .prompt file, a program's\ndescription file (in the app's copy)."
+    },
+    "description": {
+      "type": "string",
+      "description": "Description is what its file says it does."
     },
     "servers": {
       "items": {
@@ -43,15 +56,15 @@
     },
     "effort": {
       "type": "string",
-      "description": "Effort is the routine's effort setting (\"default\" leaves it to the backend)."
+      "description": "Effort is the routine's effort setting (\"default\" leaves it to the\nbackend); empty for a program."
     },
     "folder": {
       "type": "string",
-      "description": "Folder is where its runs work (absent: a temporary folder); frontends\ncan filter routines by it."
+      "description": "Folder is where its runs work (absent: a temporary folder; a\nprogram's data folder); frontends can filter routines by it."
     },
     "session": {
       "type": "string",
-      "description": "Session is \"save\" when runs keep their agent CLI session, else \"discard\"."
+      "description": "Session is \"save\" when runs keep their agent CLI session, else\n\"discard\"; empty for a program."
     },
     "builtinTools": {
       "items": {
@@ -149,9 +162,65 @@
       ],
       "description": "LastRun is the latest outcome from run status."
     },
+    "program": {
+      "properties": {
+        "executable": {
+          "type": "string",
+          "description": "Executable is the app's copy, the one that runs."
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum is the executable's SHA-256 (trust is keyed to it)."
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "writes": {
+          "type": "boolean",
+          "description": "Writes is whether it can change anything: a dry run passes it\n--dry-run; one that doesn't write runs as it is."
+        },
+        "secrets": {
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "env": {
+                "type": "string",
+                "description": "Env is the environment variable it's passed as."
+              },
+              "stored": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "env",
+              "stored"
+            ],
+            "description": "ProgramSecret is a secret a program declares, and whether it's stored (`auth login \u003cprogram\u003e` stores it)."
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "executable",
+        "args",
+        "writes",
+        "secrets"
+      ],
+      "description": "Program is a program's own: what runs and with what."
+    },
     "source": {
       "type": "string",
-      "description": "Source is the routine file as written (frontmatter and prompt)."
+      "description": "Source is its file as written: an LLM routine's frontmatter and\nprompt, a program's description file."
     }
   },
   "additionalProperties": false,
@@ -170,5 +239,5 @@
     "source"
   ],
   "title": "procauto routines show --json",
-  "description": "RoutineDetail is `routines show --json`: a routine with its file's source."
+  "description": "RoutineDetail is `routines show --json`: a routine of either kind with its file's source."
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
@@ -172,6 +173,55 @@ func Start(t *testing.T, a *engine.App, set *routines.Set, name string) chan err
 	done := make(chan error, 1)
 	go func() {
 		_, err := a.Execute(context.Background(), set, r, engine.RunOptions{})
+		done <- err
+	}()
+	return done
+}
+
+// AddProgram adds a program whose executable is a shell script with body
+// (the description file is desc, naming ./prog), and trusts it unless the
+// test says not to. Trust is first used before, so the LLM routines already
+// there stay trusted.
+func AddProgram(t *testing.T, a *engine.App, name, desc, body string, trusted bool) programs.Program {
+	t.Helper()
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "prog"), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(src, programs.DescriptionFile)
+	if err := os.WriteFile(path, []byte(desc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.InitTrust(); err != nil {
+		t.Fatal(err)
+	}
+	p, err := programs.Add(a.Layout.Programs(), name, path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trusted {
+		x, err := a.Find(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := a.Trust(x); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return p
+}
+
+// RunNamed runs a routine of either kind in the background; its error comes
+// on the channel.
+func RunNamed(t *testing.T, a *engine.App, name string, o engine.RunOptions) chan error {
+	t.Helper()
+	x, err := a.Find(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := a.Run(context.Background(), x, o)
 		done <- err
 	}()
 	return done

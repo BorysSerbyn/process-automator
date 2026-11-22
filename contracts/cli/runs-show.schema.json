@@ -9,6 +9,14 @@
     "routine": {
       "type": "string"
     },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is the routine's kind: program for a program; absent for an LLM\nroutine (llm)."
+    },
     "trigger": {
       "type": "string",
       "description": "Trigger is what started the run: \"schedule\", \"manual\" or \"backfill\"."
@@ -163,7 +171,41 @@
         "cachedTokens",
         "promptSource"
       ],
-      "description": "Result is the agent's result, for runs that got as far as the model."
+      "description": "Result is the agent's result, for an LLM routine's runs that got as\nfar as the model."
+    },
+    "program": {
+      "properties": {
+        "exitCode": {
+          "type": "integer",
+          "description": "ExitCode is the code it exited with (-1 when it was killed)."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Summary is the line it wrote to $PA_RESULT, if it wrote one."
+        },
+        "output": {
+          "type": "string",
+          "description": "Output is what it printed (stdout and stderr), up to the first 64 KiB."
+        },
+        "outputTruncated": {
+          "type": "boolean",
+          "description": "OutputTruncated is true when it printed more than Output holds."
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum is the SHA-256 of the executable that ran."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "exitCode",
+        "dryRun"
+      ],
+      "description": "Program is how a program's run went, for runs that got as far as\nstarting it."
     },
     "error": {
       "type": "string",

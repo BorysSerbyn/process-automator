@@ -48,7 +48,7 @@ func TestTrust(t *testing.T) {
 	_, _ = cli(t, cfg, "settings", "set", "routines.fresh.enabled", "true")
 	a, set := reload()
 	fresh, _ := set.Find("fresh")
-	if rd := a.Assess(fresh); !rd.Config.Enabled || !strings.Contains(rd.Untrusted, "routines trust fresh") {
+	if rd := a.Assess(a.LLM(fresh, set)); !rd.Config.Enabled || !strings.Contains(rd.Untrusted, "routines trust fresh") {
 		t.Fatalf("readiness: %+v", rd)
 	}
 	// Trusting it (a review in a terminal, or --yes).

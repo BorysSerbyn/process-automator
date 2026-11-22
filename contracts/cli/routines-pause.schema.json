@@ -5,6 +5,14 @@
     "routine": {
       "type": "string"
     },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is program for a program; absent for an LLM routine (llm)."
+    },
     "path": {
       "type": "string"
     },
