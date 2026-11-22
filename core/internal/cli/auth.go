@@ -6,16 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/BorysSerbyn/process-automator/core/internal/agent"
-	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 )
 
 func newAuthCmd() *cobra.Command {
@@ -63,137 +59,59 @@ type loginUI interface {
 	Say(format string, args ...any)
 }
 
-// localName is the sign-in name for the local server: openai-compat is its
-// former name, still taken.
-func localName(name string) string {
-	if name == agent.FormerLocalProvider {
-		return agent.LocalProvider
-	}
-	return name
-}
-
-// login signs in to a server, plugin, or the model engine.Backends.
+// login signs in to a server, a plugin, or a model backend's key: what's
+// still to do outside the app first, a local server's pairing, each secret
+// it asks for, then a remote server's OAuth sign-in.
 func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
-	ask := func(key, label string) error {
-		if label == "" {
-			label = key
+	if name == "codex" {
+		return errors.New("the codex backend uses Codex's own sign-in: run `codex login` in a terminal")
+	}
+	s, ok := a.FindSignIn(name)
+	if !ok {
+		if _, plugin := a.FindPlugin(name); plugin {
+			return fmt.Errorf("%s needs no sign-in", name)
 		}
-		v, err := ui.Secret(ctx, key, label)
+		return fmt.Errorf("unknown plugin %q (sign-in names: %s)", name, strings.Join(signInNames(a), ", "))
+	}
+	if len(s.Secrets) == 0 && !s.OAuth {
+		return fmt.Errorf("%s needs no sign-in", s.Name)
+	}
+	// What I do outside the app first, before any credential is asked for
+	// (only while something's still missing).
+	if s.Prepare != "" && a.Missing(s) {
+		if err := ui.Prepare(ctx, s.Name, s.Prepare); err != nil {
+			return err
+		}
+	}
+	if s.Pairing != "" {
+		ui.Say("Connecting to %s so it can ask you to approve "+product.Command+"…\n%s", s.Name, s.Pairing)
+		if err := a.Connector.Pair(ctx, s.Name); err != nil {
+			ui.Say("(connection ended: %v)\nIf you already copied the credential, enter it next.", err)
+		}
+	}
+	for _, sec := range s.Secrets {
+		if _, stored, err := a.Stored(sec); sec.Kept && (stored || err != nil) {
+			continue // a pre-registered app's client credentials, asked for once
+		}
+		v, err := ui.Secret(ctx, sec.Key, sec.Label)
 		if err != nil {
 			return err
 		}
 		if v = strings.TrimSpace(v); v == "" {
-			return fmt.Errorf("%s is required", key)
+			return fmt.Errorf("%s is required", sec.Key)
 		}
-		return a.Connector.Secrets.Set(key, v)
+		if err := a.Connector.Secrets.Set(sec.Key, v); err != nil {
+			return err
+		}
 	}
-	switch name = localName(name); name {
-	case "anthropic":
-		if err := ask(engine.AnthropicKey, "your Anthropic API key"); err != nil {
+	if s.OAuth {
+		if err := a.Connector.Login(ctx, s.Name, func(url string) error { return ui.SignIn(ctx, s.Name, url) }); err != nil {
 			return err
 		}
-		ui.Say("Saved the Anthropic API key.")
-		return nil
-	case "claude-code":
-		if err := ask(engine.ClaudeCodeTokenKey, "the token printed by `claude setup-token`"); err != nil {
-			return err
-		}
-		ui.Say("Saved the Claude Code token.")
-		return nil
-	case "local":
-		if err := ask(engine.LocalKey, "the local model server's API key"); err != nil {
-			return err
-		}
-		ui.Say("Saved the local model server's API key.")
-		return nil
-	case "codex":
-		return errors.New("the codex backend uses Codex's own sign-in: run `codex login` in a terminal")
-	}
-	// What I do outside the app first, before any credential is asked for
-	// (only while something's still missing).
-	prepare := func(missing bool) error {
-		if p, ok := a.FindPlugin(name); ok && p.Prepare != "" && missing {
-			return ui.Prepare(ctx, name, p.Prepare)
-		}
+		ui.Say("Signed in to %s.", s.Name)
 		return nil
 	}
-	missing := func(keys ...string) bool {
-		for _, k := range keys {
-			// Only a secret that isn't stored is missing: one that can't be
-			// read (locked) is asked for again by nothing.
-			if _, stored, err := secrets.Lookup(a.Connector.Secrets, k); k != "" && err == nil && !stored {
-				return true
-			}
-		}
-		return false
-	}
-	if p, ok := a.InProcess(name); ok {
-		if len(p.InProcess.Secrets) == 0 {
-			return fmt.Errorf("%s needs no sign-in", name)
-		}
-		var keys []string
-		for _, s := range p.InProcess.Secrets {
-			keys = append(keys, engine.PluginSecretKey(name, s.Name))
-		}
-		if err := prepare(missing(keys...)); err != nil {
-			return err
-		}
-		for _, s := range p.InProcess.Secrets {
-			if err := ask(engine.PluginSecretKey(name, s.Name), s.Prompt); err != nil {
-				return err
-			}
-		}
-		ui.Say("Saved credentials for %s.", name)
-		return nil
-	}
-	srv, ok := a.Config.MCPServers[name]
-	if !ok {
-		return fmt.Errorf("unknown plugin %q (sign-in names: %s)", name, strings.Join(signInNames(a), ", "))
-	}
-	if config.OAuth(srv) {
-		// A pre-registered app's client credentials are asked for the first time.
-		if oc := srv.OAuthClient; oc != nil {
-			if err := prepare(missing(oc.ClientIDKey, oc.ClientSecretKey)); err != nil {
-				return err
-			}
-			for _, k := range []struct{ key, label string }{
-				{oc.ClientIDKey, "the app's Client ID"}, {oc.ClientSecretKey, "the app's Client Secret"},
-			} {
-				if k.key == "" || !missing(k.key) {
-					continue
-				}
-				if err := ask(k.key, k.label); err != nil {
-					return err
-				}
-			}
-		} else if err := prepare(!signedIn(a)[name]); err != nil {
-			return err
-		}
-		if err := a.Connector.Login(ctx, name, func(url string) error { return ui.SignIn(ctx, name, url) }); err != nil {
-			return err
-		}
-		ui.Say("Signed in to %s.", name)
-		return nil
-	}
-	keys := config.SecretKeys(srv)
-	if len(keys) == 0 {
-		return fmt.Errorf("%s needs no sign-in", name)
-	}
-	if err := prepare(missing(keys...)); err != nil {
-		return err
-	}
-	if srv.Pairing != "" {
-		ui.Say("Connecting to %s so it can ask you to approve "+product.Command+"…\n%s", name, srv.Pairing)
-		if err := a.Connector.Pair(ctx, name); err != nil {
-			ui.Say("(connection ended: %v)\nIf you already copied the credential, enter it next.", err)
-		}
-	}
-	for _, key := range keys {
-		if err := ask(key, key); err != nil {
-			return err
-		}
-	}
-	ui.Say("Saved credentials for %s.", name)
+	ui.Say("Saved credentials for %s.", s.Name)
 	return nil
 }
 
@@ -263,67 +181,13 @@ func newAuthLogoutCmd() *cobra.Command {
 	}
 }
 
-// logout forgets a server's or plugin's stored credentials.
+// logout forgets a server's, plugin's or backend's stored credentials.
 func logout(a *engine.App, name string) error {
-	switch name = localName(name); name {
-	case "anthropic":
-		return a.Connector.Secrets.Delete(engine.AnthropicKey)
-	case "claude-code":
-		return a.Connector.Secrets.Delete(engine.ClaudeCodeTokenKey)
-	case "local":
-		for _, k := range engine.LocalKeys {
-			if err := a.Connector.Secrets.Delete(k); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if p, ok := a.InProcess(name); ok {
-		for _, s := range p.InProcess.Secrets {
-			if err := a.Connector.Secrets.Delete(engine.PluginSecretKey(p.Name, s.Name)); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	srv, ok := a.Config.MCPServers[name]
+	s, ok := a.FindSignIn(name)
 	if !ok {
 		return fmt.Errorf("unknown server %q", name)
 	}
-	if config.OAuth(srv) {
-		if err := a.Connector.Logout(name); err != nil {
-			return err
-		}
-	}
-	// Secrets are referenced by key, so other servers may share one: those stay.
-	shared := secretKeysUsedBy(a, name)
-	for _, key := range config.SecretKeys(srv) {
-		if shared[key] {
-			continue
-		}
-		if err := a.Connector.Secrets.Delete(key); err != nil && !errors.Is(err, secrets.ErrNotFound) {
-			return err
-		}
-	}
-	return nil
-}
-
-// secretKeysUsedBy is every secret key referenced by configured servers other
-// than except (headers, env and OAuth client credentials).
-func secretKeysUsedBy(a *engine.App, except string) map[string]bool {
-	used := map[string]bool{}
-	for name, s := range a.Config.MCPServers {
-		if name == except {
-			continue
-		}
-		for _, k := range config.SecretKeys(s) {
-			used[k] = true
-		}
-		if oc := s.OAuthClient; oc != nil {
-			used[oc.ClientIDKey], used[oc.ClientSecretKey] = true, true
-		}
-	}
-	return used
+	return a.Logout(s)
 }
 
 // AuthStatus is one row of `auth status --json`.
@@ -347,10 +211,7 @@ func newAuthStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rows, err := authStatuses(a)
-			if err != nil {
-				return err
-			}
+			rows := authStatuses(a)
 			if asJSON {
 				return writeJSON(cmd.OutOrStdout(), rows)
 			}
@@ -370,83 +231,22 @@ func newAuthStatusCmd() *cobra.Command {
 
 // authStatuses is whether each server, plugin and backend that can sign in has
 // what it needs stored, sorted by name.
-func authStatuses(a *engine.App) ([]AuthStatus, error) {
+func authStatuses(a *engine.App) []AuthStatus {
 	var rows []AuthStatus
-	for name, srv := range a.Config.MCPServers {
-		row := AuthStatus{Server: name, Kind: "local", SignedIn: true}
-		if config.Remote(srv) {
-			row.Kind = "remote"
-		}
-		if config.OAuth(srv) {
-			signedIn, err := a.Connector.SignedIn(name)
-			if err != nil {
-				return nil, err
-			}
-			row.SignedIn = signedIn
-		}
-		for _, key := range config.SecretKeys(srv) {
-			row.check(a, key)
-		}
-		rows = append(rows, row)
-	}
-	for _, p := range a.Plugins {
-		if p.InProcess == nil || len(p.InProcess.Secrets) == 0 {
-			continue
-		}
-		row := AuthStatus{Server: p.Name, Kind: "in-process", SignedIn: true}
-		for _, s := range p.InProcess.Secrets {
-			row.check(a, engine.PluginSecretKey(p.Name, s.Name))
-		}
-		rows = append(rows, row)
-	}
-	anthropic := AuthStatus{Server: "anthropic", Kind: "api-key", SignedIn: true}
-	anthropic.check(a, engine.AnthropicKey)
-	rows = append(rows, anthropic)
-	// The token is optional (without it Claude Code uses its own login), and so
-	// is this key (local servers need none): listed when stored, or unreadable.
-	optional := []struct {
-		row  AuthStatus
-		keys []string
-	}{
-		{AuthStatus{Server: "claude-code", Kind: "token"}, []string{engine.ClaudeCodeTokenKey}},
-		{AuthStatus{Server: "local", Kind: "api-key"}, engine.LocalKeys}, // under its former key too
-	}
-	for _, o := range optional {
-		for _, key := range o.keys {
-			if _, stored, err := secrets.Lookup(a.Connector.Secrets, key); stored || err != nil {
-				o.row.SignedIn = true
-				o.row.check(a, key)
-				rows = append(rows, o.row)
-				break
-			}
+	for _, s := range a.SignIns() {
+		if a.Listed(s) {
+			st := a.State(s)
+			rows = append(rows, AuthStatus{Server: s.Name, Kind: s.Kind, SignedIn: st.SignedIn, Problem: st.Problem})
 		}
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Server < rows[j].Server })
-	return rows, nil
+	return rows
 }
 
-// check marks the row signed out when key isn't stored, and with a problem
-// when it can't be read.
-func (r *AuthStatus) check(a *engine.App, key string) {
-	switch _, stored, err := secrets.Lookup(a.Connector.Secrets, key); {
-	case err != nil:
-		r.SignedIn, r.Problem = false, "a secret can't be read: "+err.Error()
-	case !stored:
-		r.SignedIn = false
-	}
-}
-
-// signInNames is everything `auth login` accepts.
+// signInNames is everything `auth login` takes.
 func signInNames(a *engine.App) []string {
-	names := []string{"anthropic", "claude-code", "local"}
-	for name := range a.Config.MCPServers {
-		names = append(names, name)
+	var names []string
+	for _, s := range a.SignIns() {
+		names = append(names, s.Name)
 	}
-	for _, p := range a.Plugins {
-		if p.InProcess != nil && len(p.InProcess.Secrets) > 0 {
-			names = append(names, p.Name)
-		}
-	}
-	sort.Strings(names)
 	return names
 }

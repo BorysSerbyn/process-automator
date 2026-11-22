@@ -1,24 +1,27 @@
 //go:build !darwin && !linux
 
-package cli
+package loginitems
 
 import (
 	"errors"
 	"runtime"
 )
 
-// loginItemLabels: there are no login items here.
-func loginItemLabels() map[string]string { return nil }
+// Labels: there are no login items here.
+func Labels() map[string]string { return nil }
 
-func loginItems(map[string]string) ([]LoginItem, error) {
+// List says starting at login isn't implemented here.
+func List(map[string]string) ([]LoginItem, error) {
 	return nil, errors.New("starting at login isn't implemented on " + runtime.GOOS + " yet")
 }
 
-func setLoginItems(map[string]string, bool) error {
+// Set says starting at login isn't implemented here.
+func Set(map[string]string, bool) error {
 	return errors.New("starting at login isn't implemented on " + runtime.GOOS + " yet")
 }
 
-const uiName = "menu bar app"
+// UIName is what the frontend is called here.
+const UIName = "menu bar app"
 
 func notHere() error {
 	return errors.New("starting and stopping the app isn't implemented on " + runtime.GOOS + " yet")

@@ -3,8 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -41,17 +39,13 @@ func newStopCmd() *cobra.Command {
 			if !inProgress(a, name) {
 				return fmt.Errorf("%s isn't running", name)
 			}
-			req := a.Layout.StopRequest(name)
-			if err := os.MkdirAll(filepath.Dir(req), 0o700); err != nil {
-				return err
-			}
-			if err := os.WriteFile(req, []byte(time.Now().Format(time.RFC3339)), 0o600); err != nil {
+			if err := a.RequestStop(name); err != nil {
 				return err
 			}
 			deadline := time.Now().Add(stopWait)
 			for inProgress(a, name) {
 				if time.Now().After(deadline) {
-					_ = os.Remove(req)
+					a.CancelStop(name)
 					return errors.New("asked the run to stop, but it hasn't ended; if its process is gone, the scheduler marks it interrupted when it next starts")
 				}
 				select {

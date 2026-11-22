@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
@@ -39,8 +38,8 @@ const (
 
 // Daemon runs routines on their schedules until ctx ends, re-reading config,
 // settings and routine files on every check. Only one runs at a time (a
-// lock). setupLeft lists the setup steps still to do, for run status.
-func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)) error {
+// lock).
+func (a *App) Daemon(ctx context.Context) error {
 	unlock, err := filelock.Lock(a.Layout.DaemonLock(), false)
 	if err != nil {
 		return errors.New("another " + product.Command + " daemon is already running")
@@ -84,7 +83,6 @@ func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)
 		}
 	}()
 
-	queued := &queuedSince{at: map[string]time.Time{}}
 	s := &scheduler.Scheduler{
 		StatePath: a.Layout.SchedulerState(),
 		Jobs: func() ([]scheduler.Job, error) {
@@ -101,12 +99,11 @@ func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)
 			if err := runstatus.Sync(cur.Layout.RunStatus(), statusSetups(jobs, problems, time.Now()), time.Now()); err != nil {
 				logf("run status: %v", err)
 			}
-			recordSetup(cur, setupLeft)
+			recordSetup(cur)
 			return jobs, nil
 		},
-		Run: func(ctx context.Context, j scheduler.Job, occ trigger.Occurrence) {
+		Run: func(ctx context.Context, j scheduler.Job, occ trigger.Occurrence, queuedAt *time.Time) {
 			name := j.Name
-			queuedAt := queued.take(name)
 			// Anything that stops the routine from running is recorded as a
 			// failed run, not just logged: the slot is already handled.
 			fail := func(err error) {
@@ -144,13 +141,11 @@ func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)
 			}
 			logf("%s: done [%s]", name, res.Summary())
 		},
-		Queued: func(name string, occ trigger.Occurrence) {
+		Queued: func(name string, occ trigger.Occurrence, at time.Time) {
 			logf("%s: queued behind another run (slot %s)", name, occ.At.Format("Mon 15:04"))
-			at := queued.put(name)
 			writeStatus(statusPath, name, forOccurrence(runstatus.Run{StartedAt: at, QueuedAt: &at, Outcome: runstatus.OutcomeQueued}, occ))
 		},
 		Missed: func(name string, occ trigger.Occurrence, late time.Duration) {
-			queued.take(name)
 			logf("%s: missed the %s slot (%s late)", name, occ.At.Format("Mon 15:04"), late.Round(time.Minute))
 			recordRun(a, name, occ, nil, runstatus.Run{
 				StartedAt: occ.At, Outcome: runstatus.OutcomeMissed,
@@ -160,7 +155,7 @@ func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)
 		},
 	}
 
-	go stopWaiting(ctx, a, s, queued)
+	go stopWaiting(ctx, a, s)
 
 	lastPrune := time.Time{}
 	lastTick := time.Now()
@@ -332,14 +327,8 @@ func scheduleProblem(rd Readiness) string {
 		return ""
 	}
 	var why []string
-	for _, p := range rd.Problems {
+	for _, p := range rd.All() {
 		why = append(why, p.Text)
-	}
-	switch {
-	case rd.TrustErr != nil:
-		why = append(why, rd.TrustErr.Error())
-	case rd.Untrusted != "":
-		why = append(why, rd.Untrusted)
 	}
 	return strings.Join(why, "; ")
 }
@@ -376,36 +365,10 @@ func trimNL(p []byte) []byte {
 	return p
 }
 
-// queuedSince remembers when routines started waiting in the scheduler's
-// queue, so their run records it.
-type queuedSince struct {
-	mu sync.Mutex
-	at map[string]time.Time
-}
-
-func (q *queuedSince) put(name string) time.Time {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	t := time.Now()
-	q.at[name] = t
-	return t
-}
-
-func (q *queuedSince) take(name string) *time.Time {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	t, ok := q.at[name]
-	if !ok {
-		return nil
-	}
-	delete(q.at, name)
-	return &t
-}
-
 // stopWaiting stops runs still waiting in the scheduler's queue when a stop
 // request for them comes in (runs already handed over watch for it
 // themselves): they're taken out of the queue and recorded as stopped.
-func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler, queued *queuedSince) {
+func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler) {
 	t := time.NewTicker(stopPoll)
 	defer t.Stop()
 	dir := a.Layout.StopRequests()
@@ -421,7 +384,7 @@ func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler, queued *qu
 		}
 		for _, e := range entries {
 			name := e.Name()
-			occ, ok := s.Drop(name)
+			occ, queuedAt, ok := s.Drop(name)
 			if !ok {
 				continue
 			}
@@ -429,7 +392,7 @@ func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler, queued *qu
 			logf("%s: stopped while waiting for its turn", name)
 			now := time.Now()
 			recordRun(a, name, occ, nil, runstatus.Run{
-				StartedAt: now, FinishedAt: &now, QueuedAt: queued.take(name),
+				StartedAt: now, FinishedAt: &now, QueuedAt: queuedAt,
 				Outcome: runstatus.OutcomeStopped, Reason: "stopped on request (" + product.Command + " stop) while waiting for its turn",
 			}, nil)
 		}
@@ -438,8 +401,8 @@ func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler, queued *qu
 
 // recordSetup puts the setup steps still to do in run status, so unfinished
 // setup shows (red, with what's left) without frontends asking.
-func recordSetup(a *App, setupLeft func(*App) ([]string, error)) {
-	left, err := setupLeft(a)
+func recordSetup(a *App) {
+	left, err := a.SetupLeft()
 	if err != nil {
 		logf("setup: %v", err)
 		return

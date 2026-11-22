@@ -1,7 +1,7 @@
 Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirements|Functional Requirements]], [[Spec/Requirements/Technical/Distribution|Technical: Distribution]]. Why it's built this way: [[Spec/Technical Decisions|Technical Decisions]].
 
 ## Core
-- **Go core, one binary**: `procauto` (the Go module in `core/`, main package `core/cmd/procauto`); `core/internal/engine` is the engine (loading, readiness, runs, the scheduler; Genkit for the model), `core/internal/cli` the CLI over it
+- **Go core, one binary**: `procauto` (the Go module in `core/`, main package `core/cmd/procauto`); `core/internal/engine` is the engine (loading, readiness, runs, the scheduler, setup's steps and what each sign-in needs; Genkit for the model), `core/internal/cli` the CLI over it (commands, their output and questions), `core/internal/loginitems` starting at login (launchd, systemd and XDG autostart)
 - **A small public surface; the rest is internal**: `core/automator` (`App`, `App.Validate`, `Main`, `CheckTemplates`) and `core/pluginapi` (the plugin contract, with `pluginapi/plugintest` for plugins' tests). An app is an `automator.App` handed to `automator.Main` by its main package:
 
 | Field | What it sets | Process Automator |

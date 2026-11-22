@@ -61,7 +61,7 @@ The identity is said three times (the `App`, `install.sh` and the Makefile) beca
 - **A test host in each app**: each app wrote the same fake `Host`, and could drift from how the engine decodes sections
 
 ## Decision: in-process plugins' secrets are their own; external servers' are shared keys
-An in-process plugin declares its secrets by name, with a prompt, and they're stored under `plugin/<name>/<secret>`: only that plugin reads them (`Host.Secret` refuses others), and `auth logout <name>` forgets them all. An external server references keys in its spec (`{key}` in `env` or `headers`), which are global: two servers for the same service share a key, and `auth logout` keeps a key another server still references. Both are signed in to with `auth login <name>`.
+An in-process plugin declares its secrets by name, with a prompt, and they're stored under `plugin/<name>/<secret>`: only that plugin reads them (`Host.Secret` refuses others), and `auth logout <name>` forgets them all. An external server references keys in its spec (`{key}` in `env` or `headers`), which are global: two servers for the same service share a key, and `auth logout` keeps a key another server still references. Both are signed in to with `auth login <name>`, from one list of what each name needs (the model backends' keys too), which `auth logout` and `auth status`, setup and readiness read as well.
 
 ### Rejected
 - **Namespacing external servers' keys too**: a key referenced by two servers would be asked for twice, and specs written for other MCP clients name keys freely

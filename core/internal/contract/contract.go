@@ -309,13 +309,17 @@ func openAPISchema(v any) any {
 }
 
 // componentName prefixes run-status types so their names read on their own
-// (runstatus.Status → RunStatus, runstatus.Run → RunStatusRun).
+// (runstatus.Status → RunStatus, runstatus.Run → RunStatusRun), and keep
+// those of types that moved package (loginitems.Status → LoginItemsOutput).
 func componentName(t reflect.Type) string {
 	if strings.HasSuffix(t.PkgPath(), "/runstatus") {
 		return "RunStatus" + strings.TrimPrefix(t.Name(), "Status")
 	}
 	if strings.HasSuffix(t.PkgPath(), "/notifications") && t.Name() == "File" {
 		return "NotificationsFile"
+	}
+	if strings.HasSuffix(t.PkgPath(), "/loginitems") && t.Name() == "Status" {
+		return "LoginItemsOutput"
 	}
 	return t.Name()
 }

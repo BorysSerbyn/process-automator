@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
@@ -25,18 +26,18 @@ func TestCodexBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	var got SetupOutput
+	var got engine.SetupOutput
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range got.Steps {
 		switch s.Step {
-		case stepBackend:
+		case engine.StepBackend:
 			if s.Done || !strings.Contains(s.Status, "Runs with codex (experimental, untested), but Codex isn't installed") || s.SignIn != "" ||
 				!strings.Contains(s.Ask, "- codex: OpenAI's Codex CLI (experimental, untested)") {
 				t.Errorf("backend step: %+v", s)
 			}
-		case stepUsage, stepMCP:
+		case engine.StepUsage, engine.StepMCP:
 			t.Errorf("a Claude Code step on codex: %+v", s)
 		}
 	}

@@ -35,7 +35,7 @@ func pathsOf(l engine.Layout) PathsOutput {
 		History: l.History(), Notifications: l.Notifications(), MCPChanges: l.MCPChanges(),
 		FrontendLog: l.FrontendLog(),
 	}
-	p.Templates, _ = templatesDir()
+	p.Templates, _ = engine.TemplatesDir()
 	return p
 }
 

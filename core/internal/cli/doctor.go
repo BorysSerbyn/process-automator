@@ -111,31 +111,20 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		add("routine", "routines folder", err.Error(), "")
 		return findings
 	}
-	signIns := signedIn(a)
 	for _, e := range set.Errors {
 		add("routine", e.Path, e.Err.Error(), "fix the file, or `"+product.Command+" routines delete` it")
 	}
 	for _, r := range set.Routines {
 		rd := a.Assess(r)
-		if rd.ConfigErr != nil {
-			add("routine", r.Name, rd.ConfigErr.Error(), "")
-			continue
-		}
-		if !rd.Config.Enabled {
+		if rd.ConfigErr == nil && !rd.Config.Enabled {
 			continue // can't make anything red
 		}
-		switch {
-		case rd.TrustErr != nil:
-			add("routine", r.Name, rd.TrustErr.Error(), "")
-		case rd.Untrusted != "":
-			add("routine", r.Name, rd.Untrusted, product.Command+" routines trust "+r.Name)
-		}
-		rd.CheckTools(cmd.Context(), a, r, signIns)
+		rd.CheckTools(cmd.Context(), a, r)
 		rd.CheckModel(cmd.Context(), a, r)
-		for _, p := range rd.Problems {
+		for _, p := range rd.All() {
 			add("routine", r.Name, p.Text, p.Fix)
 		}
-		if status == nil {
+		if rd.ConfigErr != nil || status == nil {
 			continue
 		}
 		for _, rs := range status.Routines {

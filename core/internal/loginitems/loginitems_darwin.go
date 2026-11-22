@@ -1,4 +1,4 @@
-package cli
+package loginitems
 
 import (
 	"errors"
@@ -19,9 +19,9 @@ import (
 // On macOS, login items are LaunchAgents installed by scripts/install-app.sh;
 // starting at login is launchd's enable/disable override for them.
 
-// loginItemLabels are the app's LaunchAgents: automator-ui and the scheduler,
+// Labels are the app's LaunchAgents: automator-ui and the scheduler,
 // named after the bundle ID (as the Makefile's UI_LABEL and SCHED_LABEL).
-func loginItemLabels() map[string]string {
+func Labels() map[string]string {
 	return map[string]string{"ui": product.BundleID() + ".ui", "scheduler": product.BundleID() + ".scheduler"}
 }
 
@@ -30,7 +30,8 @@ func launchdDomain() string { return fmt.Sprintf("gui/%d", os.Getuid()) }
 // scripts/install-app.sh reads the same output with grep; keep the two in step.
 var disabledLine = regexp.MustCompile(`"([^"]+)"\s*=>\s*(disabled|true|enabled|false)`)
 
-func loginItems(labels map[string]string) ([]LoginItem, error) {
+// List is whether each item is installed, and starts at login.
+func List(labels map[string]string) ([]LoginItem, error) {
 	out, err := exec.Command("launchctl", "print-disabled", launchdDomain()).Output()
 	if err != nil {
 		return nil, fmt.Errorf("launchctl print-disabled: %w", err)
@@ -52,7 +53,8 @@ func loginItems(labels map[string]string) ([]LoginItem, error) {
 	return items, nil
 }
 
-func setLoginItems(labels map[string]string, on bool) error {
+// Set turns starting at login on or off for every item.
+func Set(labels map[string]string, on bool) error {
 	verb := "disable"
 	if on {
 		verb = "enable"
@@ -66,8 +68,8 @@ func setLoginItems(labels map[string]string, on bool) error {
 	return errors.Join(errs...)
 }
 
-// uiName is what the frontend is called here.
-const uiName = "menu bar app"
+// UIName is what the frontend is called here.
+const UIName = "menu bar app"
 
 // uiExecutable is the menu bar app's binary, beside the core in the .app.
 var uiExecutable = "AutomatorUI"

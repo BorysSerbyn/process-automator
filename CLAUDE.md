@@ -2,7 +2,7 @@
 
 Scheduled LLM routines: prompt files a model runs in the background, on a schedule, with tools from MCP servers.
 
-- `core/internal/`: Go engine (`engine`: loading, readiness, runs, the scheduler; Genkit for LLM) + the `procauto` CLI over it (`cli`: commands and their output), service-agnostic
+- `core/internal/`: Go engine (`engine`: loading, readiness, runs, the scheduler, setup's steps, sign-ins; Genkit for LLM) + the `procauto` CLI over it (`cli`: commands, their output and questions), service-agnostic
 - `core/plugins/`: plugins any app built on the engine may compile in (`notify`), each built only on `pluginapi` like any other; the engine adds none and nothing in `core/internal/` imports one. `cmd/procauto` lists `notify` in its plugins
 - `core/cmd/procauto`: the binary, an `automator.App` handed to `automator.Main`. It compiles in `notify` (from `core/plugins`); routines use it and the MCP servers added with `procauto plugins add`. The app's MCP server (`procauto mcp serve`) is its interface for Claude and other MCP clients, not a plugin: routines don't get it
 - The public surface is `core/automator` (an app: its names, identifiers, release source, plugins; `Main`, `CheckTemplates`) and `core/pluginapi` (the plugin contract); everything else stays in `internal/`. Other apps import them as a Go module, with their own plugins and templates, and build with this repo's Makefile and scripts. Keep both packages small and stable, and nothing app-specific in this repo

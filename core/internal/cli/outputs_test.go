@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/loginitems"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 )
 
@@ -105,15 +106,15 @@ func TestJSONErrors(t *testing.T) {
 }
 
 func TestLoginItemsSummary(t *testing.T) {
-	none := summarizeLoginItems([]LoginItem{{Name: "ui"}, {Name: "scheduler"}})
+	none := loginitems.Summarize([]loginitems.LoginItem{{Name: "ui"}, {Name: "scheduler"}})
 	if none.Installed || none.Enabled {
 		t.Errorf("nothing installed reads as %+v", none)
 	}
-	on := summarizeLoginItems([]LoginItem{{Name: "ui", Installed: true, Enabled: true}, {Name: "scheduler"}})
+	on := loginitems.Summarize([]loginitems.LoginItem{{Name: "ui", Installed: true, Enabled: true}, {Name: "scheduler"}})
 	if !on.Installed || !on.Enabled {
 		t.Errorf("the installed item starting at login reads as %+v", on)
 	}
-	off := summarizeLoginItems([]LoginItem{{Name: "ui", Installed: true, Enabled: true}, {Name: "scheduler", Installed: true}})
+	off := loginitems.Summarize([]loginitems.LoginItem{{Name: "ui", Installed: true, Enabled: true}, {Name: "scheduler", Installed: true}})
 	if off.Enabled {
 		t.Errorf("one installed item not starting at login reads as %+v", off)
 	}

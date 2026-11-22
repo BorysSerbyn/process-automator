@@ -1,4 +1,4 @@
-package cli
+package loginitems
 
 import (
 	"errors"
@@ -19,9 +19,9 @@ import (
 // is whether it's hidden), and the scheduler, a systemd user unit (starting
 // at login is whether it's enabled).
 
-// loginItemLabels are the tray's autostart entry and the scheduler's unit,
+// Labels are the tray's autostart entry and the scheduler's unit,
 // as the Makefile's UI_LABEL and LINUX_SCHED_LABEL name them.
-func loginItemLabels() map[string]string {
+func Labels() map[string]string {
 	return map[string]string{"ui": product.Command + "-tray.desktop", "scheduler": product.Command + "-scheduler.service"}
 }
 
@@ -69,7 +69,8 @@ func itemFile(label string) (string, error) {
 	return filepath.Join(config, "systemd", "user", label), err
 }
 
-func loginItems(labels map[string]string) ([]LoginItem, error) {
+// List is whether each item is installed, and starts at login.
+func List(labels map[string]string) ([]LoginItem, error) {
 	var items []LoginItem
 	for name, label := range labels {
 		path, err := itemFile(label)
@@ -93,7 +94,8 @@ func loginItems(labels map[string]string) ([]LoginItem, error) {
 	return items, nil
 }
 
-func setLoginItems(labels map[string]string, on bool) error {
+// Set turns starting at login on or off for every item.
+func Set(labels map[string]string, on bool) error {
 	verb := "disable"
 	if on {
 		verb = "enable"
@@ -125,8 +127,8 @@ func setLoginItems(labels map[string]string, on bool) error {
 	return errors.Join(errs...)
 }
 
-// uiName is what the frontend is called here.
-const uiName = "tray"
+// UIName is what the frontend is called here.
+const UIName = "tray"
 
 // frontendExecutables are the tray and its windows app, beside the core in
 // the Linux tree (install-app.sh stops them the same way).

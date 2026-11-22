@@ -22,7 +22,7 @@ func newDaemonCmd() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return a.Daemon(ctx, setupLeft)
+			return a.Daemon(ctx)
 		},
 	}
 }

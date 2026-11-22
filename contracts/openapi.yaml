@@ -343,7 +343,7 @@ components:
       type: object
     LoginItemsOutput:
       additionalProperties: false
-      description: LoginItemsOutput is `login-items --json`.
+      description: 'Status is `login-items --json`: whether the app starts at login.'
       properties:
         enabled:
           description: |-

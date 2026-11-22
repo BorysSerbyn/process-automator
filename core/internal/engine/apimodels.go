@@ -29,15 +29,8 @@ func apiModelProblem(a *App, model string) *Problem {
 			return &Problem{Text: "its model " + model + " needs an Anthropic API key, and none is stored", Fix: product.Command + " auth login anthropic"}
 		}
 	case agent.LocalProvider:
-		c, err := a.Local()
-		if err == nil {
-			err = c.CheckURL()
-		}
-		if err != nil {
-			return &Problem{
-				Text: "its model " + model + " needs the local server (experimental, untested), but " + err.Error() + " (" + LocalURLSetting + ")",
-				Fix:  product.Command + " settings set " + LocalURLSetting + " <url>",
-			}
+		if _, p := a.localServer("its model "+model+" needs ", ", but "); p != nil {
+			return p
 		}
 	}
 	return nil
@@ -46,18 +39,10 @@ func apiModelProblem(a *App, model string) *Problem {
 // apiReachModel asks the local server, for a local model, whether it answers
 // and has the model (agent.OpenAICompat.Probe, bounded by agent.ProbeTimeout).
 func apiReachModel(ctx context.Context, a *App, model string) *Problem {
-	provider, err := agent.APIModel(model)
-	if err != nil || provider != agent.LocalProvider {
+	if provider, err := agent.APIModel(model); err != nil || provider != agent.LocalProvider {
 		return nil
 	}
-	c, err := a.Local()
-	if err != nil || c.CheckURL() != nil {
-		return nil // apiModelProblem says so
-	}
-	if err := c.Probe(ctx, localID(agent.LocalModel(model, ""))); err != nil {
-		return &Problem{Text: "its model " + model + " needs the local server: " + err.Error()}
-	}
-	return nil
+	return a.reachLocal(ctx, agent.LocalModel(model, ""), "its model "+model+" needs the local server: ")
 }
 
 // onlyLocal is whether the routines run only models on the local server:

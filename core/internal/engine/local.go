@@ -108,19 +108,43 @@ func localReady(a *App) (string, string) {
 	return strings.Join(missing, ", and "), ""
 }
 
-// localModelProblem is what keeps a routine from running on the local
-// backend, without connecting: the server's URL, or no model to run it on
-// (the routine names no local/<model>, and llm.local.model isn't set).
-func localModelProblem(a *App, model string) *Problem {
+// localServer is the local server, or why it can't be used, without
+// connecting: its settings, or a URL that isn't http(s). The problem says
+// before, the server, after, then why.
+func (a *App) localServer(before, after string) (agent.OpenAICompat, *Problem) {
 	c, err := a.Local()
 	if err == nil {
 		err = c.CheckURL()
 	}
 	if err != nil {
-		return &Problem{
-			Text: "the local server (experimental, untested) can't be used: " + err.Error() + " (" + LocalURLSetting + ")",
+		return c, &Problem{
+			Text: before + "the local server (experimental, untested)" + after + err.Error() + " (" + LocalURLSetting + ")",
 			Fix:  product.Command + " settings set " + LocalURLSetting + " <url>",
 		}
+	}
+	return c, nil
+}
+
+// reachLocal asks the local server whether it answers and has the model m
+// (nil when it can't be asked: localServer says why). The problem says
+// before, then why.
+func (a *App) reachLocal(ctx context.Context, m, before string) *Problem {
+	c, p := a.localServer("", "")
+	if p != nil || m == "" {
+		return nil
+	}
+	if err := c.Probe(ctx, localID(m)); err != nil {
+		return &Problem{Text: before + err.Error()}
+	}
+	return nil
+}
+
+// localModelProblem is what keeps a routine from running on the local
+// backend, without connecting: the server's URL, or no model to run it on
+// (the routine names no local/<model>, and llm.local.model isn't set).
+func localModelProblem(a *App, model string) *Problem {
+	if _, p := a.localServer("", " can't be used: "); p != nil {
+		return p
 	}
 	if agent.LocalModel(model, a.localModel()) == "" {
 		return &Problem{
@@ -134,13 +158,6 @@ func localModelProblem(a *App, model string) *Problem {
 // localReachModel asks the local server whether it answers and has the
 // model the routine runs on.
 func localReachModel(ctx context.Context, a *App, model string) *Problem {
-	c, err := a.Local()
 	m := agent.LocalModel(model, a.localModel())
-	if err != nil || c.CheckURL() != nil || m == "" {
-		return nil // localModelProblem says so
-	}
-	if err := c.Probe(ctx, localID(m)); err != nil {
-		return &Problem{Text: "it runs on " + m + ", but " + err.Error()}
-	}
-	return nil
+	return a.reachLocal(ctx, m, "it runs on "+m+", but ")
 }

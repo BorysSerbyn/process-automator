@@ -36,17 +36,17 @@ func TestSetupSteps(t *testing.T) {
 	connectClaude(t)
 	a, _ := enginetest.Fixture(t, map[string]string{"old": "queue"}, nil)
 	cfg := a.Layout.Config()
-	steps := func() (SetupOutput, map[string]SetupStep) {
+	steps := func() (engine.SetupOutput, map[string]engine.SetupStep) {
 		t.Helper()
 		out, err := cli(t, cfg, "setup", "--json")
 		if err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
-		var got SetupOutput
+		var got engine.SetupOutput
 		if err := json.Unmarshal([]byte(out), &got); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
-		m := map[string]SetupStep{}
+		m := map[string]engine.SetupStep{}
 		for _, s := range got.Steps {
 			m[s.Step+" "+s.Subject] = s
 		}
@@ -149,7 +149,7 @@ func TestSetupDoneWithoutRoutines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got SetupOutput
+	var got engine.SetupOutput
 	if err := json.Unmarshal([]byte(out), &got); err != nil || !got.Done || got.Remaining != 0 {
 		t.Errorf("no routines: %+v (%v)", got, err)
 	}
@@ -285,16 +285,16 @@ func TestPlanUsageFallback(t *testing.T) {
 	if _, err := a.Usage(context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	step := func() (SetupStep, bool) {
+	step := func() (engine.SetupStep, bool) {
 		out, _ := cli(t, cfg, "setup", "--json")
-		var got SetupOutput
+		var got engine.SetupOutput
 		_ = json.Unmarshal([]byte(out), &got)
 		for _, s := range got.Steps {
-			if s.Step == stepUsage {
+			if s.Step == engine.StepUsage {
 				return s, got.Done
 			}
 		}
-		return SetupStep{}, got.Done
+		return engine.SetupStep{}, got.Done
 	}
 	if s, done := step(); s.Step == "" || s.Done || done {
 		t.Fatalf("no unfinished plan usage step: %+v (setup done %v)", s, done)
@@ -609,10 +609,10 @@ func TestBackendStepSettings(t *testing.T) {
 	enginetest.Load(t, cfg)
 	settingsOf := func() []string {
 		out, _ := cli(t, cfg, "setup", "--json")
-		var got SetupOutput
+		var got engine.SetupOutput
 		_ = json.Unmarshal([]byte(out), &got)
 		for _, s := range got.Steps {
-			if s.Step == stepBackend {
+			if s.Step == engine.StepBackend {
 				return s.Settings
 			}
 		}

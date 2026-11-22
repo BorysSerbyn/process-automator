@@ -18,20 +18,20 @@ import (
 )
 
 // backendStepOf is setup --json's backend step.
-func backendStepOf(t *testing.T, cfg string) SetupStep {
+func backendStepOf(t *testing.T, cfg string) engine.SetupStep {
 	t.Helper()
 	out, err := cli(t, cfg, "setup", "--json")
-	var got SetupOutput
+	var got engine.SetupOutput
 	if err != nil || json.Unmarshal([]byte(out), &got) != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	for _, s := range got.Steps {
-		if s.Step == stepBackend {
+		if s.Step == engine.StepBackend {
 			return s
 		}
 	}
 	t.Fatal("no backend step")
-	return SetupStep{}
+	return engine.SetupStep{}
 }
 
 // On local, setup --json's backend step isn't done while the server's URL or
@@ -47,7 +47,7 @@ func TestLocalSetupJSON(t *testing.T) {
 		!strings.Contains(s.Ask, "is the server at http://localhost:11434/v1 (Ollama on this machine)") {
 		t.Errorf("no model: %+v", s)
 	}
-	hasCommand := func(s SetupStep, prefix string) bool {
+	hasCommand := func(s engine.SetupStep, prefix string) bool {
 		return slices.ContainsFunc(s.Commands, func(c string) bool { return strings.HasPrefix(c, prefix) })
 	}
 	for _, want := range []string{
@@ -162,10 +162,7 @@ func TestAuthStatusUnreadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := authStatuses(a)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rows := authStatuses(a)
 	got := map[string]AuthStatus{}
 	for _, r := range rows {
 		got[r.Server] = r

@@ -138,7 +138,7 @@ func refreshStatus(cmd *cobra.Command) {
 	if !ranReadOnly(cmd) {
 		_ = a.SyncStatus(time.Now())
 	}
-	left, err := setupLeft(a)
+	left, err := a.SetupLeft()
 	if err != nil {
 		return
 	}

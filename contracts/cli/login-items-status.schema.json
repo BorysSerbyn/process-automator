@@ -50,5 +50,5 @@
     "items"
   ],
   "title": "procauto login-items status --json",
-  "description": "LoginItemsOutput is `login-items --json`."
+  "description": "Status is `login-items --json`: whether the app starts at login."
 }

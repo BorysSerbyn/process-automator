@@ -191,7 +191,7 @@ func TestStopWaitingInDaemonQueue(t *testing.T) {
 		Jobs: func() ([]scheduler.Job, error) {
 			return []scheduler.Job{job("first", time.Minute), job("second", time.Hour)}, nil
 		},
-		Run:    func(context.Context, scheduler.Job, trigger.Occurrence) { <-release },
+		Run:    func(context.Context, scheduler.Job, trigger.Occurrence, *time.Time) { <-release },
 		Missed: func(string, trigger.Occurrence, time.Duration) {},
 		Now:    func() time.Time { return now },
 	}
@@ -200,16 +200,14 @@ func TestStopWaitingInDaemonQueue(t *testing.T) {
 	_ = s.Tick(ctx)
 	now = now.Add(80 * time.Minute) // 09:20: first runs, second waits in the queue
 	_ = s.Tick(ctx)
-	queued := &queuedSince{at: map[string]time.Time{}}
 	done := make(chan struct{})
-	go func() { stopWaiting(ctx, a, s, queued); close(done) }()
+	go func() { stopWaiting(ctx, a, s); close(done) }()
 	// It records the run (status, then history) after the status shows:
 	// wait for it before the test's folders go.
 	defer func() { cancel(); <-done }()
-	_ = os.MkdirAll(filepath.Dir(a.Layout.StopRequest("second")), 0o700)
-	_ = os.WriteFile(a.Layout.StopRequest("second"), nil, 0o600)
+	_ = a.RequestStop("second")
 	waitOutcome(t, a, "second", runstatus.OutcomeStopped)
-	if _, ok := s.Drop("second"); ok {
+	if _, _, ok := s.Drop("second"); ok {
 		t.Fatal("still queued after being stopped")
 	}
 }

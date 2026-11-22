@@ -326,11 +326,10 @@ func newRoutinesCheckCmd() *cobra.Command {
 				return err
 			}
 			var rows []RoutineCheck
-			signIns := signedIn(a)
 			add := func(r routines.Routine) {
 				row := RoutineCheck{Routine: r.Name}
 				rd := a.Assess(r)
-				rd.CheckTools(cmd.Context(), a, r, signIns)
+				rd.CheckTools(cmd.Context(), a, r)
 				rd.CheckModel(cmd.Context(), a, r)
 				switch {
 				case rd.ConfigErr != nil:

@@ -101,15 +101,11 @@ var Backends = map[string]BackendDef{
 	},
 	"claude-code": {
 		New: func(a *App) (agent.Backend, error) {
-			path, err := agent.FindClaude()
+			cc, err := claudeCode(a)
 			if err != nil {
 				return nil, err
 			}
-			token, _, err := secrets.Lookup(a.Connector.Secrets, ClaudeCodeTokenKey) // optional
-			if err != nil {
-				return nil, fmt.Errorf("can't read the Claude Code token: %w", err)
-			}
-			return &agent.CLI{Tool: &agent.ClaudeCode{Path: path, OAuthToken: token}}, nil
+			return &agent.CLI{Tool: cc}, nil
 		},
 		AgentModel:        func(_ *App, model string) (string, error) { return agent.ClaudeModel(model) },
 		ModelProviders:    []string{agent.AnthropicProvider},
@@ -117,15 +113,11 @@ var Backends = map[string]BackendDef{
 		Builtins:          &agent.ClaudeBuiltins,
 		CheckBuiltinTools: agent.CheckClaudeBuiltins,
 		PlanUsage: func(ctx context.Context, a *App) ([]usage.Limit, error) {
-			path, err := agent.FindClaude()
+			cc, err := claudeCode(a)
 			if err != nil {
 				return nil, err
 			}
-			token, _, err := secrets.Lookup(a.Connector.Secrets, ClaudeCodeTokenKey)
-			if err != nil {
-				return nil, fmt.Errorf("can't read the Claude Code token: %w", err)
-			}
-			return (&agent.ClaudeCode{Path: path, OAuthToken: token}).PlanUsage(ctx)
+			return cc.PlanUsage(ctx)
 		},
 		Ready: func(a *App) (string, string) {
 			if _, err := find(a, agent.FindClaude); err != nil {
@@ -174,6 +166,20 @@ var Backends = map[string]BackendDef{
 			return "", ""
 		},
 	},
+}
+
+// claudeCode is the claude CLI, with the `claude setup-token` token when
+// one is stored (optional: without it, Claude Code's own login).
+func claudeCode(a *App) (*agent.ClaudeCode, error) {
+	path, err := agent.FindClaude()
+	if err != nil {
+		return nil, err
+	}
+	token, _, err := secrets.Lookup(a.Connector.Secrets, ClaudeCodeTokenKey)
+	if err != nil {
+		return nil, fmt.Errorf("can't read the Claude Code token: %w", err)
+	}
+	return &agent.ClaudeCode{Path: path, OAuthToken: token}, nil
 }
 
 // find looks for an agent CLI's binary; when it isn't on PATH it may have

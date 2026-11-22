@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 )
@@ -99,7 +100,7 @@ func TestTemplateBackends(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, _ := cli(t, cfg, "templates", "list", "--json")
-	var rows []TemplateInfo
+	var rows []engine.TemplateInfo
 	if err := json.Unmarshal([]byte(out), &rows); err != nil || len(rows) != 1 || rows[0].SupportsBackend ||
 		len(rows[0].Backends) != 1 || rows[0].Backends[0] != "claude-code" {
 		t.Fatalf("list on claude-api: %v\n%s", err, out)
@@ -108,8 +109,8 @@ func TestTemplateBackends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := templatesOffered(a); n != 0 {
-		t.Errorf("setup offers %d templates on a backend they don't support", n)
+	if setup, err := a.Setup(); err != nil || !strings.Contains(setup.Steps[0].Ask, "There are no templates") {
+		t.Errorf("setup offers templates on a backend they don't support: %v %+v", err, setup.Steps[0])
 	}
 	_, err = cli(t, cfg, "templates", "install", "personal/sweep")
 	if err == nil || !strings.Contains(err.Error(), "works only with the claude-code backend, and llm.backend is claude-api") ||
@@ -155,12 +156,12 @@ func TestNoTemplates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("setup: %v\n%s", err, out)
 			}
-			var got SetupOutput
+			var got engine.SetupOutput
 			if err := json.Unmarshal([]byte(out), &got); err != nil {
 				t.Fatal(err)
 			}
 			st := got.Steps[0]
-			if st.Step != stepTemplates || st.Done || !st.Optional || !strings.Contains(st.Ask, "no templates") ||
+			if st.Step != engine.StepTemplates || st.Done || !st.Optional || !strings.Contains(st.Ask, "no templates") ||
 				len(st.Commands) != 1 || !strings.Contains(st.Commands[0], "routines create") {
 				t.Fatalf("templates step: %+v", st)
 			}

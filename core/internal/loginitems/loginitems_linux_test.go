@@ -1,4 +1,4 @@
-package cli
+package loginitems
 
 import (
 	"os"
@@ -20,7 +20,7 @@ func TestLoginItemsFindTheUnitWhereSystemdReadsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	labels := loginItemLabels()
+	labels := Labels()
 	write := func(path string) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -31,7 +31,7 @@ func TestLoginItemsFindTheUnitWhereSystemdReadsIt(t *testing.T) {
 	}
 	write(filepath.Join(manager, "systemd", "user", labels["scheduler"]))
 	write(filepath.Join(session, "autostart", labels["ui"]))
-	items, err := loginItems(labels)
+	items, err := List(labels)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,8 +60,8 @@ esac`)
 // a user session or a unit.
 func TestStartStartsTheUnitOnce(t *testing.T) {
 	dir, calls := fakeSystemctl(t)
-	labels := loginItemLabels()
-	if _, err := startLoginItems(labels); err == nil || !strings.Contains(err.Error(), "install") {
+	labels := Labels()
+	if _, err := Start(labels); err == nil || !strings.Contains(err.Error(), "install") {
 		t.Fatalf("not installed: %v", err)
 	}
 	unit := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "systemd", "user", labels["scheduler"])
@@ -71,12 +71,12 @@ func TestStartStartsTheUnitOnce(t *testing.T) {
 	if err := os.WriteFile(unit, []byte("[Unit]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, err := startLoginItems(labels)
+	out, err := Start(labels)
 	if err != nil || !out.Changed || out.Scheduler != "running" || !hasCall(calls(), "systemctl --user start "+labels["scheduler"]) {
 		t.Fatal(out, err, calls())
 	}
 	_ = os.Remove(filepath.Join(dir, "log"))
-	out, err = startLoginItems(labels)
+	out, err = Start(labels)
 	if err != nil || out.Changed || hasCall(calls(), "systemctl --user start") {
 		t.Fatal(out, err, calls())
 	}
@@ -84,7 +84,7 @@ func TestStartStartsTheUnitOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "nosession"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := startLoginItems(labels); err == nil || !strings.Contains(err.Error(), "daemon") {
+	if _, err := Start(labels); err == nil || !strings.Contains(err.Error(), "daemon") {
 		t.Fatal(err)
 	}
 }
@@ -93,7 +93,7 @@ func TestStartStartsTheUnitOnce(t *testing.T) {
 // app's folder, but not the process that asked.
 func TestStopStopsTheUnitAndTheTray(t *testing.T) {
 	dir, calls := fakeSystemctl(t)
-	labels := loginItemLabels()
+	labels := Labels()
 	if err := os.WriteFile(filepath.Join(dir, "active"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -101,11 +101,11 @@ func TestStopStopsTheUnitAndTheTray(t *testing.T) {
 	frontendExecutables = []string{filepath.Base(tray.Path), "automator-windows"}
 	t.Cleanup(func() { frontendExecutables = []string{"automator-tray", "automator-windows"} })
 	// The tray that asked is spared.
-	out, err := stopLoginItems(labels, filepath.Dir(tray.Path), []int{os.Getpid(), tray.Process.Pid})
+	out, err := Stop(labels, filepath.Dir(tray.Path), []int{os.Getpid(), tray.Process.Pid})
 	if err != nil || !out.Changed || out.Scheduler != "stopped" || out.UIStopped || !hasCall(calls(), "systemctl --user stop "+labels["scheduler"]) {
 		t.Fatal(out, err, calls())
 	}
-	out, err = stopLoginItems(labels, filepath.Dir(tray.Path), []int{os.Getpid()})
+	out, err = Stop(labels, filepath.Dir(tray.Path), []int{os.Getpid()})
 	if err != nil || out.Changed || !out.UIStopped || !exited() {
 		t.Fatal(out, err)
 	}

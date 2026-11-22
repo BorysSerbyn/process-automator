@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
+	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 )
 
 // Progress is how the latest update went, or is going: kept in a file by
@@ -42,6 +43,56 @@ func ReadProgress(path string) (p Progress, ok bool, err error) {
 		return Progress{}, false, err
 	}
 	return p, true, nil
+}
+
+// Where the latest update stands (Latest).
+const (
+	StateNone       = "none"
+	StateInstalling = "installing"
+	StateDone       = "done"
+	StateFailed     = "failed"
+)
+
+// startGrace is how long an update that hasn't finished counts as
+// installing without holding the lock: a detached one between `update
+// --detach` and the update it starts taking the lock.
+const startGrace = 30 * time.Second
+
+// Installing reports whether an update is installing: its lock is held.
+func Installing(lockPath string) bool {
+	unlock, err := filelock.Lock(lockPath, false)
+	if err != nil {
+		return errors.Is(err, filelock.ErrHeld)
+	}
+	unlock()
+	return false
+}
+
+// Latest is where the latest update stands, from its progress file and its
+// lock, and its progress: while it's installing, FinishedAt and Error are
+// unset; one that stopped before it finished failed, its log (logPath) says
+// why.
+func Latest(progressPath, lockPath, logPath string, now time.Time) (state string, p Progress, err error) {
+	p, ok, err := ReadProgress(progressPath)
+	if err != nil {
+		return StateNone, Progress{}, err
+	}
+	held := Installing(lockPath)
+	switch {
+	case !ok && held:
+		return StateInstalling, p, nil
+	case !ok:
+		return StateNone, p, nil
+	case held || (p.FinishedAt == nil && now.Sub(p.UpdatedAt) < startGrace):
+		p.FinishedAt, p.Error = nil, ""
+		return StateInstalling, p, nil
+	case p.FinishedAt == nil:
+		p.Error = "it stopped before it finished (log: " + logPath + ")"
+		return StateFailed, p, nil
+	case p.Error != "":
+		return StateFailed, p, nil
+	}
+	return StateDone, p, nil
 }
 
 // detailEvery is how often at most a step's output updates the file.

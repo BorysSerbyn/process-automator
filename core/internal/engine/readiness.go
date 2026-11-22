@@ -32,6 +32,25 @@ type Readiness struct {
 	Problems []Problem
 	// Tools are its allowlisted tools as a run gets them (CheckTools).
 	Tools []agent.CheckedTool
+
+	routine string
+}
+
+// All is everything that keeps it from running for real, with the
+// command that fixes each: its settings (then nothing else was checked),
+// its problems, and why it isn't trusted.
+func (rd Readiness) All() []Problem {
+	if rd.ConfigErr != nil {
+		return []Problem{{Text: rd.ConfigErr.Error()}}
+	}
+	all := slices.Clone(rd.Problems)
+	switch {
+	case rd.TrustErr != nil:
+		all = append(all, Problem{Text: rd.TrustErr.Error()})
+	case rd.Untrusted != "":
+		all = append(all, Problem{Text: rd.Untrusted, Fix: product.Command + " routines trust " + rd.routine})
+	}
+	return all
 }
 
 // Problem is something that keeps a routine from running, with the
@@ -45,7 +64,7 @@ type Problem struct {
 // backend's, its model's provider is set up, every server it uses (directly
 // or through its plugins) is provided, and whether it's trusted.
 func (a *App) Assess(r routines.Routine) Readiness {
-	var rd Readiness
+	rd := Readiness{routine: r.Name}
 	if rd.Config, rd.ConfigErr = a.RoutineConfig(r); rd.ConfigErr != nil {
 		return rd
 	}
@@ -84,9 +103,9 @@ func (a *App) Assess(r routines.Routine) Readiness {
 
 // CheckTools connects to the routine's servers and confirms each allowlisted
 // tool is offered by exactly one of them, as a run would, and that the
-// servers it reaches through its plugins are signed in (signedIn: by server,
-// for those that sign in). It's skipped when a server is missing.
-func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine, signedIn map[string]bool) {
+// servers it reaches through its plugins are signed in. It's skipped when a
+// server is missing.
+func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine) {
 	if rd.ConfigErr != nil || slices.ContainsFunc(a.Servers(r), func(s string) bool { return !a.KnownServer(s) }) {
 		return
 	}
@@ -103,7 +122,10 @@ func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine,
 	// Servers it reaches through its plugins aren't connected until a tool
 	// needs them: check they're signed in.
 	for _, s := range a.Servers(r) {
-		if in, signs := signedIn[s]; signs && !in && !slices.Contains(r.Servers, s) {
+		if slices.Contains(r.Servers, s) {
+			continue
+		}
+		if in, signs := a.SignedIn(s); signs && !in {
 			rd.Problems = append(rd.Problems, Problem{Text: s + " (which it uses through a plugin) isn't signed in", Fix: product.Command + " auth login " + s})
 		}
 	}

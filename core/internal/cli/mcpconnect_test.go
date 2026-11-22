@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/claudemcp"
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 )
 
@@ -65,18 +66,18 @@ func TestMCPConnect(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", dir)
 	a, _ := enginetest.Fixture(t, nil, nil)
 	cfg := a.Layout.Config()
-	step := func() (SetupStep, bool) {
+	step := func() (engine.SetupStep, bool) {
 		t.Helper()
-		out, err := setupSteps(a)
+		out, err := a.Setup()
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, s := range out.Steps {
-			if s.Step == stepMCP {
+			if s.Step == engine.StepMCP {
 				return s, out.Done
 			}
 		}
-		return SetupStep{}, out.Done
+		return engine.SetupStep{}, out.Done
 	}
 	s, done := step()
 	if s.Done || s.Optional || !s.Auto || done || !slices.Contains(s.Commands, "procauto mcp connect") {

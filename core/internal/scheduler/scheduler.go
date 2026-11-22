@@ -58,13 +58,14 @@ type Scheduler struct {
 	Jobs func() ([]Job, error)
 	// Run runs one routine for an occurrence (and records its outcome). The
 	// job carries its staleness: a run that has to wait (for runs elsewhere)
-	// re-checks it before it starts.
-	Run func(ctx context.Context, j Job, o trigger.Occurrence)
+	// re-checks it before it starts. queuedAt is when it started waiting in
+	// the queue, nil when it didn't.
+	Run func(ctx context.Context, j Job, o trigger.Occurrence, queuedAt *time.Time)
 	// Missed records an occurrence that was too late to run.
 	Missed func(name string, o trigger.Occurrence, late time.Duration)
 	// Queued, if set, records an occurrence waiting in the queue behind
-	// another run. Called outside the scheduler's lock.
-	Queued func(name string, o trigger.Occurrence)
+	// another run since at. Called outside the scheduler's lock.
+	Queued func(name string, o trigger.Occurrence, at time.Time)
 	// Now is the clock (tests); nil means time.Now.
 	Now func() time.Time
 
@@ -112,8 +113,9 @@ func (s *Scheduler) now() time.Time {
 }
 
 type due struct {
-	job Job
-	occ trigger.Occurrence
+	job    Job
+	occ    trigger.Occurrence
+	queued *time.Time // when it started waiting in the queue
 }
 
 // Tick handles everything due now.
@@ -159,7 +161,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 			s.Missed(j.Name, occ, late)
 			continue
 		}
-		run = append(run, due{j, occ})
+		run = append(run, due{job: j, occ: occ})
 	}
 	if err := s.save(state); err != nil {
 		return err // don't run what we couldn't mark handled
@@ -178,11 +180,13 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 			go func() {
 				defer s.runs.Done()
 				defer s.done(d.job.Name)
-				s.Run(ctx, d.job, d.occ)
+				s.Run(ctx, d.job, d.occ, nil)
 			}()
 			continue
 		}
 		if s.working || len(s.queue) > 0 {
+			at := now
+			d.queued = &at
 			waiting = append(waiting, d)
 		}
 		s.queue = append(s.queue, d)
@@ -195,7 +199,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	s.mu.Unlock()
 	if s.Queued != nil {
 		for _, d := range waiting {
-			s.Queued(d.job.Name, d.occ)
+			s.Queued(d.job.Name, d.occ, *d.queued)
 		}
 	}
 	return nil
@@ -230,26 +234,26 @@ func (s *Scheduler) work(ctx context.Context) {
 		if late := s.now().Sub(d.occ.At); late > d.job.Staleness {
 			s.Missed(d.job.Name, d.occ, late) // went stale waiting for an earlier run
 		} else {
-			s.Run(ctx, d.job, d.occ)
+			s.Run(ctx, d.job, d.occ, d.queued)
 		}
 		s.done(d.job.Name)
 	}
 }
 
 // Drop takes a routine out of the queue if it's still waiting there (not
-// yet handed to Run), returning its occurrence. It's how a waiting run is
-// stopped.
-func (s *Scheduler) Drop(name string) (trigger.Occurrence, bool) {
+// yet handed to Run), returning its occurrence and when it started waiting.
+// It's how a waiting run is stopped.
+func (s *Scheduler) Drop(name string) (trigger.Occurrence, *time.Time, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, d := range s.queue {
 		if d.job.Name == name {
 			s.queue = append(s.queue[:i], s.queue[i+1:]...)
 			delete(s.busy, name)
-			return d.occ, true
+			return d.occ, d.queued, true
 		}
 	}
-	return trigger.Occurrence{}, false
+	return trigger.Occurrence{}, nil, false
 }
 
 func (s *Scheduler) isBusy(name string) bool {

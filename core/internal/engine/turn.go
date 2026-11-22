@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
@@ -60,6 +61,20 @@ func takeTurn(ctx context.Context, a *App, routine string, parallel bool, waitin
 
 // ErrStopped is why a run stopped on request (`procauto stop`).
 var ErrStopped = errors.New("stopped on request")
+
+// RequestStop asks a routine's run to stop, whichever process runs it: the
+// run finds the request (watchStop), or the scheduler while the run waits in
+// its queue (stopWaiting).
+func (a *App) RequestStop(routine string) error {
+	req := a.Layout.StopRequest(routine)
+	if err := os.MkdirAll(filepath.Dir(req), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(req, []byte(time.Now().Format(time.RFC3339)), 0o600)
+}
+
+// CancelStop withdraws a stop request no run took.
+func (a *App) CancelStop(routine string) { _ = os.Remove(a.Layout.StopRequest(routine)) }
 
 // stopPoll is how often a run checks for a stop request.
 const stopPoll = time.Second

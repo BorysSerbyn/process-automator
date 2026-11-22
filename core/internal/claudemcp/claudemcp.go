@@ -50,3 +50,28 @@ func UserServer(configPath, name string) (s Server, ok bool, err error) {
 	s, ok = cfg.MCPServers[name]
 	return s, ok, nil
 }
+
+// Problem says why Claude Code doesn't have the app's MCP server (registered
+// as name) at user scope, "" when it has: none is registered, or one whose
+// command is gone.
+func Problem(name string) (string, error) {
+	path, err := ConfigPath()
+	if err != nil {
+		return "", err
+	}
+	s, ok, err := UserServer(path, name)
+	switch {
+	case err != nil:
+		return "", err
+	case !ok:
+		return "Claude Code doesn't have " + name + "'s MCP server, so /mcp doesn't list it", nil
+	case s.Command != "" && filepath.IsAbs(s.Command) && !isFile(s.Command):
+		return "Claude Code's " + name + " MCP server runs " + s.Command + ", which isn't there anymore", nil
+	}
+	return "", nil
+}
+
+func isFile(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && !info.IsDir()
+}

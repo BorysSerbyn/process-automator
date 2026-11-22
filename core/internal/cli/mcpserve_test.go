@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -54,10 +53,6 @@ func TestMain(m *testing.M) {
 	product.ReleaseWeb, product.ReleaseAPI = "http://127.0.0.1:1", "http://127.0.0.1:1"
 	if mode := os.Getenv(pluginEnv); mode != "" {
 		servePluginFixture(mode)
-		os.Exit(0)
-	}
-	if os.Getenv(sleeperEnv) == "1" {
-		time.Sleep(time.Minute) // a process to stop (login-items stop's tests)
 		os.Exit(0)
 	}
 	if os.Getenv(cliEnv) == "1" {

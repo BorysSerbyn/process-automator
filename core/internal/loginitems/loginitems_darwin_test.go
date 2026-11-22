@@ -1,4 +1,4 @@
-package cli
+package loginitems
 
 import (
 	"os"
@@ -61,14 +61,14 @@ func writeFile(t *testing.T, path, text string) {
 // when it is.
 func TestStartLoadsTheSchedulerOnce(t *testing.T) {
 	dir, calls := fakeLaunchctl(t)
-	labels := loginItemLabels()
+	labels := Labels()
 	home, _ := os.UserHomeDir()
 	plist := filepath.Join(home, "Library", "LaunchAgents", labels["scheduler"]+".plist")
-	if _, err := startLoginItems(labels); err == nil || !strings.Contains(err.Error(), "install") {
+	if _, err := Start(labels); err == nil || !strings.Contains(err.Error(), "install") {
 		t.Fatalf("not installed: %v", err)
 	}
 	writeFile(t, plist, "<plist/>")
-	out, err := startLoginItems(labels)
+	out, err := Start(labels)
 	if err != nil || !out.Changed || out.Scheduler != "running" {
 		t.Fatal(out, err)
 	}
@@ -76,7 +76,7 @@ func TestStartLoadsTheSchedulerOnce(t *testing.T) {
 		t.Fatalf("%q", calls())
 	}
 	_ = os.Remove(filepath.Join(dir, "log"))
-	out, err = startLoginItems(labels)
+	out, err = Start(labels)
 	if err != nil || out.Changed || hasCall(calls(), "launchctl bootstrap") {
 		t.Fatal(out, err, calls())
 	}
@@ -86,14 +86,14 @@ func TestStartLoadsTheSchedulerOnce(t *testing.T) {
 // load refused while launchd lets go of the agent is tried again.
 func TestStartLoadsAnAgentTurnedOffAndRetries(t *testing.T) {
 	dir, calls := fakeLaunchctl(t)
-	labels := loginItemLabels()
+	labels := Labels()
 	home, _ := os.UserHomeDir()
 	writeFile(t, filepath.Join(home, "Library", "LaunchAgents", labels["scheduler"]+".plist"), "<plist/>")
 	writeFile(t, filepath.Join(dir, "disabled"), `disabled services = {
 	"`+labels["scheduler"]+`" => disabled
 }`)
 	writeFile(t, filepath.Join(dir, "fail."+labels["scheduler"]), "2")
-	if _, err := startLoginItems(labels); err != nil {
+	if _, err := Start(labels); err != nil {
 		t.Fatal(err)
 	}
 	var verbs []string
@@ -108,7 +108,7 @@ func TestStartLoadsAnAgentTurnedOffAndRetries(t *testing.T) {
 	// Refused every time: the last error.
 	_ = os.Remove(filepath.Join(dir, "loaded."+labels["scheduler"]))
 	writeFile(t, filepath.Join(dir, "fail."+labels["scheduler"]), "9")
-	if _, err := startLoginItems(labels); err == nil || !strings.Contains(err.Error(), "Input/output error") {
+	if _, err := Start(labels); err == nil || !strings.Contains(err.Error(), "Input/output error") {
 		t.Fatal(err)
 	}
 }
@@ -118,10 +118,10 @@ func TestStartLoadsAnAgentTurnedOffAndRetries(t *testing.T) {
 // running from the app's folder.
 func TestStopBootsOutTheSchedulerAndTheMenuBarApp(t *testing.T) {
 	dir, calls := fakeLaunchctl(t)
-	labels := loginItemLabels()
+	labels := Labels()
 	writeFile(t, filepath.Join(dir, "loaded."+labels["scheduler"]), "")
 	writeFile(t, filepath.Join(dir, "loaded."+labels["ui"]), "4242")
-	out, err := stopLoginItems(labels, t.TempDir(), []int{os.Getpid(), 4242})
+	out, err := Stop(labels, t.TempDir(), []int{os.Getpid(), 4242})
 	if err != nil || !out.Changed || out.Scheduler != "stopped" || out.UIStopped {
 		t.Fatal(out, err)
 	}
@@ -131,7 +131,7 @@ func TestStopBootsOutTheSchedulerAndTheMenuBarApp(t *testing.T) {
 	}
 	// Stopped already: nothing to do. A menu bar app launchd runs that
 	// didn't ask is booted out.
-	out, err = stopLoginItems(labels, t.TempDir(), []int{os.Getpid()})
+	out, err = Stop(labels, t.TempDir(), []int{os.Getpid()})
 	if err != nil || out.Changed || !out.UIStopped || !hasCall(calls(), "launchctl bootout "+launchdDomain()+"/"+labels["ui"]) {
 		t.Fatal(out, err, calls())
 	}
@@ -139,7 +139,7 @@ func TestStopBootsOutTheSchedulerAndTheMenuBarApp(t *testing.T) {
 	sleeper, exited := startSleeper(t)
 	uiExecutable = filepath.Base(sleeper.Path)
 	t.Cleanup(func() { uiExecutable = "AutomatorUI" })
-	out, err = stopLoginItems(labels, filepath.Dir(sleeper.Path), []int{os.Getpid()})
+	out, err = Stop(labels, filepath.Dir(sleeper.Path), []int{os.Getpid()})
 	if err != nil || !out.UIStopped || !exited() {
 		t.Fatal(out, err)
 	}

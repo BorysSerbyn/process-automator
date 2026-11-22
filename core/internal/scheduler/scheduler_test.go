@@ -26,7 +26,7 @@ func newHarness(t *testing.T, now string) *harness {
 	h.s = &Scheduler{
 		StatePath: filepath.Join(t.TempDir(), "state.json"),
 		Jobs:      func() ([]Job, error) { return h.jobs, nil },
-		Run: func(_ context.Context, j Job, o trigger.Occurrence) {
+		Run: func(_ context.Context, j Job, o trigger.Occurrence, _ *time.Time) {
 			h.events = append(h.events, "run "+j.Name+" "+o.At.Format("Mon 15:04"))
 			h.now = h.now.Add(h.runTakes)
 		},
@@ -149,7 +149,7 @@ func TestRunsGetScheduleOccurrences(t *testing.T) {
 	h := newHarness(t, "2026-11-18 09:00")
 	h.jobs = []Job{standup}
 	var got trigger.Occurrence
-	h.s.Run = func(_ context.Context, _ Job, o trigger.Occurrence) { got = o }
+	h.s.Run = func(_ context.Context, _ Job, o trigger.Occurrence, _ *time.Time) { got = o }
 	h.tick(t, "2026-11-18 09:20")
 	if got.Trigger != trigger.Schedule || got.ID != "schedule:2026-11-18T09:20:00" || !got.At.Equal(at(t, "2026-11-18 09:20")) {
 		t.Fatalf("occurrence %+v", got)
@@ -197,7 +197,7 @@ func TestParallelRunsOverlap(t *testing.T) {
 	h.tick(t, "2026-11-18 08:00")
 	started := make(chan string, 2)
 	release := make(chan struct{})
-	h.s.Run = func(_ context.Context, j Job, _ trigger.Occurrence) {
+	h.s.Run = func(_ context.Context, j Job, _ trigger.Occurrence, _ *time.Time) {
 		started <- j.Name
 		<-release
 	}
@@ -226,7 +226,7 @@ func TestBusyRoutineSlotWaits(t *testing.T) {
 	release := make(chan struct{})
 	var runs []string
 	var mu sync.Mutex
-	h.s.Run = func(_ context.Context, _ Job, o trigger.Occurrence) {
+	h.s.Run = func(_ context.Context, _ Job, o trigger.Occurrence, _ *time.Time) {
 		mu.Lock()
 		runs = append(runs, o.At.Format("15:04"))
 		mu.Unlock()
@@ -255,7 +255,7 @@ func TestQueuedCallback(t *testing.T) {
 	h.jobs = []Job{standup, digest}
 	h.tick(t, "2026-11-18 08:00")
 	var queued []string
-	h.s.Queued = func(name string, _ trigger.Occurrence) { queued = append(queued, name) }
+	h.s.Queued = func(name string, _ trigger.Occurrence, _ time.Time) { queued = append(queued, name) }
 	h.tick(t, "2026-11-18 09:20")
 	if len(queued) != 1 || queued[0] != "digest" {
 		t.Fatalf("queued = %v; the second of two due queued routines waits", queued)
@@ -269,7 +269,7 @@ func TestDropWaiting(t *testing.T) {
 	h.tick(t, "2026-11-18 08:00")
 	release := make(chan struct{})
 	ran := make(chan string, 2)
-	h.s.Run = func(_ context.Context, j Job, _ trigger.Occurrence) {
+	h.s.Run = func(_ context.Context, j Job, _ trigger.Occurrence, _ *time.Time) {
 		ran <- j.Name
 		<-release
 	}
@@ -278,10 +278,10 @@ func TestDropWaiting(t *testing.T) {
 	if first := <-ran; first != "standup" {
 		t.Fatalf("first = %s", first)
 	}
-	if _, ok := h.s.Drop("digest"); !ok {
+	if _, _, ok := h.s.Drop("digest"); !ok {
 		t.Fatal("digest wasn't waiting")
 	}
-	if _, ok := h.s.Drop("standup"); ok {
+	if _, _, ok := h.s.Drop("standup"); ok {
 		t.Fatal("dropped a run already handed over")
 	}
 	close(release)

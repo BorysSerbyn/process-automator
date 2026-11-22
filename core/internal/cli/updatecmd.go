@@ -64,39 +64,15 @@ type UpdateProgress struct {
 	Log string `json:"log"`
 }
 
-// startGrace is how long an update that hasn't finished counts as
-// installing without holding the lock: a detached one between `update
-// --detach` and the update it starts taking the lock.
-const startGrace = 30 * time.Second
-
 // updateProgress is where the latest update stands.
 func updateProgress(a *engine.App, now time.Time) (UpdateProgress, error) {
-	out := UpdateProgress{State: "none", Log: a.Layout.UpdateLog()}
-	p, ok, err := update.ReadProgress(a.Layout.UpdateProgress())
-	if err != nil {
-		return out, err
+	state, p, err := update.Latest(a.Layout.UpdateProgress(), a.Layout.UpdateLock(), a.Layout.UpdateLog(), now)
+	out := UpdateProgress{State: state, Tag: p.Tag, Step: p.Step, Detail: p.Detail, FinishedAt: p.FinishedAt, Error: p.Error,
+		Log: a.Layout.UpdateLog()}
+	if !p.StartedAt.IsZero() {
+		out.StartedAt = &p.StartedAt
 	}
-	held := updating(a)
-	if !ok {
-		if held {
-			out.State = "installing"
-		}
-		return out, nil
-	}
-	out.Tag, out.Step, out.Detail, out.Error = p.Tag, p.Step, p.Detail, p.Error
-	out.StartedAt, out.FinishedAt = &p.StartedAt, p.FinishedAt
-	switch {
-	case held || (p.FinishedAt == nil && now.Sub(p.UpdatedAt) < startGrace):
-		out.State, out.FinishedAt, out.Error = "installing", nil, ""
-	case p.FinishedAt == nil:
-		out.State = "failed"
-		out.Error = "it stopped before it finished (log: " + a.Layout.UpdateLog() + ")"
-	case p.Error != "":
-		out.State = "failed"
-	default:
-		out.State = "done"
-	}
-	return out, nil
+	return out, err
 }
 
 func newUpdateProgressCmd() *cobra.Command {
@@ -128,11 +104,11 @@ func newUpdateProgressCmd() *cobra.Command {
 
 func describeProgress(p UpdateProgress) string {
 	switch p.State {
-	case "none":
+	case update.StateNone:
 		return "No update has run."
-	case "failed":
+	case update.StateFailed:
 		return "The update failed: " + p.Error
-	case "done":
+	case update.StateDone:
 		return p.Step + "."
 	}
 	text := "Updating"
@@ -146,16 +122,6 @@ func describeProgress(p UpdateProgress) string {
 		text += "\n  " + p.Detail
 	}
 	return text
-}
-
-// updating reports whether an update is installing: its lock is held.
-func updating(a *engine.App) bool {
-	unlock, err := filelock.Lock(a.Layout.UpdateLock(), false)
-	if err != nil {
-		return errors.Is(err, filelock.ErrHeld)
-	}
-	unlock()
-	return false
 }
 
 // detachedEnv marks an update running detached: it reports its result as a
@@ -259,7 +225,7 @@ func newUpdateCmd() *cobra.Command {
 				res.Note = plan.note()
 			}
 			if check {
-				res.InProgress = updating(a)
+				res.InProgress = update.Installing(a.Layout.UpdateLock())
 			}
 			var appRoot string
 			if res.UpdateAvailable && !check && plan.release != nil {

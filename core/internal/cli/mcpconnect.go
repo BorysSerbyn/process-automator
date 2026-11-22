@@ -71,26 +71,6 @@ func isFile(p string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// claudeMCPState says whether Claude Code has the app's MCP server at user
-// scope, and if not why ("" when it has). One registered under the app's
-// name whose command is gone (e.g. a build moved) doesn't count.
-func claudeMCPState() (problem string, err error) {
-	path, err := claudemcp.ConfigPath()
-	if err != nil {
-		return "", err
-	}
-	s, ok, err := claudemcp.UserServer(path, product.Command)
-	switch {
-	case err != nil:
-		return "", err
-	case !ok:
-		return "Claude Code doesn't have " + product.Command + "'s MCP server, so /mcp doesn't list it", nil
-	case s.Command != "" && filepath.IsAbs(s.Command) && !isFile(s.Command):
-		return "Claude Code's " + product.Command + " MCP server runs " + s.Command + ", which isn't there anymore", nil
-	}
-	return "", nil
-}
-
 func newMCPConnectCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
@@ -108,7 +88,7 @@ func newMCPConnectCmd() *cobra.Command {
 				return err
 			}
 			out := MCPConnectOutput{Server: product.Command, Command: command}
-			problem, err := claudeMCPState()
+			problem, err := claudemcp.Problem(product.Command)
 			if err != nil {
 				return err
 			}
@@ -126,7 +106,7 @@ func newMCPConnectCmd() *cobra.Command {
 			if err := runClaudeMCP(cmd.Context(), args...); err != nil {
 				return err
 			}
-			if problem, err := claudeMCPState(); err != nil {
+			if problem, err := claudemcp.Problem(product.Command); err != nil {
 				return err
 			} else if problem != "" {
 				return errors.New("claude mcp add didn't register it: " + problem)

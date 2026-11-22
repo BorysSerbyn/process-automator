@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
@@ -20,7 +21,7 @@ import (
 // tree) and its installer, which sits next to the templates two folders
 // below the app's root in both layouts. A development build has none.
 func installedApp() (root, installer string, err error) {
-	templates, err := templatesDir()
+	templates, err := engine.TemplatesDir()
 	if err != nil {
 		return "", "", err
 	}
