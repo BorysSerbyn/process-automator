@@ -268,6 +268,8 @@ struct TrustReviewView: View {
     /// is asked elsewhere, as setup does).
     var actionTitle = "Trust"
     var note: String? = "Trusting it lets it run for real with what's listed above. Dry runs never need it."
+    /// The words beside a program's button.
+    var programNote = "Trusting it lets this executable run, dry runs included."
     /// A program's sign-in to its secrets that aren't stored (none: setup has
     /// its own sign-in step).
     var signIn: SignInAction?
@@ -339,7 +341,7 @@ struct TrustReviewView: View {
         if let trust {
             Divider().padding(.leading, SettingsMetrics.rowInset)
             HStack(spacing: 12) {
-                if let note = program == nil ? note : "Trusting it lets this executable run, dry runs included." {
+                if let note = program == nil ? note : programNote {
                     Text(note)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -419,22 +421,44 @@ struct PathText: View {
     }
 }
 
-/// A program's description file, as the app keeps it: what it says it does,
-/// where it is, its data folder, and its text (read-only: a program is
-/// updated from a terminal).
+/// A description file (a program's, a hook's, a watcher's), as the app keeps
+/// it: what it says it does, where it is, its data folder, and its text
+/// (read-only: it's updated from a terminal, with `update`).
 struct ProgramFile: View {
-    let detail: RoutineDetail
+    var title = "Program file"
+    let description: String?
+    let path: String
+    var folder: String?
+    let source: String
+    /// The command that updates it (`<command> routines update`).
+    var update = "\(AppInfo.command) routines update"
+
+    init(detail: RoutineDetail) {
+        self.init(description: detail.description, path: detail.path, folder: detail.folder, source: detail.source)
+    }
+
+    init(
+        title: String = "Program file", description: String?, path: String, folder: String? = nil, source: String,
+        update: String = "\(AppInfo.command) routines update"
+    ) {
+        self.title = title
+        self.description = description
+        self.path = path
+        self.folder = folder
+        self.source = source
+        self.update = update
+    }
 
     var body: some View {
-        CardTitle("Program file", systemImage: "doc.text")
+        CardTitle(title, systemImage: "doc.text")
         Divider().padding(.leading, SettingsMetrics.rowInset)
-        if let description = detail.description, !description.isEmpty {
+        if let description, !description.isEmpty {
             InfoRow(label: "Description") {
                 Text(description).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             }
         }
-        InfoRow(label: "File") { PathText(path: detail.path) }
-        if let folder = detail.folder, !folder.isEmpty {
+        InfoRow(label: "File") { PathText(path: path) }
+        if let folder, !folder.isEmpty {
             InfoRow(label: "Data folder") {
                 PathText(path: folder)
                 Text("Where it works: kept between runs, and when it's deleted.")
@@ -443,7 +467,7 @@ struct ProgramFile: View {
             }
         }
         VStack(alignment: .leading, spacing: 6) {
-            Text(detail.source.isEmpty ? " " : detail.source)
+            Text(verbatim: source.isEmpty ? " " : source)
                 .font(.callout.monospaced())
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -451,7 +475,7 @@ struct ProgramFile: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text("Read-only: the app's copy. Update it from a terminal (`\(AppInfo.command) routines update`).")
+            Text("Read-only: the app's copy. Update it from a terminal (`\(update)`).")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -477,6 +501,8 @@ struct SignInAction {
 struct ProgramRows: View {
     let program: ProgramInfo
     var signIn: SignInAction?
+    /// Whether it says if it writes (a watcher only reads: it doesn't).
+    var showsWrites = true
 
     var body: some View {
         InfoRow(label: "Executable") {
@@ -499,8 +525,10 @@ struct ProgramRows: View {
                 }
             }
         }
-        InfoRow(label: "Writes") {
-            Text(program.writes ? "Yes: a dry run passes it --dry-run" : "No: a dry run runs it as it is")
+        if showsWrites {
+            InfoRow(label: "Writes") {
+                Text(program.writes ? "Yes: a dry run passes it --dry-run" : "No: a dry run runs it as it is")
+            }
         }
         if !program.args.isEmpty {
             InfoRow(label: "Arguments") {

@@ -288,3 +288,178 @@ private func ran(_ log: URL) -> [String] {
     #expect(cli.signIn("backup") == nil)
     #expect(ran(log) == ["auth login backup --browser"])
 }
+
+// MARK: Hooks and watchers
+
+@Test func runStatusKeepsHooksApartFromRoutines() throws {
+    // `status --watch` with hooks: their own array, and reasons about one say so.
+    let json = """
+        {"schemaVersion":1,"updatedAt":"2026-11-22T14:55:10Z","health":"error","busy":false,
+         "routines":[{"name":"standup","enabled":true,"health":"ok","summary":"Runs by hand"}],
+         "hooks":[{"name":"brief","enabled":false,"health":"none","summary":"Paused"},
+                  {"name":"open-meet","enabled":true,"problem":"its watcher cal is paused, so it hears nothing",
+                   "health":"error","summary":"open-meet can't run"}],
+         "reasons":[{"routine":"open-meet","hook":true,"text":"open-meet can't run",
+                     "detail":"its watcher cal is paused, so it hears nothing"}]}
+        """
+    let status = try RunStatus.decode(Data(json.utf8))
+    #expect(status.routines.map(\.name) == ["standup"])
+    #expect(status.hook("open-meet")?.health == "error")
+    #expect(status.hook("standup") == nil)
+    #expect(status.reasons?.first?.hook == true)
+    // No hooks: the array is absent.
+    let none = try RunStatus.decode(
+        Data(#"{"schemaVersion":1,"updatedAt":"2026-11-22T14:55:10Z","health":"ok","busy":false,"routines":[]}"#.utf8))
+    #expect(none.hooks == nil && none.hook("brief") == nil)
+    // A notification about a hook's run.
+    let click = try CoreJSON.decoder().decode(
+        Components.Schemas.ClickOutput.self,
+        from: Data(
+            #"{"notification":"n1","action":"show-run","routine":"open-meet","run":"open-meet/x","hook":true}"#.utf8))
+    #expect(click.hook == true && click.routine == "open-meet")
+}
+
+@Test func decodesHooksAndTheirWatcher() throws {
+    // `hooks list`: an LLM hook has no kind; a program hook has kind program.
+    let list = """
+        [{"name":"brief","path":"/h/brief/hook.prompt","description":"Briefs me",
+          "on":{"watcher":"cal","type":"meeting.started"},"batch":true,"enabled":false,"staleness":"10m",
+          "timeout":"20m","rate":60,"trusted":false,"untrusted":"not trusted yet","builtinTools":["Bash"]},
+         {"name":"open-meet","kind":"program","path":"/h/open-meet/hook.yaml","on":{"watcher":"cal"},
+          "enabled":true,"staleness":"2m","timeout":"20m","rate":20,"trusted":true,
+          "program":{"executable":"/h/open-meet/act","checksum":"6666","args":[],"writes":true,"secrets":[]}}]
+        """
+    let hooks = try CoreJSON.decoder().decode([Components.Schemas.HookInfo].self, from: Data(list.utf8))
+    #expect(!hooks[0].isProgram && hooks[0].batch == true && hooks[0].builtinTools == ["Bash"])
+    #expect(hooks[1].isProgram && hooks[1].program?.writes == true)
+    #expect(hooks[0].on.text == "cal's meeting.started events")
+    #expect(hooks[1].on.text == "every event from cal")
+    // `hooks show`: its file and its watcher.
+    let show = """
+        {"name":"open-meet","kind":"program","path":"/h/open-meet/hook.yaml","on":{"watcher":"cal","type":"meeting.started"},
+         "enabled":true,"staleness":"2m","timeout":"20m","rate":20,"trusted":true,
+         "problem":"its watcher cal is paused, so it hears nothing","source":"executable: ./act\\n",
+         "watcher":{"name":"cal","path":"/w/cal/watcher.yaml","mode":"poll","interval":"30s","timeout":"30s",
+           "executable":"/w/cal/watch","checksum":"9ab8","args":[],"secrets":[{"name":"cal-token","env":"CAL_TOKEN","stored":false}],
+           "enabled":false,"trusted":true,"hooks":["brief","open-meet"],"error":"exit 1","errorAt":"2026-11-22T09:00:00Z"}}
+        """
+    let detail = try CoreJSON.decoder().decode(Components.Schemas.HookDetail.self, from: Data(show.utf8))
+    #expect(detail.isProgram && detail.watcher?.enabled == false && detail.watcher?.hooks.count == 2)
+    #expect(detail.watcher?.modeText == "Polled every 30s")
+    #expect(detail.watcher?.errorAt == CoreJSON.parseDate("2026-11-22T09:00:00Z"))
+    // `hooks trust --check`: what it acts on, its watcher's trust, and warnings.
+    let review = """
+        {"routine":"brief","surface":{"servers":[],"tools":[],"builtinTools":["Bash"]},"changes":[],"trusted":false,
+         "hook":true,"trigger":{"watcher":"cal","type":"meeting.started","batch":true},
+         "watcher":{"name":"cal","trusted":false,"untrusted":"not trusted yet"},
+         "warnings":["it can write (Bash) and acts on outside event data"]}
+        """
+    let trust = try CoreJSON.decoder().decode(Components.Schemas.TrustOutput.self, from: Data(review.utf8))
+    #expect(trust.hook == true && trust.trigger?.batch == true && trust.watcher?.trusted == false)
+    #expect(trust.warnings?.count == 1)
+}
+
+@Test func decodesWatchers() throws {
+    let show = """
+        {"name":"inbox","path":"/w/inbox/watcher.yaml","description":"New mail","mode":"stream","executable":"/w/inbox/watch",
+         "checksum":"9ab8fabc8c72bfa0","args":["--all"],"secrets":[{"name":"mail","env":"MAIL","stored":false}],
+         "enabled":true,"trusted":false,"untrusted":"not trusted yet","hooks":[],"startedAt":"2026-11-22T08:00:00Z",
+         "source":"mode: stream\\n"}
+        """
+    let w = try CoreJSON.decoder().decode(Components.Schemas.WatcherDetail.self, from: Data(show.utf8))
+    #expect(w.modeText == "Streams events")
+    #expect(w.needsSignIn)
+    #expect(w.program.executable == "/w/inbox/watch" && w.program.args == ["--all"] && !w.program.writes)
+    let review = """
+        {"watcher":"inbox","program":{"executable":"/w/inbox/watch","checksum":"9ab8","args":[],"writes":false,"secrets":[]},
+         "mode":"stream","changes":["its executable changed"],"trusted":false}
+        """
+    let trust = try CoreJSON.decoder().decode(Components.Schemas.WatcherTrustOutput.self, from: Data(review.utf8))
+    #expect(trust.changes == ["its executable changed"] && trust.mode == .stream)
+}
+
+@Test func aHooksRunKeepsItsEventsAsPlainText() throws {
+    // `runs show` of a hook's run: the events it ran for. Their data is
+    // outside data: kept as text, markup and all.
+    let run = """
+        {"id":"open-meet/2026-11-22T093000","routine":"open-meet","hook":true,"kind":"program","trigger":"event",
+         "startedAt":"2026-11-22T09:30:00Z","outcome":"success",
+         "events":[{"id":"m1","type":"meeting.started","at":"2026-11-22T09:30:00Z","watcher":"cal",
+                    "data":{"title":"**Standup** <b>now</b>","link":"https://meet.google.com/abc"}},
+                   {"id":"m2","type":"meeting.started","at":"2026-11-22T09:31:00Z"}]}
+        """
+    let e = try CoreJSON.decoder().decode(Components.Schemas.Entry.self, from: Data(run.utf8))
+    #expect(e.hook == true && e.trigger == "event")
+    let events = try #require(e.events)
+    #expect(events[0].dataText.contains(#""title" : "**Standup** <b>now</b>""#))
+    #expect(events[0].dataText.contains("https://meet.google.com/abc"))
+    #expect(events[1].dataText.isEmpty)
+}
+
+@Test func putsAHooksFactsInWords() throws {
+    #expect(HookWords.staleness("2m") == "Events older than 2m are dropped.")
+    #expect(HookWords.rate(20) == "At most 20 runs an hour; far past it, it's paused.")
+    #expect(HookWords.rate(1).hasPrefix("At most 1 run an hour"))
+    #expect(HookWords.kind(program: true) == "Program" && HookWords.kind(program: false) == "Prompt")
+    #expect(HookWords.dryRun(program: true).contains("needs trusting even for a dry run"))
+    #expect(HookWords.dryRun(program: false).contains("needs no trust"))
+    // The sample event is JSON, of the type it acts on.
+    let sample = HookWords.sampleEvent(.init(_type: "meeting.started", watcher: "cal"))
+    let object = try #require(try JSONSerialization.jsonObject(with: Data(sample.utf8)) as? [String: Any])
+    #expect(object["type"] as? String == "meeting.started")
+    #expect(object["id"] as? String != nil)
+}
+
+/// A stand-in CLI that logs what it's given and prints `reply`.
+private func loggingCLI(reply: String) throws -> (CLI, URL) {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "automator-ui-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let log = dir.appending(path: "log")
+    let script = dir.appending(path: "procauto")
+    try """
+    #!/bin/sh
+    echo "$*" >> '\(log.path)'
+    echo '\(reply)'
+    """.write(to: script, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    return (CLI(executable: script), log)
+}
+
+@Test func hooksAndWatchersRunTheirOwnCommands() throws {
+    let (cli, log) = try loggingCLI(reply: "{}")
+    _ = cli.hooks()
+    _ = cli.hook("open-meet")
+    _ = cli.hookTrustCheck("open-meet")
+    _ = cli.trustHook("open-meet", turnOn: false)
+    _ = cli.trustHook("open-meet", turnOn: true)
+    _ = cli.setHookPaused("open-meet", true)
+    _ = cli.setHookPaused("open-meet", false)
+    _ = cli.deleteHook("open-meet")
+    _ = cli.fireHook("open-meet", event: #"{"id":"1","type":"meeting.started"}"#, dryRun: true)
+    _ = cli.fireHook("open-meet", event: #"{"id":"1","type":"meeting.started"}"#, dryRun: false)
+    _ = cli.watchers()
+    _ = cli.watcher("cal")
+    _ = cli.watcherTrustCheck("cal")
+    _ = cli.trustWatcher("cal")
+    _ = cli.setWatcherPaused("cal", true)
+    _ = cli.setWatcherPaused("cal", false)
+    _ = cli.deleteWatcher("cal")
+    #expect(cli.signIn("cal") == nil)
+    #expect(
+        ran(log) == [
+            "hooks list --json", "hooks show open-meet --json", "hooks trust open-meet --check --json",
+            "hooks trust open-meet --yes --json", "hooks trust open-meet --yes --resume --json",
+            "hooks pause open-meet --json", "hooks resume open-meet --json", "hooks delete open-meet --json",
+            #"hooks fire open-meet --event-json {"id":"1","type":"meeting.started"} --dry-run --json"#,
+            #"hooks fire open-meet --event-json {"id":"1","type":"meeting.started"} --json"#,
+            "watchers list --json", "watchers show cal --json", "watchers trust cal --check --json",
+            "watchers trust cal --yes --json", "watchers pause cal --json", "watchers resume cal --json",
+            "watchers delete cal --json", "auth login cal --browser",
+        ])
+}
+
+@Test func firingAHookSaysHowItWent() throws {
+    let (cli, _) = try loggingCLI(reply: #"{"kind":"program","program":{"exitCode":0,"output":"ok","dryRun":true}}"#)
+    let fired = try cli.fireHook("open-meet", event: "{}", dryRun: true).get()
+    #expect(fired.kind == .program && fired.program?.dryRun == true)
+}

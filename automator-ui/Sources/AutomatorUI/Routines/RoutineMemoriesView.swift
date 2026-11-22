@@ -1,10 +1,20 @@
 import AutomatorUICore
 import SwiftUI
 
-/// The routine's own memories: what its runs are given to remember. Only the
-/// user adds and removes them here; runs only read them.
-struct RoutineMemoriesView: View {
-    @ObservedObject var model: RoutineModel
+/// What a window with memories has: an LLM routine's and an LLM hook's.
+@MainActor
+protocol MemoriesModel: ObservableObject {
+    var name: String { get }
+    var memories: [Memory]? { get }
+    var memoryError: String? { get }
+    func addMemory(_ text: String) async -> Bool
+    func removeMemory(_ id: String)
+}
+
+/// The routine's (or LLM hook's) own memories: what its runs are given to
+/// remember. Only the user adds and removes them here; runs only read them.
+struct RoutineMemoriesView<Model: MemoriesModel>: View {
+    @ObservedObject var model: Model
     @State private var text = ""
     @State private var adding = false
 

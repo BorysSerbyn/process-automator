@@ -6,7 +6,7 @@ import SwiftUI
 /// core gives them. Every change goes through the CLI, then what changed is
 /// re-read.
 @MainActor
-final class RoutineModel: ObservableObject {
+final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
     enum Tab: String, CaseIterable, Identifiable {
         case overview = "Overview"
         case runs = "Runs"

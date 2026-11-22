@@ -5,7 +5,8 @@ import QuartzCore
 /// The indicator: the app's glyph in the menu bar with a status dot (pulsing
 /// while a routine runs), and its menu: the version, the status in the core's
 /// words, Finish Setup… while setup isn't done; Routines › (each routine with
-/// its status), updates, Settings; Quit.
+/// its status), Hooks › (each hook with its status, while there are any),
+/// updates, Settings; Quit.
 @MainActor
 final class Indicator: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -16,6 +17,8 @@ final class Indicator: NSObject, NSMenuDelegate {
     private let openRoutines: () -> Void
     private let openRoutine: (String) -> Void
     private let openRun: (String) -> Void
+    private let openHooks: () -> Void
+    private let openHook: (String, String?) -> Void
     private let openSetup: () -> Void
     /// The latest run status, shown as the core wrote it.
     private var status: RunStatus?
@@ -28,9 +31,12 @@ final class Indicator: NSObject, NSMenuDelegate {
         updates: Updates, quit: @escaping () -> Void, openSettings: @escaping () -> Void,
         openRoutines: @escaping () -> Void,
         openRoutine: @escaping (String) -> Void, openRun: @escaping (String) -> Void,
+        openHooks: @escaping () -> Void, openHook: @escaping (String, String?) -> Void,
         openSetup: @escaping () -> Void
     ) {
         self.openSetup = openSetup
+        self.openHooks = openHooks
+        self.openHook = openHook
         self.updates = updates
         self.quit = quit
         self.openSettings = openSettings
@@ -71,6 +77,7 @@ final class Indicator: NSObject, NSMenuDelegate {
         }
         menu.addItem(.separator())
         menu.addItem(routinesItem())
+        if let hooks = hooksItem() { menu.addItem(hooks) }
         menu.addItem(updates.makeMenuItem())
         let settings = NSMenuItem(title: "Settings", action: #selector(settingsChosen), keyEquivalent: ",")
         settings.target = self
@@ -123,6 +130,38 @@ final class Indicator: NSObject, NSMenuDelegate {
 
     @objc private func routinesChosen() { openRoutines() }
 
+    /// Hooks ›, while run status has hooks: All Hooks…, then every hook with
+    /// its health and summary as the core gives them; choosing one opens its
+    /// window. Hooks aren't routines: they never show under Routines ›.
+    private func hooksItem() -> NSMenuItem? {
+        guard let hooks = status?.hooks, !hooks.isEmpty else { return nil }
+        let submenu = NSMenu(title: "Hooks")
+        submenu.minimumWidth = MenuTextView.menuWidth
+        submenu.delegate = self
+        let all = NSMenuItem(title: "All Hooks…", action: #selector(hooksChosen), keyEquivalent: "")
+        all.target = self
+        submenu.addItem(all)
+        submenu.addItem(.separator())
+        for hook in hooks {
+            let item = NSMenuItem(title: hook.name, action: #selector(hookChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = hook.name
+            item.view = RoutineMenuView(name: hook.name, summary: hook.summary, health: hook.health) {
+                [weak self] in self?.openHook(hook.name, nil)
+            }
+            submenu.addItem(item)
+        }
+        let item = NSMenuItem(title: "Hooks", action: nil, keyEquivalent: "")
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func hooksChosen() { openHooks() }
+
+    @objc private func hookChosen(_ item: NSMenuItem) {
+        if let name = item.representedObject as? String { openHook(name, nil) }
+    }
+
     /// A routine chosen from the keyboard (a click goes through its view).
     @objc private func routineChosen(_ item: NSMenuItem) {
         if let name = item.representedObject as? String { openRoutine(name) }
@@ -134,17 +173,23 @@ final class Indicator: NSObject, NSMenuDelegate {
     }
 
     /// What the status is, in the core's words: why it's red (each reason
-    /// opens the run it's about), or its summary.
+    /// opens the run it's about; one about a hook, the hook's window, on its
+    /// run if it names one), or its summary.
     private func statusItems() -> [NSMenuItem] {
         guard RunStatus.responding(status), let status else {
             return [NSMenuItem(title: "Not responding", action: nil, keyEquivalent: "")]
         }
         if let reasons = status.reasons, !reasons.isEmpty {
             return reasons.map { reason in
-                textItem(
+                var click: (() -> Void)?
+                if reason.hook == true, let hook = reason.routine, !hook.isEmpty {
+                    click = { [weak self] in self?.openHook(hook, reason.run) }
+                } else if let id = reason.run {
+                    click = { [weak self] in self?.openRun(id) }
+                }
+                return textItem(
                     MenuTextView(
-                        text: reason.text, detail: reason.detail, lines: 2, dimmed: reason.run == nil,
-                        onClick: reason.run.map { id in { [weak self] in self?.openRun(id) } }))
+                        text: reason.text, detail: reason.detail, lines: 2, dimmed: click == nil, onClick: click))
             }
         }
         return [NSMenuItem(title: status.summary ?? "", action: nil, keyEquivalent: "")]

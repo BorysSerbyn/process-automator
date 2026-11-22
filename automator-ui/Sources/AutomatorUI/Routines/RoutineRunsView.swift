@@ -2,11 +2,23 @@ import AutomatorUICore
 import OpenAPIRuntime
 import SwiftUI
 
-/// The routine's run history, newest first: each run opens to what it did
-/// (its final text, writes, tokens and cost; a program's exit code and
-/// output), read from `runs show`.
-struct RoutineRunsView: View {
-    @ObservedObject var model: RoutineModel
+/// What a window with a run history has: a routine's and a hook's.
+@MainActor
+protocol RunHistoryModel: ObservableObject {
+    var runs: [RunSummary]? { get }
+    var runsError: String? { get }
+    var runEntries: [String: RunEntry] { get }
+    var runErrors: [String: String] { get }
+    var openRuns: Set<String> { get }
+    func toggleRun(_ id: String)
+    func openReport(_ id: String)
+}
+
+/// The run history, newest first: each run opens to what it did (its final
+/// text, writes, tokens and cost; a program's exit code and output; a hook's
+/// events), read from `runs show`.
+struct RoutineRunsView<Model: RunHistoryModel>: View {
+    @ObservedObject var model: Model
 
     var body: some View {
         SettingsCard {
@@ -91,7 +103,7 @@ struct RunRow: View {
 }
 
 /// What a run did: the agent's final text, its writes, and its tokens; a
-/// program's summary, exit code and output.
+/// program's summary, exit code and output; a hook's events.
 struct RunDetail: View {
     let entry: RunEntry?
     let error: String?
@@ -102,6 +114,9 @@ struct RunDetail: View {
             if let error {
                 RowError(message: error)
             } else if let entry {
+                if let events = entry.events, !events.isEmpty {
+                    EventsView(events: events)
+                }
                 if let result = entry.result {
                     resultView(result)
                 } else if let text = entry.reason ?? entry.error {
@@ -345,5 +360,53 @@ struct ArgumentsView: View {
             }
             return (key, json.map { String(decoding: $0, as: UTF8.self) } ?? "")
         }
+    }
+}
+
+/// The events a hook's run was for: each one's type, when it happened, its
+/// watcher and its data. Events are outside data: their text is shown as
+/// is, in monospace, never read as markup.
+struct EventsView: View {
+    let events: [Components.Schemas.Event]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(events.count == 1 ? "For this event" : "For these \(events.count) events")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                EventView(event: event)
+            }
+        }
+    }
+}
+
+/// One event: its type, time and watcher, then its data as plain text.
+struct EventView: View {
+    let event: Components.Schemas.Event
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(verbatim: event._type).font(.callout.monospaced().weight(.medium))
+                Text(Formats.when(event.at)).font(.caption).foregroundStyle(.secondary)
+                if let watcher = event.watcher, !watcher.isEmpty {
+                    Text(verbatim: "from \(watcher)").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Text(verbatim: event.id).font(.caption.monospaced()).foregroundStyle(.tertiary).lineLimit(1)
+            }
+            let data = event.dataText
+            if !data.isEmpty {
+                Text(verbatim: data)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .help("Outside data, from the watcher: shown as it came")
     }
 }

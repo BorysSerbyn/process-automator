@@ -46,6 +46,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             openRoutines: { [weak self] in self?.routineWindows?.showList() },
             openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name) },
             openRun: { [weak self] id in self?.openRun(id) },
+            openHooks: { [weak self] in self?.routineWindows?.showHooks() },
+            openHook: { [weak self] name, run in self?.routineWindows?.showHook(name, run: run) },
             openSetup: { [weak self] in self?.setupWindow?.show() })
         notifier.setUp(cli: cli) { [weak self] click in self?.show(click) }
         followStatus()
@@ -121,10 +123,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// A click on one of the app's notifications: the run it's about, in
-    /// its routine's window, or the app (the Routines window).
+    /// its routine's (or hook's) window, or the app (the Routines window).
     private func show(_ click: Components.Schemas.ClickOutput) {
         if click.action == .show_hyphen_run, let routine = click.routine {
-            routineWindows?.showRoutine(routine, run: click.run)
+            if click.hook == true {
+                routineWindows?.showHook(routine, run: click.run)
+            } else {
+                routineWindows?.showRoutine(routine, run: click.run)
+            }
         } else {
             routineWindows?.showList()
         }
