@@ -2,7 +2,12 @@
 // the counterpart of automator-ui's menu bar indicator. It shows the core's
 // run status in its icon and menu, delivers the app's notifications and
 // offers updates, through the app's CLI only. Windows open through the
-// window seam (tray.OpenWindow).
+// window seam (tray.OpenWindow). It logs to the app's frontend log (`paths`).
+//
+// Started, it takes over from a tray already running (an update restarts
+// it so). With --open (the app menu's entry), it asks the running tray to
+// open the app and exits; with none running, it becomes the tray and opens
+// the app itself.
 package main
 
 import (
@@ -19,6 +24,7 @@ import (
 	"fyne.io/systray"
 
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/app"
+	"github.com/BorysSerbyn/process-automator/automator-tray/internal/cli"
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/desktop"
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/tray"
 )
@@ -30,13 +36,14 @@ func main() {
 	log.SetFlags(0)
 	log.SetPrefix("automator-tray: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env and the tray's icons (default: found beside the tray)")
+	open := flag.Bool("open", false, "open the app: have the running tray open its window (Setup or Settings), or start as the tray and open it")
 	flag.Parse()
-	if err := run(*dir); err != nil {
+	if err := run(*dir, *open); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(dir string) error {
+func run(dir string, open bool) error {
 	exe, err := os.Executable()
 	if err == nil {
 		exe, err = filepath.EvalSymlinks(exe)
@@ -58,6 +65,12 @@ func run(dir string) error {
 	if err != nil {
 		return err
 	}
+	name := desktop.BusName(info.BundleID)
+	if open && session.AskOpen(name) == nil {
+		return nil // the running tray opens it
+	}
+	openLog(info)
+	log.Printf("%s %s: started (pid %d)", info.Name, info.Version, os.Getpid())
 	icon := url.URL{Scheme: "file", Path: filepath.Join(info.Icons, AppIcon)}
 	notifications := desktop.NewNotifications(session.Conn, info.Name, icon.String())
 
@@ -72,9 +85,12 @@ func run(dir string) error {
 	if err := session.Listen(desktop.Events{Invoked: t.Desk().Invoked, Closed: t.Desk().Closed, Lost: systray.Quit, Gone: systray.Quit}); err != nil {
 		return err
 	}
+	if err := session.Serve(name, t.OpenApp); err != nil {
+		return err
+	}
 	// Claimed once listening, so losing the name to a tray started right
 	// after this one isn't missed.
-	if err := session.Claim(desktop.BusName(info.BundleID)); err != nil {
+	if err := session.Claim(name); err != nil {
 		return err
 	}
 	go func() {
@@ -88,6 +104,9 @@ func run(dir string) error {
 	systray.SetIcon(icons[tray.Frame{Light: tray.Red}])
 	systray.Run(func() {
 		go t.Run(ctx)
+		if open {
+			go t.OpenApp()
+		}
 		go func() {
 			for range systray.TrayOpenedCh {
 				t.MenuOpened()
@@ -95,6 +114,27 @@ func run(dir string) error {
 		}()
 	}, cancel)
 	return nil
+}
+
+// openLog has the tray log to the app's frontend log, as `paths` names it;
+// until then, and when it can't, to stderr.
+func openLog(info app.Info) {
+	c := cli.CLI{Path: info.CLI, Command: info.Command}
+	p, err := c.Paths()
+	if err == nil && p.FrontendLog == "" {
+		err = fmt.Errorf("%s paths names no frontend log", info.Command)
+	}
+	if err != nil {
+		log.Printf("logging here: %v", err)
+		return
+	}
+	l, err := tray.OpenLog(p.FrontendLog, tray.LogLimit)
+	if err != nil {
+		log.Printf("logging here: %v", err)
+		return
+	}
+	log.SetFlags(log.LstdFlags)
+	tray.SetLog(l)
 }
 
 // view is the tray icon and its menu, through fyne.io/systray

@@ -39,6 +39,8 @@ func (o *fakeObject) CallWithContext(ctx context.Context, method string, _ dbus.
 		return &dbus.Call{Body: []any{uint32(len(o.calls))}}
 	case notificationsIface + ".GetCapabilities":
 		return &dbus.Call{Body: []any{o.caps}}
+	case "dev.acme.Tray.Open": // a running tray
+		return &dbus.Call{}
 	}
 	return &dbus.Call{Err: dbus.ErrMsgUnknownMethod}
 }
@@ -155,4 +157,28 @@ func TestDotsArePNGs(t *testing.T) {
 			t.Errorf("%s: the corner isn't clear", h)
 		}
 	}
+}
+
+// A second tray asks the running one to open the app: its bus name's Open,
+// at its name's path; the running one's Open opens it.
+func TestOpenAsksTheRunningTray(t *testing.T) {
+	o := &fakeObject{}
+	if err := askOpen(o, "dev.acme.Tray"); err != nil {
+		t.Fatal(err)
+	}
+	if len(o.calls) != 1 || o.calls[0].method != "dev.acme.Tray.Open" || len(o.calls[0].args) != 0 {
+		t.Fatalf("%+v", o.calls)
+	}
+	o.down = true // no tray has the name
+	if err := askOpen(o, "dev.acme.Tray"); err == nil {
+		t.Fatal("asked no one, and it worked")
+	}
+	if p := objectPath("dev.acme.Tray"); p != "/dev/acme/Tray" || !p.IsValid() {
+		t.Fatal(p)
+	}
+	opened := make(chan struct{})
+	if err := (opener{open: func() { close(opened) }}).Open(); err != nil {
+		t.Fatal(err)
+	}
+	<-opened
 }

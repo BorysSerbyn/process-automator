@@ -1,6 +1,7 @@
 package tray
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"sync"
@@ -137,6 +138,9 @@ func TestChoosingMenuItems(t *testing.T) {
 	}
 	tr.Choose(Action{Kind: Quit})
 	<-quit
+	if !f.hasRun("login-items stop --json") {
+		t.Fatalf("Quit didn't stop the scheduler: %q", f.ran())
+	}
 
 	// No terminal: it says what to run instead.
 	w.err = ErrNoTerminal
@@ -250,5 +254,62 @@ func TestFollowingAnUpdateStopsWhenTheCoreCantSay(t *testing.T) {
 	}
 	if asked != 3 || tr.updates.following || !f.hasRun("update --check --json") {
 		t.Fatalf("asked %d times, following %v: %q", asked, tr.updates.following, f.ran())
+	}
+}
+
+// Quit stops the scheduler, then quits; when stopping fails, it says why
+// and quits anyway.
+func TestQuitStopsTheSchedulerThenQuits(t *testing.T) {
+	f := newFakeCLI(t)
+	tr, _, n, _ := newTray(t, f)
+	f.fail("login-items stop --json", "launchctl bootout failed")
+	quit := make(chan struct{})
+	tr.quit = func() {
+		if !f.hasRun("login-items stop --json") {
+			t.Error("quit before stopping the scheduler")
+		}
+		close(quit)
+	}
+	tr.Choose(Action{Kind: Quit})
+	<-quit
+	id := n.find("Couldn't stop the scheduler")
+	if id == 0 || n.note(id).Body != "launchctl bootout failed" {
+		t.Fatalf("%+v", n.notes)
+	}
+}
+
+// Starting, the tray starts the scheduler (opening the app does).
+func TestRunStartsTheScheduler(t *testing.T) {
+	f := newFakeCLI(t)
+	tr, _, _, _ := newTray(t, f)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go tr.Run(ctx)
+	eventually(t, "login-items start", func() bool { return f.hasRun("login-items start --json") })
+}
+
+// Opening the app while the tray runs starts the scheduler and opens Setup
+// while the core's status lists setup steps left, else Settings.
+func TestOpeningTheAppOpensSetupOrSettings(t *testing.T) {
+	f := newFakeCLI(t)
+	tr, _, _, w := newTray(t, f)
+	f.answer("status --json", `{"schemaVersion":1,"health":"error","busy":false,"setupLeft":["backend"],"routines":[]}`)
+	tr.OpenApp()
+	if !f.hasRun("login-items start --json") || !w.has(Window{Kind: SetupWindow}) {
+		t.Fatalf("%q %+v", f.ran(), w.opened)
+	}
+	f.answer("status --json", `{"schemaVersion":1,"health":"ok","busy":false,"routines":[]}`)
+	tr.OpenApp()
+	if !w.has(Window{Kind: SettingsWindow}) {
+		t.Fatalf("%+v", w.opened)
+	}
+	// The status unreadable: Settings, and the scheduler failing to start
+	// doesn't stop it.
+	w.opened = nil
+	f.fail("status --json", "no status")
+	f.fail("login-items start --json", "no systemd user session")
+	tr.OpenApp()
+	if !w.has(Window{Kind: SettingsWindow}) {
+		t.Fatalf("%+v", w.opened)
 	}
 }

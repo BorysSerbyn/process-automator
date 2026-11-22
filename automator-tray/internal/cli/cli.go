@@ -134,3 +134,32 @@ func (c CLI) UpdateProgress() (UpdateProgress, error) {
 	var out UpdateProgress
 	return out, c.call(&out, "update", "progress")
 }
+
+// Status is the run status now (`status`), for a decision made once (which
+// window opening the app shows); the tray follows it with Follow.
+func (c CLI) Status() (RunStatus, error) {
+	var out RunStatus
+	return out, c.call(&out, "status")
+}
+
+// StartScheduler starts the scheduler if it isn't running (`login-items
+// start`): opening the app does.
+func (c CLI) StartScheduler() (RunningOutput, error) {
+	var out RunningOutput
+	return out, c.call(&out, "login-items", "start")
+}
+
+// StopApp stops the scheduler, and any other frontend running (`login-items
+// stop`): Quit does, then quits. It waits for the scheduler to stop (its
+// runs end first): no time limit beyond the command's own.
+func (c CLI) StopApp() (RunningOutput, error) {
+	var out RunningOutput
+	return out, c.call(&out, "login-items", "stop")
+}
+
+// Paths is where the app keeps its files (`paths`): the tray reads only
+// where its log goes.
+func (c CLI) Paths() (Paths, error) {
+	var out Paths
+	return out, c.call(&out, "paths")
+}

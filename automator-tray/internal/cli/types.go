@@ -76,3 +76,16 @@ type UpdateProgress struct {
 type errorOutput struct {
 	Error string `json:"error"`
 }
+
+// RunningOutput is `login-items start --json` and `login-items stop --json`.
+type RunningOutput struct {
+	// Scheduler is running or stopped.
+	Scheduler string `json:"scheduler"`
+	Changed   bool   `json:"changed"`
+}
+
+// Paths is `paths --json`: only what the tray uses.
+type Paths struct {
+	// FrontendLog is where the tray logs.
+	FrontendLog string `json:"frontendLog"`
+}

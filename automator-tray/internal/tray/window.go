@@ -78,10 +78,18 @@ func openWindow(getenv func(string) string, cliPath string, w Window, terminal f
 		return terminal()
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
+	// What it says goes to the tray's log, straight to the file (no pipe
+	// to outlive: it outlives the tray); without a log, kept for the message.
 	var stderr bytes.Buffer
-	cmd.Stderr = &limitedWriter{w: &stderr, left: 4096}
+	toLog := childStderr()
+	if toLog != nil {
+		cmd.Stderr = toLog
+	} else {
+		cmd.Stderr = &limitedWriter{w: &stderr, left: 4096}
+	}
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
+		log.Printf("the %s window couldn't start (%v); opening it in a terminal", w.Kind, err)
 		return terminal()
 	}
 	started := time.Now()
@@ -90,7 +98,11 @@ func openWindow(getenv func(string) string, cliPath string, w Window, terminal f
 		if err == nil || time.Since(started) > StartGrace {
 			return
 		}
-		log.Printf("the %s window didn't open (%v: %s); opening it in a terminal", w.Kind, err, strings.TrimSpace(stderr.String()))
+		said := "what it said is above"
+		if toLog == nil {
+			said = strings.TrimSpace(stderr.String())
+		}
+		log.Printf("the %s window didn't open (%v: %s); opening it in a terminal", w.Kind, err, said)
 		if err := terminal(); err != nil {
 			log.Printf("the %s window: %v", w.Kind, err)
 		}
@@ -106,10 +118,12 @@ func WindowsCommand(getenv func(string) string, cliPath string, w Window) []stri
 		return nil
 	}
 	if getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "" {
+		log.Printf("the %s window: no display (DISPLAY, WAYLAND_DISPLAY); opening it in a terminal", w.Kind)
 		return nil
 	}
 	exe := filepath.Join(filepath.Dir(cliPath), WindowsApp)
 	if st, err := os.Stat(exe); err != nil || st.IsDir() || st.Mode()&0o111 == 0 {
+		log.Printf("the %s window: no windows app at %s; opening it in a terminal", w.Kind, exe)
 		return nil
 	}
 	return []string{exe, string(w.Kind)}

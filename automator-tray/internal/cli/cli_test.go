@@ -206,6 +206,9 @@ func TestTypesMatchTheContracts(t *testing.T) {
 		"usage.schema.json":              Report{},
 		"login-items-status.schema.json": LoginItems{},
 		"login-items-enable.schema.json": LoginItems{},
+		"login-items-start.schema.json":  RunningOutput{},
+		"login-items-stop.schema.json":   RunningOutput{},
+		"paths.schema.json":              Paths{},
 	} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "cli", schema))
 		if err != nil {

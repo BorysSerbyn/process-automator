@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -116,4 +117,47 @@ func Dispatch(ch <-chan *dbus.Signal, ev Events) {
 			}
 		}
 	}
+}
+
+// The tray's object on the bus, under its name: its one method, Open, opens
+// the app (the app menu's entry runs a second tray with --open, which asks
+// the running one and exits).
+
+// objectPath is the tray's object's path: its bus name as a path.
+func objectPath(name string) dbus.ObjectPath {
+	return dbus.ObjectPath("/" + strings.ReplaceAll(name, ".", "/"))
+}
+
+// opener is the tray's object: Open hands the request to open, off the
+// bus's loop.
+type opener struct{ open func() }
+
+// Open opens the app (D-Bus method <name>.Open).
+func (o opener) Open() *dbus.Error {
+	go o.open()
+	return nil
+}
+
+// Serve puts the tray's object on the bus, at its name's path, with open as
+// its Open (before Claim, so the name never comes without it).
+func (s *Session) Serve(name string, open func()) error {
+	if name == "" {
+		return nil
+	}
+	return s.Conn.Export(opener{open: open}, objectPath(name), name)
+}
+
+// AskOpen asks the tray that has the app's bus name to open the app; err:
+// none has it, or it didn't answer.
+func (s *Session) AskOpen(name string) error {
+	if name == "" {
+		return fmt.Errorf("no bus name to ask a running tray at")
+	}
+	return askOpen(s.Conn.Object(name, objectPath(name)), name)
+}
+
+func askOpen(obj caller, name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return obj.CallWithContext(ctx, name+".Open", dbus.FlagNoAutoStart).Err
 }

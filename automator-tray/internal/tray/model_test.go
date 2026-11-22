@@ -165,3 +165,15 @@ func TestLongTextIsShortened(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestReopenWindowFollowsSetupLeft(t *testing.T) {
+	if w := ReopenWindow(&cli.RunStatus{SetupLeft: []string{"sign-in"}}); w.Kind != SetupWindow {
+		t.Fatal(w)
+	}
+	if w := ReopenWindow(&cli.RunStatus{}); w.Kind != SettingsWindow {
+		t.Fatal(w)
+	}
+	if w := ReopenWindow(nil); w.Kind != SettingsWindow {
+		t.Fatal(w)
+	}
+}

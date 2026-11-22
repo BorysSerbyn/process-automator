@@ -208,3 +208,13 @@ func shorten(s string) string {
 	}
 	return string(r[:MenuText-1]) + "…"
 }
+
+// ReopenWindow is the window opening the app shows while it runs: Setup
+// while the core's status lists setup steps still to do, else Settings
+// (automator-ui's rule too). An unreadable status lists none.
+func ReopenWindow(s *cli.RunStatus) Window {
+	if s != nil && len(s.SetupLeft) > 0 {
+		return Window{Kind: SetupWindow}
+	}
+	return Window{Kind: SettingsWindow}
+}

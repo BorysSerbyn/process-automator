@@ -3,6 +3,7 @@ package tray
 import (
 	"context"
 	"errors"
+	"log"
 	"reflect"
 	"strings"
 	"sync"
@@ -63,8 +64,11 @@ func New(info app.Info, view View, notifications Notifications, openWindow func(
 // Desk is where the tray's notes are posted: the desktop's actions go to it.
 func (t *Tray) Desk() *Desk { return t.desk }
 
-// Run follows the core until ctx ends.
+// Run follows the core until ctx ends. Starting, it starts the scheduler if
+// it isn't running (opening the app does, as automator-ui's launch does), so
+// opening it after a Quit brings everything back.
 func (t *Tray) Run(ctx context.Context) {
+	go t.startScheduler()
 	t.render()
 	t.updates.Start(ctx.Done())
 	go t.cli.Follow(ctx, t.Show)
@@ -188,8 +192,41 @@ func (t *Tray) Choose(a Action) {
 	case ShowUpdate:
 		t.updates.ShowProgress()
 	case Quit:
-		t.quit()
+		go t.quitApp()
 	}
+}
+
+// startScheduler starts the scheduler if it isn't running; why it couldn't
+// goes to the log (run status shows it isn't responding, doctor says why).
+func (t *Tray) startScheduler() {
+	if _, err := t.cli.StartScheduler(); err != nil {
+		log.Printf("couldn't start the scheduler: %v", err)
+	}
+}
+
+// quitApp is Quit: the scheduler stopped too (both start again at the next
+// login), then the tray ends; when stopping fails, it says why, and ends
+// anyway.
+func (t *Tray) quitApp() {
+	if _, err := t.cli.StopApp(); err != nil {
+		log.Printf("Quit: couldn't stop the scheduler: %v", err)
+		t.Alert("Couldn't stop the scheduler", err.Error())
+	}
+	t.quit()
+}
+
+// OpenApp is the app opened while the tray runs (its app menu entry): the
+// scheduler started if it isn't running, and the window the core's status
+// calls for (ReopenWindow) opened.
+func (t *Tray) OpenApp() {
+	t.startScheduler()
+	var status *cli.RunStatus
+	if s, err := t.cli.Status(); err == nil {
+		status = &s
+	} else {
+		log.Printf("opening the app: the status: %v", err)
+	}
+	t.open(ReopenWindow(status))
 }
 
 func (t *Tray) openRun(id string) {
