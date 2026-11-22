@@ -324,3 +324,48 @@ func TestMCPLogin(t *testing.T) {
 		}
 	}
 }
+
+// The MCP server serves the guide as one read-only tool taking a topic, as
+// text, and its instructions send clients to it.
+func TestGuideOverMCP(t *testing.T) {
+	s := testServer(t, true)
+	g, ok := toolMap(s)["guide"]
+	if !ok {
+		t.Fatal("no guide tool")
+	}
+	if !g.tool.Annotations.ReadOnlyHint || g.jsonOut {
+		t.Errorf("guide: read-only %v, --json %v", g.tool.Annotations.ReadOnlyHint, g.jsonOut)
+	}
+	topic := g.tool.InputSchema.(map[string]any)["properties"].(map[string]any)["topic"].(map[string]any)
+	if enum, _ := topic["enum"].([]string); len(enum) != len(guideTopics) {
+		t.Errorf("the topic argument doesn't list the topics: %v", topic)
+	}
+	for _, topic := range guideTopics {
+		if !strings.Contains(g.tool.Description, topic.Summary) {
+			t.Errorf("the tool's description lacks %s", topic.Name)
+		}
+	}
+	if strings.Contains(mcpInstructions, "settings_set") || strings.Contains(mcpInstructions, ".enabled") ||
+		!strings.Contains(mcpInstructions, "guide with topic routines") || !strings.Contains(mcpInstructions, "routines trust") {
+		t.Errorf("instructions: %s", mcpInstructions)
+	}
+
+	srv, err := s.build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	ct, st := sdk.NewInMemoryTransports()
+	if _, err := srv.Connect(ctx, st, nil); err != nil {
+		t.Fatal(err)
+	}
+	cs, err := sdk.NewClient(&sdk.Implementation{Name: "test"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "guide", Arguments: map[string]any{"topic": "routines"}})
+	if err != nil || res.IsError || !strings.HasPrefix(resultText(res), "# Writing a routine") {
+		t.Fatalf("guide over MCP: %v %s", err, resultText(res))
+	}
+}
