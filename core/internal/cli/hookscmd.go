@@ -179,12 +179,7 @@ func hookInfo(cmd *cobra.Command, a *engine.App, status *runstatus.Status, x eng
 	if p := h.Program; p != nil {
 		row.Program = programInfo(a, *p)
 	}
-	row.TurnOn = !row.Trusted || !row.Enabled
-	if w, err := a.FindWatcher(h.On.Watcher); err == nil {
-		if why, err := a.WatcherUntrusted(w); err == nil && why != "" {
-			row.TurnOn = true
-		}
-	}
+	row.TurnOn = a.NeedsTurnOn(x)
 	row.LastRun = status.LastRun(x.Name())
 	return row
 }

@@ -208,7 +208,7 @@ func routineInfo(cmd *cobra.Command, a *engine.App, def engine.BackendDef, statu
 			row.Next = &n
 		}
 	}
-	row.TurnOn = !row.Trusted || (!c.Enabled && c.Schedule != "")
+	row.TurnOn = a.NeedsTurnOn(x)
 	row.LastRun = status.LastRun(x.Name())
 	// What only one kind has.
 	if r, _, err := engine.AsRoutine(x, ""); err == nil {
