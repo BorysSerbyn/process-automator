@@ -1,4 +1,4 @@
-Process Automator runs scheduled LLM **routines**: prompt files that a model runs in the background, on a schedule, with the tools I allow from MCP servers. A Go core and the `procauto` CLI do the work; on macOS, automator-ui (a menu bar status indicator with settings, routines and setup windows) sits on top, and on Linux a tray (automator-tray). On its own the app does nothing: the routines I add give it a purpose.
+Process Automator runs scheduled LLM **routines**: prompt files that a model runs in the background, on a schedule, with the tools I allow from MCP servers. A Go core and the `procauto` CLI do the work; on macOS, automator-ui (a menu bar status indicator with settings, routines and setup windows) sits on top, and on Linux a tray (automator-tray) with the setup and settings windows (automator-windows). On its own the app does nothing: the routines I add give it a purpose.
 
 ## Guides
 Everything needed to use the app, in reading order:

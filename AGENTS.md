@@ -8,7 +8,7 @@ Process Automator runs **routines**: prompt files that a model (Claude, through 
 - **plugins:** add any MCP server (remote, local, or a folder they wrote), try it before it's installed, sign in;
 - **settings:** app-wide and per routine (schedule, model, effort, timeout, working folder, which tools it may use, ...);
 - **memories** routines read, desktop **notifications** routines send, **templates** to start from, an **LLM budget** that keeps scheduled runs from overspending, and **guardrails**: a routine runs for real only once trusted with what it can reach;
-- a menu bar app on macOS (status, routines, settings, setup), a tray in Linux desktop sessions (status, routines, notifications, updates), and `doctor` to explain anything red.
+- a menu bar app on macOS (status, routines, settings, setup), a tray in Linux desktop sessions (status, routines, notifications, updates, settings, setup), and `doctor` to explain anything red.
 
 **All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. On the `claude-code` backend, setup connects Claude Code to it (the `mcp` step below); for another MCP client, its stdio command is `procauto mcp serve`.
 
@@ -41,7 +41,7 @@ It downloads the latest release for this machine, checks its checksum (and on ma
 2. A code-signing identity named `Process Automator Dev`, which keeps macOS permission grants across rebuilds. *They* create it in Keychain Access, following `docs/Guides/Getting started.md` → "Building it from the checkout"; check with `security find-identity -v -p codesigning`.
 3. `make install`. It builds the core and the app, installs them as above, and remembers this checkout: `procauto update` builds newer tagged releases from it until releases are published.
 
-On Linux: Go (from their package manager, with their go-ahead), then `make package-linux LINUX_ARCH=<amd64|arm64>` and `./install.sh --yes --from build/dist/<the .tar.gz it made>`.
+On Linux: Go (from their package manager, with their go-ahead), then `make package-linux LINUX_ARCH=<amd64|arm64> LINUX_WINDOWS=none` (without Docker the Setup and Settings windows can't be built, and the tray opens them in a terminal; with Docker running, leave out `LINUX_WINDOWS=none`) and `./install.sh --yes --from build/dist/<the .tar.gz it made>`.
 
 If `~/.local/bin` isn't on their PATH, use `~/.local/bin/procauto` below and tell them how to add it.
 
