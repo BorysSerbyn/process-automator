@@ -7,6 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,6 +25,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
+	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
@@ -462,8 +467,9 @@ func TestSetupStatusNotWithoutData(t *testing.T) {
 
 // Interactive setup lists the backends one per line with what each means,
 // takes a number or a name, and asks again for anything else.
-func TestSetupInteractiveBackend(t *testing.T) {
-	cfg := filepath.Join(t.TempDir(), "config.yaml")
+// setupWith runs the interactive setup on cfg, answering with input.
+func setupWith(t *testing.T, cfg, input string) string {
+	t.Helper()
 	a := enginetest.Load(t, cfg)
 	cmd, _, err := NewRoot(nil).Find([]string{"setup"})
 	if err != nil {
@@ -476,11 +482,16 @@ func TestSetupInteractiveBackend(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetIn(strings.NewReader("9\n4\n\n\n\n\n\n"))
+	cmd.SetIn(strings.NewReader(input))
 	if err := setupInteractive(cmd, a); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	got := out.String()
+	return out.String()
+}
+
+func TestSetupInteractiveBackend(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	got := setupWith(t, cfg, "9\n4\n\n\n\n\n\n")
 	for _, want := range []string{
 		"    1. claude-code  Claude Code on your Claude subscription (recommended)\n",
 		"    2. claude-api   Anthropic's API, paid per token\n",
@@ -516,5 +527,75 @@ func TestFormerBackendName(t *testing.T) {
 	}
 	if raw, _ := os.ReadFile(cfg); !strings.Contains(string(raw), "llm.backend: api") {
 		t.Errorf("the config was rewritten:\n%s", raw)
+	}
+}
+
+// Choosing local, setup asks for the server's URL (Enter keeps the default,
+// Ollama on this machine), then a model: picked by number from those the
+// server lists, or typed when it doesn't answer.
+func TestSetupInteractiveLocal(t *testing.T) {
+	get := func(cfg, key string) settings.State {
+		t.Helper()
+		a := enginetest.Load(t, cfg)
+		vals, err := a.Settings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		st, _ := vals.Get(key)
+		return st
+	}
+
+	// The default URL, kept; the model typed (whether or not Ollama runs here).
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	out := setupWith(t, cfg, "3\n\nqwen3:8b\n")
+	if !strings.Contains(out, "Your model server's URL [Enter keeps http://localhost:11434/v1 (Ollama on this machine)]:") {
+		t.Errorf("URL question:\n%s", out)
+	}
+	if st := get(cfg, engine.LocalURLSetting); !st.IsDefault {
+		t.Errorf("Enter changed the URL: %+v", st)
+	}
+	if st := get(cfg, engine.LocalModelSetting); st.Value != "qwen3:8b" {
+		t.Errorf("model: %+v\n%s", st, out)
+	}
+
+	// A server that answers: its models, one picked by number.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, `{"data":[{"id":"qwen3:8b"},{"id":"llama3.2:3b"}]}`)
+	}))
+	defer srv.Close()
+	cfg = filepath.Join(t.TempDir(), "config.yaml")
+	out = setupWith(t, cfg, "3\n"+srv.URL+"/v1\n7\n2\n")
+	for _, want := range []string{"The server has:\n    1. qwen3:8b\n    2. llama3.2:3b\n", "7 isn't one of them: a number from 1 to 2, or a name", "All set."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if st := get(cfg, engine.LocalURLSetting); st.Value != srv.URL+"/v1" {
+		t.Errorf("URL: %+v", st)
+	}
+	if st := get(cfg, engine.LocalModelSetting); st.Value != "llama3.2:3b" {
+		t.Errorf("model by number: %+v", st)
+	}
+
+	// A server that doesn't answer: it says so, and takes the model's name.
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	down := "http://" + l.Addr().String() + "/v1"
+	_ = l.Close()
+	cfg = filepath.Join(t.TempDir(), "config.yaml")
+	out = setupWith(t, cfg, "3\nlocalhost:1\n"+down+"\nqwen3:8b\n")
+	for _, want := range []string{`"localhost:1" isn't an http(s) URL`, "Nothing answers at " + down + ".", "Its name on the server (e.g. qwen3:8b):"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if st := get(cfg, engine.LocalModelSetting); st.Value != "qwen3:8b" {
+		t.Errorf("typed model: %+v", st)
+	}
+	if b, _ := enginetest.Load(t, cfg).BackendReady(); b.Name != "local" || b.Problem != "" {
+		t.Errorf("backend: %+v", b)
 	}
 }

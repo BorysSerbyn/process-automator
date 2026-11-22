@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -525,6 +526,14 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 	if b, err = a.BackendReady(); err != nil {
 		return err
 	}
+	if b.Name == agent.LocalBackend {
+		if err := setupLocal(cmd.Context(), a, w, ask, yes, self); err != nil {
+			return err
+		}
+		if b, err = a.BackendReady(); err != nil {
+			return err
+		}
+	}
 	if b.SignIn != "" && yes("  "+capitalize(b.Problem)+". Sign in to "+b.SignIn+" now?", true) {
 		self("auth", "login", b.SignIn)
 	} else if b.Problem != "" {
@@ -575,6 +584,89 @@ func setupInteractive(cmd *cobra.Command, a *engine.App) error {
 	for _, s := range final.Steps {
 		if !s.Done && !s.Optional {
 			fmt.Fprintf(w, "  - %s: %s\n", s.Title, s.Status)
+		}
+	}
+	return nil
+}
+
+// setupLocal asks for the local backend's server and model: the server's
+// URL (Enter keeps it), then one of the models it lists, by number or name,
+// or a model's name when it doesn't answer. It asks for the server's API key
+// only when the server wants one (HTTP 401 or 403).
+func setupLocal(ctx context.Context, a *engine.App, w io.Writer, ask func(string) string, yes func(string, bool) bool, self func(...string)) error {
+	store := settings.Store{Path: a.Layout.Config()}
+	vals, err := a.Settings()
+	if err != nil {
+		return err
+	}
+	def, _ := settings.Lookup(engine.LocalURLSetting)
+	url := vals.String(engine.LocalURLSetting)
+	for {
+		answer := ask("  Your model server's URL [Enter keeps " + url + ollamaNote(url, def.Default) + "]:")
+		if answer == "" {
+			break
+		}
+		if (agent.OpenAICompat{BaseURL: answer}).CheckURL() != nil {
+			fmt.Fprintf(w, "  %q isn't an http(s) URL, e.g. %v\n", answer, def.Default)
+			continue
+		}
+		if _, err := store.Set(engine.LocalURLSetting, answer); err != nil {
+			return err
+		}
+		break
+	}
+	models := func() ([]string, bool, error) {
+		c, err := a.Local()
+		if err != nil {
+			return nil, false, err
+		}
+		return c.Models(ctx)
+	}
+	ids, listed, err := models()
+	var needsKey *agent.NeedsKeyError
+	q := "  The server at %s needs an API key. Enter it now?"
+	if errors.As(err, &needsKey) && needsKey.Refused {
+		q = "  The server at %s refuses its API key. Enter another now?"
+	}
+	if needsKey != nil && yes(fmt.Sprintf(q, needsKey.BaseURL), true) {
+		self("auth", "login", agent.LocalProvider)
+		ids, listed, err = models()
+	}
+	keep := ""
+	if now := vals.String(engine.LocalModelSetting); now != "" {
+		keep = " [Enter keeps " + now + "]"
+	}
+	byName := "  Which model should routines run on? Its name on the server (e.g. qwen3:8b)" + keep + ":"
+	var model string
+	switch {
+	case err != nil:
+		fmt.Fprintln(w, "  "+capitalize(err.Error())+".")
+		model = ask(byName)
+	case listed && len(ids) > 0:
+		fmt.Fprintln(w, "  Which model should routines run on? The server has:")
+		for i, id := range ids {
+			fmt.Fprintf(w, "    %d. %s\n", i+1, id)
+		}
+		for {
+			model = ask("  Number or name" + keep + ":")
+			if n, err := strconv.Atoi(model); err == nil {
+				if n < 1 || n > len(ids) {
+					fmt.Fprintf(w, "  %d isn't one of them: a number from 1 to %d, or a name\n", n, len(ids))
+					continue
+				}
+				model = ids[n-1]
+			}
+			break
+		}
+	case listed:
+		fmt.Fprintln(w, "  The server has no models yet (on Ollama, pull one in a terminal: `ollama pull qwen3:8b`).")
+		model = ask(byName)
+	default: // it answers in a shape of its own
+		model = ask(byName)
+	}
+	if model != "" {
+		if _, err := store.Set(engine.LocalModelSetting, model); err != nil {
+			return err
 		}
 	}
 	return nil
