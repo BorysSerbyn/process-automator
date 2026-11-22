@@ -10,7 +10,7 @@ procauto routines create digest --from ./digest.prompt
 procauto routines update digest --from ./digest.prompt   # replace it later; its settings are kept
 ```
 
-Both validate the file first. You can also edit files in the routines folder directly (`procauto paths` shows where), or ask Claude to write one ([[Guides/Using it from Claude|Using it from Claude]]). `procauto routines delete <name>` removes a routine with its settings, trust and memories; its run history stays.
+Both validate the file first. A routine that runs an executable instead of a model is a program: see [[Guides/Writing a program|Writing a program]]. You can also edit files in the routines folder directly (`procauto paths` shows where), or ask Claude to write one ([[Guides/Using it from Claude|Using it from Claude]]). `procauto routines delete <name>` removes a routine with its settings, trust and memories; its run history stays.
 
 ## Add one from a template
 Templates are routines shared as files, grouped by tags (general to specific). The app ships none: they come from the repository's `templates/` folder when you or your team add some there, and a release carries whatever that folder holds.

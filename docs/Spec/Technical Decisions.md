@@ -487,3 +487,66 @@ How to write a routine and how to add a plugin is a command, `guide`, so every i
 - **One MCP tool per topic**: more tools in every client's list for one command, and each new topic another override
 - **Serving it as `--json` over MCP**: the same text, escaped, with its tables repeated as data
 - **Putting it in the MCP server's instructions**: they're sent with every session; the guide is read when it's needed
+
+## Decision: programs are a second kind of routine, behind one interface
+Some scheduled work needs no model: a program I wrote (usually in Go) does it the same way every time. It still wants everything around a run the app already has: a schedule, catch-up after sleep, pause, stop, run history, notifications, the status dot, trust. So a program is a routine of another kind, not a feature beside routines: `engine.Runnable` is what that machinery works on, an LLM routine and a program each implement it in their own file, and the split happens only at the step that runs (the agent for one, exec for the other) and at what each kind checks and trusts. "Routine" stays the umbrella word in commands (`routines list --kind program`), with an LLM routine as its default sense, so the commands people know keep working and a name finds either kind.
+
+### Rejected
+- **One struct with a kind field**, branched on wherever kinds differ: the smell `pluginapi.Plugin` had, with fourteen branches on its own kind before it was split
+- **Parallel commands per kind** (a `programs` group with its own run, stop, pause, history): twice the commands for one machinery, and a frontend or Claude would need to know a name's kind before acting on it
+- **A program as a fifth model backend**: backends run models; a program has no prompt, tools, MCP servers or tokens, and a backend is chosen for every routine at once
+- **A generic "command" field in a routine file**: a prompt file that's really a shell command would carry an allowlist, model and memories that mean nothing for it
+
+## Decision: no kind means an LLM routine, at every level
+The app is for LLM routines; programs are the add-on, named explicitly. So `kind` is absent wherever an LLM routine is meant: a CLI flag left out, an MCP argument, a JSON field, a run record, a trust record, a file. Everything written before programs reads the same, LLM routines' outputs and records are written exactly as before, and only where no name is given (listing, checking all, creating) does the default matter; a name finds either kind. Frontends ask for `--kind all` once, so programs and LLM routines show in the same lists.
+
+### Rejected
+- **Writing `kind: llm` everywhere**: every existing output and record would change for a fact that's the default
+- **Listing both kinds by default**: a bare `routines list` would contradict "routine means LLM routine", and a script reading it would meet rows without a prompt
+- **A second name space for programs**: two things named `backup` couldn't be told apart by `run backup`
+
+## Decision: a program is trusted by checksum, and what runs is the app's copy
+A program has no tool allowlist and no writes the app can intercept: trust is its only guard. Adding one copies its description file and executable into the app's own folder, and that copy is what runs, so rebuilding or swapping the file where I made it changes nothing until I update the program; trust records the SHA-256 of the copy and of the description file (its arguments, `writes` and secrets with it), and the copy's checksum is taken again right before each run. Another executable or a changed description takes the trust away, said in words (another executable, now writes, a secret added). A program's secrets are its own keys, passed only as the environment variables it declares.
+
+### Rejected
+- **Running the file where I built it**, trusted by path: a rebuild or a swap between the check and the run would run untrusted code
+- **Trusting the executable only**: a new secret or `writes: false` in the description would change what it's given and how dry runs treat it, unreviewed
+- **Checking the checksum only when trust is given**: the copy in the data folder can still be changed afterwards; checking it at each run costs a hash
+- **Giving it the app's own environment**: it would see the app's own keys and whatever launchd, systemd or the terminal happened to set
+
+## Decision: a program's dry run is --dry-run by convention, and needs trust
+The app can't intercept what a program does, so a dry run is the program's own: one that declares `writes: true` is passed `--dry-run` and is expected to change nothing; one that doesn't write runs as it is. Either way the executable runs, so unlike an LLM routine's, a program's dry run needs trust: a dry run of an untrusted program would run untrusted code, and `--dry-run` is only a convention the program may ignore. `writes` is required in the description file, so a program can't be taken for read-only by leaving it out.
+
+### Rejected
+- **Dry runs need no trust, as for LLM routines**: they'd run any executable added, unreviewed, including through Claude
+- **Refusing dry runs of programs**: the convention is useful, and frontends offer Dry Run for every routine
+- **An environment variable instead of the flag**: a flag is what a command-line program already parses, and shows in its usage
+- **`writes` defaulting to false**: a program that forgot to say would get no `--dry-run` on a dry run
+
+## Decision: programs skip the run queue and the usage limit
+The one-at-a-time run queue exists because of the model's plan and usage limits, and the usage limit is about LLM spend; neither applies to a program. A program takes only its own routine's lock (it never overlaps itself), so a backup isn't held up behind a long digest, and a digest isn't held up by a backup.
+
+### Rejected
+- **Programs waiting in the queue**: a quick program would wait for a model run it has nothing to do with, and could go stale doing so
+- **A queue of their own**: nothing they share needs taking turns
+
+## Decision: a program runs in a defined environment, in a process group of its own
+A program started by the scheduler under launchd or systemd would otherwise see a minimal, changing environment, and a program started in a terminal the terminal's. It gets the same one every time: a fixed PATH per OS (the system's folders, and Homebrew's on macOS), my home folder, a temporary folder, its secrets and what the run is for, in its own data folder, which is kept between runs. It runs in a process group of its own, asked to end and then killed as a group on stop, timeout and shutdown, and whatever it leaves running when it exits is killed too, so a run never leaves processes behind. Its output is read through a pipe the app owns, kept and logged up to 64 KiB: a runaway program can't fill the log or hold the run open.
+
+### Rejected
+- **The login shell's PATH**, as agent CLIs and MCP servers get: whatever my shell profile does would change what a scheduled program finds; a program needing more names it in `args` or by absolute path
+- **Killing only the program**: what it started (a child process, a server) would outlive its stop or timeout
+- **Keeping all of its output**: one program printing in a loop would fill the history
+
+## Decision: a program reports through its exit code and a one-line file
+Exit code 0 is success, as every command-line program already says; a one-line summary written to the file `$PA_RESULT` names is what the run's record shows (what it did, or why it failed), and without one a failure shows its output's last line. That's all a program needs to know about the app to fit in, and a program written for the app still runs by hand.
+
+### Rejected
+- **Reading the summary from stdout's last line**: a program's normal output would have to end just so
+- **A JSON protocol on stdout**: more than one line of status needs, and it couples every program to the app
+
+## Decision: Claude can run programs, but not add or trust one
+Through the app's MCP server Claude can list programs, run, stop and pause them and read their runs, as for any routine. Adding one is mine, like trusting one: a program is added from its description file's path, which no tool takes (`--from` isn't exposed, and a routine's source sent on stdin has no folder to find an executable in), and `routines create`'s `--kind` isn't a tool argument. Trusting stays out of MCP for both kinds.
+
+### Rejected
+- **Letting Claude add programs, untrusted**: an executable Claude chose or built would sit one trust away from running, reviewed only by a checksum I can't read
