@@ -34,6 +34,15 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/doctor.schema.json
+  - command: guide
+    usage: procauto guide [<topic>] [flags]
+    summary: How to write a routine and how to add a plugin, for people and agents
+    example: procauto guide routines
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/guide.schema.json
   - command: login-items disable
     usage: procauto login-items disable
     summary: Don't start the app at login (what's running keeps running)

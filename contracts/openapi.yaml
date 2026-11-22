@@ -208,6 +208,76 @@ components:
         - subject
         - problem
       type: object
+    GuideOutput:
+      additionalProperties: false
+      description: 'GuideOutput is `guide --json`: the topics (no topic given), or one topic.'
+      properties:
+        sections:
+          items:
+            $ref: '#/components/schemas/GuideSection'
+          type: array
+        title:
+          type: string
+        topic:
+          description: Topic is the topic shown, with its title and sections.
+          type: string
+        topics:
+          description: Topics are the guide's topics, when no topic is given.
+          items:
+            $ref: '#/components/schemas/GuideTopic'
+          type: array
+      type: object
+    GuideSection:
+      additionalProperties: false
+      description: GuideSection is one section of a topic.
+      properties:
+        tables:
+          description: Tables are the section's generated tables, as data.
+          items:
+            $ref: '#/components/schemas/GuideTable'
+          type: array
+        text:
+          description: Text is the section as plain text (Markdown), its tables included.
+          type: string
+        title:
+          type: string
+      required:
+        - title
+        - text
+      type: object
+    GuideTable:
+      additionalProperties: false
+      description: GuideTable is a table the guide generates from code.
+      properties:
+        columns:
+          items:
+            type: string
+          type: array
+        id:
+          type: string
+        rows:
+          items:
+            items:
+              type: string
+            type: array
+          type: array
+      required:
+        - id
+        - columns
+        - rows
+      type: object
+    GuideTopic:
+      additionalProperties: false
+      description: GuideTopic is one of the guide's topics.
+      properties:
+        name:
+          type: string
+        summary:
+          type: string
+      required:
+        - name
+        - summary
+      type: object
     Info:
       additionalProperties: false
       description: Info is a schedule as frontends show it.
