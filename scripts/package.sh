@@ -8,7 +8,7 @@
 #       → <out-dir>/<FOLDER>-<version>-linux-<arch>.tar.gz, holding bin/<COMMAND>,
 #         bin/automator-tray (the tray, beside the core), bin/automator-windows
 #         (the windows app, when given) and share/<FOLDER>/
-#         (templates, installer, systemd unit and autostart entry templates,
+#         (templates, installer, systemd unit, autostart and app menu entry templates,
 #         the tray's icons in tray/)
 # TEMPLATES is the templates folder the Linux tree ships (default: the repo's templates/).
 set -euo pipefail
@@ -47,7 +47,7 @@ case $kind in
     fi
     cp -R "$icons" "$tree/share/$folder/tray"
     if [ -d "$templates" ]; then cp -R "$templates" "$tree/share/$folder/templates"; else mkdir "$tree/share/$folder/templates"; fi
-    cp "$scripts/install-app.sh" "$scripts/scheduler.service.in" "$scripts/tray.desktop.in" "$tree/share/$folder/"
+    cp "$scripts/install-app.sh" "$scripts/scheduler.service.in" "$scripts/tray.desktop.in" "$scripts/app.desktop.in" "$tree/share/$folder/"
     cp "$env" "$tree/share/$folder/install.env"
     mkdir -p "$out"
     out=$(cd "$out" && pwd)

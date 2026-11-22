@@ -6,6 +6,8 @@
 #     agent that isn't loaded exits 113. An update stops the agents, then
 #     (re)loads each one: stopping one that isn't loaded mustn't end the script.
 #   - purge_secrets on both OSes: a locked store is reported, not "removed".
+#   - The Linux app menu entry: written with the tray's path quoted (a home
+#     with a space, & and $), and removed.
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d)
@@ -106,5 +108,26 @@ for os in macos linux; do
   out=$(purge "$os" 2 yes)
   case $out in *"couldn't be removed"*"locked"*left=2) ;; *) fail "$os: a locked store wasn't reported: $out" ;; esac
 done
+
+# The app menu entry, files only, for an app under a home with a space, & and $.
+menu_home="$tmp/home & \$dir"
+mkdir -p "$menu_home/app/bin" "$menu_home/app/share/acme/tray"
+printf '#!/bin/sh\n' > "$menu_home/app/bin/automator-tray"
+chmod +x "$menu_home/app/bin/automator-tray"
+cp "$repo/scripts/app.desktop.in" "$tmp/"
+menu() { # menu <function> [args]: with the installer's names, in that home
+  HOME="$menu_home" XDG_DATA_HOME="" OS=linux NAME="Acme Auto" COMMAND=acme FOLDER=acme here="$tmp" \
+    PROCAUTO_INSTALL_FILES_ONLY=1 files_only=1 bash -c '. "$1"; shift; "$@"' _ "$repo/scripts/install-app.sh" "$@"
+}
+menu install_menu_entry "$menu_home/app" >/dev/null || fail "install_menu_entry failed"
+entry="$menu_home/.local/share/applications/acme.desktop"
+grep -qxF "Exec=\"$tmp/home & \\\\\$dir/app/bin/automator-tray\" --open" "$entry" ||
+  fail "the app menu entry's Exec isn't the tray, quoted, with --open: $(grep Exec "$entry")"
+grep -qxF "Name=Acme Auto" "$entry" || fail "the app menu entry doesn't name the app"
+grep -qxF "Icon=$menu_home/app/share/acme/tray/app.png" "$entry" || fail "the app menu entry's icon: $(grep Icon "$entry")"
+grep -qxF "Categories=Utility;" "$entry" || fail "the app menu entry has no category"
+menu remove_menu_entry || fail "remove_menu_entry failed"
+[ ! -e "$entry" ] || fail "remove_menu_entry left the entry"
+menu remove_menu_entry || fail "remove_menu_entry of no entry failed"
 
 echo "--- ok"

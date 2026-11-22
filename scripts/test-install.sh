@@ -66,6 +66,10 @@ case $(uname -s) in
     entry="$XDG_CONFIG_HOME/autostart/$command-tray.desktop"
     grep -qx "Exec=\"$app/bin/automator-tray\"" "$entry" || fail "the tray's autostart entry doesn't run the installed tray"
     grep -qx "Name=$name" "$entry" || fail "the tray's autostart entry doesn't name the app"
+    menu="$HOME/.local/share/applications/$command.desktop"
+    grep -qx "Exec=\"$app/bin/automator-tray\" --open" "$menu" || fail "the app menu entry doesn't open the installed tray"
+    grep -qx "Name=$name" "$menu" || fail "the app menu entry doesn't name the app"
+    grep -qx "Icon=$app/share/$folder/tray/app.png" "$menu" || fail "the app menu entry's icon isn't the app's"
     ;;
 esac
 

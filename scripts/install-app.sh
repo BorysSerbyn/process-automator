@@ -35,6 +35,13 @@
 # only when this runs in a graphical session. A headless machine never starts it.
 # The windows app (bin/automator-windows) beside it is the tray's, started for
 # a window; windows open from the app being replaced are closed with it.
+# The app's entry in the desktop's app menu (applications/<COMMAND>.desktop
+# in XDG_DATA_HOME) runs the tray with --open: the running tray opens a
+# window, or it starts. Written on headless machines too: it's harmless.
+#
+# The scheduler is (re)started before the frontend: opening the app starts
+# the scheduler if it isn't running, which mustn't race the installer's own
+# (re)start of it.
 set -euo pipefail
 
 main() {
@@ -142,13 +149,14 @@ login_items() {
       -e "s|__PATH__|$(plist_value "$(sched_path)")|" -e "s|__LOG__|$(plist_value "$logs/scheduler.log")|" \
       "$here/scheduler.plist.in" > "$agents/$SCHED_LABEL.plist"
     if system; then
-      load_agent "$agents/$UI_LABEL.plist" "$UI_LABEL"
       load_agent "$agents/$SCHED_LABEL.plist" "$SCHED_LABEL"
+      load_agent "$agents/$UI_LABEL.plist" "$UI_LABEL"
     fi
     echo "Login items: $UI_LABEL, $SCHED_LABEL (scheduler log: $logs/scheduler.log)"
   else
-    install_tray "$app"
     install_scheduler "$app"
+    install_tray "$app"
+    install_menu_entry "$app"
   fi
 }
 
@@ -256,6 +264,39 @@ install_tray() {
     start_tray "$exe" && started=1
   fi
   echo "Login item: $UI_LABEL (the tray, in desktop sessions${started:+; started})"
+}
+
+menu_entry() { echo "${XDG_DATA_HOME:-$HOME/.local/share}/applications/$COMMAND.desktop"; }
+
+# install_menu_entry <app>: the app's entry in the desktop's app menu, which
+# opens it (the tray with --open).
+install_menu_entry() {
+  local app=$1 exe entry
+  exe="$app/bin/automator-tray" entry=$(menu_entry)
+  [ -x "$exe" ] || return 0
+  mkdir -p "$(dirname "$entry")"
+  sed -e "s|__NAME__|$(sed_value "$NAME")|g" -e "s|__PROGRAM__|$(sed_value "$(desktop_quoted "$exe")")|" \
+    -e "s|__ICON__|$(sed_value "$app/share/$FOLDER/tray/app.png")|" \
+    "$here/app.desktop.in" > "$entry"
+  refresh_menu "$(dirname "$entry")"
+  echo "App menu: $entry"
+}
+
+# remove_menu_entry: the app's entry gone from the app menu.
+remove_menu_entry() {
+  local entry
+  entry=$(menu_entry)
+  [ -f "$entry" ] || return 0
+  rm -f "$entry"
+  refresh_menu "$(dirname "$entry")"
+}
+
+# refresh_menu <dir>: the desktop's cache of app entries brought up to date,
+# where it keeps one (best effort: desktops also watch the folder).
+refresh_menu() {
+  if system && command -v update-desktop-database >/dev/null; then
+    update-desktop-database "$1" >/dev/null 2>&1 || true
+  fi
 }
 
 # desktop_quoted <path>: path as a desktop entry's Exec argument: quoted,
@@ -406,6 +447,7 @@ uninstall_app() {
     if system; then systemctl --user disable "$SCHED_LABEL" 2>/dev/null || true; fi
     rm -f "$(units_dir)/$SCHED_LABEL"
     [ -z "$UI_LABEL" ] || rm -f "$(autostart_entry)"
+    remove_menu_entry
     if system; then systemctl --user daemon-reload 2>/dev/null || true; fi
   fi
   if [ -n "$purge" ]; then

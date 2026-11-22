@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=__NAME__
+Comment=Routines on a schedule: open __NAME__'s setup or settings
+Exec=__PROGRAM__ --open
+Icon=__ICON__
+Terminal=false
+Categories=Utility;
