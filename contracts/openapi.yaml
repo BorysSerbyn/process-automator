@@ -1133,6 +1133,14 @@ components:
             Setting is the setting the step chooses, for frontends to show and set
             (backend: llm.backend).
           type: string
+        settings:
+          description: |-
+            Settings are further settings the step needs set, for frontends to show
+            and set with each setting's own control (backend: the local backend's
+            server and model).
+          items:
+            type: string
+          type: array
         signIn:
           description: |-
             SignIn is what the step still needs signed in (`auth login <signIn>

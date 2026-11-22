@@ -56,6 +56,13 @@
             "type": "string",
             "description": "Setting is the setting the step chooses, for frontends to show and set\n(backend: llm.backend)."
           },
+          "settings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Settings are further settings the step needs set, for frontends to show\nand set with each setting's own control (backend: the local backend's\nserver and model)."
+          },
           "commands": {
             "items": {
               "type": "string"

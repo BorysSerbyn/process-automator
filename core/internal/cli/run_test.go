@@ -599,3 +599,30 @@ func TestSetupInteractiveLocal(t *testing.T) {
 		t.Errorf("backend: %+v", b)
 	}
 }
+
+// The backend step names the settings its backend needs (local: its server
+// and model), so a frontend shows them with the backend, and none otherwise.
+func TestBackendStepSettings(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	enginetest.Load(t, cfg)
+	settingsOf := func() []string {
+		out, _ := cli(t, cfg, "setup", "--json")
+		var got SetupOutput
+		_ = json.Unmarshal([]byte(out), &got)
+		for _, s := range got.Steps {
+			if s.Step == stepBackend {
+				return s.Settings
+			}
+		}
+		return nil
+	}
+	if s := settingsOf(); len(s) != 0 {
+		t.Errorf("claude-code: %v", s)
+	}
+	if _, err := cli(t, cfg, "settings", "set", "llm.backend", "local"); err != nil {
+		t.Fatal(err)
+	}
+	if s := settingsOf(); !slices.Equal(s, []string{"llm.local.url", "llm.local.model"}) {
+		t.Errorf("local: %v", s)
+	}
+}

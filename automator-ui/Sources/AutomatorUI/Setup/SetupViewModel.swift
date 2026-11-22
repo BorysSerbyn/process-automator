@@ -34,6 +34,9 @@ final class SetupViewModel: ObservableObject {
     @Published var values: [String: [String: String]] = [:]
     /// The model backend setting (its choices and words come from the core).
     @Published var backend: SettingState?
+    /// The settings the chosen backend needs set (the step's `settings`, e.g.
+    /// the local backend's server and model), in the core's order.
+    @Published var backendSettings: [SettingState] = []
     @Published var reviews: [String: TrustReview] = [:]
     /// Steps the core does without asking (`auto`) that were started once
     /// already: a failed one waits for its button.
@@ -184,6 +187,7 @@ final class SetupViewModel: ObservableObject {
             switch await cli.background({ $0.appSettings() }) {
             case .success(let list):
                 backend = list.first { $0.key == step.setting }
+                backendSettings = (step.settings ?? []).compactMap { key in list.first { $0.key == key } }
                 if backend == nil { errors[Self.id(step)] = "The core lists no setting for this step." }
             case .failure(let failure):
                 errors[Self.id(step)] = failure.message
@@ -195,6 +199,17 @@ final class SetupViewModel: ObservableObject {
         guard let key = backend?.key else { return }
         run(step) { cli in
             if case .failure(let failure) = cli.setSetting(key, value) { return failure }
+            return nil
+        } then: {
+            self.loadBackend(step)
+        }
+    }
+
+    /// Sets (or, with nil, resets) one of the backend's own settings.
+    func setBackendSetting(_ step: SetupStep, _ key: String, _ value: String?) {
+        run(step) { cli in
+            let result = value.map { cli.setSetting(key, $0) } ?? cli.resetSetting(key)
+            if case .failure(let failure) = result { return failure }
             return nil
         } then: {
             self.loadBackend(step)

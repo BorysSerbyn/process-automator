@@ -529,6 +529,16 @@ struct BackendPicker: View {
                 .labelsHidden()
                 .fixedSize()
                 .disabled(busy)
+                // What the chosen backend needs set (local: its server and
+                // model), each with the Settings window's control.
+                ForEach(model.backendSettings, id: \.key) { setting in
+                    SettingRow(
+                        setting: setting, label: setting.key, error: nil,
+                        set: { model.setBackendSetting(step, setting.key, $0) },
+                        reset: { model.setBackendSetting(step, setting.key, nil) }
+                    )
+                    .disabled(busy)
+                }
             }
         } else if model.errors[SetupViewModel.id(step)] == nil {
             ProgressView().controlSize(.small)  // the error shows under the step otherwise

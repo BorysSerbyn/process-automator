@@ -56,6 +56,10 @@ type SetupStep struct {
 	// Setting is the setting the step chooses, for frontends to show and set
 	// (backend: llm.backend).
 	Setting string `json:"setting,omitempty"`
+	// Settings are further settings the step needs set, for frontends to show
+	// and set with each setting's own control (backend: the local backend's
+	// server and model).
+	Settings []string `json:"settings,omitempty"`
 	// Commands do the step once I've answered: placeholders in <angle
 	// brackets> are my answers, and a trailing # comment says when a command
 	// applies or what to do with its output.
@@ -223,8 +227,12 @@ func backendStep(a *engine.App) (SetupStep, error) {
 		return SetupStep{}, err
 	}
 	def, _ := settings.Lookup("llm.backend")
+	backend, err := a.BackendDef()
+	if err != nil {
+		return SetupStep{}, err
+	}
 	st := SetupStep{Step: stepBackend, Title: "Model backend", Done: b.Problem == "", Status: b.Status(), SignIn: b.SignIn,
-		Setting:  def.Key,
+		Setting: def.Key, Settings: backend.Settings,
 		Ask:      "Which backend should run your routines?\n" + strings.Join(choiceLines(def, "- ", ": "), "\n"),
 		Commands: []string{product.Command + " settings set " + def.Key + " <" + strings.Join(def.Enum, "|") + ">"}}
 	if b.SignIn != "" {

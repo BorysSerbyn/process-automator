@@ -17,7 +17,10 @@ import (
 type BackendDef struct {
 	// Name is its llm.backend value (set when it's looked up).
 	Name string
-	New  func(a *App) (agent.Backend, error)
+	// Settings are the settings it needs set (local: its server and model),
+	// for setup to show with the backend.
+	Settings []string
+	New      func(a *App) (agent.Backend, error)
 	// AgentModel maps a routine's model (as written in its file) to what the
 	// backend's agent CLI takes, or Genkit runs; "" means the CLI's default.
 	AgentModel func(a *App, model string) (string, error)
@@ -121,7 +124,8 @@ var Backends = map[string]BackendDef{
 		},
 	},
 	"local": {
-		New: newLocal,
+		New:      newLocal,
+		Settings: []string{LocalURLSetting, LocalModelSetting},
 		// Routine files name Claude models: they run on llm.local.model
 		// unless they name local/<model>.
 		AgentModel:   func(a *App, model string) (string, error) { return agent.LocalModel(model, a.localModel()), nil },
