@@ -285,8 +285,8 @@ type loadedRoutine struct {
 
 // loadRoutines resolves each routine's settings, of either kind; a routine
 // that doesn't load, settings that don't resolve, or what keeps it from
-// running whether trusted or not (a missing folder or server) is a step to
-// fix (it would fail every run).
+// running whether trusted or not (a missing folder or server, a permission
+// that isn't granted) is a step to fix (it would fail every run).
 func (a *App) loadRoutines() ([]loadedRoutine, []SetupStep, error) {
 	all, broken, err := a.All()
 	if err != nil {
@@ -294,10 +294,12 @@ func (a *App) loadRoutines() ([]loadedRoutine, []SetupStep, error) {
 	}
 	var loaded []loadedRoutine
 	var problems []SetupStep
-	fix := func(name, problem string) {
+	fix := func(name, problem string, commands ...string) {
+		if len(commands) == 0 {
+			commands = []string{product.Command + " doctor   # says what's wrong and how to fix it"}
+		}
 		problems = append(problems, SetupStep{Step: StepRoutine, Subject: name, Title: "Fix " + name,
-			Status:   Capitalize(problem),
-			Commands: []string{product.Command + " doctor   # says what's wrong and how to fix it"}})
+			Status: Capitalize(problem), Commands: commands})
 	}
 	for _, b := range broken {
 		fix(b.Name, b.Err.Error())
@@ -309,6 +311,11 @@ func (a *App) loadRoutines() ([]loadedRoutine, []SetupStep, error) {
 			continue
 		}
 		for _, p := range rd.Problems {
+			if p.Permission != "" && p.Open != "" {
+				// The OS asks me, as the app; or I turn it on where it says.
+				fix(x.Name(), p.Text, product.Command+" permissions request "+p.Permission)
+				continue
+			}
 			fix(x.Name(), p.Text)
 		}
 		loaded = append(loaded, loadedRoutine{x, rd.Config})

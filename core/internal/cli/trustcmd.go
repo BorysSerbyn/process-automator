@@ -13,6 +13,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
+	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/schedule"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
@@ -59,6 +60,13 @@ type TrustOutput struct {
 	// <name>`): its servers', its own secrets' (a program's, a hook's), and
 	// its watcher's. Trusting doesn't wait for them.
 	SignIns []string `json:"signIns,omitempty"`
+	// Permissions are what the OS must allow it before it works: an LLM
+	// routine's plugins', a program's own, a hook's action's and its
+	// watcher's, each with what declares it and what the scheduler last
+	// found (`permissions request <permission>` asks for one). Trusting
+	// covers them (one added later needs a new review) and doesn't wait for
+	// them; while one isn't granted it doesn't run.
+	Permissions []engine.PermissionNeed `json:"permissions,omitempty"`
 }
 
 // WatcherTrust is a hook's watcher in the hook's review: whether it's
@@ -139,12 +147,13 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 	// one yes.
 	trustWatcher := out.Watcher != nil && !out.Watcher.Trusted && out.Watcher.review.Approval != nil
 	out.SignIns = a.SignInsNeeded(x)
+	out.Permissions = a.Permissions(x)
 	if approval.Surface != nil {
 		out.Surface = approval.Surface.Normalized()
 	}
 	if rec, ok := f.Routines[name]; ok {
-		out.Changes = append(out.Changes, approval.Changes(rec.Approval)...)
-		out.Trusted = approval.Equal(rec.Approval)
+		out.Changes = append(out.Changes, rec.ChangesTo(approval)...)
+		out.Trusted = rec.Approves(approval)
 	}
 	// Only a paused routine with a schedule, or a paused hook, has anything
 	// to resume.
@@ -191,6 +200,7 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 			if len(out.SignIns) > 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "It needs signing in before it works: %s.\n", signInCommands(out.SignIns))
 			}
+			describePermissions(cmd.OutOrStdout(), out.Permissions)
 		}
 		if check {
 			note := "\nNothing trusted (--check only reviews)."
@@ -248,7 +258,48 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 	if len(out.SignIns) > 0 {
 		done = append(done, "It still needs signing in: "+signInCommands(out.SignIns))
 	}
+	for _, p := range engine.PermissionProblems(name, out.Permissions) {
+		done = append(done, "Before it runs, "+p.Text+" (fix: "+p.Fix+")")
+	}
 	return emit(cmd, out, strings.Join(done, ". ")+".")
+}
+
+// describePermissions prints the permissions something needs, with what
+// declares each and what the scheduler last found.
+func describePermissions(w io.Writer, needs []engine.PermissionNeed) {
+	if len(needs) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "It needs these permissions from the OS (trusting it covers them; it doesn't run while one isn't granted):")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, n := range needs {
+		var by []string
+		for _, s := range n.By {
+			by = append(by, s.Kind+" "+s.Name)
+		}
+		line := fmt.Sprintf("  %s\t%s\t(%s)", n.Label, permissionStateText(n.State), strings.Join(by, ", "))
+		if n.Blocks() && n.State != permissions.NotChecked {
+			line += "\tfix: " + engine.PermissionFix(n)
+		}
+		fmt.Fprintln(tw, line)
+	}
+	_ = tw.Flush()
+}
+
+// permissionStateText is a permission's state in words.
+func permissionStateText(s permissions.Status) string {
+	switch s {
+	case permissions.Granted:
+		return "granted"
+	case permissions.Missing:
+		return "not allowed"
+	case permissions.Unknown:
+		return "can't be checked"
+	case permissions.Unsupported:
+		return "not checked on this OS"
+	default:
+		return "not checked yet (the scheduler checks it)"
+	}
 }
 
 // enabledKey is the key of x's enabled setting: routines.<name>.enabled, or

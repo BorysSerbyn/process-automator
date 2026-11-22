@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
@@ -145,6 +146,9 @@ func ValidatePlugins(ps []pluginapi.Plugin) error {
 func validatePlugin(p pluginapi.Plugin) error {
 	if !ValidName(p.Name) {
 		return fmt.Errorf("plugin %q: names are lowercase letters, digits and dashes", p.Name)
+	}
+	if _, err := permissions.Check(fmt.Sprintf("plugin %q", p.Name), p.Permissions); err != nil {
+		return err
 	}
 	switch {
 	case (p.External == nil) == (p.InProcess == nil):

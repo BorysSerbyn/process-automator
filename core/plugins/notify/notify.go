@@ -39,6 +39,9 @@ func Plugin() pluginapi.Plugin {
 	return pluginapi.Plugin{
 		Name:        Name,
 		Description: "Lets routines notify me (notify_me) with a desktop notification",
+		// macOS shows them only while the app may notify; routines using it
+		// can't work, and say so, until it may.
+		Permissions: []string{"notifications"},
 		InProcess:   &pluginapi.InProcess{Serve: serve},
 	}
 }

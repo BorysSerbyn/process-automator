@@ -108,6 +108,7 @@ var Fields = []programs.Field{
 	{Name: "timeout", Type: "duration", Description: "How long a run may take before it's stopped (default 20m)."},
 	{Name: "rate", Type: "int", Description: "At most this many runs an hour (default 60); far past it, it's paused."},
 	{Name: "secrets", Type: "list", Description: "Secrets it's given as environment variables: name, and optionally env and prompt."},
+	programs.PermissionsField,
 }
 
 // PromptKeys are an LLM hook's own automator.* keys, besides a routine's, for
@@ -130,6 +131,7 @@ type file struct {
 	Timeout     *string           `yaml:"timeout"`
 	Rate        *int              `yaml:"rate"`
 	Secrets     []programs.Secret `yaml:"secrets"`
+	Permissions []string          `yaml:"permissions"`
 }
 
 // Parse validates source as hook name's file, which is a prompt (PromptFile,
@@ -168,7 +170,7 @@ func Parse(name, path, source string) (Hook, error) {
 	}
 	p, err := programs.Build(name, DescriptionFile, programs.Spec{
 		Description: f.Description, Executable: f.Executable, Args: f.Args, Writes: f.Writes,
-		Secrets: f.Secrets, File: vals, Source: source, Hook: true,
+		Secrets: f.Secrets, Permissions: f.Permissions, File: vals, Source: source, Hook: true,
 	})
 	if err != nil {
 		return Hook{}, err

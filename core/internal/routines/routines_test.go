@@ -93,6 +93,8 @@ func TestRoutineFields(t *testing.T) {
 	write("full", "automator.schedule: \"20 9 * * 1-5\"\nautomator.timeout: 90m\nautomator.effort: high\nautomator.enabled: false\n")
 	write("badeffort", "automator.effort: extreme\n")
 	write("badtimeout", "automator.timeout: soon\n")
+	// A prompt needs its plugins' permissions; it declares none.
+	write("permissions", "automator.permissions: [notifications]\n")
 	set, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +113,7 @@ func TestRoutineFields(t *testing.T) {
 	if defaults["timeout"] != "90m" || defaults["effort"] != "high" || defaults["staleness"] != "1h" || defaults["enabled"] != false {
 		t.Fatalf("settings defaults: %v", defaults)
 	}
-	for _, bad := range []string{"badeffort", "badtimeout"} {
+	for _, bad := range []string{"badeffort", "badtimeout", "permissions"} {
 		if _, err := set.Find(bad); err == nil {
 			t.Errorf("%s accepted", bad)
 		}

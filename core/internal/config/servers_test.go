@@ -14,7 +14,7 @@ func serve(pluginapi.Host) (*sdk.Server, error) { return nil, nil }
 
 func TestValidatePlugins(t *testing.T) {
 	ext := pluginapi.Plugin{Name: "tracker", External: &pluginapi.ServerSpec{URL: "https://x"}}
-	inproc := pluginapi.Plugin{Name: "notes", InProcess: &pluginapi.InProcess{Serve: serve, Secrets: []pluginapi.SecretSpec{{Name: "api-key", Prompt: "Token"}}}}
+	inproc := pluginapi.Plugin{Name: "notes", Permissions: []string{"notifications"}, InProcess: &pluginapi.InProcess{Serve: serve, Secrets: []pluginapi.SecretSpec{{Name: "api-key", Prompt: "Token"}}}}
 	if err := ValidatePlugins([]pluginapi.Plugin{ext, inproc}); err != nil {
 		t.Fatal(err)
 	}
@@ -26,6 +26,7 @@ func TestValidatePlugins(t *testing.T) {
 		"bad name":        {Name: "Bad Name", External: ext.External},
 		"bad spec":        {Name: "spec", External: &pluginapi.ServerSpec{Command: "x", URL: "https://y"}},
 		"bad secret name": {Name: "y", InProcess: &pluginapi.InProcess{Serve: serve, Secrets: []pluginapi.SecretSpec{{Name: "API KEY"}}}},
+		"bad permission":  {Name: "z", Permissions: []string{"keyboard"}, InProcess: &pluginapi.InProcess{Serve: serve}},
 	}
 	for what, p := range bad {
 		set := []pluginapi.Plugin{p}

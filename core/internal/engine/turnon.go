@@ -44,8 +44,8 @@ func (a *App) HookWatcherReview(name string) WatcherReview {
 		return r
 	}
 	if rec, ok := f.Routines[name]; ok {
-		r.Changes = ap.Changes(rec.Approval)
-		r.Trusted = ap.Equal(rec.Approval)
+		r.Changes = rec.ChangesTo(ap)
+		r.Trusted = rec.Approves(ap)
 		if !r.Trusted {
 			r.Untrusted = "changed since it was trusted"
 		}

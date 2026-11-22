@@ -71,6 +71,9 @@ type RoutineInfo struct {
 	LastRun *runstatus.Run `json:"lastRun,omitempty"`
 	// Program is a program's own: what runs and with what.
 	Program *ProgramInfo `json:"program,omitempty"`
+	// Permissions are what the OS must allow it before it can work: its plugins' for an
+	// LLM routine, its own for a program (what declares each, and what the scheduler last found); absent when none.
+	Permissions []engine.PermissionNeed `json:"permissions,omitempty"`
 }
 
 // ProgramInfo is a program's section of its routine row: the copy of its
@@ -191,6 +194,7 @@ func routineInfo(cmd *cobra.Command, a *engine.App, def engine.BackendDef, statu
 		Name: x.Name(), Kind: x.Kind().Written(), Path: x.Path(), Description: x.Description(),
 		Servers: []string{}, Tools: []string{}, BuiltinTools: []string{},
 		Enabled: c.Enabled, Schedule: c.Schedule, Timeout: settings.DurationText(c.Timeout), Folder: c.WorkFolder,
+		Permissions: a.Permissions(x),
 	}
 	if rd.ConfigErr == nil {
 		if rd.TrustErr != nil {

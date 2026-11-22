@@ -87,6 +87,8 @@ type Runnable interface {
 	check(ctx context.Context, a *App, rd *Readiness)
 	// reaches are the sign-ins it needs (`auth login` names).
 	reaches(a *App) []string
+	// needs are the permissions it needs, with what declares each.
+	needs(a *App) []need
 	// approval is what trusting it approves, as it is now.
 	approval(a *App) (trust.Approval, error)
 	// run runs it once it has its turn (App.Run does the rest).

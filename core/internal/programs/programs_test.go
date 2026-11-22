@@ -62,10 +62,22 @@ func TestParse(t *testing.T) {
 		"executable: ./prog\nwrites: false\nschedule: every day\n",
 		"name: other\nexecutable: ./prog\nwrites: false\n",
 		"executable: ./prog\nwrites: false\nsecrets:\n  - name: Bad Name\n",
+		"executable: ./prog\nwrites: false\npermissions: [keyboard]\n", // an unknown permission
 	} {
 		if _, err := Parse("backup", bad); err == nil {
 			t.Errorf("accepted %q", bad)
 		}
+	}
+}
+
+// A program declares the permissions it needs; they're kept sorted, each once.
+func TestParsePermissions(t *testing.T) {
+	p, err := Parse("snap", "executable: ./prog\nwrites: false\npermissions: [screen-recording, accessibility, screen-recording]\n")
+	if err != nil || strings.Join(p.Permissions, ",") != "accessibility,screen-recording" {
+		t.Fatalf("%v %v", p.Permissions, err)
+	}
+	if _, err := Parse("snap", "executable: ./prog\nwrites: false\npermissions: [keyboard]\n"); err == nil || !strings.Contains(err.Error(), `unknown permission "keyboard"`) {
+		t.Fatalf("an unknown permission: %v", err)
 	}
 }
 

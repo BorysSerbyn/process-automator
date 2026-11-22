@@ -290,6 +290,14 @@ components:
           type: string
         fix:
           type: string
+        open:
+          type: string
+        permission:
+          description: |-
+            Permission is the permission it's about when one isn't granted
+            (`permissions request <permission>` asks the OS for it), and Open the
+            address of the OS's page that turns it on (absent when there's none).
+          type: string
         problem:
           type: string
         subject:
@@ -431,6 +439,15 @@ components:
             Path is its file: its prompt, or its program's description file (in
             the app's copy).
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it before it can work: its
+            action's (an LLM hook's plugins', a program hook's own) and its
+            watcher's, with what declares each and what the scheduler last found;
+            absent when none.
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         problem:
           description: |-
             Problem is why it can't run while it's on (its watcher missing,
@@ -528,6 +545,15 @@ components:
             Path is its file: its prompt, or its program's description file (in
             the app's copy).
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it before it can work: its
+            action's (an LLM hook's plugins', a program hook's own) and its
+            watcher's, with what declares each and what the scheduler last found;
+            absent when none.
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         problem:
           description: |-
             Problem is why it can't run while it's on (its watcher missing,
@@ -853,6 +879,203 @@ components:
         - mcpChanges
         - frontendLog
       type: object
+    PermissionNeed:
+      additionalProperties: false
+      description: PermissionNeed is a permission something needs, what declares it, and what the scheduler last found.
+      properties:
+        by:
+          items:
+            $ref: '#/components/schemas/PermissionSource'
+          type: array
+        label:
+          description: Label is what the OS calls it (Input Monitoring).
+          type: string
+        permission:
+          type: string
+        settingsUrl:
+          type: string
+        state:
+          description: |-
+            State is what the scheduler last found: granted, missing, unknown (it
+            can't be checked), unsupported (not on this OS) or not-checked
+            (nothing recorded yet). Only missing and not-checked keep it from
+            running.
+          enum:
+            - granted
+            - missing
+            - unknown
+            - unsupported
+            - not-checked
+          type: string
+        where:
+          description: |-
+            Where says where it's turned on, following "turn it on" ("in System
+            Settings > Privacy & Security > Input Monitoring"), and SettingsURL is
+            the address that opens it (absent where there's none).
+          type: string
+      required:
+        - permission
+        - label
+        - state
+        - by
+      type: object
+    PermissionReport:
+      additionalProperties: false
+      description: PermissionReport is what's needed, by what, and what the scheduler last found (`permissions list`).
+      properties:
+        checkedAt:
+          description: |-
+            CheckedAt is when the scheduler last checked (absent: never, so every
+            state is not-checked).
+          format: date-time
+          type: string
+        permissions:
+          items:
+            $ref: '#/components/schemas/PermissionStatus'
+          type: array
+      required:
+        - permissions
+      type: object
+    PermissionRequest:
+      additionalProperties: false
+      description: PermissionRequest is how asking the OS for a permission went (`permissions request`).
+      properties:
+        asked:
+          description: |-
+            Asked is whether the scheduler asked the OS (the first time, macOS
+            shows its prompt naming the app; after that only its settings change
+            it); Why says why not.
+          type: boolean
+        by:
+          items:
+            $ref: '#/components/schemas/PermissionSource'
+          type: array
+        label:
+          description: Label is what the OS calls it (Input Monitoring).
+          type: string
+        permission:
+          type: string
+        settingsUrl:
+          type: string
+        state:
+          description: |-
+            State is what the scheduler last found: granted, missing, unknown (it
+            can't be checked), unsupported (not on this OS) or not-checked
+            (nothing recorded yet). Only missing and not-checked keep it from
+            running.
+          enum:
+            - granted
+            - missing
+            - unknown
+            - unsupported
+            - not-checked
+          type: string
+        where:
+          description: |-
+            Where says where it's turned on, following "turn it on" ("in System
+            Settings > Privacy & Security > Input Monitoring"), and SettingsURL is
+            the address that opens it (absent where there's none).
+          type: string
+        why:
+          type: string
+      required:
+        - permission
+        - label
+        - state
+        - by
+        - asked
+      type: object
+    PermissionSource:
+      additionalProperties: false
+      description: 'PermissionSource is what declares a permission something needs: a plugin it uses, its own program (a program''s, a program hook''s) or its watcher.'
+      properties:
+        kind:
+          enum:
+            - plugin
+            - program
+            - hook
+            - watcher
+          type: string
+        name:
+          type: string
+      required:
+        - kind
+        - name
+      type: object
+    PermissionStatus:
+      additionalProperties: false
+      description: 'PermissionStatus is a permission, what the scheduler last found, and everything that needs it (By: what declares it for any of them).'
+      properties:
+        by:
+          items:
+            $ref: '#/components/schemas/PermissionSource'
+          type: array
+        label:
+          description: Label is what the OS calls it (Input Monitoring).
+          type: string
+        neededBy:
+          items:
+            $ref: '#/components/schemas/PermissionUse'
+          type: array
+        permission:
+          type: string
+        settingsUrl:
+          type: string
+        state:
+          description: |-
+            State is what the scheduler last found: granted, missing, unknown (it
+            can't be checked), unsupported (not on this OS) or not-checked
+            (nothing recorded yet). Only missing and not-checked keep it from
+            running.
+          enum:
+            - granted
+            - missing
+            - unknown
+            - unsupported
+            - not-checked
+          type: string
+        where:
+          description: |-
+            Where says where it's turned on, following "turn it on" ("in System
+            Settings > Privacy & Security > Input Monitoring"), and SettingsURL is
+            the address that opens it (absent where there's none).
+          type: string
+      required:
+        - permission
+        - label
+        - state
+        - by
+        - neededBy
+      type: object
+    PermissionUse:
+      additionalProperties: false
+      description: 'PermissionUse is something that needs a permission: a routine (LLM), a program, a hook or a watcher.'
+      properties:
+        by:
+          description: By is what declares the permission for it.
+          items:
+            $ref: '#/components/schemas/PermissionSource'
+          type: array
+        enabled:
+          description: |-
+            Enabled is whether it's on: a routine or a hook enabled, a watcher not
+            paused.
+          type: boolean
+        kind:
+          enum:
+            - routine
+            - program
+            - hook
+            - watcher
+          type: string
+        name:
+          type: string
+      required:
+        - kind
+        - name
+        - enabled
+        - by
+      type: object
     Picker:
       additionalProperties: false
       description: Picker is a schedule as days of the week and a time of day.
@@ -939,6 +1162,13 @@ components:
           type: string
         name:
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it before its tools can work,
+            as it declares them (routines that use it need them too).
+          items:
+            type: string
+          type: array
       required:
         - name
         - kind
@@ -1241,6 +1471,13 @@ components:
             Path is its file: an LLM routine's .prompt file, a program's
             description file (in the app's copy).
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it before it can work: its plugins' for an
+            LLM routine, its own for a program (what declares each, and what the scheduler last found); absent when none.
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         program:
           $ref: '#/components/schemas/ProgramInfo'
           description: 'Program is a program''s own: what runs and with what.'
@@ -1354,6 +1591,13 @@ components:
             Path is its file: an LLM routine's .prompt file, a program's
             description file (in the app's copy).
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it before it can work: its plugins' for an
+            LLM routine, its own for a program (what declares each, and what the scheduler last found); absent when none.
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         program:
           $ref: '#/components/schemas/ProgramInfo'
           description: 'Program is a program''s own: what runs and with what.'
@@ -2080,6 +2324,17 @@ components:
             - llm
             - program
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it before it works: an LLM
+            routine's plugins', a program's own, a hook's action's and its
+            watcher's, each with what declares it and what the scheduler last
+            found (`permissions request <permission>` asks for one). Trusting
+            covers them (one added later needs a new review) and doesn't wait for
+            them; while one isn't granted it doesn't run.
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         program:
           $ref: '#/components/schemas/ProgramInfo'
           description: |-
@@ -2289,6 +2544,14 @@ components:
           type: string
         path:
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it, as its file declares, with
+            what the scheduler last found: it isn't started while one isn't
+            granted. Absent when none.
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         secrets:
           items:
             $ref: '#/components/schemas/ProgramSecret'
@@ -2375,6 +2638,14 @@ components:
           type: string
         path:
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it, as its file declares, with
+            what the scheduler last found: it isn't started while one isn't
+            granted. Absent when none.
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         secrets:
           items:
             $ref: '#/components/schemas/ProgramSecret'
@@ -2446,6 +2717,13 @@ components:
             - poll
             - stream
           type: string
+        permissions:
+          description: |-
+            Permissions are what the OS must allow it, which trusting it covers,
+            with what the scheduler last found (absent when none).
+          items:
+            $ref: '#/components/schemas/PermissionNeed'
+          type: array
         program:
           $ref: '#/components/schemas/ProgramInfo'
           description: |-

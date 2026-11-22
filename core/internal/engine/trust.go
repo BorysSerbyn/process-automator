@@ -74,11 +74,57 @@ func (a *App) TrustProblem(x Runnable) (why string, changed bool, err error) {
 	if err != nil {
 		return "", false, err
 	}
-	if cur.Equal(rec.Approval) {
+	if rec.Approves(cur) {
 		return "", false, nil
 	}
-	return fmt.Sprintf("changed since you trusted it (%s)", strings.Join(cur.Changes(rec.Approval), "; ")), true, nil
+	return fmt.Sprintf("changed since you trusted it (%s)", strings.Join(rec.ChangesTo(cur), "; ")), true, nil
 }
 
 // RunConfig is the settings x has whatever its kind.
 func (a *App) RunConfig(x Runnable) (RunConfig, error) { return x.runConfig(a) }
+
+// recordTrustedPermissions records the permissions that what was trusted
+// before permissions were declared needs now: it already needed them when
+// it was trusted, so turning them into a change to review would only ask
+// me again about what I approved. Each record is filled once; ones whose
+// routine, hook or watcher doesn't load wait until it does.
+func (a *App) recordTrustedPermissions(f *trust.File) error {
+	var unrecorded []string
+	for name, rec := range f.Routines {
+		if rec.Unrecorded() {
+			unrecorded = append(unrecorded, name)
+		}
+	}
+	if len(unrecorded) == 0 {
+		return nil
+	}
+	current := map[string][]string{}
+	all, _, err := a.All()
+	if err != nil {
+		return err
+	}
+	hooks, _, err := a.Hooks()
+	if err != nil {
+		return err
+	}
+	for _, x := range append(all, hooks...) {
+		if slices.Contains(unrecorded, x.Name()) {
+			if ap, err := x.approval(a); err == nil {
+				current[x.Name()] = ap.Permissions
+			}
+		}
+	}
+	ws, _, err := a.Watchers()
+	if err != nil {
+		return err
+	}
+	for _, w := range ws {
+		if slices.Contains(unrecorded, w.Name) {
+			current[w.Name] = w.Program.Permissions
+		}
+	}
+	if len(current) == 0 {
+		return nil
+	}
+	return a.TrustStore().RecordPermissions(current)
+}

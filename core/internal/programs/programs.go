@@ -24,6 +24,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/yamlfile"
 )
@@ -51,6 +52,8 @@ type Program struct {
 	Writes bool
 	// Secrets are the secrets it's given, as environment variables.
 	Secrets []Secret
+	// Permissions are what the OS must allow it (permissions.All), sorted.
+	Permissions []string
 	// File holds the per-routine settings its file sets (schedule,
 	// staleness, timeout), as written. Effective values come from settings.
 	File map[string]any
@@ -91,6 +94,7 @@ type file struct {
 	Staleness   *string  `yaml:"staleness"`
 	Timeout     *string  `yaml:"timeout"`
 	Secrets     []Secret `yaml:"secrets"`
+	Permissions []string `yaml:"permissions"`
 }
 
 // Field is one of the description file's fields.
@@ -109,7 +113,13 @@ var Fields = []Field{
 	{"staleness", "duration", "How late a missed run may still run (needs schedule)."},
 	{"timeout", "duration", "How long a run may take before it's stopped."},
 	{"secrets", "list", "Secrets it's given as environment variables: name, and optionally env and prompt."},
+	PermissionsField,
 }
+
+// PermissionsField is the permissions key, the same in a program's, a
+// program hook's and a watcher's file.
+var PermissionsField = Field{"permissions", "list", "What the OS must allow it before it can work (" + strings.Join(permissions.Names(), ", ") + "). " +
+	"Trusting it covers them; while one isn't granted it doesn't run, and says so."}
 
 // Settings are the program's per-routine settings (routines.<name>.<field>),
 // with defaults from its file.
@@ -150,7 +160,7 @@ func Parse(name, source string) (Program, error) {
 	}
 	return Build(name, DescriptionFile, Spec{
 		Description: f.Description, Executable: f.Executable, Args: f.Args, Writes: f.Writes,
-		Secrets: f.Secrets, File: settingsOf, Source: source,
+		Secrets: f.Secrets, Permissions: f.Permissions, File: settingsOf, Source: source,
 	})
 }
 
@@ -180,6 +190,8 @@ type Spec struct {
 	// writes (nil there means false).
 	Writes  *bool
 	Secrets []Secret
+	// Permissions are what the OS must allow it (permissions.All).
+	Permissions []string
 	// File are the settings the file sets, as written.
 	File   map[string]any
 	Source string
@@ -207,6 +219,9 @@ func Build(name, file string, s Spec) (Program, error) {
 		return Program{}, err
 	}
 	p.Secrets = secrets
+	if p.Permissions, err = permissions.Check(file, s.Permissions); err != nil {
+		return Program{}, err
+	}
 	// Validate the settings it sets with the same rules `settings set` uses.
 	for _, def := range p.Settings() {
 		if def.Default == nil {

@@ -275,6 +275,74 @@
       },
       "type": "array",
       "description": "SignIns are the sign-ins it still needs before it works (`auth login\n\u003cname\u003e`): its servers', its own secrets' (a program's, a hook's), and\nits watcher's. Trusting doesn't wait for them."
+    },
+    "permissions": {
+      "items": {
+        "properties": {
+          "permission": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "description": "Label is what the OS calls it (Input Monitoring)."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "granted",
+              "missing",
+              "unknown",
+              "unsupported",
+              "not-checked"
+            ],
+            "description": "State is what the scheduler last found: granted, missing, unknown (it\ncan't be checked), unsupported (not on this OS) or not-checked\n(nothing recorded yet). Only missing and not-checked keep it from\nrunning."
+          },
+          "by": {
+            "items": {
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "plugin",
+                    "program",
+                    "hook",
+                    "watcher"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "kind",
+                "name"
+              ],
+              "description": "PermissionSource is what declares a permission something needs: a plugin it uses, its own program (a program's, a program hook's) or its watcher."
+            },
+            "type": "array"
+          },
+          "where": {
+            "type": "string",
+            "description": "Where says where it's turned on, following \"turn it on\" (\"in System\nSettings \u003e Privacy \u0026 Security \u003e Input Monitoring\"), and SettingsURL is\nthe address that opens it (absent where there's none)."
+          },
+          "settingsUrl": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "permission",
+          "label",
+          "state",
+          "by"
+        ],
+        "description": "PermissionNeed is a permission something needs, what declares it, and what the scheduler last found."
+      },
+      "type": "array",
+      "description": "Permissions are what the OS must allow it before it works: an LLM\nroutine's plugins', a program's own, a hook's action's and its\nwatcher's, each with what declares it and what the scheduler last\nfound (`permissions request \u003cpermission\u003e` asks for one). Trusting\ncovers them (one added later needs a new review) and doesn't wait for\nthem; while one isn't granted it doesn't run."
     }
   },
   "additionalProperties": false,

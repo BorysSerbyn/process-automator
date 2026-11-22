@@ -151,12 +151,18 @@ func orEvery(t string) string {
 
 // Approval is what a routine, a hook or a watcher is trusted with: an LLM
 // routine's surface or a program's section (a hook's action is one or the
-// other) and a hook's trigger; or a watcher's executable.
+// other) and a hook's trigger; or a watcher's executable. Permissions are
+// what the OS must allow it: an LLM routine's, its plugins'; a program's
+// or a watcher's, what its file declares; a hook's, its action's (its
+// watcher's are the watcher's own).
 type Approval struct {
 	Surface *Surface `json:"surface,omitempty"`
 	Program *Program `json:"program,omitempty"`
 	Trigger *Trigger `json:"trigger,omitempty"`
 	Watcher *Program `json:"watcher,omitempty"`
+	// Permissions are always written ([] for none): a record without them
+	// was trusted before permissions were declared (see Record).
+	Permissions []string `json:"permissions"`
 }
 
 // Normalized sorts what's listed, so equal approvals compare equal.
@@ -183,6 +189,10 @@ func (a Approval) Normalized() Approval {
 		}
 		a.Watcher = &w
 	}
+	a.Permissions = slices.Compact(slices.Sorted(slices.Values(a.Permissions)))
+	if a.Permissions == nil {
+		a.Permissions = []string{}
+	}
 	return a
 }
 
@@ -206,8 +216,33 @@ func (a Approval) Changes(old Approval) []string {
 		trig = []string{"is no longer a hook"}
 	}
 	a.Trigger, old.Trigger = nil, nil
-	return append(a.actionChanges(old), trig...)
+	perms := permissionChanges(a.Permissions, old.Permissions)
+	action := a.actionChanges(old)
+	if len(perms) > 0 && slices.Equal(action, []string{describedAnew}) {
+		action = nil // the permissions are what changed in it
+	}
+	return append(append(perms, action...), trig...)
 }
+
+// permissionChanges says which permissions it needs now, or no longer.
+func permissionChanges(now, was []string) []string {
+	var out []string
+	for _, p := range now {
+		if !slices.Contains(was, p) {
+			out = append(out, "needs the "+p+" permission now")
+		}
+	}
+	for _, p := range was {
+		if !slices.Contains(now, p) {
+			out = append(out, "no longer needs the "+p+" permission")
+		}
+	}
+	return out
+}
+
+// describedAnew is the change said of a description file that changed in
+// nothing else said.
+const describedAnew = "changes its description file"
 
 // actionChanges describes how what it runs differs.
 func (a Approval) actionChanges(old Approval) []string {
@@ -253,7 +288,7 @@ func (p Program) changes(old Program) []string {
 		}
 	}
 	if len(out) == 0 && p.Description != old.Description {
-		out = append(out, "changes its description file")
+		out = append(out, describedAnew)
 	}
 	return out
 }
@@ -262,6 +297,28 @@ func (p Program) changes(old Program) []string {
 type Record struct {
 	Approval
 	TrustedAt time.Time `json:"trustedAt"`
+}
+
+// Unrecorded reports whether r was trusted before permissions were
+// declared: until they're recorded (Store.RecordPermissions), it covers
+// whatever it needs now.
+func (r Record) Unrecorded() bool { return r.Permissions == nil }
+
+// Approves reports whether r covers cur: what it was trusted with is what
+// it is now.
+func (r Record) Approves(cur Approval) bool {
+	if r.Unrecorded() {
+		cur.Permissions = nil
+	}
+	return cur.Equal(r.Approval)
+}
+
+// ChangesTo describes how cur differs from what r was trusted with.
+func (r Record) ChangesTo(cur Approval) []string {
+	if r.Unrecorded() {
+		cur.Permissions = nil
+	}
+	return cur.Changes(r.Approval)
 }
 
 // File is the trust file.
@@ -297,6 +354,20 @@ func (st Store) Trust(approvals map[string]Approval, now time.Time) error {
 	return st.update(func(f *File) {
 		for name, a := range approvals {
 			f.Routines[name] = Record{Approval: a.Normalized(), TrustedAt: now}
+		}
+	})
+}
+
+// RecordPermissions records, for records trusted before permissions were
+// declared, the permissions they need now (by name): what they were
+// trusted as already needed them. Records that have them are left alone.
+func (st Store) RecordPermissions(current map[string][]string) error {
+	return st.update(func(f *File) {
+		for name, perms := range current {
+			if rec, ok := f.Routines[name]; ok && rec.Unrecorded() {
+				rec.Permissions = Approval{Permissions: perms}.Normalized().Permissions
+				f.Routines[name] = rec
+			}
 		}
 	})
 }

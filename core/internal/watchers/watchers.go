@@ -71,6 +71,7 @@ type file struct {
 	Interval    string            `yaml:"interval"`
 	Timeout     string            `yaml:"timeout"`
 	Secrets     []programs.Secret `yaml:"secrets"`
+	Permissions []string          `yaml:"permissions"`
 }
 
 // Fields are the description file's fields, for the guide and the docs.
@@ -83,6 +84,7 @@ var Fields = []programs.Field{
 	{Name: "interval", Type: "duration", Description: "poll only: how often it's run (default 1m, at least 5s)."},
 	{Name: "timeout", Type: "duration", Description: "poll only: how long one poll may take before it's stopped (default 30s)."},
 	{Name: "secrets", Type: "list", Description: "Secrets it's given as environment variables: name, and optionally env and prompt."},
+	programs.PermissionsField,
 }
 
 // ValidName reports whether name can name a watcher.
@@ -126,7 +128,7 @@ func Parse(name, source string) (Watcher, error) {
 	}
 	no := false
 	if w.Program, err = programs.Build(name, DescriptionFile, programs.Spec{
-		Description: f.Description, Executable: f.Executable, Args: f.Args, Writes: &no, Secrets: f.Secrets, Source: source,
+		Description: f.Description, Executable: f.Executable, Args: f.Args, Writes: &no, Secrets: f.Secrets, Permissions: f.Permissions, Source: source,
 	}); err != nil {
 		return Watcher{}, err
 	}

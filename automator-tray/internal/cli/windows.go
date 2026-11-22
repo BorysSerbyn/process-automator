@@ -186,6 +186,33 @@ type TrustOutput struct {
 	Warnings []string      `json:"warnings,omitempty"`
 	// SignIns are the sign-ins it still needs before it works (`auth login <name>`).
 	SignIns []string `json:"signIns,omitempty"`
+	// Permissions are what the OS must allow it before it works, each with
+	// what the scheduler last found (`permissions request <permission>`
+	// asks for one).
+	Permissions []PermissionNeed `json:"permissions,omitempty"`
+}
+
+// PermissionNeed is a permission something needs, what declares it, and
+// what the scheduler last found.
+type PermissionNeed struct {
+	Permission string `json:"permission"`
+	// Label is what the OS calls it.
+	Label string `json:"label"`
+	// State is granted, missing, unknown, unsupported or not-checked; only
+	// missing and not-checked keep it from running.
+	State string             `json:"state"`
+	By    []PermissionSource `json:"by"`
+	// Where says where it's turned on, and SettingsURL opens it (absent where
+	// there's none).
+	Where       string `json:"where,omitempty"`
+	SettingsURL string `json:"settingsUrl,omitempty"`
+}
+
+// PermissionSource is what declares a permission: a plugin, a program, a
+// hook or a watcher.
+type PermissionSource struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 // NeedsTrust is whether confirming its review trusts anything: it isn't

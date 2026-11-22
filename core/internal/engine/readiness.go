@@ -23,7 +23,8 @@ type Readiness struct {
 	// missing folder, built-in tools its backend doesn't have, a model whose
 	// provider isn't set up, a server nothing provides and, once Check has
 	// run, its tools, a sign-in or its model's server; once Check has run, a
-	// program's secret that isn't stored.
+	// program's secret that isn't stored; for any kind, a permission it needs
+	// that isn't granted (or hasn't been checked yet).
 	Problems []Problem
 	// Tools are an LLM routine's allowlisted tools as a run gets them (Check).
 	Tools []agent.CheckedTool
@@ -52,6 +53,11 @@ func (rd Readiness) All() []Problem {
 // command that fixes it ("" when its file or settings need editing).
 type Problem struct {
 	Text, Fix string
+	// Permission is the permission it's about, when it's one that isn't
+	// granted or hasn't been checked; when it isn't granted, Open is the
+	// address of the OS's settings page that turns it on ("" where there's
+	// none) and `permissions request <permission>` asks for it.
+	Permission, Open string
 }
 
 // Assess checks what can be checked without connecting to anything: its
@@ -62,7 +68,7 @@ func (a *App) Assess(x Runnable) Readiness {
 	if rd.Config, rd.ConfigErr = x.runConfig(a); rd.ConfigErr != nil {
 		return rd
 	}
-	rd.Problems = x.problems(a)
+	rd.Problems = append(x.problems(a), PermissionProblems(x.Name(), a.Permissions(x))...)
 	rd.Untrusted, rd.TrustErr = a.Untrusted(x)
 	return rd
 }

@@ -133,5 +133,13 @@ func (l Layout) RunQueueLock() string { return l.in("run.lock") }
 // EditLock serializes changes to routines and plugins.
 func (l Layout) EditLock() string { return l.in("edit.lock") }
 
+// Permissions is what the scheduler last found of the permissions things
+// declare (permissions.json).
+func (l Layout) Permissions() string { return l.in("permissions.json") }
+
+// PermissionRequests holds requests to ask the OS for a permission, which
+// the scheduler takes (a file per permission).
+func (l Layout) PermissionRequests() string { return l.in("permission-requests") }
+
 // DaemonLock is held by the one running daemon.
 func (l Layout) DaemonLock() string { return l.in("daemon.lock") }

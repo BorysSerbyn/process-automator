@@ -113,6 +113,15 @@ func (p *program) check(_ context.Context, a *App, rd *Readiness) {
 	}
 }
 
+// needs: what its file declares.
+func (p *program) needs(*App) []need {
+	kind := SourceProgram
+	if p.p.Hook {
+		kind = SourceHook
+	}
+	return needsOf(p.p.Permissions, PermissionSource{kind, p.p.Name})
+}
+
 func (p *program) reaches(*App) []string {
 	if len(p.p.Secrets) == 0 {
 		return nil
@@ -131,7 +140,7 @@ func (p *program) approval(*App) (trust.Approval, error) {
 	for _, s := range p.p.Secrets {
 		tp.Secrets = append(tp.Secrets, s.Name)
 	}
-	return trust.Approval{Program: tp}, nil
+	return trust.Approval{Program: tp, Permissions: p.p.Permissions}, nil
 }
 
 // run runs the app's copy of the executable, checked against what was

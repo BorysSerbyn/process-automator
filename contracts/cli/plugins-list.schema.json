@@ -16,6 +16,13 @@
       "endpoint": {
         "type": "string",
         "description": "URL or command, for external plugins"
+      },
+      "permissions": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "description": "Permissions are what the OS must allow it before its tools can work,\nas it declares them (routines that use it need them too)."
       }
     },
     "additionalProperties": false,

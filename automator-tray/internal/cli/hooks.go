@@ -104,6 +104,8 @@ type WatcherTrustOutput struct {
 	Program ProgramInfo `json:"program"`
 	Changes []string    `json:"changes"`
 	Trusted bool        `json:"trusted"`
+	// Permissions are what the OS must allow it, which trusting it covers.
+	Permissions []PermissionNeed `json:"permissions,omitempty"`
 }
 
 // Event is one thing that happened, as a watcher printed it: a hook's run

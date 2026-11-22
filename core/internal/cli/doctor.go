@@ -20,6 +20,11 @@ type Finding struct {
 	Subject string `json:"subject"`
 	Problem string `json:"problem"`
 	Fix     string `json:"fix,omitempty"`
+	// Permission is the permission it's about when one isn't granted
+	// (`permissions request <permission>` asks the OS for it), and Open the
+	// address of the OS's page that turns it on (absent when there's none).
+	Permission string `json:"permission,omitempty"`
+	Open       string `json:"open,omitempty"`
 }
 
 // DoctorOutput is `doctor --json`.
@@ -78,6 +83,9 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 	add := func(area, subject, problem, fix string) {
 		findings = append(findings, Finding{Area: area, Subject: subject, Problem: problem, Fix: fix})
 	}
+	addProblem := func(area, subject string, p engine.Problem) {
+		findings = append(findings, Finding{Area: area, Subject: subject, Problem: p.Text, Fix: p.Fix, Permission: p.Permission, Open: p.Open})
+	}
 
 	status, err := runstatus.Load(a.Layout.RunStatus())
 	switch {
@@ -117,13 +125,13 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		rd.Check(cmd.Context(), a, x)
 		name := x.Name()
 		for _, p := range rd.All() {
-			add("routine", name, p.Text, p.Fix)
+			addProblem("routine", name, p)
 		}
 		if rd.ConfigErr == nil {
 			lastRunFinding(add, status, name, false)
 		}
 	}
-	hookFindings(cmd, a, status, add)
+	hookFindings(cmd, a, status, add, addProblem)
 	return findings
 }
 
@@ -148,7 +156,7 @@ func lastRunFinding(add func(area, subject, problem, fix string), status *runsta
 }
 
 // hookFindings adds what keeps each hook that's on from running.
-func hookFindings(cmd *cobra.Command, a *engine.App, status *runstatus.Status, add func(area, subject, problem, fix string)) {
+func hookFindings(cmd *cobra.Command, a *engine.App, status *runstatus.Status, add func(area, subject, problem, fix string), addProblem func(area, subject string, p engine.Problem)) {
 	all, broken, err := a.Hooks()
 	if err != nil {
 		add("hook", "hooks folder", err.Error(), "")
@@ -164,7 +172,7 @@ func hookFindings(cmd *cobra.Command, a *engine.App, status *runstatus.Status, a
 		}
 		rd.Check(cmd.Context(), a, x)
 		for _, p := range rd.All() {
-			add("hook", x.Name(), p.Text, p.Fix)
+			addProblem("hook", x.Name(), p)
 		}
 		if rd.ConfigErr == nil {
 			lastRunFinding(add, status, x.Name(), true)

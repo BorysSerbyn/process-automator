@@ -17,6 +17,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
+	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
@@ -120,8 +121,13 @@ func TestGuidePluginsCoversTheCode(t *testing.T) {
 		}
 	}
 	server, _ := guideFiles.ReadFile("guide/testdata/notes-server/main.go")
-	for _, w := range []string{string(server), "--url", "--command", "--dir", "--auth", "--header", "--arg", "--env",
-		"auth login <name>", "plugins check <name>", "mcp tools <name>", "readOnlyHint", "pairing"} {
+	want := []string{string(server), "--url", "--command", "--dir", "--auth", "--header", "--arg", "--env", "--permission",
+		"auth login <name>", "plugins check <name>", "mcp tools <name>", "readOnlyHint", "pairing",
+		"pluginapi.Plugin.Permissions", "permissions list", "permissions request <permission>", "`notifications`"}
+	for _, p := range permissions.All {
+		want = append(want, "`"+p.Name+"` (")
+	}
+	for _, w := range want {
 		if !strings.Contains(out, w) {
 			t.Errorf("guide plugins lacks %q", w)
 		}
@@ -131,7 +137,7 @@ func TestGuidePluginsCoversTheCode(t *testing.T) {
 func TestGuideProgramsCoversTheCode(t *testing.T) {
 	out := guideOut(t, "programs")
 	want := []string{"$" + programs.ResultEnv, "$" + programs.TriggerEnv, "$" + programs.ForEnv, "$" + programs.RunIDEnv,
-		programs.DryRunFlag, programs.DefaultPath, "routines create <name> --kind program", "auth login <name>",
+		programs.DryRunFlag, programs.DefaultPath, "routines create <name> --kind program", "auth login <name>", "permissions request <permission>",
 		"routines trust <name> --resume", "run <name> --dry-run", "routines update <name>"}
 	for _, f := range programs.Fields {
 		want = append(want, "`"+f.Name+"` (")
@@ -215,7 +221,7 @@ func TestGuideHooksCoversTheCode(t *testing.T) {
 		"$" + programs.ResultEnv, engine.UntrustedOpen, engine.UntrustedClose, "<" + engine.EventBlockTag + ">",
 		"watchers add <name> --from", "hooks add <name> --from", "hooks fire <name> --event",
 		"--dry-run", "hooks trust <name> --resume", "hooks pause <name>", "stop <name>", "auth login <name>",
-		"{{event}}", "{{events}}", "automator.batch", "on stdin", `{"cursor": "..."}`}
+		"{{event}}", "{{events}}", "automator.batch", "on stdin", `{"cursor": "..."}`, "permissions request <permission>"}
 	for _, f := range hooks.Fields {
 		want = append(want, "`"+f.Name+"` (")
 	}
@@ -246,8 +252,8 @@ func TestGuideHooksCoversTheCode(t *testing.T) {
 		t.Fatalf("the examples: %d yaml, %d prompts", len(yamls), len(prompts))
 	}
 	w, err := watchers.Parse("calendar", yamls[0])
-	if err != nil {
-		t.Fatalf("the example watcher.yaml doesn't parse: %v", err)
+	if err != nil || len(w.Program.Permissions) == 0 {
+		t.Fatalf("the example watcher.yaml doesn't parse, or declares no permission: %+v %v", w.Program.Permissions, err)
 	}
 	h, err := hooks.Parse("open-meet", hooks.DescriptionFile, yamls[1])
 	if err != nil || h.On.Watcher != w.Name {

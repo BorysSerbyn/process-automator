@@ -47,6 +47,7 @@ func TestParse(t *testing.T) {
 		"mode: poll\n", // no executable
 		"executable: ./w\nmode: poll\nname: other\n",          // another name
 		"executable: ./w\nmode: poll\nsecrets: [{name: A}]\n", // a bad secret name
+		"executable: ./w\nmode: poll\npermissions: [keys]\n",  // an unknown permission
 	} {
 		if _, err := Parse("cal", bad); err == nil {
 			t.Errorf("parsed %q", bad)
@@ -55,6 +56,10 @@ func TestParse(t *testing.T) {
 	w, err := Parse("cal", "executable: ./w\nmode: poll\ninterval: 10s\nsecrets: [{name: cal-token}]\n")
 	if err != nil || w.Interval != 10*time.Second || w.Timeout != DefaultTimeout || w.Program.Secrets[0].Env != "CAL_TOKEN" || w.Program.Writes {
 		t.Fatalf("%+v %v", w, err)
+	}
+	w, err = Parse("keys", "executable: ./w\nmode: stream\npermissions: [input-monitoring]\n")
+	if err != nil || len(w.Program.Permissions) != 1 || w.Program.Permissions[0] != "input-monitoring" {
+		t.Fatalf("its permissions: %+v %v", w.Program.Permissions, err)
 	}
 }
 

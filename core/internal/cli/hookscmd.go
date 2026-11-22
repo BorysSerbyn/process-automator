@@ -66,6 +66,11 @@ type HookInfo struct {
 	Program *ProgramInfo `json:"program,omitempty"`
 	// LastRun is its latest outcome from run status.
 	LastRun *runstatus.Run `json:"lastRun,omitempty"`
+	// Permissions are what the OS must allow it before it can work: its
+	// action's (an LLM hook's plugins', a program hook's own) and its
+	// watcher's, with what declares each and what the scheduler last found;
+	// absent when none.
+	Permissions []engine.PermissionNeed `json:"permissions,omitempty"`
 }
 
 // HookDetail is `hooks show --json`: a hook with its file's source and its
@@ -152,7 +157,8 @@ func newHooksListCmd() *cobra.Command {
 // with its settings are warned about.
 func hookInfo(cmd *cobra.Command, a *engine.App, status *runstatus.Status, x engine.Runnable) HookInfo {
 	h, _ := engine.AsHook(x)
-	row := HookInfo{Name: x.Name(), Kind: x.Kind().Written(), Path: x.Path(), Description: x.Description(), On: h.On, Batch: h.Batch}
+	row := HookInfo{Name: x.Name(), Kind: x.Kind().Written(), Path: x.Path(), Description: x.Description(), On: h.On, Batch: h.Batch,
+		Permissions: a.Permissions(x)}
 	c, err := a.HookConfig(x)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: %v\n", x.Name(), err)

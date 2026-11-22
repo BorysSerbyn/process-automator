@@ -127,13 +127,17 @@ func (l *llmRoutine) check(ctx context.Context, a *App, rd *Readiness) {
 
 func (l *llmRoutine) reaches(a *App) []string { return a.Servers(l.r) }
 
+// needs: a prompt declares none of its own; it needs what the plugins it
+// reaches declare.
+func (l *llmRoutine) needs(a *App) []need { return a.serverNeeds(a.Servers(l.r)) }
+
 func (l *llmRoutine) approval(a *App) (trust.Approval, error) {
 	c, err := a.RoutineConfig(l.r)
 	if err != nil {
 		return trust.Approval{}, err
 	}
 	s := SurfaceOf(l.r, c)
-	return trust.Approval{Surface: &s}, nil
+	return trust.Approval{Surface: &s, Permissions: permissionNames(l.needs(a))}, nil
 }
 
 // SurfaceOf is what an LLM routine can reach, with its effective settings.
@@ -296,8 +300,11 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 // call it first, so a routine made afterwards is never trusted this way;
 // read-only commands don't (TrustProblem reads as if it had run).
 func (a *App) InitTrust() error {
-	if _, ok, err := a.TrustStore().Load(); ok || err != nil {
-		return err
+	if f, ok, err := a.TrustStore().Load(); ok || err != nil {
+		if err != nil {
+			return err
+		}
+		return a.recordTrustedPermissions(f)
 	}
 	set, err := routines.Load(a.Layout.Routines())
 	if err != nil {
@@ -305,9 +312,8 @@ func (a *App) InitTrust() error {
 	}
 	current := map[string]trust.Approval{}
 	for _, r := range set.Routines {
-		if c, err := a.RoutineConfig(r); err == nil {
-			s := SurfaceOf(r, c)
-			current[r.Name] = trust.Approval{Surface: &s}
+		if ap, err := a.LLM(r, set).approval(a); err == nil {
+			current[r.Name] = ap
 		}
 	}
 	return a.TrustStore().Init(current, time.Now())

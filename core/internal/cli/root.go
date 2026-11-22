@@ -34,7 +34,7 @@ func NewRoot(plugins []pluginapi.Plugin) *cobra.Command {
 	root.PersistentFlags().String("config", "", "config file (default: per-user config dir)")
 	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) { adoptLoginPath(cmd) }
 	root.PersistentPostRun = func(cmd *cobra.Command, _ []string) { refreshStatus(cmd) }
-	root.AddCommand(newVersionCmd(), newAuthCmd(), newSettingsCmd(), newMCPCmd(), newRunCmd(), newDaemonCmd(), newRoutinesCmd(), newPathsCmd(), newUpdateCmd(), newRunsCmd(), newTemplatesCmd(), newPluginsCmd(), newStartCmd(), newStopCmd(), newScheduleCmd(), newUsageCmd(), newSetupCmd(), newNotificationsCmd(), newStatusCmd(), newDoctorCmd(), newMemoryCmd(), newLoginItemsCmd(), newUninstallCmd(), newGuideCmd(), newHooksCmd(), newWatchersCmd())
+	root.AddCommand(newVersionCmd(), newAuthCmd(), newSettingsCmd(), newMCPCmd(), newRunCmd(), newDaemonCmd(), newRoutinesCmd(), newPathsCmd(), newUpdateCmd(), newRunsCmd(), newTemplatesCmd(), newPluginsCmd(), newStartCmd(), newStopCmd(), newScheduleCmd(), newUsageCmd(), newSetupCmd(), newNotificationsCmd(), newStatusCmd(), newDoctorCmd(), newMemoryCmd(), newLoginItemsCmd(), newUninstallCmd(), newGuideCmd(), newHooksCmd(), newWatchersCmd(), newPermissionsCmd())
 	root.SetContext(withPlugins(context.Background(), plugins))
 	return root
 }

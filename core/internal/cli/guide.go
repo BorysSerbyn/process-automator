@@ -14,6 +14,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
+	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
@@ -290,6 +291,8 @@ func (s guideSources) table(id string) (GuideTable, error) {
 		return fieldsTable(id, watchers.Fields), nil
 	case "hookSettings":
 		return hookSettingsTable(), nil
+	case "permissions":
+		return permissionsTable(), nil
 	}
 	return GuideTable{}, fmt.Errorf("no table %q", id)
 }
@@ -454,6 +457,15 @@ func builtinsTable() (GuideTable, error) {
 		}
 	}
 	return t, nil
+}
+
+// permissionsTable is every permission something can declare.
+func permissionsTable() GuideTable {
+	t := GuideTable{ID: "permissions", Columns: []string{"Permission", "In System Settings", "Allows"}}
+	for _, p := range permissions.All {
+		t.Rows = append(t.Rows, []string{p.Name, p.Label, p.Means})
+	}
+	return t
 }
 
 // manifestTable is every plugin.yaml field, from pluginManifest.

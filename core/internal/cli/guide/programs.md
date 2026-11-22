@@ -22,6 +22,7 @@ secrets:
 - **Dry runs**: with `writes: true` it's passed `%{dryRunFlag}` and must change nothing; with `writes: false` a dry run runs it as it is
 - **Environment**: a fixed PATH (`%{programPath}`), `HOME`, `TMPDIR`, its secrets, `$%{triggerEnv}` (`schedule`, `manual` or `backfill`), `$%{forEnv}` (the time it runs for) and `$%{runIDEnv}`. Call anything else by its full path. It works in a folder of its own, kept between runs
 - **Output**: stdout and stderr go to the run's log and history, the first and last %{outputHalf} KiB when there's more
+- **Permissions**: what the OS must allow it (`permissions`: one of those `%{command} guide plugins` lists, e.g. `screen-recording`). Trusting it covers them; while one isn't granted it doesn't run, saying which and where it's turned on (`%{command} permissions request <permission>` asks for it)
 - Stopping it, or its timeout, ends it and everything it started
 
 ## After writing it

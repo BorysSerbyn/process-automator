@@ -96,3 +96,41 @@ func TestLoadRejectsUnknownServerFields(t *testing.T) {
 		t.Fatalf("empty config rejected: %v", err)
 	}
 }
+
+// A server in the file declares what the OS must allow it; an unknown
+// permission is refused, and writing a server keeps its permissions.
+func TestServerPermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	body := "mcpServers:\n  keys:\n    command: /x\n    permissions: [input-monitoring, accessibility]\n  plain:\n    command: /y\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Permissions["keys"]; strings.Join(got, ",") != "accessibility,input-monitoring" || cfg.MCPServers["keys"].Command != "/x" {
+		t.Fatalf("%v %+v", got, cfg.MCPServers["keys"])
+	}
+	if got, ok := cfg.Permissions["plain"]; !ok || len(got) != 0 {
+		t.Fatalf("a server that declares none: %v %v", got, ok)
+	}
+	if _, ok := cfg.Permissions["remote"]; ok {
+		t.Fatal("a preset's permissions aren't the file's")
+	}
+	if err := os.WriteFile(path, []byte("mcpServers:\n  keys:\n    command: /x\n    permissions: [keyboard]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path, nil); err == nil || !strings.Contains(err.Error(), `unknown permission "keyboard"`) {
+		t.Fatalf("an unknown permission: %v", err)
+	}
+	if err := SetServer(path, "keys", Server{ServerSpec: pluginapi.ServerSpec{Command: "/z"}, Permissions: []string{"camera"}}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := Load(path, nil); err != nil || strings.Join(cfg.Permissions["keys"], ",") != "camera" {
+		t.Fatalf("written: %+v %v", cfg.Permissions, err)
+	}
+	if err := SetServer(path, "keys", Server{ServerSpec: pluginapi.ServerSpec{Command: "/z"}, Permissions: []string{"keyboard"}}); err == nil {
+		t.Fatal("wrote an unknown permission")
+	}
+}

@@ -58,6 +58,14 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// A program hook declares the permissions its program needs.
+func TestParsePermissions(t *testing.T) {
+	h, err := Parse("h", DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: w}\npermissions: [accessibility]\n")
+	if err != nil || strings.Join(h.Program.Permissions, ",") != "accessibility" {
+		t.Fatalf("%+v %v", h.Program, err)
+	}
+}
+
 func TestParseRefuses(t *testing.T) {
 	for name, c := range map[string]struct{ path, src, want string }{
 		"no on":              {DescriptionFile, "executable: ./act\nwrites: false\n", "on is required"},
@@ -71,6 +79,9 @@ func TestParseRefuses(t *testing.T) {
 		"prompt parameters":  {"x.prompt", "---\nautomator.on: {watcher: w}\nautomator.parameters: [{name: x, type: string}]\n---\nGo.", "unknown field"},
 		"prompt bad on":      {"x.prompt", "---\nautomator.on: {watcher: w, when: now}\n---\nGo.", "unknown field"},
 		"prompt bad batch":   {"x.prompt", "---\nautomator.on: {watcher: w}\nautomator.batch: often\n---\nGo.", "batch"},
+		"a bad permission":   {DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: w}\npermissions: [keys]\n", `unknown permission "keys"`},
+		// A prompt needs its plugins' permissions; it declares none.
+		"prompt permissions": {"x.prompt", "---\nautomator.on: {watcher: w}\nautomator.permissions: [notifications]\n---\nGo.", "has no automator.permissions"},
 	} {
 		if _, err := Parse("h", c.path, c.src); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v (want %q)", name, err, c.want)

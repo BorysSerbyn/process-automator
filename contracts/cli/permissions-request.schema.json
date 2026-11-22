@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "permissions-request.schema.json",
+  "properties": {
+    "permission": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string",
+      "description": "Label is what the OS calls it (Input Monitoring)."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "granted",
+        "missing",
+        "unknown",
+        "unsupported",
+        "not-checked"
+      ],
+      "description": "State is what the scheduler last found: granted, missing, unknown (it\ncan't be checked), unsupported (not on this OS) or not-checked\n(nothing recorded yet). Only missing and not-checked keep it from\nrunning."
+    },
+    "by": {
+      "items": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plugin",
+              "program",
+              "hook",
+              "watcher"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "name"
+        ],
+        "description": "PermissionSource is what declares a permission something needs: a plugin it uses, its own program (a program's, a program hook's) or its watcher."
+      },
+      "type": "array"
+    },
+    "where": {
+      "type": "string",
+      "description": "Where says where it's turned on, following \"turn it on\" (\"in System\nSettings \u003e Privacy \u0026 Security \u003e Input Monitoring\"), and SettingsURL is\nthe address that opens it (absent where there's none)."
+    },
+    "settingsUrl": {
+      "type": "string"
+    },
+    "asked": {
+      "type": "boolean",
+      "description": "Asked is whether the scheduler asked the OS (the first time, macOS\nshows its prompt naming the app; after that only its settings change\nit); Why says why not."
+    },
+    "why": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "permission",
+    "label",
+    "state",
+    "by",
+    "asked"
+  ],
+  "title": "procauto permissions request --json",
+  "description": "PermissionRequest is how asking the OS for a permission went (`permissions request`)."
+}

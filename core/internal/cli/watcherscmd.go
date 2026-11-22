@@ -56,6 +56,10 @@ type WatcherInfo struct {
 	// (cleared once it works again), and ErrorAt when.
 	Error   string     `json:"error,omitempty"`
 	ErrorAt *time.Time `json:"errorAt,omitempty"`
+	// Permissions are what the OS must allow it, as its file declares, with
+	// what the scheduler last found: it isn't started while one isn't
+	// granted. Absent when none.
+	Permissions []engine.PermissionNeed `json:"permissions,omitempty"`
 }
 
 // WatcherDetail is `watchers show --json`: a watcher with its description
@@ -84,6 +88,9 @@ type WatcherTrustOutput struct {
 	// Changes since it was last trusted (empty for a first trust).
 	Changes []string `json:"changes"`
 	Trusted bool     `json:"trusted"`
+	// Permissions are what the OS must allow it, which trusting it covers,
+	// with what the scheduler last found (absent when none).
+	Permissions []engine.PermissionNeed `json:"permissions,omitempty"`
 }
 
 func newWatchersCmd() *cobra.Command {
@@ -104,7 +111,7 @@ func newWatchersCmd() *cobra.Command {
 func watcherInfo(a *engine.App, w watchers.Watcher, all []engine.Runnable) WatcherInfo {
 	info := WatcherInfo{
 		Name: w.Name, Path: w.Path, Description: w.Description, Mode: w.Mode, Executable: w.Program.Executable,
-		Args: w.Program.Args, Secrets: []ProgramSecret{}, Hooks: []string{},
+		Args: w.Program.Args, Secrets: []ProgramSecret{}, Hooks: []string{}, Permissions: a.WatcherPermissions(w),
 	}
 	if info.Args == nil {
 		info.Args = []string{}
@@ -325,20 +332,22 @@ func newWatchersTrustCmd() *cobra.Command {
 			}
 			info := watcherInfo(a, w, nil)
 			out := WatcherTrustOutput{Watcher: w.Name, Mode: w.Mode, Changes: []string{},
-				Program: ProgramInfo{Executable: info.Executable, Checksum: info.Checksum, Args: info.Args, Secrets: info.Secrets}}
+				Program:     ProgramInfo{Executable: info.Executable, Checksum: info.Checksum, Args: info.Args, Secrets: info.Secrets},
+				Permissions: info.Permissions}
 			f, _, err := a.TrustStore().Load()
 			if err != nil {
 				return err
 			}
 			if rec, ok := f.Routines[w.Name]; ok {
-				out.Changes = append(out.Changes, approval.Changes(rec.Approval)...)
-				out.Trusted = approval.Equal(rec.Approval)
+				out.Changes = append(out.Changes, rec.ChangesTo(approval)...)
+				out.Trusted = rec.Approves(approval)
 			}
 			if out.Trusted && !check {
 				return emit(cmd, out, w.Name+" is already trusted as it is now.")
 			}
 			if !wantsJSON(cmd) {
 				describeWatcher(cmd, out)
+				describePermissions(cmd.OutOrStdout(), out.Permissions)
 			}
 			if check {
 				return emit(cmd, out, "\nNothing trusted (--check only reviews).")

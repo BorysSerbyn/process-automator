@@ -400,6 +400,8 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 			}
 		case hook && slices.Contains(HookOnlyKeys, k):
 			hookKeys[k] = v
+		case k == "permissions":
+			return Routine{}, fmt.Errorf("a prompt has no %s.permissions: it needs what the plugins in %s.servers declare (their plugin.yaml, config entry or Go plugin), shown when it's reviewed", Namespace, Namespace)
 		case hook && k == "schedule":
 			return Routine{}, fmt.Errorf("a hook has no %s.schedule: it runs when its events come (%s.on)", Namespace, Namespace)
 		case fields[k]:

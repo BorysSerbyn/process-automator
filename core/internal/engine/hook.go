@@ -222,6 +222,16 @@ func (h *hook) check(ctx context.Context, a *App, rd *Readiness) { h.action.chec
 
 func (h *hook) reaches(a *App) []string { return h.action.reaches(a) }
 
+// needs: its action's (a prompt's plugins', or its program's) and its
+// watcher's.
+func (h *hook) needs(a *App) []need {
+	out := h.action.needs(a)
+	if w, err := a.FindWatcher(h.h.On.Watcher); err == nil {
+		out = append(out, watcherNeeds(w)...)
+	}
+	return out
+}
+
 // approval: its action's, and its trigger: another watcher or event type,
 // or batching, needs another review.
 func (h *hook) approval(a *App) (trust.Approval, error) {

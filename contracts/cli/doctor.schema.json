@@ -27,6 +27,13 @@
           },
           "fix": {
             "type": "string"
+          },
+          "permission": {
+            "type": "string",
+            "description": "Permission is the permission it's about when one isn't granted\n(`permissions request \u003cpermission\u003e` asks the OS for it), and Open the\naddress of the OS's page that turns it on (absent when there's none)."
+          },
+          "open": {
+            "type": "string"
           }
         },
         "additionalProperties": false,

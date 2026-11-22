@@ -18,6 +18,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
+	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/yamlfile"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
@@ -164,6 +165,7 @@ type pluginManifest struct {
 	Args        []string          `yaml:"args" guide:"The command's arguments."`
 	Env         map[string]string `yaml:"env" guide:"Its environment, NAME: value. A value may reference a secret as {key}, which auth login <name> asks for."`
 	Pairing     string            `yaml:"pairing" guide:"For a server that issues its own credential on first contact (an approval dialog, then a key shown once): what to do to approve it. auth login then starts the server first, shows this, and asks for the credential, which must be a secret its env references."`
+	Permissions []string          `yaml:"permissions" guide:"What the OS must allow the server before its tools can work (see Permissions below). Routines that use it need them too: trusting one covers them, and while one isn't granted it doesn't run."`
 }
 
 func readManifest(dir string) (pluginManifest, error) {
@@ -177,6 +179,9 @@ func readManifest(dir string) (pluginManifest, error) {
 	}
 	if m.Command == "" {
 		return m, fmt.Errorf("%s: command is required", manifestFile)
+	}
+	if m.Permissions, err = permissions.Check(manifestFile, m.Permissions); err != nil {
+		return m, err
 	}
 	if c := m.Command; !filepath.IsAbs(c) && strings.ContainsRune(c, filepath.Separator) && !insideDir(".", c) {
 		return m, fmt.Errorf("%s: command %q points outside the folder", manifestFile, c)
@@ -214,7 +219,7 @@ func managed(a *engine.App, s pluginapi.ServerSpec) bool {
 // there, and only then moves it into place, keeping an older copy aside. On
 // any failure nothing changes. finish(true) drops the older copy once the
 // config points at the new one; finish(false) puts the older copy back.
-func installFolder(ctx context.Context, a *engine.App, name, src string) (spec pluginapi.ServerSpec, trial PluginTrial, finish func(ok bool), err error) {
+func installFolder(ctx context.Context, a *engine.App, name, src string) (spec config.Server, trial PluginTrial, finish func(ok bool), err error) {
 	if src, err = filepath.Abs(src); err != nil {
 		return spec, trial, nil, err
 	}
@@ -269,7 +274,7 @@ func installFolder(ctx context.Context, a *engine.App, name, src string) (spec p
 			_ = os.Rename(old, final)
 		}
 	}
-	return m.spec(final), trial, finish, nil
+	return config.Server{ServerSpec: m.spec(final), Permissions: m.Permissions}, trial, finish, nil
 }
 
 // copyTree copies a folder (files, folders and symlinks, keeping modes),

@@ -83,7 +83,7 @@ func (a *App) WatcherApproval(w watchers.Watcher) (trust.Approval, error) {
 	for _, s := range w.Program.Secrets {
 		tp.Secrets = append(tp.Secrets, s.Name)
 	}
-	return trust.Approval{Watcher: tp}, nil
+	return trust.Approval{Watcher: tp, Permissions: w.Program.Permissions}, nil
 }
 
 // TrustWatcher records a watcher as trusted with what it is now.
@@ -110,10 +110,10 @@ func (a *App) WatcherUntrusted(w watchers.Watcher) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if cur.Equal(rec.Approval) {
+	if rec.Approves(cur) {
 		return "", nil
 	}
-	return "changed since you trusted it: " + strings.Join(cur.Changes(rec.Approval), "; "), nil
+	return "changed since you trusted it: " + strings.Join(rec.ChangesTo(cur), "; "), nil
 }
 
 // WatcherEnabled is whether a watcher isn't paused (watchers.<name>.enabled).

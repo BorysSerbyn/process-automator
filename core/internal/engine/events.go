@@ -107,8 +107,8 @@ func newEvents(a *App, reload func() (*App, error)) *events {
 }
 
 // sync starts the watchers that hooks that are on listen to (trusted, not
-// paused) and stops the others, on every pass of the daemon, so changes
-// apply without a restart.
+// paused, every permission they declare granted) and stops the others, on
+// every pass of the daemon, so changes apply without a restart.
 func (e *events) sync(ctx context.Context, a *App) {
 	all, _, err := a.Hooks()
 	if err != nil {
@@ -137,6 +137,9 @@ func (e *events) sync(ctx context.Context, a *App) {
 		}
 		if why, err := a.WatcherUntrusted(w); err != nil || why != "" {
 			continue
+		}
+		if blocked(a.WatcherPermissions(w)) {
+			continue // the hooks listening say why
 		}
 		ap, err := a.WatcherApproval(w)
 		if err != nil {
@@ -171,7 +174,8 @@ func (e *events) sync(ctx context.Context, a *App) {
 }
 
 // listenerOf is x as a listener, when it's a hook that's on: enabled, trusted, and
-// with nothing keeping it from running but (maybe) its watcher failing.
+// with nothing keeping it from running but (maybe) its watcher failing (a
+// permission its action needs that isn't granted keeps it too).
 func listenerOf(a *App, x Runnable) (listener, bool) {
 	h := x.(*hook)
 	c, err := a.HookConfig(x)
@@ -181,7 +185,7 @@ func listenerOf(a *App, x Runnable) (listener, bool) {
 	if why, err := a.Untrusted(x); err != nil || why != "" {
 		return listener{}, false
 	}
-	if len(h.action.problems(a)) > 0 || len(a.listening(h.h, false)) > 0 {
+	if len(h.action.problems(a)) > 0 || len(a.listening(h.h, false)) > 0 || blocked(a.merged(h.action.needs(a))) {
 		return listener{}, false
 	}
 	return listener{name: x.Name(), on: c.On, staleness: c.Staleness, parallel: !c.Queued, batch: c.Batch}, true

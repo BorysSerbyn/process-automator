@@ -12,6 +12,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
@@ -22,6 +23,9 @@ type PluginInfo struct {
 	Kind        string `json:"kind"` // in-process, remote, local
 	Description string `json:"description,omitempty"`
 	Endpoint    string `json:"endpoint,omitempty"` // URL or command, for external plugins
+	// Permissions are what the OS must allow it before its tools can work,
+	// as it declares them (routines that use it need them too).
+	Permissions []string `json:"permissions,omitempty"`
 }
 
 func newPluginsCmd() *cobra.Command {
@@ -36,7 +40,7 @@ func newPluginsCmd() *cobra.Command {
 			seen := map[string]bool{}
 			for _, p := range a.Plugins {
 				seen[p.Name] = true
-				row := PluginInfo{Name: p.Name, Description: p.Description, Kind: "in-process"}
+				row := PluginInfo{Name: p.Name, Description: p.Description, Kind: "in-process", Permissions: a.ServerPermissions(p.Name)}
 				if p.External != nil {
 					row.Kind, row.Endpoint = endpoint(a.Config.MCPServers[p.Name])
 				}
@@ -49,7 +53,7 @@ func newPluginsCmd() *cobra.Command {
 					if desc == "" {
 						desc = "(from config)"
 					}
-					rows = append(rows, PluginInfo{Name: name, Kind: kind, Endpoint: ep, Description: desc})
+					rows = append(rows, PluginInfo{Name: name, Kind: kind, Endpoint: ep, Description: desc, Permissions: a.ServerPermissions(name)})
 				}
 			}
 			if wantsJSON(cmd) {
@@ -82,7 +86,7 @@ type PluginChange struct {
 
 func newPluginsAddCmd() *cobra.Command {
 	var spec pluginapi.ServerSpec
-	var env, headers []string
+	var env, headers, perms []string
 	var dir string
 	var replace bool
 	cmd := &cobra.Command{
@@ -120,13 +124,18 @@ func newPluginsAddCmd() *cobra.Command {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Trying %s: starting it, MCP handshake, listing its tools…\n", name)
 			var trial PluginTrial
 			finish := func(bool) {}
+			server := config.Server{Permissions: perms}
+			if server.Permissions, err = permissions.Check("--permission", perms); err != nil {
+				return err
+			}
 			if dir != "" {
-				if spec.URL != "" || spec.Command != "" || len(spec.Args)+len(env)+len(headers) > 0 {
-					return errors.New("--dir takes everything from the folder's plugin.yaml; don't combine it with --url, --command, --arg, --env or --header")
+				if spec.URL != "" || spec.Command != "" || len(spec.Args)+len(env)+len(headers)+len(perms) > 0 {
+					return errors.New("--dir takes everything from the folder's plugin.yaml; don't combine it with --url, --command, --arg, --env, --header or --permission")
 				}
-				if spec, trial, finish, err = installFolder(cmd.Context(), a, name, dir); err != nil {
+				if server, trial, finish, err = installFolder(cmd.Context(), a, name, dir); err != nil {
 					return err
 				}
+				spec = server.ServerSpec
 			} else {
 				if spec.Env, err = keyValues("--env", env); err != nil {
 					return err
@@ -141,7 +150,8 @@ func newPluginsAddCmd() *cobra.Command {
 					return fmt.Errorf("trial failed, nothing added: %w", err)
 				}
 			}
-			if err := config.SetServer(a.Layout.Config(), name, spec); err != nil {
+			server.ServerSpec = spec
+			if err := config.SetServer(a.Layout.Config(), name, server); err != nil {
 				finish(false)
 				return err
 			}
@@ -189,6 +199,7 @@ func newPluginsAddCmd() *cobra.Command {
 	f.StringArrayVar(&spec.Scopes, "scope", nil, "an OAuth scope to request (repeatable)")
 	f.StringVar(&dir, "dir", "", "install a plugin folder (an MCP server with a plugin.yaml); it's copied into the app")
 	f.StringVar(&spec.Description, "description", "", "what the server is for (shown by plugins list)")
+	f.StringArrayVar(&perms, "permission", nil, "what the OS must allow the server, e.g. input-monitoring (repeatable; `"+product.Command+" guide plugins` lists them)")
 	_ = f.SetAnnotation("env", annRedact, []string{"true"})
 	_ = f.SetAnnotation("header", annRedact, []string{"true"})
 	f.BoolVar(&replace, "replace", false, "replace a server of the same name (a built-in preset is overridden)")

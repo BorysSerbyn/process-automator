@@ -25,6 +25,14 @@ type Plugin struct {
 	// text and its address), so a long prefilled address can hide behind a few
 	// words.
 	Prepare string
+	// Permissions are what the OS must allow the plugin before its tools
+	// can work, by name: input-monitoring, accessibility, screen-recording,
+	// notifications, full-disk-access, calendars, contacts, reminders,
+	// microphone, camera, automation. Routines that use it need them too:
+	// trusting one covers them, and while one isn't granted it doesn't run.
+	// For External, a config mcpServers.<name> entry that replaces the
+	// preset declares its own.
+	Permissions []string
 
 	// External presets an external MCP server. The config file's
 	// mcpServers.<name> entry, if present, replaces it.

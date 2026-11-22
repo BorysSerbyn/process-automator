@@ -297,6 +297,26 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/paths.schema.json
+  - command: permissions list
+    usage: procauto permissions list [flags]
+    summary: List the permissions something needs, what needs each, and what the scheduler last found
+    flags:
+      - name: --all
+        type: bool
+        usage: list every permission, not only those something needs
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/permissions-list.schema.json
+  - command: permissions request
+    usage: procauto permissions request <permission> [flags]
+    summary: Ask the OS for a permission, as the app (macOS shows its prompt naming the app, the first time)
+    example: procauto permissions request input-monitoring
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/permissions-request.schema.json
   - command: plugins add
     usage: procauto plugins add <name> [flags]
     summary: Add an MCP server routines can use, after trying it (this starts the server)
@@ -330,6 +350,9 @@ commands:
       - name: --json
         type: bool
         usage: machine-readable output
+      - name: --permission
+        type: stringArray
+        usage: what the OS must allow the server, e.g. input-monitoring (repeatable; `procauto guide plugins` lists them)
       - name: --replace
         type: bool
         usage: replace a server of the same name (a built-in preset is overridden)
