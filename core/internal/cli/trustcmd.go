@@ -13,6 +13,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/schedule"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
@@ -42,8 +43,26 @@ type TrustOutput struct {
 	// Changes since it was last trusted (empty for a first trust).
 	Changes []string `json:"changes"`
 	Trusted bool     `json:"trusted"`
-	// Resumed is true when --resume turned its schedule on (it was paused).
+	// Resumed is true when --resume turned its schedule on (it was paused),
+	// or turned a hook on.
 	Resumed bool `json:"resumed,omitempty"`
+	// Hook is true for a hook: Kind is its action's, and Trigger is what it
+	// acts on, which trusting it covers too.
+	Hook    bool           `json:"hook,omitempty"`
+	Trigger *trust.Trigger `json:"trigger,omitempty"`
+	// Watcher is the hook's watcher, which needs trusting of its own.
+	Watcher *WatcherTrust `json:"watcher,omitempty"`
+	// Warnings are what to weigh before trusting it: an LLM hook with
+	// write tools acts on outside event data.
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// WatcherTrust is whether a hook's watcher is trusted.
+type WatcherTrust struct {
+	Name    string `json:"name"`
+	Trusted bool   `json:"trusted"`
+	// Untrusted says why not (no such watcher, not trusted yet, changed).
+	Untrusted string `json:"untrusted,omitempty"`
 }
 
 func newRoutinesTrustCmd() *cobra.Command {
@@ -64,97 +83,11 @@ func newRoutinesTrustCmd() *cobra.Command {
 			"  " + product.Command + " routines trust digest --yes --resume    # trust it and run it on its schedule",
 		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
-			x, err := a.Find(args[0])
+			x, err := a.FindAny(args[0])
 			if err != nil {
 				return err
 			}
-			name := x.Name()
-			c, err := a.RunConfig(x)
-			if err != nil {
-				return err
-			}
-			f, _, err := a.TrustStore().Load()
-			if err != nil {
-				return err
-			}
-			approval, err := a.Approval(x)
-			if err != nil {
-				return err
-			}
-			out := TrustOutput{Routine: name, Kind: x.Kind().Written(), Surface: trust.Surface{}.Normalized(), Changes: []string{}}
-			if approval.Surface != nil {
-				out.Surface = approval.Surface.Normalized()
-			}
-			if rec, ok := f.Routines[name]; ok {
-				out.Changes = append(out.Changes, approval.Changes(rec.Approval)...)
-				out.Trusted = approval.Equal(rec.Approval)
-			}
-			// Only a paused routine with a schedule has anything to resume.
-			resuming := resume && !c.Enabled && c.Schedule != ""
-			question := "Trust " + name + " to run for real with this"
-			if resuming {
-				question += ", and run it on its schedule (" + schedule.Text(c.Schedule) + ")"
-			}
-			switch {
-			case out.Trusted && !check && !resuming:
-				return emit(cmd, out, name+" is already trusted with what it can reach now.")
-			case out.Trusted && !check:
-				// Nothing to review: only the schedule to turn on.
-				if !wantsJSON(cmd) {
-					fmt.Fprintln(cmd.OutOrStdout(), name+" is already trusted with what it can reach now.")
-				}
-				question = "Run " + name + " on its schedule (" + schedule.Text(c.Schedule) + ")"
-			default:
-				// What each kind shows for review.
-				var toolsErr error
-				if r, _, err := engine.AsRoutine(x, ""); err == nil {
-					rc, _ := a.RoutineConfig(r)
-					out.Tools, toolsErr = agent.CheckTools(cmd.Context(), a.Connector, engine.RunOf(r, rc.WorkFolder, ""), r.Servers, r.Tools)
-					if toolsErr != nil {
-						out.ToolsError = toolsErr.Error()
-					}
-				}
-				if p, err := engine.AsProgram(x); err == nil {
-					out.Program = programInfo(a, p)
-				}
-				if !wantsJSON(cmd) {
-					describeSurface(cmd, out, toolsErr)
-				}
-				if check {
-					note := "\nNothing trusted (--check only reviews)."
-					if out.Trusted {
-						note = "\nIt's trusted with what it can reach now."
-					}
-					return emit(cmd, out, note)
-				}
-				question = "\n" + question
-			}
-			if !yes {
-				if !isTerminal(os.Stdin) {
-					return errors.New("trusting is your decision: run it in a terminal, or add --yes after reviewing the above")
-				}
-				if !newPrompt(cmd).Confirm(question+"?", false) {
-					return errors.New("nothing changed")
-				}
-			}
-			var done []string
-			if !out.Trusted {
-				// What was shown is what's trusted.
-				if err := a.TrustStore().Trust(map[string]trust.Approval{name: approval}, time.Now()); err != nil {
-					return err
-				}
-				out.Trusted = true
-				done = append(done, "Trusted "+name)
-			}
-			if resuming {
-				st := settings.Store{Path: a.Layout.Config(), Extra: x.Settings()}
-				if _, err := st.Set("routines."+name+".enabled", "true"); err != nil {
-					return err
-				}
-				out.Resumed = true
-				done = append(done, "Resumed "+name+": it runs on its schedule")
-			}
-			return emit(cmd, out, strings.Join(done, ". ")+".")
+			return trustRunnable(cmd, a, x, yes, check, resume)
 		}),
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "don't ask (after reviewing what it can reach)")
@@ -166,9 +99,132 @@ func newRoutinesTrustCmd() *cobra.Command {
 	return cmd
 }
 
+// trustRunnable reviews and trusts a routine of either kind, or a hook (with
+// --resume, also turning it on), as `routines trust` and `hooks trust` do.
+func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, check, resume bool) error {
+	name := x.Name()
+	c, err := a.RunConfig(x)
+	if err != nil {
+		return err
+	}
+	f, _, err := a.TrustStore().Load()
+	if err != nil {
+		return err
+	}
+	approval, err := a.Approval(x)
+	if err != nil {
+		return err
+	}
+	h, isHook := engine.AsHook(x)
+	out := TrustOutput{Routine: name, Kind: x.Kind().Written(), Surface: trust.Surface{}.Normalized(), Changes: []string{}, Hook: isHook, Trigger: approval.Trigger}
+	if approval.Surface != nil {
+		out.Surface = approval.Surface.Normalized()
+	}
+	if rec, ok := f.Routines[name]; ok {
+		out.Changes = append(out.Changes, approval.Changes(rec.Approval)...)
+		out.Trusted = approval.Equal(rec.Approval)
+	}
+	// Only a paused routine with a schedule, or a paused hook, has anything
+	// to resume.
+	resuming := resume && !c.Enabled && (c.Schedule != "" || isHook)
+	turnOn := "run it on its schedule (" + schedule.Text(c.Schedule) + ")"
+	if isHook {
+		turnOn = "turn it on (it runs on " + h.On.String() + ")"
+	}
+	question := "Trust " + name + " to run for real with this"
+	if resuming {
+		question += ", and " + turnOn
+	}
+	switch {
+	case out.Trusted && !check && !resuming:
+		return emit(cmd, out, name+" is already trusted with what it can reach now.")
+	case out.Trusted && !check:
+		// Nothing to review: only the schedule to turn on.
+		if !wantsJSON(cmd) {
+			fmt.Fprintln(cmd.OutOrStdout(), name+" is already trusted with what it can reach now.")
+		}
+		question = strings.ToUpper(turnOn[:1]) + turnOn[1:]
+		question = strings.Replace(question, " it ", " "+name+" ", 1)
+	default:
+		// What each kind shows for review.
+		var toolsErr error
+		if r, _, err := engine.AsRoutine(x, ""); err == nil {
+			rc, _ := a.RoutineConfig(r)
+			out.Tools, toolsErr = agent.CheckTools(cmd.Context(), a.Connector, engine.RunOf(r, rc.WorkFolder, ""), r.Servers, r.Tools)
+			if toolsErr != nil {
+				out.ToolsError = toolsErr.Error()
+			}
+		}
+		if p, err := engine.AsProgram(x); err == nil {
+			out.Program = programInfo(a, p)
+		}
+		if isHook {
+			toolsErr = hookReview(cmd, a, h, &out)
+		}
+		if !wantsJSON(cmd) {
+			describeSurface(cmd, out, toolsErr)
+		}
+		if check {
+			note := "\nNothing trusted (--check only reviews)."
+			if out.Trusted {
+				note = "\nIt's trusted with what it can reach now."
+			}
+			return emit(cmd, out, note)
+		}
+		question = "\n" + question
+	}
+	if !yes {
+		if !isTerminal(os.Stdin) {
+			return errors.New("trusting is your decision: run it in a terminal, or add --yes after reviewing the above")
+		}
+		if !newPrompt(cmd).Confirm(question+"?", false) {
+			return errors.New("nothing changed")
+		}
+	}
+	var done []string
+	if !out.Trusted {
+		// What was shown is what's trusted.
+		if err := a.TrustStore().Trust(map[string]trust.Approval{name: approval}, time.Now()); err != nil {
+			return err
+		}
+		out.Trusted = true
+		done = append(done, "Trusted "+name)
+	}
+	if resuming {
+		st := settings.Store{Path: a.Layout.Config(), Extra: x.Settings()}
+		if _, err := st.Set(enabledKey(x), "true"); err != nil {
+			return err
+		}
+		out.Resumed = true
+		if isHook {
+			done = append(done, "Turned "+name+" on: it runs on "+h.On.String())
+		} else {
+			done = append(done, "Resumed "+name+": it runs on its schedule")
+		}
+	}
+	if out.Watcher != nil && !out.Watcher.Trusted {
+		done = append(done, "It hears nothing until its watcher is trusted too: "+product.Command+" watchers trust "+out.Watcher.Name)
+	}
+	return emit(cmd, out, strings.Join(done, ". ")+".")
+}
+
+// enabledKey is the key of x's enabled setting: routines.<name>.enabled, or
+// a hook's hooks.<name>.enabled.
+func enabledKey(x engine.Runnable) string {
+	for _, s := range x.Settings() {
+		if strings.HasSuffix(s.Key, ".enabled") {
+			return s.Key
+		}
+	}
+	return "routines." + x.Name() + ".enabled"
+}
+
 // describeSurface prints what a routine can reach, writes first.
 func describeSurface(cmd *cobra.Command, out TrustOutput, toolsErr error) {
 	w := cmd.OutOrStdout()
+	if out.Hook {
+		describeHook(w, out)
+	}
 	if out.Program != nil {
 		describeProgram(w, out)
 		return
@@ -231,4 +287,69 @@ func describeProgram(w io.Writer, out TrustOutput) {
 	if len(out.Changes) > 0 {
 		fmt.Fprintf(w, "\nSince you last trusted it, it %s.\n", strings.Join(out.Changes, "; "))
 	}
+}
+
+// hookReview adds what trusting a hook covers besides its action: its
+// trigger, its watcher's own trust, and the warning for an LLM hook that
+// can write and acts on outside data. It returns why its tools couldn't be
+// checked (an LLM hook's).
+func hookReview(cmd *cobra.Command, a *engine.App, h hooks.Hook, out *TrustOutput) error {
+	wt := &WatcherTrust{Name: h.On.Watcher}
+	if w, err := a.FindWatcher(h.On.Watcher); err != nil {
+		wt.Untrusted = err.Error()
+	} else if why, err := a.WatcherUntrusted(w); err != nil {
+		wt.Untrusted = err.Error()
+	} else {
+		wt.Trusted, wt.Untrusted = why == "", why
+	}
+	out.Watcher = wt
+	if h.Prompt == nil {
+		return nil
+	}
+	r := *h.Prompt
+	rc, _ := a.RoutineConfig(r)
+	tools, err := agent.CheckTools(cmd.Context(), a.Connector, engine.RunOf(r, rc.WorkFolder, ""), r.Servers, r.Tools)
+	out.Tools = tools
+	if err != nil {
+		out.ToolsError = err.Error()
+	}
+	var writes []string
+	for _, t := range tools {
+		if !t.ReadOnly {
+			writes = append(writes, t.Name)
+		}
+	}
+	if err != nil {
+		writes = append(writes, r.Tools...) // which write is unknown: assume they may
+	}
+	writes = append(writes, a.WriteBuiltins(rc.BuiltinTools)...)
+	if len(writes) > 0 {
+		out.Warnings = append(out.Warnings, fmt.Sprintf("it can write (%s) and acts on outside event data: an event "+
+			"from %s could try to steer what it writes. Its prompt gets the data marked untrusted, but if it needn't "+
+			"write, read-only tools are safer; or let a program act on it", strings.Join(writes, ", "), h.On.Watcher))
+	}
+	return err
+}
+
+// describeHook prints what a hook acts on, and what to weigh, before its
+// action.
+func describeHook(w io.Writer, out TrustOutput) {
+	t := out.Trigger
+	on := hooks.On{Watcher: t.Watcher, Type: t.Type}
+	fmt.Fprintf(w, "%s is a hook; it acts on %s", out.Routine, on.String())
+	if t.Batch {
+		fmt.Fprint(w, ", in batches")
+	}
+	fmt.Fprintln(w, ".")
+	if wt := out.Watcher; wt != nil {
+		if wt.Trusted {
+			fmt.Fprintf(w, "Its watcher %s is trusted.\n", wt.Name)
+		} else {
+			fmt.Fprintf(w, "Its watcher %s isn't trusted (%s): `%s watchers trust %s` too.\n", wt.Name, wt.Untrusted, product.Command, wt.Name)
+		}
+	}
+	for _, warn := range out.Warnings {
+		fmt.Fprintf(w, "Warning: %s.\n", warn)
+	}
+	fmt.Fprintln(w)
 }

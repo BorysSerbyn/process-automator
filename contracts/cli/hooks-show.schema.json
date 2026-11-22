@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hooks-show.schema.json",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is program for a program hook; absent for an LLM hook (llm)."
+    },
+    "path": {
+      "type": "string",
+      "description": "Path is its file: its prompt, or its program's description file (in\nthe app's copy)."
+    },
+    "description": {
+      "type": "string"
+    },
+    "on": {
+      "properties": {
+        "watcher": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "watcher"
+      ],
+      "description": "On is what it acts on: a watcher's events, of one type (or every type)."
+    },
+    "batch": {
+      "type": "boolean",
+      "description": "Batch (an LLM hook's) gives one run every event that waited for it."
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "staleness": {
+      "type": "string"
+    },
+    "timeout": {
+      "type": "string"
+    },
+    "rate": {
+      "type": "integer",
+      "description": "Rate is how many runs it may start in any hour."
+    },
+    "folder": {
+      "type": "string",
+      "description": "Folder is where its runs work (absent: a temporary folder)."
+    },
+    "trusted": {
+      "type": "boolean",
+      "description": "Trusted is whether it may run for real (what it reaches and acts on\nis what I trusted); Untrusted says why not."
+    },
+    "untrusted": {
+      "type": "string"
+    },
+    "problem": {
+      "type": "string",
+      "description": "Problem is why it can't run while it's on (its watcher missing,\nuntrusted or failing, ...); empty when it can."
+    },
+    "servers": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Servers, Tools and Model are an LLM hook's, as an LLM routine's."
+    },
+    "tools": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "model": {
+      "type": "string"
+    },
+    "program": {
+      "properties": {
+        "executable": {
+          "type": "string",
+          "description": "Executable is the app's copy, the one that runs."
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum is the executable's SHA-256 (trust is keyed to it)."
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "writes": {
+          "type": "boolean",
+          "description": "Writes is whether it can change anything: a dry run passes it\n--dry-run; one that doesn't write runs as it is."
+        },
+        "secrets": {
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "env": {
+                "type": "string",
+                "description": "Env is the environment variable it's passed as."
+              },
+              "stored": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "env",
+              "stored"
+            ],
+            "description": "ProgramSecret is a secret a program declares, and whether it's stored (`auth login \u003cprogram\u003e` stores it)."
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "executable",
+        "args",
+        "writes",
+        "secrets"
+      ],
+      "description": "Program is a program hook's own: what runs and with what."
+    },
+    "lastRun": {
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "description": "Trigger is what started the run: \"schedule\", \"manual\", \"backfill\" or\n(a hook's) \"event\" (empty in records from before triggers were\nrecorded)."
+        },
+        "for": {
+          "type": "string",
+          "format": "date-time",
+          "description": "For is the time the run is for (the schedule slot, the backfilled day)."
+        },
+        "id": {
+          "type": "string",
+          "description": "ID is the run's history ID (as `runs show` takes)."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "SessionID is the run's saved agent CLI session (routines with\nsession: save): set when the run starts if the app picks its ID, when\nit ends if the CLI does (Backend says which CLI resumes it)."
+        },
+        "backend": {
+          "type": "string",
+          "description": "Backend is the model backend running it, or that ran it (llm.backend's\nvalue), once it got as far as the model."
+        },
+        "folder": {
+          "type": "string",
+          "description": "Folder is the folder the run worked in (where its session resumes\nfrom), unless it was an empty temporary one."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Deadline is when a running run is stopped (its routine's timeout)."
+        },
+        "queuedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "QueuedAt is when the run started waiting for its turn, if it had to."
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "success",
+            "failed",
+            "skipped",
+            "missed",
+            "needs-reauth",
+            "running",
+            "queued",
+            "stopped"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "startedAt",
+        "outcome"
+      ],
+      "description": "LastRun is its latest outcome from run status."
+    },
+    "source": {
+      "type": "string",
+      "description": "Source is its file as written."
+    },
+    "watcher": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "poll",
+            "stream"
+          ],
+          "description": "Mode is poll (run every interval) or stream (one long-lived process)."
+        },
+        "interval": {
+          "type": "string",
+          "description": "Interval and Timeout are a poll watcher's: how often it runs, and how\nlong one poll may take."
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "executable": {
+          "type": "string",
+          "description": "Executable is the app's copy, the one that runs; Checksum its SHA-256\n(trust is keyed to it)."
+        },
+        "checksum": {
+          "type": "string"
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "secrets": {
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "env": {
+                "type": "string",
+                "description": "Env is the environment variable it's passed as."
+              },
+              "stored": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "env",
+              "stored"
+            ],
+            "description": "ProgramSecret is a secret a program declares, and whether it's stored (`auth login \u003cprogram\u003e` stores it)."
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Enabled is false while it's paused."
+        },
+        "trusted": {
+          "type": "boolean"
+        },
+        "untrusted": {
+          "type": "string"
+        },
+        "hooks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Hooks are the hooks that listen to it; it runs while one of them is\non (and it's trusted and not paused)."
+        },
+        "lastPollAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "LastPollAt is when a poll last worked; StartedAt when its stream last\nstarted; LastEventAt when it last printed a new event."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastEventAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error is why its last poll failed or its stream last ended early\n(cleared once it works again), and ErrorAt when."
+        },
+        "errorAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "path",
+        "mode",
+        "executable",
+        "args",
+        "secrets",
+        "enabled",
+        "trusted",
+        "hooks"
+      ],
+      "description": "Watcher is the watcher it listens to (absent when there's none by\nthat name)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "name",
+    "path",
+    "on",
+    "enabled",
+    "staleness",
+    "timeout",
+    "rate",
+    "trusted",
+    "source"
+  ],
+  "title": "procauto hooks show --json",
+  "description": "HookDetail is `hooks show --json`: a hook with its file's source and its watcher."
+}

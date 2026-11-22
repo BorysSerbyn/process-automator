@@ -277,11 +277,12 @@ components:
       description: Finding is one problem doctor found, with what fixes it.
       properties:
         area:
-          description: 'Area is what it''s about: scheduler, usage, routine or run.'
+          description: 'Area is what it''s about: scheduler, usage, routine, hook or run.'
           enum:
             - scheduler
             - usage
             - routine
+            - hook
             - run
           type: string
         fix:
@@ -364,6 +365,190 @@ components:
       required:
         - name
         - summary
+      type: object
+    HookChange:
+      additionalProperties: false
+      description: HookChange is the output of `hooks add/update/delete/pause/resume --json`.
+      properties:
+        enabled:
+          description: |-
+            Enabled is whether it runs on its events after the change (added
+            hooks start off; absent for deletes).
+          type: boolean
+        hook:
+          type: string
+        kind:
+          description: Kind is program for a program hook; absent for an LLM hook (llm).
+          enum:
+            - llm
+            - program
+          type: string
+        path:
+          type: string
+      required:
+        - hook
+        - path
+      type: object
+    HookDetail:
+      additionalProperties: false
+      description: 'HookDetail is `hooks show --json`: a hook with its file''s source and its watcher.'
+      properties:
+        batch:
+          description: Batch (an LLM hook's) gives one run every event that waited for it.
+          type: boolean
+        description:
+          type: string
+        enabled:
+          type: boolean
+        folder:
+          description: 'Folder is where its runs work (absent: a temporary folder).'
+          type: string
+        kind:
+          description: Kind is program for a program hook; absent for an LLM hook (llm).
+          enum:
+            - llm
+            - program
+          type: string
+        lastRun:
+          $ref: '#/components/schemas/RunStatusRun'
+          description: LastRun is its latest outcome from run status.
+        model:
+          type: string
+        name:
+          type: string
+        "on":
+          $ref: '#/components/schemas/On'
+          description: 'On is what it acts on: a watcher''s events, of one type (or every type).'
+        path:
+          description: |-
+            Path is its file: its prompt, or its program's description file (in
+            the app's copy).
+          type: string
+        problem:
+          description: |-
+            Problem is why it can't run while it's on (its watcher missing,
+            untrusted or failing, ...); empty when it can.
+          type: string
+        program:
+          $ref: '#/components/schemas/ProgramInfo'
+          description: 'Program is a program hook''s own: what runs and with what.'
+        rate:
+          description: Rate is how many runs it may start in any hour.
+          type: integer
+        servers:
+          description: Servers, Tools and Model are an LLM hook's, as an LLM routine's.
+          items:
+            type: string
+          type: array
+        source:
+          description: Source is its file as written.
+          type: string
+        staleness:
+          type: string
+        timeout:
+          type: string
+        tools:
+          items:
+            type: string
+          type: array
+        trusted:
+          description: |-
+            Trusted is whether it may run for real (what it reaches and acts on
+            is what I trusted); Untrusted says why not.
+          type: boolean
+        untrusted:
+          type: string
+        watcher:
+          $ref: '#/components/schemas/WatcherInfo'
+          description: |-
+            Watcher is the watcher it listens to (absent when there's none by
+            that name).
+      required:
+        - name
+        - path
+        - "on"
+        - enabled
+        - staleness
+        - timeout
+        - rate
+        - trusted
+        - source
+      type: object
+    HookInfo:
+      additionalProperties: false
+      description: 'HookInfo is one row of `hooks list --json`: a hook with its effective settings and last run.'
+      properties:
+        batch:
+          description: Batch (an LLM hook's) gives one run every event that waited for it.
+          type: boolean
+        description:
+          type: string
+        enabled:
+          type: boolean
+        folder:
+          description: 'Folder is where its runs work (absent: a temporary folder).'
+          type: string
+        kind:
+          description: Kind is program for a program hook; absent for an LLM hook (llm).
+          enum:
+            - llm
+            - program
+          type: string
+        lastRun:
+          $ref: '#/components/schemas/RunStatusRun'
+          description: LastRun is its latest outcome from run status.
+        model:
+          type: string
+        name:
+          type: string
+        "on":
+          $ref: '#/components/schemas/On'
+          description: 'On is what it acts on: a watcher''s events, of one type (or every type).'
+        path:
+          description: |-
+            Path is its file: its prompt, or its program's description file (in
+            the app's copy).
+          type: string
+        problem:
+          description: |-
+            Problem is why it can't run while it's on (its watcher missing,
+            untrusted or failing, ...); empty when it can.
+          type: string
+        program:
+          $ref: '#/components/schemas/ProgramInfo'
+          description: 'Program is a program hook''s own: what runs and with what.'
+        rate:
+          description: Rate is how many runs it may start in any hour.
+          type: integer
+        servers:
+          description: Servers, Tools and Model are an LLM hook's, as an LLM routine's.
+          items:
+            type: string
+          type: array
+        staleness:
+          type: string
+        timeout:
+          type: string
+        tools:
+          items:
+            type: string
+          type: array
+        trusted:
+          description: |-
+            Trusted is whether it may run for real (what it reaches and acts on
+            is what I trusted); Untrusted says why not.
+          type: boolean
+        untrusted:
+          type: string
+      required:
+        - name
+        - path
+        - "on"
+        - enabled
+        - staleness
+        - timeout
+        - rate
+        - trusted
       type: object
     Info:
       additionalProperties: false
@@ -551,6 +736,17 @@ components:
         - schemaVersion
         - notifications
       type: object
+    "On":
+      additionalProperties: false
+      description: 'On is what a hook listens for: a watcher''s events, of one type or (no type) every type.'
+      properties:
+        type:
+          type: string
+        watcher:
+          type: string
+      required:
+        - watcher
+      type: object
     Param:
       additionalProperties: false
       description: Param is one routine parameter.
@@ -594,6 +790,11 @@ components:
           type: string
         history:
           type: string
+        hooks:
+          description: |-
+            Hooks and Watchers are the hooks' and watchers' folders: the app's
+            copies of those added.
+          type: string
         mcpChanges:
           description: MCPChanges logs every side-effecting call made through `mcp serve`.
           type: string
@@ -609,6 +810,8 @@ components:
           type: string
         templates:
           description: Templates is where the app's templates are (empty if unknown).
+          type: string
+        watchers:
           type: string
       required:
         - config
@@ -908,6 +1111,9 @@ components:
           description: |-
             Enabled is whether the routine runs on its schedule after the change
             (created routines start disabled; absent for deletes).
+          type: boolean
+        hook:
+          description: Hook is true when the change is to a hook (paused or resumed by name).
           type: boolean
         kind:
           description: Kind is program for a program; absent for an LLM routine (llm).
@@ -1799,6 +2005,19 @@ components:
         - name
         - description
       type: object
+    Trigger:
+      additionalProperties: false
+      description: 'Trigger is what a hook was trusted to act on: a watcher''s events, of one type (empty: every type), one at a time or in batches.'
+      properties:
+        batch:
+          type: boolean
+        type:
+          type: string
+        watcher:
+          type: string
+      required:
+        - watcher
+      type: object
     TrustOutput:
       additionalProperties: false
       description: TrustOutput is `routines trust --json`.
@@ -1808,6 +2027,11 @@ components:
           items:
             type: string
           type: array
+        hook:
+          description: |-
+            Hook is true for a hook: Kind is its action's, and Trigger is what it
+            acts on, which trusting it covers too.
+          type: boolean
         kind:
           description: Kind is program for a program; absent for an LLM routine (llm).
           enum:
@@ -1820,7 +2044,9 @@ components:
             Program is what trusting a program approves: the executable that
             runs (by checksum, with its description file), what it declares.
         resumed:
-          description: Resumed is true when --resume turned its schedule on (it was paused).
+          description: |-
+            Resumed is true when --resume turned its schedule on (it was paused),
+            or turned a hook on.
           type: boolean
         routine:
           type: string
@@ -1838,8 +2064,20 @@ components:
             ToolsError says why its tools couldn't be checked (e.g. a server needs
             a sign-in).
           type: string
+        trigger:
+          $ref: '#/components/schemas/Trigger'
         trusted:
           type: boolean
+        warnings:
+          description: |-
+            Warnings are what to weigh before trusting it: an LLM hook with
+            write tools acts on outside event data.
+          items:
+            type: string
+          type: array
+        watcher:
+          $ref: '#/components/schemas/WatcherTrust'
+          description: Watcher is the hook's watcher, which needs trusting of its own.
       required:
         - routine
         - surface
@@ -1924,6 +2162,235 @@ components:
           type: string
       required:
         - version
+      type: object
+    WatcherChange:
+      additionalProperties: false
+      description: WatcherChange is the output of `watchers add/update/delete/pause/resume --json`.
+      properties:
+        enabled:
+          description: Enabled is whether it may run after the change (absent for deletes).
+          type: boolean
+        path:
+          type: string
+        watcher:
+          type: string
+      required:
+        - watcher
+        - path
+      type: object
+    WatcherDetail:
+      additionalProperties: false
+      description: 'WatcherDetail is `watchers show --json`: a watcher with its description file''s source.'
+      properties:
+        args:
+          items:
+            type: string
+          type: array
+        checksum:
+          type: string
+        description:
+          type: string
+        enabled:
+          description: Enabled is false while it's paused.
+          type: boolean
+        error:
+          description: |-
+            Error is why its last poll failed or its stream last ended early
+            (cleared once it works again), and ErrorAt when.
+          type: string
+        errorAt:
+          format: date-time
+          type: string
+        executable:
+          description: |-
+            Executable is the app's copy, the one that runs; Checksum its SHA-256
+            (trust is keyed to it).
+          type: string
+        hooks:
+          description: |-
+            Hooks are the hooks that listen to it; it runs while one of them is
+            on (and it's trusted and not paused).
+          items:
+            type: string
+          type: array
+        interval:
+          description: |-
+            Interval and Timeout are a poll watcher's: how often it runs, and how
+            long one poll may take.
+          type: string
+        lastEventAt:
+          format: date-time
+          type: string
+        lastPollAt:
+          description: |-
+            LastPollAt is when a poll last worked; StartedAt when its stream last
+            started; LastEventAt when it last printed a new event.
+          format: date-time
+          type: string
+        mode:
+          description: Mode is poll (run every interval) or stream (one long-lived process).
+          enum:
+            - poll
+            - stream
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        secrets:
+          items:
+            $ref: '#/components/schemas/ProgramSecret'
+          type: array
+        source:
+          type: string
+        startedAt:
+          format: date-time
+          type: string
+        timeout:
+          type: string
+        trusted:
+          type: boolean
+        untrusted:
+          type: string
+      required:
+        - name
+        - path
+        - mode
+        - executable
+        - args
+        - secrets
+        - enabled
+        - trusted
+        - hooks
+        - source
+      type: object
+    WatcherInfo:
+      additionalProperties: false
+      description: WatcherInfo is one row of `watchers list --json`.
+      properties:
+        args:
+          items:
+            type: string
+          type: array
+        checksum:
+          type: string
+        description:
+          type: string
+        enabled:
+          description: Enabled is false while it's paused.
+          type: boolean
+        error:
+          description: |-
+            Error is why its last poll failed or its stream last ended early
+            (cleared once it works again), and ErrorAt when.
+          type: string
+        errorAt:
+          format: date-time
+          type: string
+        executable:
+          description: |-
+            Executable is the app's copy, the one that runs; Checksum its SHA-256
+            (trust is keyed to it).
+          type: string
+        hooks:
+          description: |-
+            Hooks are the hooks that listen to it; it runs while one of them is
+            on (and it's trusted and not paused).
+          items:
+            type: string
+          type: array
+        interval:
+          description: |-
+            Interval and Timeout are a poll watcher's: how often it runs, and how
+            long one poll may take.
+          type: string
+        lastEventAt:
+          format: date-time
+          type: string
+        lastPollAt:
+          description: |-
+            LastPollAt is when a poll last worked; StartedAt when its stream last
+            started; LastEventAt when it last printed a new event.
+          format: date-time
+          type: string
+        mode:
+          description: Mode is poll (run every interval) or stream (one long-lived process).
+          enum:
+            - poll
+            - stream
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        secrets:
+          items:
+            $ref: '#/components/schemas/ProgramSecret'
+          type: array
+        startedAt:
+          format: date-time
+          type: string
+        timeout:
+          type: string
+        trusted:
+          type: boolean
+        untrusted:
+          type: string
+      required:
+        - name
+        - path
+        - mode
+        - executable
+        - args
+        - secrets
+        - enabled
+        - trusted
+        - hooks
+      type: object
+    WatcherTrust:
+      additionalProperties: false
+      description: WatcherTrust is whether a hook's watcher is trusted.
+      properties:
+        name:
+          type: string
+        trusted:
+          type: boolean
+        untrusted:
+          description: Untrusted says why not (no such watcher, not trusted yet, changed).
+          type: string
+      required:
+        - name
+        - trusted
+      type: object
+    WatcherTrustOutput:
+      additionalProperties: false
+      description: WatcherTrustOutput is `watchers trust --json`.
+      properties:
+        changes:
+          description: Changes since it was last trusted (empty for a first trust).
+          items:
+            type: string
+          type: array
+        mode:
+          enum:
+            - poll
+            - stream
+          type: string
+        program:
+          $ref: '#/components/schemas/ProgramInfo'
+          description: |-
+            Program is what trusting it approves: the executable that runs (by
+            checksum, with its description file), its arguments and secrets.
+        trusted:
+          type: boolean
+        watcher:
+          type: string
+      required:
+        - watcher
+        - program
+        - mode
+        - changes
+        - trusted
       type: object
     Window:
       additionalProperties: false

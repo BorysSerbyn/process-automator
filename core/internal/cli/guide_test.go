@@ -16,9 +16,11 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
@@ -202,5 +204,57 @@ func TestGuideExamplesWork(t *testing.T) {
 	}
 	if out := run("routines", "create", "new-notes", "--source", string(src)); !strings.Contains(out, "paused") || strings.Contains(out, "warning") {
 		t.Fatalf("the example routine isn't created cleanly: %s", out)
+	}
+}
+
+// The hooks topic names what the code defines, and its examples parse: the
+// watcher, the program hook and the LLM hook.
+func TestGuideHooksCoversTheCode(t *testing.T) {
+	out := guideOut(t, "hooks")
+	want := []string{"$" + watchers.CursorEnv, "$" + watchers.NameEnv, "$" + programs.TriggerEnv, "$" + programs.ForEnv,
+		"$" + programs.ResultEnv, engine.UntrustedOpen, engine.UntrustedClose, "<" + engine.EventBlockTag + ">",
+		"watchers add <name> --from", "watchers trust <name>", "hooks add <name> --from", "hooks fire <name> --event",
+		"--dry-run", "hooks trust <name> --resume", "hooks pause <name>", "stop <name>", "auth login <name>",
+		"{{event}}", "{{events}}", "automator.batch", "on stdin", `{"cursor": "..."}`}
+	for _, f := range hooks.Fields {
+		want = append(want, "`"+f.Name+"` (")
+	}
+	for _, f := range hooks.PromptKeys {
+		want = append(want, "`"+f.Name+"` (")
+	}
+	for _, f := range watchers.Fields {
+		want = append(want, "`"+f.Name+"` (")
+	}
+	for _, f := range settings.HookFields {
+		want = append(want, "`"+f.Name+"` (")
+	}
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("guide hooks lacks %s", w)
+		}
+	}
+	src, _ := guideFiles.ReadFile("guide/hooks.md")
+	blocks := func(fence string) []string {
+		var out []string
+		for _, part := range strings.Split(string(src), "```"+fence+"\n")[1:] {
+			out = append(out, strings.SplitN(part, "```", 2)[0])
+		}
+		return out
+	}
+	yamls, prompts := blocks("yaml"), blocks("handlebars")
+	if len(yamls) != 2 || len(prompts) != 1 {
+		t.Fatalf("the examples: %d yaml, %d prompts", len(yamls), len(prompts))
+	}
+	w, err := watchers.Parse("calendar", yamls[0])
+	if err != nil {
+		t.Fatalf("the example watcher.yaml doesn't parse: %v", err)
+	}
+	h, err := hooks.Parse("open-meet", hooks.DescriptionFile, yamls[1])
+	if err != nil || h.On.Watcher != w.Name {
+		t.Fatalf("the example hook.yaml doesn't parse, or listens to another watcher: %+v %v", h.On, err)
+	}
+	p, err := hooks.Parse("triage", "triage.prompt", prompts[0])
+	if err != nil || !p.Batch || p.On.Watcher != "inbox" {
+		t.Fatalf("the example LLM hook doesn't parse: %+v %v", p, err)
 	}
 }

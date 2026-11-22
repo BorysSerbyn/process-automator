@@ -10,10 +10,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 )
 
 // settingsStore includes the per-routine settings of every routine on this
@@ -45,7 +47,31 @@ func settingsStore(cmd *cobra.Command) (settings.Store, error) {
 	for _, p := range progs.Programs {
 		st.Extra = append(st.Extra, p.Settings()...)
 	}
+	// Hooks' and watchers' own: hooks.<hook>.<field>, watchers.<watcher>.enabled.
+	if hs, err := hooks.Load(layout.Hooks()); err == nil {
+		for _, h := range hs.Hooks {
+			st.Extra = append(st.Extra, h.Settings()...)
+		}
+	}
+	if ws, err := watchers.Load(layout.Watchers()); err == nil {
+		for _, w := range ws.Watchers {
+			st.Extra = append(st.Extra, settings.WatcherSettings(w.Name)...)
+		}
+	}
 	return st, nil
+}
+
+// settingScope is the scope a setting's key is in: routines (a routine's),
+// hooks (a hook's or a watcher's) or app.
+func settingScope(key string) string {
+	switch {
+	case strings.HasPrefix(key, "routines."):
+		return "routines"
+	case strings.HasPrefix(key, "hooks."), strings.HasPrefix(key, "watchers."):
+		return "hooks"
+	default:
+		return "app"
+	}
 }
 
 // programKey refuses an LLM routine's setting (routines.<program>.effort)
@@ -77,8 +103,8 @@ func newSettingsCmd() *cobra.Command {
 		Short:       "List every setting with its value, default and description",
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if !slices.Contains([]string{"all", "app", "routines"}, scope) {
-				return fmt.Errorf("unknown --scope %q: all, app or routines", scope)
+			if !slices.Contains([]string{"all", "app", "routines", "hooks"}, scope) {
+				return fmt.Errorf("unknown --scope %q: all, app, routines or hooks", scope)
 			}
 			if routine != "" && cmd.Flags().Changed("scope") {
 				return errors.New("--routine already picks one routine's settings: leave out --scope")
@@ -92,10 +118,15 @@ func newSettingsCmd() *cobra.Command {
 				return err
 			}
 			if routine != "" {
-				if _, err := routineExists(cmd, routine); err != nil {
+				a, err := loadApp(cmd)
+				if err != nil {
 					return err
 				}
-				prefix := "routines." + routine + "."
+				x, err := a.FindAny(routine) // a hook's too
+				if err != nil {
+					return err
+				}
+				prefix := strings.TrimSuffix(enabledKey(x), "enabled")
 				kept := all[:0]
 				for _, s := range all {
 					if strings.HasPrefix(s.Key, prefix) {
@@ -106,7 +137,7 @@ func newSettingsCmd() *cobra.Command {
 			} else if scope != "all" {
 				kept := all[:0]
 				for _, s := range all {
-					if routine := strings.HasPrefix(s.Key, "routines."); (scope == "routines") == routine {
+					if settingScope(s.Key) == scope {
 						kept = append(kept, s)
 					}
 				}
@@ -134,8 +165,8 @@ func newSettingsCmd() *cobra.Command {
 			return tw.Flush()
 		},
 	}
-	list.Flags().StringVar(&scope, "scope", "all", "all, app (app-wide settings) or routines (each routine's)")
-	list.Flags().StringVar(&routine, "routine", "", "only this routine's settings")
+	list.Flags().StringVar(&scope, "scope", "all", "all, app (app-wide settings), routines (each routine's) or hooks (each hook's and watcher's)")
+	list.Flags().StringVar(&routine, "routine", "", "only this routine's (or hook's) settings")
 	get := &cobra.Command{
 		Use:         "get <key>",
 		Annotations: readOnly(),
@@ -220,14 +251,4 @@ func format(v any, s settings.Setting) string {
 		return fmt.Sprintf("%g%%", v)
 	}
 	return fmt.Sprint(v)
-}
-
-// routineExists checks a routine of either kind is installed (settings for
-// one that isn't would never be used).
-func routineExists(cmd *cobra.Command, name string) (engine.Runnable, error) {
-	a, err := loadApp(cmd)
-	if err != nil {
-		return nil, err
-	}
-	return a.Find(name)
 }

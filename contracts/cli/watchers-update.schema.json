@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "watchers-update.schema.json",
+  "properties": {
+    "watcher": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Enabled is whether it may run after the change (absent for deletes)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "watcher",
+    "path"
+  ],
+  "title": "procauto watchers update --json",
+  "description": "WatcherChange is the output of `watchers add/update/delete/pause/resume --json`."
+}

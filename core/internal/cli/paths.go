@@ -16,7 +16,11 @@ type PathsOutput struct {
 	Data     string `json:"data"`
 	Routines string `json:"routines"`
 	// Programs is the programs folder: the app's copies of the programs added.
-	Programs  string `json:"programs,omitempty"`
+	Programs string `json:"programs,omitempty"`
+	// Hooks and Watchers are the hooks' and watchers' folders: the app's
+	// copies of those added.
+	Hooks     string `json:"hooks,omitempty"`
+	Watchers  string `json:"watchers,omitempty"`
 	RunStatus string `json:"runStatus"`
 	History   string `json:"history"`
 	// Notifications is the app's own notifications file.
@@ -33,7 +37,7 @@ type PathsOutput struct {
 // paths are the files frontends use.
 func pathsOf(l engine.Layout) PathsOutput {
 	p := PathsOutput{
-		Config: l.Config(), Data: l.Data(), Routines: l.Routines(), Programs: l.Programs(), RunStatus: l.RunStatus(),
+		Config: l.Config(), Data: l.Data(), Routines: l.Routines(), Programs: l.Programs(), Hooks: l.Hooks(), Watchers: l.Watchers(), RunStatus: l.RunStatus(),
 		History: l.History(), Notifications: l.Notifications(), MCPChanges: l.MCPChanges(),
 		FrontendLog: l.FrontendLog(),
 	}
@@ -45,7 +49,7 @@ func newPathsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "paths",
 		Annotations: readOnly(),
-		Short:       "Show where the app keeps its config, routines, programs, run status and history",
+		Short:       "Show where the app keeps its config, routines, programs, hooks, run status and history",
 		Args:        cobra.NoArgs,
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			p := pathsOf(a.Layout)
@@ -54,7 +58,7 @@ func newPathsCmd() *cobra.Command {
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			for _, row := range [][2]string{
-				{"config", p.Config}, {"data", p.Data}, {"routines", p.Routines}, {"programs", p.Programs},
+				{"config", p.Config}, {"data", p.Data}, {"routines", p.Routines}, {"programs", p.Programs}, {"hooks", p.Hooks}, {"watchers", p.Watchers},
 				{"run status", p.RunStatus}, {"history", p.History}, {"notifications", p.Notifications}, {"mcp changes", p.MCPChanges},
 				{"frontend log", p.FrontendLog},
 				{"templates", orDash(p.Templates)},

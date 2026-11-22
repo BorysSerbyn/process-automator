@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hooks-pause.schema.json",
+  "properties": {
+    "hook": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is program for a program hook; absent for an LLM hook (llm)."
+    },
+    "path": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Enabled is whether it runs on its events after the change (added\nhooks start off; absent for deletes)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "hook",
+    "path"
+  ],
+  "title": "procauto hooks pause --json",
+  "description": "HookChange is the output of `hooks add/update/delete/pause/resume --json`."
+}

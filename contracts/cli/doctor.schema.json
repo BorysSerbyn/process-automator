@@ -14,9 +14,10 @@
               "scheduler",
               "usage",
               "routine",
+              "hook",
               "run"
             ],
-            "description": "Area is what it's about: scheduler, usage, routine or run."
+            "description": "Area is what it's about: scheduler, usage, routine, hook or run."
           },
           "subject": {
             "type": "string"

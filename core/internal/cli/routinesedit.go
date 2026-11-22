@@ -37,6 +37,8 @@ type RoutineChange struct {
 	// Enabled is whether the routine runs on its schedule after the change
 	// (created routines start disabled; absent for deletes).
 	Enabled *bool `json:"enabled,omitempty"`
+	// Hook is true when the change is to a hook (paused or resumed by name).
+	Hook bool `json:"hook,omitempty"`
 }
 
 // RoutineCheck is one row of `routines check --json`.

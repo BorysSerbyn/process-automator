@@ -144,7 +144,57 @@
     },
     "resumed": {
       "type": "boolean",
-      "description": "Resumed is true when --resume turned its schedule on (it was paused)."
+      "description": "Resumed is true when --resume turned its schedule on (it was paused),\nor turned a hook on."
+    },
+    "hook": {
+      "type": "boolean",
+      "description": "Hook is true for a hook: Kind is its action's, and Trigger is what it\nacts on, which trusting it covers too."
+    },
+    "trigger": {
+      "properties": {
+        "watcher": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "batch": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "watcher"
+      ]
+    },
+    "watcher": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "trusted": {
+          "type": "boolean"
+        },
+        "untrusted": {
+          "type": "string",
+          "description": "Untrusted says why not (no such watcher, not trusted yet, changed)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "trusted"
+      ],
+      "description": "Watcher is the hook's watcher, which needs trusting of its own."
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Warnings are what to weigh before trusting it: an LLM hook with\nwrite tools acts on outside event data."
     }
   },
   "additionalProperties": false,

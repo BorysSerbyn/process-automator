@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hooks-fire.schema.json",
+  "properties": {
+    "text": {
+      "type": "string"
+    },
+    "writes": {
+      "items": {
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error is the tool's error, when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool",
+          "args"
+        ],
+        "description": "Write is a side-effecting tool call (intercepted in dry-run)."
+      },
+      "type": "array"
+    },
+    "calls": {
+      "items": {
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object"
+          },
+          "write": {
+            "type": "boolean",
+            "description": "Write is whether the tool can change things (not read-only): such\ncalls are intercepted in dry runs, and are also listed in Writes."
+          },
+          "error": {
+            "type": "string",
+            "description": "Error is the tool's error, when the call failed."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool",
+          "args",
+          "write"
+        ],
+        "description": "Call is one tool call a run made."
+      },
+      "type": "array",
+      "description": "Calls are every tool call, in order (absent in records from before\nthey were kept)."
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "backend": {
+      "type": "string"
+    },
+    "toolCalls": {
+      "type": "integer"
+    },
+    "inputTokens": {
+      "type": "integer"
+    },
+    "outputTokens": {
+      "type": "integer"
+    },
+    "cachedTokens": {
+      "type": "integer"
+    },
+    "costUsd": {
+      "type": "number",
+      "description": "CostUSD is the run's cost at API list prices: claude-api runs only (agent CLI\nruns are on the CLI's own plan, and the app never works out a cost for them)."
+    },
+    "promptSource": {
+      "type": "string",
+      "description": "the routine file"
+    },
+    "output": {
+      "description": "Output is the result in the shape the routine declared (Dotprompt\noutput: schema), validated; absent for routines without one."
+    },
+    "outcome": {
+      "type": "string",
+      "description": "Outcome is the routine's own report when the run succeeded: done or\nnothing_to_do (a failed report fails the run). Reason says why."
+    },
+    "reason": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is program for a program; absent for an LLM routine (llm)."
+    },
+    "program": {
+      "properties": {
+        "exitCode": {
+          "type": "integer",
+          "description": "ExitCode is the code it exited with (-1 when it was killed)."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Summary is the line it wrote to $PA_RESULT, if it wrote one."
+        },
+        "output": {
+          "type": "string",
+          "description": "Output is what it printed (stdout and stderr): all of it, or its first\nand last 32 KiB with what was left out marked between them."
+        },
+        "outputTruncated": {
+          "type": "boolean",
+          "description": "OutputTruncated is true when it printed more than Output holds."
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum is the SHA-256 of the executable that ran."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "exitCode",
+        "dryRun"
+      ],
+      "description": "Program is a program's run: its exit code, summary and output."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "title": "procauto hooks fire --json",
+  "description": "RunOutput is `run --json`: how the run went."
+}

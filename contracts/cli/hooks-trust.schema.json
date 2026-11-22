@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hooks-trust.schema.json",
+  "properties": {
+    "routine": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "llm",
+        "program"
+      ],
+      "description": "Kind is program for a program; absent for an LLM routine (llm)."
+    },
+    "surface": {
+      "properties": {
+        "servers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "builtinTools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "folder": {
+          "type": "string"
+        },
+        "plugins": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "servers",
+        "tools"
+      ]
+    },
+    "program": {
+      "properties": {
+        "executable": {
+          "type": "string",
+          "description": "Executable is the app's copy, the one that runs."
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum is the executable's SHA-256 (trust is keyed to it)."
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "writes": {
+          "type": "boolean",
+          "description": "Writes is whether it can change anything: a dry run passes it\n--dry-run; one that doesn't write runs as it is."
+        },
+        "secrets": {
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "env": {
+                "type": "string",
+                "description": "Env is the environment variable it's passed as."
+              },
+              "stored": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "env",
+              "stored"
+            ],
+            "description": "ProgramSecret is a secret a program declares, and whether it's stored (`auth login \u003cprogram\u003e` stores it)."
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "executable",
+        "args",
+        "writes",
+        "secrets"
+      ],
+      "description": "Program is what trusting a program approves: the executable that\nruns (by checksum, with its description file), what it declares."
+    },
+    "tools": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "server",
+          "readOnly"
+        ],
+        "description": "CheckedTool is an allowlisted tool as a routine would get it."
+      },
+      "type": "array",
+      "description": "Tools are its allowlisted tools with the server offering each and\nwhether it's read-only (absent when its servers couldn't be reached)."
+    },
+    "toolsError": {
+      "type": "string",
+      "description": "ToolsError says why its tools couldn't be checked (e.g. a server needs\na sign-in)."
+    },
+    "changes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Changes since it was last trusted (empty for a first trust)."
+    },
+    "trusted": {
+      "type": "boolean"
+    },
+    "resumed": {
+      "type": "boolean",
+      "description": "Resumed is true when --resume turned its schedule on (it was paused),\nor turned a hook on."
+    },
+    "hook": {
+      "type": "boolean",
+      "description": "Hook is true for a hook: Kind is its action's, and Trigger is what it\nacts on, which trusting it covers too."
+    },
+    "trigger": {
+      "properties": {
+        "watcher": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "batch": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "watcher"
+      ]
+    },
+    "watcher": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "trusted": {
+          "type": "boolean"
+        },
+        "untrusted": {
+          "type": "string",
+          "description": "Untrusted says why not (no such watcher, not trusted yet, changed)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "trusted"
+      ],
+      "description": "Watcher is the hook's watcher, which needs trusting of its own."
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Warnings are what to weigh before trusting it: an LLM hook with\nwrite tools acts on outside event data."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "routine",
+    "surface",
+    "changes",
+    "trusted"
+  ],
+  "title": "procauto hooks trust --json",
+  "description": "TrustOutput is `routines trust --json`."
+}

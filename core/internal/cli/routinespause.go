@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 )
 
 // newRoutinesPauseCmd is `routines pause|resume <routine>` (either kind):
@@ -18,21 +20,31 @@ func newRoutinesPauseCmd(resume bool) *cobra.Command {
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			x, err := routineExists(cmd, args[0])
+			a, err := loadApp(cmd)
 			if err != nil {
 				return err
 			}
-			st, err := settingsStore(cmd)
+			x, err := a.FindAny(args[0]) // a hook's name too
 			if err != nil {
 				return err
 			}
-			if _, err := st.Set("routines."+x.Name()+".enabled", fmt.Sprint(resume)); err != nil {
-				return err
-			}
-			out := RoutineChange{Routine: x.Name(), Kind: x.Kind().Written(), Path: x.Path(), Enabled: &resume}
-			return emit(cmd, out, fmt.Sprintf("%s %s.", verb, x.Name()))
+			return setEnabled(cmd, x, resume, verb)
 		},
 	}
 	jsonFlag(cmd.Flags(), RoutineChange{})
 	return cmd
+}
+
+// setEnabled pauses or resumes a routine of either kind, or a hook.
+func setEnabled(cmd *cobra.Command, x engine.Runnable, on bool, verb string) error {
+	st, err := settingsStore(cmd)
+	if err != nil {
+		return err
+	}
+	if _, err := st.Set(enabledKey(x), fmt.Sprint(on)); err != nil {
+		return err
+	}
+	_, hook := engine.AsHook(x)
+	out := RoutineChange{Routine: x.Name(), Kind: x.Kind().Written(), Path: x.Path(), Enabled: &on, Hook: hook}
+	return emit(cmd, out, fmt.Sprintf("%s %s.", verb, x.Name()))
 }

@@ -19,6 +19,10 @@
     "enabled": {
       "type": "boolean",
       "description": "Enabled is whether the routine runs on its schedule after the change\n(created routines start disabled; absent for deletes)."
+    },
+    "hook": {
+      "type": "boolean",
+      "description": "Hook is true when the change is to a hook (paused or resumed by name)."
     }
   },
   "additionalProperties": false,

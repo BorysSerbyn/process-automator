@@ -15,6 +15,13 @@
       "type": "string",
       "description": "Programs is the programs folder: the app's copies of the programs added."
     },
+    "hooks": {
+      "type": "string",
+      "description": "Hooks and Watchers are the hooks' and watchers' folders: the app's\ncopies of those added."
+    },
+    "watchers": {
+      "type": "string"
+    },
     "runStatus": {
       "type": "string"
     },

@@ -43,6 +43,114 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/guide.schema.json
+  - command: hooks add
+    usage: procauto hooks add <hook> [flags]
+    summary: Add a hook from its file (a .prompt file, or a hook.yaml beside its executable); it starts off and untrusted
+    example: |-
+      procauto hooks add open-meet --from ./open-meet/hook.yaml
+      procauto hooks add triage --from ./triage.prompt
+    flags:
+      - name: --from
+        type: string
+        usage: 'the hook''s file: a .prompt file, or a hook.yaml with its executable beside it'
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-add.schema.json
+  - command: hooks delete
+    usage: procauto hooks delete <hook> [flags]
+    summary: 'Delete a hook: its copy, settings, trust and secrets (its run history is kept)'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-delete.schema.json
+  - command: hooks fire
+    usage: procauto hooks fire <hook> [flags]
+    summary: 'Run a hook now for a sample event (a file or stdin), as its watcher would: the way to try one out'
+    example: |-
+      procauto hooks fire open-meet --event sample.json --dry-run
+      echo '{"id":"1","type":"meeting.started","data":{"link":"https://meet.google.com/abc"}}' | procauto hooks fire open-meet --event -
+    flags:
+      - name: --dry-run
+        type: bool
+        usage: intercept an LLM hook's side-effecting tool calls; a program hook that writes gets --dry-run
+      - name: --event
+        type: string
+        usage: 'the sample event''s file: a JSON object as its watcher prints it (- for stdin)'
+      - name: --event-json
+        type: string
+        usage: the sample event itself, as JSON
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-fire.schema.json
+  - command: hooks list
+    usage: procauto hooks list [flags]
+    summary: 'List hooks: what each acts on, whether it''s on, and its last run'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-list.schema.json
+  - command: hooks pause
+    usage: procauto hooks pause <hook> [flags]
+    summary: 'Turn a hook off: it no longer runs on its events'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-pause.schema.json
+  - command: hooks resume
+    usage: procauto hooks resume <hook> [flags]
+    summary: Turn a paused hook on again
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-resume.schema.json
+  - command: hooks show
+    usage: procauto hooks show <hook> [flags]
+    summary: 'Show a hook: its file, what it acts on, its watcher, its settings and last run'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-show.schema.json
+  - command: hooks trust
+    usage: procauto hooks trust <hook> [flags]
+    summary: 'Review what a hook acts on and what it can reach, and trust it (--resume: and turn it on)'
+    example: |-
+      procauto hooks trust open-meet --check --json   # review only
+      procauto hooks trust open-meet --yes --resume    # trust it and turn it on
+    flags:
+      - name: --check
+        type: bool
+        usage: only show what it acts on and can reach, and what changed; trust nothing
+      - name: --json
+        type: bool
+        usage: machine-readable output
+      - name: --resume
+        type: bool
+        usage: also turn it on, if it's off
+      - name: --yes
+        type: bool
+        usage: don't ask (after reviewing it)
+    jsonOutput: cli/hooks-trust.schema.json
+  - command: hooks update
+    usage: procauto hooks update <hook> [flags]
+    summary: Replace a hook's file (its settings are kept); a changed action or trigger takes its trust away
+    example: |-
+      procauto hooks add open-meet --from ./open-meet/hook.yaml
+      procauto hooks add triage --from ./triage.prompt
+    flags:
+      - name: --from
+        type: string
+        usage: 'the hook''s file: a .prompt file, or a hook.yaml with its executable beside it'
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/hooks-update.schema.json
   - command: login-items disable
     usage: procauto login-items disable [flags]
     summary: Don't start the app at login (what's running keeps running)
@@ -183,7 +291,7 @@ commands:
     jsonOutput: cli/notifications-open.schema.json
   - command: paths
     usage: procauto paths [flags]
-    summary: Show where the app keeps its config, routines, programs, run status and history
+    summary: Show where the app keeps its config, routines, programs, hooks, run status and history
     flags:
       - name: --json
         type: bool
@@ -456,11 +564,11 @@ commands:
         usage: machine-readable output
       - name: --routine
         type: string
-        usage: only this routine's settings
+        usage: only this routine's (or hook's) settings
       - name: --scope
         type: string
         default: all
-        usage: all, app (app-wide settings) or routines (each routine's)
+        usage: all, app (app-wide settings), routines (each routine's) or hooks (each hook's and watcher's)
     jsonOutput: cli/settings-list.schema.json
   - command: settings reset
     usage: procauto settings reset <key>
@@ -617,3 +725,81 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/version.schema.json
+  - command: watchers add
+    usage: procauto watchers add <watcher> [flags]
+    summary: Add a watcher from its watcher.yaml (its executable beside it); it runs once trusted
+    example: procauto watchers add calendar --from ./calendar/watcher.yaml
+    flags:
+      - name: --from
+        type: string
+        usage: the watcher's description file, with its executable beside it
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/watchers-add.schema.json
+  - command: watchers delete
+    usage: procauto watchers delete <watcher> [flags]
+    summary: 'Delete a watcher: its copy, settings, trust, secrets and state (the hooks listening to it stay)'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/watchers-delete.schema.json
+  - command: watchers list
+    usage: procauto watchers list [flags]
+    summary: 'List watchers: their mode, trust, the hooks listening and how they last went'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/watchers-list.schema.json
+  - command: watchers pause
+    usage: procauto watchers pause <watcher> [flags]
+    summary: 'Stop a watcher: its process ends, and it isn''t run until resumed'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/watchers-pause.schema.json
+  - command: watchers resume
+    usage: procauto watchers resume <watcher> [flags]
+    summary: Let a paused watcher run again
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/watchers-resume.schema.json
+  - command: watchers show
+    usage: procauto watchers show <watcher> [flags]
+    summary: 'Show a watcher: its description file, trust, the hooks listening and how it last went'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/watchers-show.schema.json
+  - command: watchers trust
+    usage: procauto watchers trust <watcher> [flags]
+    summary: Review a watcher's executable and secrets, and trust it to run
+    flags:
+      - name: --check
+        type: bool
+        usage: only show what it runs and what changed; trust nothing
+      - name: --json
+        type: bool
+        usage: machine-readable output
+      - name: --yes
+        type: bool
+        usage: don't ask (after reviewing it)
+    jsonOutput: cli/watchers-trust.schema.json
+  - command: watchers update
+    usage: procauto watchers update <watcher> [flags]
+    summary: Replace a watcher's copy from its watcher.yaml; a changed one needs trusting again
+    example: procauto watchers add calendar --from ./calendar/watcher.yaml
+    flags:
+      - name: --from
+        type: string
+        usage: the watcher's description file, with its executable beside it
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/watchers-update.schema.json

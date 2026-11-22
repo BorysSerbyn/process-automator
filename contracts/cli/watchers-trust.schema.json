@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "watchers-trust.schema.json",
+  "properties": {
+    "watcher": {
+      "type": "string"
+    },
+    "program": {
+      "properties": {
+        "executable": {
+          "type": "string",
+          "description": "Executable is the app's copy, the one that runs."
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum is the executable's SHA-256 (trust is keyed to it)."
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "writes": {
+          "type": "boolean",
+          "description": "Writes is whether it can change anything: a dry run passes it\n--dry-run; one that doesn't write runs as it is."
+        },
+        "secrets": {
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "env": {
+                "type": "string",
+                "description": "Env is the environment variable it's passed as."
+              },
+              "stored": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "env",
+              "stored"
+            ],
+            "description": "ProgramSecret is a secret a program declares, and whether it's stored (`auth login \u003cprogram\u003e` stores it)."
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "executable",
+        "args",
+        "writes",
+        "secrets"
+      ],
+      "description": "Program is what trusting it approves: the executable that runs (by\nchecksum, with its description file), its arguments and secrets."
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "poll",
+        "stream"
+      ]
+    },
+    "changes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Changes since it was last trusted (empty for a first trust)."
+    },
+    "trusted": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "watcher",
+    "program",
+    "mode",
+    "changes",
+    "trusted"
+  ],
+  "title": "procauto watchers trust --json",
+  "description": "WatcherTrustOutput is `watchers trust --json`."
+}

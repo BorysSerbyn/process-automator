@@ -13,11 +13,13 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
+	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
@@ -32,7 +34,7 @@ import (
 // `%{file:<path>}` an embedded file as a code block, and `%{<name>}` inline
 // is a generated value (guideValues).
 
-//go:embed guide/routines.md guide/plugins.md guide/programs.md guide/new-notes.prompt guide/testdata/notes-server/main.go guide/testdata/notes-server/plugin.yaml
+//go:embed guide/routines.md guide/plugins.md guide/programs.md guide/hooks.md guide/new-notes.prompt guide/testdata/notes-server/main.go guide/testdata/notes-server/plugin.yaml
 var guideFiles embed.FS
 
 // guideTopic is one topic of `guide`.
@@ -44,6 +46,7 @@ var guideTopics = []guideTopic{
 	{Name: "routines", Summary: "Writing a routine file: its keys, inputs, models and tools, how a run ends, and turning it on", file: "routines.md"},
 	{Name: "plugins", Summary: "Giving routines new tools: adding an MCP server, or writing one and installing it as a plugin folder", file: "plugins.md"},
 	{Name: "programs", Summary: "Writing a program: a routine that runs an executable instead of a model, and its program.yaml", file: "programs.md"},
+	{Name: "hooks", Summary: "Writing a hook (a prompt or program run on events) and a watcher (what prints the events), and the event format", file: "hooks.md"},
 }
 
 // GuideOutput is `guide --json`: the topics (no topic given), or one topic.
@@ -89,7 +92,8 @@ func newGuideCmd() *cobra.Command {
 		Use:   "guide [<topic>]",
 		Short: "How to write a routine and how to add a plugin, for people and agents",
 		Long: "Without a topic, lists the topics; with one, prints it. Read `guide routines` before writing a " +
-			"routine, `guide plugins` before adding an MCP server and `guide programs` before writing a program. Topics:" + list.String(),
+			"routine, `guide plugins` before adding an MCP server, `guide programs` before writing a program and `guide hooks` " +
+			"before writing a hook or a watcher. Topics:" + list.String(),
 		Example:     "  " + product.Command + " guide routines",
 		Annotations: readOnly(),
 		ValidArgs:   names,
@@ -228,17 +232,24 @@ func guideValues() map[string]string {
 		types[i] = string(t)
 	}
 	return map[string]string{
-		"command":     product.Command,
-		"outcomeTool": agent.OutcomeTool,
-		"outcomes":    codeList([]string{agent.OutcomeDone, agent.OutcomeNothingToDo, agent.OutcomeFailed}, "or"),
-		"paramTypes":  codeList(types, "or"),
-		"resultEnv":   programs.ResultEnv,
-		"triggerEnv":  programs.TriggerEnv,
-		"forEnv":      programs.ForEnv,
-		"runIDEnv":    programs.RunIDEnv,
-		"dryRunFlag":  programs.DryRunFlag,
-		"programPath": programs.DefaultPath,
-		"outputHalf":  fmt.Sprint(programs.OutputCap / 2 >> 10),
+		"command":        product.Command,
+		"outcomeTool":    agent.OutcomeTool,
+		"outcomes":       codeList([]string{agent.OutcomeDone, agent.OutcomeNothingToDo, agent.OutcomeFailed}, "or"),
+		"paramTypes":     codeList(types, "or"),
+		"resultEnv":      programs.ResultEnv,
+		"triggerEnv":     programs.TriggerEnv,
+		"forEnv":         programs.ForEnv,
+		"runIDEnv":       programs.RunIDEnv,
+		"dryRunFlag":     programs.DryRunFlag,
+		"programPath":    programs.DefaultPath,
+		"outputHalf":     fmt.Sprint(programs.OutputCap / 2 >> 10),
+		"cursorEnv":      watchers.CursorEnv,
+		"watcherEnv":     watchers.NameEnv,
+		"untrustedOpen":  engine.UntrustedOpen,
+		"untrustedClose": engine.UntrustedClose,
+		"eventBlock":     engine.EventBlockTag,
+		"loopFactor":     fmt.Sprint(engine.LoopFactor),
+		"maxBackoff":     settings.DurationText(engine.MaxStreamBackoff),
 	}
 }
 
@@ -271,6 +282,14 @@ func (s guideSources) table(id string) (GuideTable, error) {
 		return manifestTable()
 	case "programFields":
 		return programFieldsTable(), nil
+	case "hookFields":
+		return fieldsTable(id, hooks.Fields), nil
+	case "hookPromptKeys":
+		return fieldsTable(id, hooks.PromptKeys), nil
+	case "watcherFields":
+		return fieldsTable(id, watchers.Fields), nil
+	case "hookSettings":
+		return hookSettingsTable(), nil
 	}
 	return GuideTable{}, fmt.Errorf("no table %q", id)
 }
@@ -313,6 +332,26 @@ func programFieldsTable() GuideTable {
 	for _, f := range programs.Fields {
 		t.Rows = append(t.Rows, []string{f.Name, f.Type, f.Description})
 	}
+	return t
+}
+
+// fieldsTable is a description file's keys.
+func fieldsTable(id string, fields []programs.Field) GuideTable {
+	t := GuideTable{ID: id, Columns: []string{"Key", "Type", "Meaning"}}
+	for _, f := range fields {
+		t.Rows = append(t.Rows, []string{f.Name, f.Type, f.Description})
+	}
+	return t
+}
+
+// hookSettingsTable is a hook's own settings.
+func hookSettingsTable() GuideTable {
+	t := GuideTable{ID: "hookSettings", Columns: []string{"Key", "Type", "Default", "Meaning"}}
+	for _, f := range settings.HookFields {
+		t.Rows = append(t.Rows, []string{f.Name, string(f.Type), fmt.Sprint(f.Default), f.Description})
+	}
+	t.Rows = append(t.Rows, []string{strings.Join(settings.HookActionFields, ", "), "", "",
+		"An LLM hook's prompt takes these LLM routine settings too (guide routines)."})
 	return t
 }
 

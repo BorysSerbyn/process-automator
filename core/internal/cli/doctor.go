@@ -15,8 +15,8 @@ import (
 
 // Finding is one problem doctor found, with what fixes it.
 type Finding struct {
-	// Area is what it's about: scheduler, usage, routine or run.
-	Area    string `json:"area" jsonschema:"enum=scheduler,enum=usage,enum=routine,enum=run"`
+	// Area is what it's about: scheduler, usage, routine, hook or run.
+	Area    string `json:"area" jsonschema:"enum=scheduler,enum=usage,enum=routine,enum=hook,enum=run"`
 	Subject string `json:"subject"`
 	Problem string `json:"problem"`
 	Fix     string `json:"fix,omitempty"`
@@ -35,7 +35,8 @@ func newDoctorCmd() *cobra.Command {
 		Long: "Checks what can make the status red, without calling the model or any tool: the scheduler is " +
 			"running; each enabled routine loads, its settings resolve, its folder exists, it's trusted, its " +
 			"servers connect (signed in) and offer its tools, its model's provider is set up (the local " +
-			"server answers and has the model) or, for a program, its secrets are stored; and its last run didn't fail. Each problem comes " +
+			"server answers and has the model) or, for a program, its secrets are stored; and its last run didn't fail. Hooks that are on " +
+			"too: and their watchers are there, trusted and working. Each problem comes " +
 			"with what fixes it. Fails if there are any.",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
@@ -118,15 +119,55 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		for _, p := range rd.All() {
 			add("routine", name, p.Text, p.Fix)
 		}
-		if run := status.LastRun(name); run != nil && rd.ConfigErr == nil {
-			switch run.Outcome {
-			case runstatus.OutcomeFailed, runstatus.OutcomeMissed:
-				add("run", name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason),
-					"see it: "+product.Command+" runs show "+history.RunID(name, run.StartedAt))
-			case runstatus.OutcomeNeedsReauth:
-				add("run", name, "its last run needed a sign-in: "+run.Reason, product.Command+" auth status shows which one")
-			}
+		if rd.ConfigErr == nil {
+			lastRunFinding(add, status, name, false)
 		}
 	}
+	hookFindings(cmd, a, status, add)
 	return findings
+}
+
+// lastRunFinding adds a routine's or hook's last run, when it makes the
+// status red (skipped: a hook's, paused past its rate; a routine's is the
+// usage limit's finding).
+func lastRunFinding(add func(area, subject, problem, fix string), status *runstatus.Status, name string, skipped bool) {
+	run := status.LastRun(name)
+	if run == nil {
+		return
+	}
+	if run.Outcome == runstatus.OutcomeSkipped && !skipped {
+		return
+	}
+	switch run.Outcome {
+	case runstatus.OutcomeFailed, runstatus.OutcomeMissed, runstatus.OutcomeSkipped:
+		add("run", name, fmt.Sprintf("its last run %s: %s", run.Outcome, run.Reason),
+			"see it: "+product.Command+" runs show "+history.RunID(name, run.StartedAt))
+	case runstatus.OutcomeNeedsReauth:
+		add("run", name, "its last run needed a sign-in: "+run.Reason, product.Command+" auth status shows which one")
+	}
+}
+
+// hookFindings adds what keeps each hook that's on from running.
+func hookFindings(cmd *cobra.Command, a *engine.App, status *runstatus.Status, add func(area, subject, problem, fix string)) {
+	all, broken, err := a.Hooks()
+	if err != nil {
+		add("hook", "hooks folder", err.Error(), "")
+		return
+	}
+	for _, b := range broken {
+		add("hook", b.Path, b.Err.Error(), "fix it, or `"+product.Command+" hooks delete "+b.Name+"` it")
+	}
+	for _, x := range all {
+		rd := a.Assess(x)
+		if rd.ConfigErr == nil && !rd.Config.Enabled {
+			continue
+		}
+		rd.Check(cmd.Context(), a, x)
+		for _, p := range rd.All() {
+			add("hook", x.Name(), p.Text, p.Fix)
+		}
+		if rd.ConfigErr == nil {
+			lastRunFinding(add, status, x.Name(), true)
+		}
+	}
 }

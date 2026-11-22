@@ -252,7 +252,11 @@ func programInfo(a *engine.App, p programs.Program) *ProgramInfo {
 	}
 	info.Checksum, _ = programs.Checksum(p.Executable)
 	for _, s := range p.Secrets {
-		_, stored, _ := a.Stored(engine.Secret{Key: engine.ProgramSecretKey(p.Name, s.Name)})
+		key := engine.ProgramSecretKey(p.Name, s.Name)
+		if p.Hook {
+			key = engine.HookSecretKey(p.Name, s.Name)
+		}
+		_, stored, _ := a.Stored(engine.Secret{Key: key})
 		info.Secrets = append(info.Secrets, ProgramSecret{Name: s.Name, Env: s.Env, Stored: stored})
 	}
 	return info
