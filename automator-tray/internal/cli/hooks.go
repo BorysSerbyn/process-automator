@@ -44,6 +44,8 @@ type HookInfo struct {
 	Model        string       `json:"model,omitempty"`
 	Program      *ProgramInfo `json:"program,omitempty"`
 	LastRun      *LastRun     `json:"lastRun,omitempty"`
+	// Permissions are what the OS must allow it, with their state.
+	Permissions []PermissionNeed `json:"permissions,omitempty"`
 }
 
 // IsProgram is whether it's a program hook, not an LLM hook: it has no
@@ -84,6 +86,8 @@ type WatcherInfo struct {
 	// ErrorAt when.
 	Error   string     `json:"error,omitempty"`
 	ErrorAt *time.Time `json:"errorAt,omitempty"`
+	// Permissions are what the OS must allow it, with their state.
+	Permissions []PermissionNeed `json:"permissions,omitempty"`
 }
 
 // WatcherDetail is a watcher in full (`watchers show --json`).

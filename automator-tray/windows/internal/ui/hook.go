@@ -52,6 +52,10 @@ type Hook struct {
 	// the hook is read, if it needs turning on (from the menu, a reason).
 	turnOn           *turnOn
 	reviewWhenLoaded bool
+	// granter is Grant… for the permissions it needs; watchingPermissions,
+	// whether it's read again while one isn't allowed.
+	granter             *granter
+	watchingPermissions bool
 
 	signingIn   bool
 	signInError string
@@ -80,6 +84,7 @@ func NewHook(c cli.CLI, win fyne.Window, async Async, name string, deleted func(
 		func(msg string) { h.actionError = msg; h.refresh() })
 	h.memories = newMemoryList(c, async, name, h.refresh)
 	h.turnOn = newTurnOn(c, async, name, true, h.summary, h.refresh, h.Load)
+	h.granter = newGranter(c, async, h.refresh, h.loadDetail)
 	h.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -137,6 +142,7 @@ func (h *Hook) Update(s *cli.RunStatus) {
 	if !sameRun(before.LastRun, after.LastRun) || before.Problem != after.Problem {
 		h.loadDetail()
 		h.history.load()
+		h.turnOn.statusChanged()
 	}
 }
 
@@ -157,6 +163,7 @@ func (h *Hook) loadDetail() {
 					h.sample = sampleEvent(d.On)
 				}
 				h.detail, h.loadError = &d, ""
+				h.watchPermissions()
 				if !d.IsProgram() && !h.memories.loaded {
 					h.memories.load()
 				}
@@ -344,6 +351,19 @@ func (h *Hook) Review() {
 	}
 }
 
+// watchPermissions reads it again now and then while a permission it needs
+// isn't allowed (the scheduler records it within a pass).
+func (h *Hook) watchPermissions() {
+	if h.watchingPermissions || len(cli.BlockingPermissions(h.detail.Permissions)) == 0 {
+		return
+	}
+	h.watchingPermissions = true
+	pollPermissions(h.async, func() bool {
+		h.watchingPermissions = h.detail != nil && len(cli.BlockingPermissions(h.detail.Permissions)) > 0
+		return h.watchingPermissions
+	}, h.loadDetail)
+}
+
 // summary is what it does, in a line, for its review.
 func (h *Hook) summary() string {
 	d := h.detail
@@ -386,6 +406,11 @@ func (h *Hook) render() fyne.CanvasObject {
 		}
 		on := widget.NewButton("Turn On…", h.turnOn.start)
 		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(on), banner(h.name+" isn't on", why)))
+	}
+	if d := h.detail; d != nil && !h.turnOn.showing {
+		if b := h.granter.banner(h.name, d.Permissions); b != nil {
+			box.Add(b)
+		}
 	}
 	box.Add(segmented(h.tabs(), h.tab, h.ShowTab))
 	switch h.tab {
@@ -533,6 +558,9 @@ func (h *Hook) overview() fyne.CanvasObject {
 	if h.detail != nil {
 		box.Add(card(false, h.trigger()...))
 		box.Add(card(false, h.access()...))
+		if c := h.granter.card(h.detail.Permissions); c != nil {
+			box.Add(c)
+		}
 	}
 	return box
 }

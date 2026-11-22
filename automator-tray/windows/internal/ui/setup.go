@@ -54,6 +54,7 @@ type Setup struct {
 	backend         *cli.Setting
 	backendSettings []cli.Setting
 	reviews         map[string]cli.TrustOutput
+	granter         *granter
 	// autoStarted are auto steps started once already: a failed one waits
 	// for its button.
 	autoStarted map[string]bool
@@ -70,6 +71,8 @@ func NewSetup(c cli.CLI, win fyne.Window, async Async, openRoutine func(string))
 		chosen: map[string]bool{}, projects: map[string]bool{}, prepared: map[string]bool{},
 		values: map[string]map[string]string{}, reviews: map[string]cli.TrustOutput{}, autoStarted: map[string]bool{},
 	}
+	// Grant… for a turn-on step's permissions; then the steps are read again.
+	s.granter = newGranter(c, async, func() { s.refresh() }, func() { s.Load() })
 	s.scroll = container.NewVScroll(container.NewVBox())
 	s.refresh()
 	return s
@@ -563,7 +566,10 @@ func (s *Setup) action(step cli.SetupStep) fyne.CanvasObject {
 			}
 			// The sign-ins it still needs, from the review, as a window's
 			// Turn On… shows them; then the one confirm.
-			var rows []fyne.CanvasObject
+			rows := s.granter.rows(cli.BlockingPermissions(r.Permissions))
+			if wontRun := cli.WontRunText(r.Permissions); wontRun != "" {
+				rows = append(rows, padded(0, 0, rowInset-8, rowInset-8, secondary(wontRun)))
+			}
 			for _, name := range r.SignIns {
 				n := name
 				signIn := s.button("Sign In…", step, func() { s.run(step, func() error { return s.cli.SignIn(n) }, nil) })

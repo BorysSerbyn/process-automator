@@ -1,0 +1,101 @@
+{
+ "name": "tell",
+ "path": "/home/me/.config/acme/hooks/tell/hook.prompt",
+ "description": "Tells me",
+ "on": {
+  "watcher": "home-key",
+  "type": "key.pressed"
+ },
+ "enabled": false,
+ "staleness": "10m",
+ "timeout": "20m",
+ "rate": 60,
+ "trusted": false,
+ "servers": [
+  "notify"
+ ],
+ "tools": [
+  "notify_me"
+ ],
+ "problem": "its watcher home-key needs the Input Monitoring permission",
+ "permissions": [
+  {
+   "permission": "input-monitoring",
+   "label": "Input Monitoring",
+   "state": "missing",
+   "by": [
+    {
+     "kind": "watcher",
+     "name": "home-key"
+    }
+   ],
+   "where": "in System Settings > Privacy & Security > Input Monitoring",
+   "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+  },
+  {
+   "permission": "notifications",
+   "label": "Notifications",
+   "state": "not-checked",
+   "by": [
+    {
+     "kind": "plugin",
+     "name": "notify"
+    }
+   ],
+   "where": "in System Settings > Notifications",
+   "settingsUrl": "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+  },
+  {
+   "permission": "full-disk-access",
+   "label": "Full Disk Access",
+   "state": "unknown",
+   "by": [
+    {
+     "kind": "plugin",
+     "name": "files"
+    }
+   ]
+  },
+  {
+   "permission": "camera",
+   "label": "Camera",
+   "state": "unsupported",
+   "by": [
+    {
+     "kind": "plugin",
+     "name": "snap"
+    }
+   ]
+  }
+ ],
+ "source": "---\nautomator.on: {watcher: home-key}\n---\nTell me.\n",
+ "watcher": {
+  "name": "home-key",
+  "path": "/w/home-key/watcher.yaml",
+  "mode": "stream",
+  "executable": "/w/home-key/watch",
+  "args": [],
+  "secrets": [],
+  "enabled": true,
+  "trusted": true,
+  "hooks": [
+   "tell"
+  ],
+  "permissions": [
+   {
+    "permission": "input-monitoring",
+    "label": "Input Monitoring",
+    "state": "missing",
+    "by": [
+     {
+      "kind": "watcher",
+      "name": "home-key"
+     }
+    ],
+    "where": "in System Settings > Privacy & Security > Input Monitoring",
+    "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+   }
+  ]
+ },
+ "turnOn": true
+}

@@ -131,6 +131,7 @@ func run(dir string, which tray.Window) error {
 	defer holder.Release()
 
 	c := cli.CLI{Path: info.CLI, Command: info.Command}
+	ui.AppName = info.Name
 	a := fyneapp.NewWithID(id + ".windows")
 	var w fyne.Window
 	var view content

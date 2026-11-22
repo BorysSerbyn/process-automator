@@ -34,10 +34,46 @@ type turnOn struct {
 	signingIn   string
 	signInError string
 	detailsOpen bool
+	// granter is Grant… for the permissions it needs that aren't allowed;
+	// polling, whether the review is read again while it waits for one.
+	granter *granter
+	polling bool
 }
 
 func newTurnOn(c cli.CLI, async Async, name string, hook bool, summary func() string, redraw, turnedOn func()) *turnOn {
-	return &turnOn{cli: c, async: async, name: name, hook: hook, summary: summary, redraw: redraw, turnedOn: turnedOn}
+	t := &turnOn{cli: c, async: async, name: name, hook: hook, summary: summary, redraw: redraw, turnedOn: turnedOn}
+	t.granter = newGranter(c, async, redraw, t.load)
+	return t
+}
+
+// waitingForPermission is whether the review shows a permission that isn't
+// allowed yet.
+func (t *turnOn) waitingForPermission() bool {
+	return t.review != nil && len(cli.BlockingPermissions(t.review.Permissions)) > 0
+}
+
+// statusChanged reads an open review again (the scheduler recorded a
+// permission, say).
+func (t *turnOn) statusChanged() {
+	if t.showing {
+		t.load()
+	}
+}
+
+// poll reads the review again now and then while it's open and waits for
+// a permission, so its row turns allowed by itself.
+func (t *turnOn) poll() {
+	if t.polling {
+		return
+	}
+	t.polling = true
+	pollPermissions(t.async, func() bool {
+		if t.showing && t.waitingForPermission() {
+			return true
+		}
+		t.polling = false
+		return false
+	}, t.load)
 }
 
 // start is Turn On…: the review shows, read afresh.
@@ -67,6 +103,9 @@ func (t *turnOn) load() {
 				t.loadError = err.Error()
 			} else {
 				t.review = &review
+				if t.showing && t.waitingForPermission() {
+					t.poll()
+				}
 			}
 			t.redraw()
 		}
@@ -135,8 +174,9 @@ func (t *turnOn) view() fyne.CanvasObject {
 		for _, w := range r.Warnings {
 			objects = append(objects, padded(4, 2, rowInset-8, rowInset-8, warning("Before you turn it on", w)))
 		}
-		// What it needs before it works. Sign-ins go here; so would
-		// anything else it needs from me first.
+		// What it needs before it works: the permissions the OS hasn't
+		// allowed yet, and the sign-ins.
+		objects = append(objects, t.granter.rows(cli.BlockingPermissions(r.Permissions))...)
 		for _, name := range r.SignIns {
 			n := name
 			var action fyne.CanvasObject
@@ -191,6 +231,14 @@ func (t *turnOn) view() fyne.CanvasObject {
 	}
 	if t.err != "" {
 		objects = append(objects, padded(4, 0, rowInset, rowInset, errorRow(t.err)))
+	}
+	if r != nil {
+		if wontRun := cli.WontRunText(r.Permissions); wontRun != "" {
+			// It can be turned on now; it says plainly it won't run yet.
+			l := text(wontRun)
+			l.Importance = widget.WarningImportance
+			objects = append(objects, padded(4, 0, rowInset-8, rowInset-8, l))
+		}
 	}
 	title := "Trust and Turn On"
 	if r != nil {

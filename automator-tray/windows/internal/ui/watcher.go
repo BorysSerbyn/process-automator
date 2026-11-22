@@ -38,6 +38,10 @@ type Watcher struct {
 	signInError string
 	actionError string
 	working     bool
+	// granter is Grant… for the permissions it declares; watchingPermissions,
+	// whether it's read again while one isn't allowed.
+	granter             *granter
+	watchingPermissions bool
 
 	scroll *container.Scroll
 }
@@ -46,6 +50,7 @@ type Watcher struct {
 // gives it run status.
 func NewWatcher(c cli.CLI, win fyne.Window, async Async, name string, deleted func(), openHook func(string)) *Watcher {
 	w := &Watcher{cli: c, async: async, name: name, now: time.Now, deleted: deleted, openHook: openHook}
+	w.granter = newGranter(c, async, w.refresh, w.Load)
 	w.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -73,6 +78,7 @@ func (w *Watcher) Load() {
 				w.loadError = err.Error()
 			} else {
 				w.detail, w.loadError = &d, ""
+				w.watchPermissions()
 				if !d.Trusted && w.review == nil {
 					w.loadTrust()
 				}
@@ -91,6 +97,19 @@ func (w *Watcher) Update(s *cli.RunStatus) {
 	if changed {
 		w.Load()
 	}
+}
+
+// watchPermissions reads it again now and then while a permission it
+// declares isn't allowed (the scheduler records it within a pass).
+func (w *Watcher) watchPermissions() {
+	if w.watchingPermissions || len(cli.BlockingPermissions(w.detail.Permissions)) == 0 {
+		return
+	}
+	w.watchingPermissions = true
+	pollPermissions(w.async, func() bool {
+		w.watchingPermissions = w.detail != nil && len(cli.BlockingPermissions(w.detail.Permissions)) > 0
+		return w.watchingPermissions
+	}, w.Load)
 }
 
 func sameHooks(a, b *cli.RunStatus) bool {
@@ -218,9 +237,17 @@ func (w *Watcher) render() fyne.CanvasObject {
 		}
 		box.Add(banner("Not trusted", why))
 	}
-	for _, o := range []fyne.CanvasObject{card(false, w.state()...), card(false, w.hooks()...), card(false, w.access()...),
+	if b := w.granter.banner(w.name, d.Permissions); b != nil {
+		box.Add(b)
+	}
+	objects := []fyne.CanvasObject{card(false, w.state()...)}
+	if c := w.granter.card(d.Permissions); c != nil {
+		objects = append(objects, c)
+	}
+	objects = append(objects, card(false, w.hooks()...), card(false, w.access()...),
 		descriptionFile(sourceFile{title: "Watcher file", description: d.Description, path: d.Path, source: d.Source,
-			update: w.cli.Command + " watchers update " + d.Name + " --from <folder>/watcher.yaml"})} {
+			update: w.cli.Command + " watchers update " + d.Name + " --from <folder>/watcher.yaml"}))
+	for _, o := range objects {
 		box.Add(o)
 	}
 	return box

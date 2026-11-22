@@ -1,0 +1,72 @@
+{
+ "routine": "tell",
+ "surface": {
+  "servers": [
+   "notify"
+  ],
+  "tools": [
+   "notify_me"
+  ]
+ },
+ "changes": [],
+ "trusted": false,
+ "hook": true,
+ "trigger": {
+  "watcher": "home-key",
+  "type": "key.pressed"
+ },
+ "watcher": {
+  "name": "home-key",
+  "trusted": true
+ },
+ "permissions": [
+  {
+   "permission": "input-monitoring",
+   "label": "Input Monitoring",
+   "state": "granted",
+   "by": [
+    {
+     "kind": "watcher",
+     "name": "home-key"
+    }
+   ],
+   "where": "in System Settings > Privacy & Security > Input Monitoring",
+   "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+  },
+  {
+   "permission": "notifications",
+   "label": "Notifications",
+   "state": "granted",
+   "by": [
+    {
+     "kind": "plugin",
+     "name": "notify"
+    }
+   ],
+   "where": "in System Settings > Notifications",
+   "settingsUrl": "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+  },
+  {
+   "permission": "full-disk-access",
+   "label": "Full Disk Access",
+   "state": "unknown",
+   "by": [
+    {
+     "kind": "plugin",
+     "name": "files"
+    }
+   ]
+  },
+  {
+   "permission": "camera",
+   "label": "Camera",
+   "state": "unsupported",
+   "by": [
+    {
+     "kind": "plugin",
+     "name": "snap"
+    }
+   ]
+  }
+ ]
+}

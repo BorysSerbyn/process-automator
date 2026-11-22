@@ -34,6 +34,8 @@ type RoutineInfo struct {
 	Program *ProgramInfo `json:"program,omitempty"`
 	// Description is what its file says it does.
 	Description string `json:"description,omitempty"`
+	// Permissions are what the OS must allow it, with their state.
+	Permissions []PermissionNeed `json:"permissions,omitempty"`
 }
 
 // RoutineDetail is a routine in full (`routines show --json`): its row, and

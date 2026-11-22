@@ -261,35 +261,36 @@ echo 'garbage'
 // each field is a property of the command's output schema.
 func TestTypesMatchTheContracts(t *testing.T) {
 	for schema, v := range map[string]any{
-		"status.schema.json":             RunStatus{},
-		"notifications-list.schema.json": []Notification{},
-		"notifications-open.schema.json": ClickOutput{},
-		"update.schema.json":             UpdateOutput{},
-		"update-progress.schema.json":    UpdateProgress{},
-		"setup.schema.json":              SetupOutput{},
-		"templates-list.schema.json":     []TemplateInfo{},
-		"settings-list.schema.json":      []Setting{},
-		"settings-set.schema.json":       Setting{},
-		"settings-reset.schema.json":     Setting{},
-		"routines-trust.schema.json":     TrustOutput{},
-		"usage.schema.json":              Report{},
-		"login-items-status.schema.json": LoginItems{},
-		"login-items-enable.schema.json": LoginItems{},
-		"login-items-start.schema.json":  RunningOutput{},
-		"login-items-stop.schema.json":   RunningOutput{},
-		"paths.schema.json":              Paths{},
-		"routines-list.schema.json":      []RoutineInfo{},
-		"routines-show.schema.json":      RoutineDetail{},
-		"runs.schema.json":               []RunSummary{},
-		"runs-show.schema.json":          RunEntry{},
-		"memory-list.schema.json":        []Memory{},
-		"hooks-list.schema.json":         []HookInfo{},
-		"hooks-show.schema.json":         HookDetail{},
-		"hooks-trust.schema.json":        TrustOutput{},
-		"hooks-fire.schema.json":         FireOutput{},
-		"watchers-list.schema.json":      []WatcherInfo{},
-		"watchers-show.schema.json":      WatcherDetail{},
-		"watchers-trust.schema.json":     WatcherTrustOutput{},
+		"status.schema.json":              RunStatus{},
+		"notifications-list.schema.json":  []Notification{},
+		"notifications-open.schema.json":  ClickOutput{},
+		"update.schema.json":              UpdateOutput{},
+		"update-progress.schema.json":     UpdateProgress{},
+		"setup.schema.json":               SetupOutput{},
+		"templates-list.schema.json":      []TemplateInfo{},
+		"settings-list.schema.json":       []Setting{},
+		"settings-set.schema.json":        Setting{},
+		"settings-reset.schema.json":      Setting{},
+		"routines-trust.schema.json":      TrustOutput{},
+		"usage.schema.json":               Report{},
+		"login-items-status.schema.json":  LoginItems{},
+		"login-items-enable.schema.json":  LoginItems{},
+		"login-items-start.schema.json":   RunningOutput{},
+		"login-items-stop.schema.json":    RunningOutput{},
+		"paths.schema.json":               Paths{},
+		"routines-list.schema.json":       []RoutineInfo{},
+		"routines-show.schema.json":       RoutineDetail{},
+		"runs.schema.json":                []RunSummary{},
+		"runs-show.schema.json":           RunEntry{},
+		"memory-list.schema.json":         []Memory{},
+		"hooks-list.schema.json":          []HookInfo{},
+		"hooks-show.schema.json":          HookDetail{},
+		"hooks-trust.schema.json":         TrustOutput{},
+		"hooks-fire.schema.json":          FireOutput{},
+		"watchers-list.schema.json":       []WatcherInfo{},
+		"watchers-show.schema.json":       WatcherDetail{},
+		"watchers-trust.schema.json":      WatcherTrustOutput{},
+		"permissions-request.schema.json": PermissionRequest{},
 	} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "cli", schema))
 		if err != nil {
@@ -328,5 +329,39 @@ func checkFields(t *testing.T, where string, typ reflect.Type, node map[string]a
 			continue
 		}
 		checkFields(t, where+"."+name, f.Type, prop)
+	}
+}
+
+// Grant… asks through `permissions request`; a permission's words come
+// from what the core says, and unknown or unsupported ones never block.
+func TestPermissions(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "log")
+	c := fake(t, `echo "$*" >> '`+log+`'
+echo '{"permission":"input-monitoring","label":"Input Monitoring","state":"missing","asked":false,"by":[],"where":"in System Settings > Privacy & Security > Input Monitoring"}'`)
+	r, err := c.RequestPermission("input-monitoring")
+	if err != nil || r.Instructions("Acme") != "Switch on Acme in System Settings > Privacy & Security > Input Monitoring." {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if b, _ := os.ReadFile(log); string(b) != "permissions request input-monitoring --json\n" {
+		t.Fatalf("ran %q", b)
+	}
+	if (PermissionRequest{State: "granted"}).Instructions("Acme") != "" {
+		t.Error("instructions for a granted permission")
+	}
+	list := []PermissionNeed{
+		{Label: "Input Monitoring", State: "missing", By: []PermissionSource{{Kind: "watcher", Name: "home-key"}}},
+		{Label: "Notifications", State: "not-checked", By: []PermissionSource{{Kind: "plugin", Name: "notify"}}},
+		{Label: "Full Disk Access", State: "unknown"},
+		{Label: "Camera", State: "unsupported"},
+		{Label: "Accessibility", State: "granted", By: []PermissionSource{{Kind: "program", Name: "x"}}},
+	}
+	if got := WontRunText(list); got != "It won't run until Input Monitoring and Notifications are allowed." {
+		t.Errorf("%q", got)
+	}
+	if list[0].Reason() != "for its watcher home-key" || list[1].Reason() != "for the notify plugin" || list[4].Reason() != "for its program" {
+		t.Error("reasons")
+	}
+	if list[2].Blocking() || list[3].Blocking() || list[2].Shown() || list[3].Shown() || !list[4].Shown() {
+		t.Error("unknown or unsupported blocks or shows")
 	}
 }

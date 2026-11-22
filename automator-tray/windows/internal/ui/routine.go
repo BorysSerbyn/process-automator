@@ -65,6 +65,10 @@ type Routine struct {
 	// the routine is read, if it needs turning on (from the menu, a reason).
 	turnOn           *turnOn
 	reviewWhenLoaded bool
+	// granter is Grant… for the permissions it needs; watchingPermissions,
+	// whether it's read again while one isn't allowed.
+	granter             *granter
+	watchingPermissions bool
 
 	// signingIn is a program's sign-in to its secrets, waiting for me.
 	signingIn   bool
@@ -87,6 +91,7 @@ func NewRoutine(c cli.CLI, win fyne.Window, async Async, name string, deleted fu
 		func(msg string) { r.actionError = msg; r.refresh() })
 	r.memories = newMemoryList(c, async, name, r.refresh)
 	r.turnOn = newTurnOn(c, async, name, false, r.summary, r.refresh, r.Load)
+	r.granter = newGranter(c, async, r.refresh, r.loadDetail)
 	r.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -136,18 +141,19 @@ func (r *Routine) tabs() []string {
 // Update shows a new run status; when the routine's last run changed, its
 // runs and detail are read again.
 func (r *Routine) Update(s *cli.RunStatus) {
-	var before, after *cli.LastRun
+	var before, after cli.RoutineStatus
 	if e := r.entry(); e != nil {
-		before = e.LastRun
+		before = *e
 	}
 	r.status = s
 	if e := r.entry(); e != nil {
-		after = e.LastRun
+		after = *e
 	}
 	r.refresh()
-	if !sameRun(before, after) {
+	if !sameRun(before.LastRun, after.LastRun) || before.Problem != after.Problem {
 		r.loadDetail()
 		r.history.load()
+		r.turnOn.statusChanged()
 	}
 }
 
@@ -172,6 +178,7 @@ func (r *Routine) loadDetail() {
 				r.loadError = err.Error()
 			} else {
 				r.detail, r.loadError = &d, ""
+				r.watchPermissions()
 				if !d.IsProgram() && !r.memories.loaded {
 					r.memories.load()
 				}
@@ -369,6 +376,19 @@ func (r *Routine) Review() {
 	}
 }
 
+// watchPermissions reads it again now and then while a permission it needs
+// isn't allowed (the scheduler records it within a pass).
+func (r *Routine) watchPermissions() {
+	if r.watchingPermissions || len(cli.BlockingPermissions(r.detail.Permissions)) == 0 {
+		return
+	}
+	r.watchingPermissions = true
+	pollPermissions(r.async, func() bool {
+		r.watchingPermissions = r.detail != nil && len(cli.BlockingPermissions(r.detail.Permissions)) > 0
+		return r.watchingPermissions
+	}, r.loadDetail)
+}
+
 // summary is what it does, in a line, for its review.
 func (r *Routine) summary() string {
 	d := r.detail
@@ -415,6 +435,11 @@ func (r *Routine) render() fyne.CanvasObject {
 		}
 		on := widget.NewButton("Turn On…", r.turnOn.start)
 		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(on), banner(r.name+" isn't on", why)))
+	}
+	if d := r.detail; d != nil && !r.turnOn.showing {
+		if b := r.granter.banner(r.name, d.Permissions); b != nil {
+			box.Add(b)
+		}
 	}
 	box.Add(segmented(r.tabs(), r.tab, r.ShowTab))
 	switch r.tab {
@@ -492,6 +517,9 @@ func (r *Routine) overview() fyne.CanvasObject {
 	box := container.NewVBox(card(false, r.statusRows()...))
 	if r.detail != nil {
 		box.Add(card(false, r.access()...))
+		if c := r.granter.card(r.detail.Permissions); c != nil {
+			box.Add(c)
+		}
 	}
 	return box
 }
