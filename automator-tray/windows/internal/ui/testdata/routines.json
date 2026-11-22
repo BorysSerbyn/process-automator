@@ -1,0 +1,9 @@
+[
+  {"name": "standup", "path": "/home/me/.config/acme/routines/standup.prompt", "servers": ["notify", "slack"], "tools": ["notify_me", "post_message"],
+   "enabled": true, "schedule": "20 9 * * 1-5", "scheduleText": "At 09:20, Monday through Friday", "timeout": "10m", "effort": "medium",
+   "session": "none", "builtinTools": [], "trusted": true, "next": "2026-11-23T09:20:00Z",
+   "lastRun": {"id": "standup/2026-11-21T092001", "trigger": "schedule", "startedAt": "2026-11-21T09:20:01Z", "outcome": "success"}},
+  {"name": "digest", "path": "/home/me/.config/acme/routines/digest.prompt", "servers": ["notify"], "tools": ["notify_me"],
+   "enabled": false, "timeout": "10m", "effort": "medium", "session": "none", "builtinTools": [], "trusted": false,
+   "untrusted": "it's never been trusted"}
+]

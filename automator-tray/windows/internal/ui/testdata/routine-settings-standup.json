@@ -1,0 +1,4 @@
+[
+ {"key": "routines.standup.schedule", "type": "cron", "description": "When it runs.", "valueText": "20 9 * * 1-5", "defaultText": "20 9 * * 1-5", "isDefault": true},
+ {"key": "routines.standup.timeout", "type": "duration", "description": "How long a run may take.", "valueText": "10m", "defaultText": "10m", "isDefault": true}
+]

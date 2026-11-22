@@ -564,7 +564,7 @@ func (s *Setup) action(step cli.SetupStep) fyne.CanvasObject {
 			if !step.Done {
 				turnOn = func() { s.turnOn(step) }
 			}
-			return card(true, trustReview(r, turnOn, s.working[id])...)
+			return card(true, trustReview(r, "Turn On", "", turnOn, s.working[id])...)
 		}
 		if s.errors[id] == "" {
 			return spinner()
@@ -893,8 +893,9 @@ func (s *Setup) preparation(step cli.SetupStep, prepare string) fyne.CanvasObjec
 
 // trustReview is what a routine can reach: its servers, tools (writes
 // tinted), built-in tools, folder, and what changed since it was trusted;
-// with a Turn On button when turnOn is given.
-func trustReview(r cli.TrustOutput, turnOn func(), working bool) []fyne.CanvasObject {
+// with a button (action: Turn On, Trust) when do is given, and the note
+// beside it, if any.
+func trustReview(r cli.TrustOutput, action, note string, do func(), working bool) []fyne.CanvasObject {
 	writes := map[string]bool{}
 	for _, t := range r.Tools {
 		if !t.ReadOnly {
@@ -925,13 +926,17 @@ func trustReview(r cli.TrustOutput, turnOn func(), working bool) []fyne.CanvasOb
 		}
 		objects = append(objects, infoRow("Changed", changes...))
 	}
-	if turnOn != nil {
-		b := widget.NewButton("Turn On", turnOn)
+	if do != nil {
+		b := widget.NewButton(action, do)
 		b.Importance = widget.HighImportance
 		if working {
 			b.Disable()
 		}
-		objects = append(objects, divider(), padded(4, 4, rowInset, rowInset-8, right(b)))
+		row := right(b)
+		if note != "" {
+			row = container.NewBorder(nil, nil, nil, container.NewCenter(b), secondary(note))
+		}
+		objects = append(objects, divider(), padded(4, 4, rowInset, rowInset-8, row))
 	}
 	return append(objects, padded(0, 6, 0, 0, container.NewHBox()))
 }

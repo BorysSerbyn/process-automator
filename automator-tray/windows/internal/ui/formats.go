@@ -31,3 +31,6 @@ func percent(p float64) string { return fmt.Sprintf("%.0f%%", math.Round(p)) }
 
 // number is a number as plainly as it can be written: "80", "12.5".
 func number(f float64) string { return fmt.Sprintf("%g", f) }
+
+// itoa is a whole number as text.
+func itoa(n int) string { return fmt.Sprintf("%d", n) }

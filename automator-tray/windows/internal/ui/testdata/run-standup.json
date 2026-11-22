@@ -1,0 +1,6 @@
+{"id": "standup/2026-11-21T092001", "routine": "standup", "trigger": "schedule", "startedAt": "2026-11-21T09:20:01Z", "outcome": "success",
+ "result": {"text": "Posted the standup to #team.", "writes": [{"tool": "post_message", "args": {"channel": "#team", "text": "Yesterday: …"}}],
+  "calls": [{"tool": "list_messages", "args": {"channel": "#team", "limit": 20}, "write": false},
+            {"tool": "post_message", "args": {"channel": "#team", "text": "Yesterday: …"}, "write": true}],
+  "dryRun": false, "backend": "claude-api", "toolCalls": 2, "inputTokens": 1200, "outputTokens": 340, "cachedTokens": 800,
+  "promptSource": "/home/me/.config/acme/routines/standup.prompt", "outcome": "done"}}

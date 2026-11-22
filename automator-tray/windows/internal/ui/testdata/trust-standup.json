@@ -1,0 +1,2 @@
+{"routine": "standup", "surface": {"servers": ["notify", "slack"], "tools": ["notify_me", "post_message"], "builtinTools": ["Read"], "folder": "/home/me/work"},
+ "tools": [{"name": "notify_me", "server": "notify", "readOnly": false}, {"name": "post_message", "server": "slack", "readOnly": false}], "changes": [], "trusted": true}

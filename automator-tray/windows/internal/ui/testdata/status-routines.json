@@ -1,0 +1,7 @@
+{"schemaVersion": 1, "updatedAt": "2026-11-21T11:59:30Z", "validUntil": "2099-01-01T00:00:00Z", "health": "error", "busy": false,
+ "summary": "1 routine needs you",
+ "routines": [
+  {"name": "standup", "enabled": true, "health": "ok", "summary": "Next: Monday 09:20", "nextRunAt": "2026-11-23T09:20:00Z",
+   "lastRun": {"id": "standup/2026-11-21T092001", "trigger": "schedule", "startedAt": "2026-11-21T09:20:01Z", "outcome": "success"}},
+  {"name": "digest", "enabled": false, "health": "error", "summary": "digest can't be scheduled", "problem": "it isn't trusted: it's never been trusted"}
+ ]}

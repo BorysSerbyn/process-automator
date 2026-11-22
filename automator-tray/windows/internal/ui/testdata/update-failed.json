@@ -1,0 +1,1 @@
+{"state": "failed", "tag": "v3.0.0", "step": "Installing", "error": "the checksum doesn't match", "log": "/home/me/.config/acme/update.log", "startedAt": "2026-11-21T11:58:00Z"}

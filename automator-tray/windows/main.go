@@ -1,6 +1,7 @@
 // automator-windows is the windows of an app built on process-automator on
 // Linux, automator-ui's windows' counterpart: the tray starts it for one
-// window (`automator-windows setup`), and it exits when that window closes.
+// window (`automator-windows setup`, `automator-windows routine standup`),
+// and it exits when that window closes.
 // Like the tray, it acts only through the app's CLI, and its names come
 // from the package's install.env. It's a program of its own so that the
 // tray, always running, stays small and needs no cgo: Fyne (OpenGL, X11 and
@@ -8,6 +9,9 @@
 package main
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -31,15 +35,17 @@ func main() {
 	log.SetPrefix("automator-windows: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env (default: found beside this program)")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name>|update|confirm-update")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	if flag.NArg() != 1 {
+	w, err := window(flag.Args())
+	if err != nil {
+		log.Print(err)
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := run(*dir, tray.WindowKind(flag.Arg(0))); err != nil {
+	if err := run(*dir, w); err != nil {
 		if errors.Is(err, instance.ErrHeld) {
 			return // the window that's open came to the front
 		}
@@ -53,10 +59,43 @@ type content interface {
 	Load()
 }
 
-func run(dir string, kind tray.WindowKind) error {
-	if kind != tray.SetupWindow && kind != tray.SettingsWindow {
-		return fmt.Errorf("no %q window (setup, settings)", kind)
+// window is the window the arguments name.
+func window(args []string) (tray.Window, error) {
+	if len(args) == 0 {
+		return tray.Window{}, errors.New("which window?")
 	}
+	w := tray.Window{Kind: tray.WindowKind(args[0])}
+	switch w.Kind {
+	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.UpdateWindow, tray.ConfirmUpdateWindow:
+		if len(args) == 1 {
+			return w, nil
+		}
+	case tray.RoutineWindow:
+		if len(args) == 2 && args[1] != "" {
+			w.Routine = args[1]
+			return w, nil
+		}
+		return w, errors.New("which routine?")
+	default:
+		return w, fmt.Errorf("no %q window", args[0])
+	}
+	return w, fmt.Errorf("the %s window takes no arguments", w.Kind)
+}
+
+// lockName is the window's lock: one window of each kind, one per routine.
+func lockName(w tray.Window) string {
+	if w.Kind != tray.RoutineWindow {
+		return "window-" + string(w.Kind)
+	}
+	sum := sha256.Sum256([]byte(w.Routine)) // a socket's path is short
+	return "window-routine-" + hex.EncodeToString(sum[:8])
+}
+
+// statusFollower is a window that shows run status as it changes.
+type statusFollower interface{ Update(*cli.RunStatus) }
+
+func run(dir string, which tray.Window) error {
+	kind := which.Kind
 	exe, err := os.Executable()
 	if err == nil {
 		exe, err = filepath.EvalSymlinks(exe)
@@ -72,7 +111,7 @@ func run(dir string, kind tray.WindowKind) error {
 	if id == "" {
 		id = info.Command
 	}
-	holder, err := instance.Claim(instance.Dir(os.Getenv, id), "window-"+string(kind))
+	holder, err := instance.Claim(instance.Dir(os.Getenv, id), lockName(which))
 	if err != nil {
 		return err
 	}
@@ -82,17 +121,19 @@ func run(dir string, kind tray.WindowKind) error {
 	a := fyneapp.NewWithID(id + ".windows")
 	var w fyne.Window
 	var view content
+	size := fyne.NewSize(640, 680)
+	open := func(win tray.Window) {
+		if err := tray.OpenWindow(info.CLI, win); err != nil {
+			log.Print(err)
+		}
+	}
 	switch kind {
 	case tray.SetupWindow:
 		w = a.NewWindow(info.Name + " Setup")
 		view = ui.NewSetup(c, w, ui.Background, func(routine string) {
-			// The routine's window is the tray's to open (for now, its
-			// CLI command in a terminal).
-			if err := tray.OpenWindow(info.CLI, tray.Window{Kind: tray.RoutineWindow, Routine: routine}); err != nil {
-				log.Print(err)
-			}
+			open(tray.Window{Kind: tray.RoutineWindow, Routine: routine})
 		})
-	default:
+	case tray.SettingsWindow:
 		w = a.NewWindow(info.Name + " Settings")
 		s := ui.NewSettings(c, w, ui.Background, info.Name)
 		// While it shows, read usage again now and then.
@@ -102,10 +143,47 @@ func run(dir string, kind tray.WindowKind) error {
 			}
 		}()
 		view = s
+	case tray.RoutinesWindow:
+		w = a.NewWindow("Routines")
+		size = fyne.NewSize(600, 460)
+		view = ui.NewRoutines(c, ui.Background,
+			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name}) },
+			func() { open(tray.Window{Kind: tray.SetupWindow}) },
+			func() { open(tray.Window{Kind: tray.SettingsWindow}) })
+	case tray.RoutineWindow:
+		w = a.NewWindow(which.Routine)
+		size = fyne.NewSize(680, 760)
+		view = ui.NewRoutine(c, w, ui.Background, which.Routine, func() { w.Close() })
+	case tray.UpdateWindow, tray.ConfirmUpdateWindow:
+		w = a.NewWindow("Updating")
+		if kind == tray.ConfirmUpdateWindow {
+			w.SetTitle(info.Name + " Update")
+		}
+		size = fyne.NewSize(460, 240)
+		view = ui.NewUpdate(c, ui.Background, kind == tray.ConfirmUpdateWindow, func() { w.Close() })
+	}
+	// The Routines and a routine's windows show run status as it changes.
+	if f, ok := view.(statusFollower); ok {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		var last *cli.RunStatus // the UI's thread's
+		go c.Follow(ctx, func(s *cli.RunStatus) {
+			fyne.Do(func() {
+				last = s
+				f.Update(s)
+			})
+		})
+		// Shown again now and then, so one past its validUntil shows as not
+		// responding.
+		go func() {
+			for range time.Tick(15 * time.Second) {
+				fyne.Do(func() { f.Update(last) })
+			}
+		}()
 	}
 	w.SetMaster() // closing it ends the process
 	w.SetContent(view.Content())
-	w.Resize(fyne.NewSize(640, 680))
+	w.Resize(size)
 	w.CenterOnScreen()
 	// Asked for again: to the front, and read again (automator-ui's show()).
 	go func() {

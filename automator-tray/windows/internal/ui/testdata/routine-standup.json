@@ -1,0 +1,4 @@
+{"name": "standup", "path": "/home/me/.config/acme/routines/standup.prompt", "servers": ["notify", "slack"], "tools": ["notify_me", "post_message"],
+ "enabled": true, "schedule": "20 9 * * 1-5", "scheduleText": "At 09:20, Monday through Friday", "timeout": "10m", "effort": "medium",
+ "session": "none", "builtinTools": ["Read"], "folder": "/home/me/work", "trusted": true, "agentModel": "claude-sonnet-4-5", "next": "2026-11-23T09:20:00Z",
+ "lastRun": {"id": "standup/2026-11-21T092001", "trigger": "schedule", "startedAt": "2026-11-21T09:20:01Z", "outcome": "success"}, "source": "---\n---\n"}

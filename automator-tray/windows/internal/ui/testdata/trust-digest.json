@@ -1,0 +1,1 @@
+{"routine": "digest", "surface": {"servers": ["notify"], "tools": ["notify_me"]}, "tools": [{"name": "notify_me", "server": "notify", "readOnly": false}], "changes": [], "trusted": false}
