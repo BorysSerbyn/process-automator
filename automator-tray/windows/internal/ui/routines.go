@@ -106,10 +106,7 @@ func responding(s *cli.RunStatus, now time.Time) bool {
 }
 
 func (r *Routines) refresh() {
-	offset := r.scroll.Offset
-	r.scroll.Content = padded(16, 16, 16, 16, r.render())
-	r.scroll.Refresh()
-	r.scroll.ScrollToOffset(offset)
+	setContent(r.scroll, padded(16, 16, 16, 16, r.render()))
 }
 
 func (r *Routines) render() fyne.CanvasObject {
@@ -159,7 +156,7 @@ func (r *Routines) row(rt cli.RoutineInfo) fyne.CanvasObject {
 			last = st.LastRun
 		}
 	}
-	name := container.NewHBox(heading(rt.Name, false))
+	name := container.NewHBox(widget.NewLabelWithStyle(rt.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	if !rt.Trusted {
 		name.Add(tag("Not trusted", theme.ColorNameWarning))
 	}

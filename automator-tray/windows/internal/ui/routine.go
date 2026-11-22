@@ -436,10 +436,7 @@ func (r *Routine) trust(turnOn bool) {
 // The view
 
 func (r *Routine) refresh() {
-	offset := r.scroll.Offset
-	r.scroll.Content = padded(16, 16, 16, 16, r.render())
-	r.scroll.Refresh()
-	r.scroll.ScrollToOffset(offset)
+	setContent(r.scroll, padded(16, 16, 16, 16, r.render()))
 }
 
 func (r *Routine) render() fyne.CanvasObject {

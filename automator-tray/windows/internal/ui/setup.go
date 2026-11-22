@@ -364,10 +364,7 @@ func (s *Setup) setUpUsage(step cli.SetupStep) {
 // refresh draws the window again from where things stand, keeping its
 // scroll position.
 func (s *Setup) refresh() {
-	offset := s.scroll.Offset
-	s.scroll.Content = padded(16, 16, 16, 16, s.render())
-	s.scroll.Refresh()
-	s.scroll.ScrollToOffset(offset)
+	setContent(s.scroll, padded(16, 16, 16, 16, s.render()))
 }
 
 func (s *Setup) render() fyne.CanvasObject {

@@ -185,10 +185,7 @@ func (s *Settings) setStartAtLogin(on bool) {
 
 // refresh draws the window again, keeping its scroll position.
 func (s *Settings) refresh() {
-	offset := s.scroll.Offset
-	s.scroll.Content = padded(16, 16, 16, 16, s.render())
-	s.scroll.Refresh()
-	s.scroll.ScrollToOffset(offset)
+	setContent(s.scroll, padded(16, 16, 16, 16, s.render()))
 }
 
 // render: Start at login, LLM usage, then one card per top-level group,

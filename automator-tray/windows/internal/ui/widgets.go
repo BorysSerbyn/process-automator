@@ -32,6 +32,22 @@ func padded(top, bottom, left, right float32, o fyne.CanvasObject) fyne.CanvasOb
 	return container.New(layout.NewCustomPaddedLayout(top, bottom, left, right), o)
 }
 
+// setContent shows o in a window's scroll, keeping where it's scrolled to,
+// and has the window drawn again: the new content isn't on the canvas yet,
+// so refreshing it alone would wait for something else to redraw the window
+// (the pointer moving over it).
+func setContent(s *container.Scroll, o fyne.CanvasObject) {
+	offset := s.Offset
+	s.Content = o
+	s.Refresh()
+	s.ScrollToOffset(offset)
+	if app := fyne.CurrentApp(); app != nil {
+		if c := app.Driver().CanvasForObject(s); c != nil {
+			c.Refresh(s)
+		}
+	}
+}
+
 // tint is the theme's colour c at alpha a (0-255).
 func tint(c fyne.ThemeColorName, a uint8) color.Color {
 	r, g, b, _ := theme.Color(c).RGBA()

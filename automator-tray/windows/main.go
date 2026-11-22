@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -186,9 +187,20 @@ func run(dir string, which tray.Window) error {
 	w.Resize(size)
 	w.CenterOnScreen()
 	// Asked for again: to the front, and read again (automator-ui's show()).
+	// Once the window has closed, the app's loop is gone: the window is let
+	// go, so the next ask starts a process of its own, and one that came in
+	// meanwhile is dropped.
+	var stopped atomic.Bool
+	a.Lifecycle().SetOnStopped(func() {
+		stopped.Store(true)
+		holder.Release()
+	})
 	go func() {
 		for range holder.Raised {
 			fyne.Do(func() {
+				if stopped.Load() {
+					return
+				}
 				w.Show()
 				w.RequestFocus()
 				view.Load()
