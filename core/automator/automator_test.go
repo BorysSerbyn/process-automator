@@ -11,7 +11,7 @@ import (
 var good = App{Name: "Acme Automator", Command: "acme-auto", Folder: "acme-auto", BundlePrefix: "com.acme", ReleaseRepo: "acme/automator"}
 
 func TestValidate(t *testing.T) {
-	if err := good.validate(); err != nil {
+	if err := good.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	for name, change := range map[string]func(a *App){
@@ -25,7 +25,7 @@ func TestValidate(t *testing.T) {
 	} {
 		a := good
 		change(&a)
-		if err := a.validate(); err == nil {
+		if err := a.Validate(); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}

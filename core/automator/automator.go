@@ -73,7 +73,7 @@ var (
 // Main runs the app's command line (os.Args) and returns its error, which
 // it has already printed. Call it once, from main.
 func Main(app App) error {
-	if err := app.validate(); err != nil {
+	if err := app.Validate(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error: this build's App:", err)
 		return err
 	}
@@ -97,7 +97,10 @@ func (a App) apply() {
 	}
 }
 
-func (a App) validate() error {
+// Validate checks the app as Main does before running it: its names, its
+// release repository and its plugins (each well-formed, names unique). An
+// app's tests run it, as they run CheckTemplates.
+func (a App) Validate() error {
 	var errs []error
 	if strings.TrimSpace(a.Name) == "" {
 		errs = append(errs, errors.New("no Name"))
