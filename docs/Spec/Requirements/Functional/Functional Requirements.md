@@ -28,16 +28,30 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Programs
 - **A program is a routine that runs an executable instead of a model**: usually a binary compiled from Go, with a description file (`program.yaml`) giving what it runs, whether it writes, and optionally its description, arguments, schedule, staleness, timeout and secrets. "Routine" with no kind means an LLM routine; programs are named explicitly
 - **Kept apart, run alike**: programs live in their own folder, apart from the routines folder, and share everything around a run with LLM routines: schedule and catch-up within staleness, missed runs, waiting for a full wake, keeping the computer awake, run now, backfill, pause, stop, timeout, trust, run status, history, notifications and the status dot
-- **One name space**: names are unique across both kinds; adding a routine, a program or a template under a name either kind has is refused
+- **One name space**: names are unique across both kinds, and hooks and watchers (see [[#Hooks]]); adding a routine, a program or a template under a name one of them has is refused
 - **Commands take either kind**: those given a name (run, start, stop, show, update, delete, pause, resume, trust, runs, settings) find it whatever its kind; where no name is given (listing, checking all, creating), no kind means an LLM routine, and `--kind program` or `--kind all` says otherwise. What only LLM routines have (memories, an LLM routine's settings) given a program's name fails with "X is a program"
 - **Adding one**: from its description file, with the executable it names beside it; both are copied into the app's own folder, and that copy is what runs. It starts paused and untrusted. Updating one copies them again; deleting one removes its copy, settings, trust and secrets, and keeps its run history and data folder
 - **Trust**: a program runs only while its executable and description file are the ones I trusted, dry runs included
 - **Dry runs**: one that declares it writes is passed `--dry-run`; one that doesn't runs as it is
-- **What it runs with**: the secrets it declares, as environment variables (signed in with `auth login <program>`), a fixed PATH, my home folder, and its own data folder as its working folder; nothing else from the app's environment
+- **What it runs with**: the secrets it declares, as environment variables (signed in with `auth login <program>`), a fixed PATH, my home folder, the desktop session's display (so it can open an app), and its own data folder as its working folder; nothing else from the app's environment
 - **Its outcome**: exit code 0 is success; a one-line summary it writes to the file named by `$PA_RESULT` is the run's reason; what it prints is kept with the run, up to a limit
 - **Never in the run queue**: programs don't wait for LLM routines' runs, and aren't held back by the usage limit
 - **Ending it**: stopping it, its timeout or the scheduler stopping ends it and everything it started
 - **Sleep mid-run**: one that doesn't write runs again once after the computer slept during it; one that writes never does
+
+## Hooks
+- **A hook is a prompt or a program run on events, not on a schedule**: its action is a Dotprompt file (an LLM hook) or an executable with a description file (`hook.yaml`, a program hook), and its trigger says which watcher's events it acts on, of which type. A hook has no schedule, and a routine no trigger but its schedule
+- **Watchers** are programs the app runs to learn that something happened: an executable with a description file (`watcher.yaml`), polled every interval (given where it left off, it prints what's new) or streaming (one long-lived process printing events as they happen, started again when it ends). Several hooks can listen to one watcher; prompts can't be watchers
+- **Events**: each has an ID, a type, when it happened and its data. A watcher's event is acted on once, even when it's printed again or the app restarts
+- **Kept apart, run alike**: hooks and watchers live in their own folders, with their own commands (`hooks`, `watchers`), and never show among routines, not even with `--kind all`. A hook's runs share everything around a run with routines: trust, the run queue for an LLM hook (a program hook skips it), keeping the computer awake, waiting for a full wake, stop, pause, timeout, run status, history, notifications and the status dot
+- **One name space**: names are unique across routines, programs, hooks and watchers; the commands that take a name find a hook by it (`stop`, `runs`, `routines pause`, `resume`, `trust`), and the routine-only ones (run, show, check) say it's a hook
+- **Adding one**: from its file's path, in a terminal; a program hook's executable, and a watcher's, are copied with it, and the copy is what runs. A hook starts off and untrusted. Deleting one removes its copy, settings, trust and secrets, and keeps its run history
+- **Trust**: a hook runs only while its action and its trigger are what I trusted, a program hook's dry runs included; a watcher runs only while its executable is the one I trusted. A hook hears nothing until its watcher is trusted too. Trusting an LLM hook that can write warns that it acts on outside data
+- **Trying one**: there's no run now for a hook; it fires with a sample event (a file or stdin), as a dry run or for real
+- **What an action gets**: an LLM hook's prompt gets the event, or every event that waited for it when it takes them in batches, each text from the watcher marked as outside data; a program hook gets its event as JSON on stdin, and the desktop session's display, so it can open an app
+- **Sleep**: an event older than the hook's staleness is dropped; a watcher isn't polled while a Mac is in a maintenance wake, and a poll due while it slept runs as it wakes
+- **Floods and loops**: a hook starts at most its rate of runs an hour, and an event past it is dropped; one due to run more than three times its rate in an hour is paused, with a run saying why
+- **Pause and resume**: a hook can be turned off and on; pausing a watcher stops it, and its hooks hear nothing until it's resumed
 
 ## Templates
 - **Templates are shareable routines**: files in the repository's `templates/` folder, shipped with the app as files; the app ships none of its own and works with none
@@ -63,19 +77,19 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Run history and logs** are kept for a retention period I set
 - **Outcomes**: success, failed, needs a sign-in, missed, skipped (over the usage limit) and stopped
 - **Structured results**: a routine can declare the shape of its result, so history and the UI show clean results instead of prose
-- **Health check** (`doctor`): explains a red indicator, with a fix for each problem
+- **Health check** (`doctor`): explains a red indicator, hooks' too, with a fix for each problem
 - **Routine check**: whether a routine would run (its file, settings, servers connecting, every allowed tool existing, and its model's provider set up and, for my own server, answering with the model), without calling the model
 
 ## Notifications
 - **From routines** (the notify plugin): a routine can send me a short desktop notification, a title and a message, shown by the plugin itself through the OS (macOS, as the app; Linux, through the desktop's notification service), not by the menu bar app. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade. Clicking one does nothing. It has no settings, app-wide or per routine
-- **The app's own**: a desktop notification when a run fails, needs a sign-in, is missed or skipped, saying which routine, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app on macOS and the tray on Linux; clicking one opens the app: on the run it's about, in its routine's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
+- **The app's own**: a desktop notification when a run (a routine's or a hook's) fails, needs a sign-in, is missed or skipped, saying which routine or hook, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app on macOS and the tray on Linux; clicking one opens the app: on the run it's about, in its routine's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
 - **On Linux** clicking one opens its run's report, or (an update's) the Routines window
 
 ## Status indicator
 - **Icon** in the macOS menu bar, or the Linux tray, with a status dot:
   - **Green**: every enabled routine is fine. A routine with no runs yet is fine while its next run is ahead
-  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled, didn't start at its time or is stuck; setup isn't finished; or the scheduler isn't responding
-  - **Grey**: no routines are enabled
+  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled, didn't start at its time or is stuck; a hook that's on failed, was missed, was paused past its rate, or can't run (its watcher missing, untrusted or failing); setup isn't finished; or the scheduler isn't responding
+  - **Grey**: no routines or hooks are enabled
   - **Pulsing**: a routine is running (whatever the colour); in the Linux tray the dot dims and brightens
 - Updates within seconds of anything changing
 
@@ -108,5 +122,5 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 ## CLI
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each
 - **Settings**: one generic `settings list/get/set/reset` surface reads and writes any setting, app-wide or per routine; values are checked before they're saved and apply without a restart
-- **Paths**: `paths` shows where the app keeps its config, routines, run status, history, notifications, templates and the frontends' log
-- **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own (`guide plugins`) and how to write a program (`guide programs`), with examples that work, as text or `--json`; `routines create`, `routines update` and `plugins add` point to it
+- **Paths**: `paths` shows where the app keeps its config, routines, programs, hooks, watchers, run status, history, notifications, templates and the frontends' log
+- **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own (`guide plugins`) how to write a program (`guide programs`) and how to write a hook and a watcher (`guide hooks`), with examples that work, as text or `--json`; `routines create`, `routines update` and `plugins add` point to it

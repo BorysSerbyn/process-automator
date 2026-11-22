@@ -1,12 +1,13 @@
 Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional Requirements|requirements]] and the [[Spec/Technical Decisions|decisions]].
 
 ## What it is
-- **A blank canvas for scheduled LLM routines**: a routine is one Dotprompt file on my device saying what the model should do, which tools it may use and when it runs. The app ships with no routines, no templates and no bundled integrations
+- **A blank canvas for routines on a schedule, and hooks on events**: a routine is one Dotprompt file on my device saying what the model should do, which tools it may use and when it runs; a hook is the same kind of prompt (or a program) run when something happens instead, a time or anything else. The app ships with no routines, hooks, templates or bundled integrations
 - **Programs, as a second kind of routine**: an executable plus a description file (its schedule, whether it writes, its secrets), run instead of a model. They share scheduling, run, stop, pause, history and trust with LLM routines and show up in the same lists; "routine" with no kind means an LLM routine, everywhere
+- **Hooks, run on events**: a hook is a prompt or a program with a trigger instead of a schedule: it acts on the events of a watcher, a program the app runs that prints them, polled or streaming (a meeting starting, a new email). Several hooks can listen to one watcher. Hooks share running, stop, pause, history, notifications and trust with routines, but have their own folder and commands, and never show among routines; there's no "run now" for a hook, which fires with a sample event instead
 - **Tools come from MCP servers**: any server I add (remote or local, or a folder I wrote), plus `notify` (`notify_me`), a plugin compiled into the app
 - **Four model backends**: Claude Code on my Claude plan (`claude-code`), an Anthropic API key (`claude-api`), my own OpenAI-compatible model server, local or hosted (`local`, experimental and untested), or OpenAI's Codex CLI on my Codex sign-in (`codex`, experimental and untested)
-- **A scheduler** that starts at login, catches up after sleep within each routine's staleness, and records every due run
-- **Guardrails**: a tool allowlist per routine, dry runs that intercept every write, and trust: a routine runs for real only while what it can reach is what I approved; a program runs only while its executable is the one I approved
+- **A scheduler** that starts at login, catches up after sleep within each routine's staleness, and records every due run; the same daemon runs the watchers and the hooks
+- **Guardrails**: a tool allowlist per routine, dry runs that intercept every write, and trust: a routine runs for real only while what it can reach is what I approved; a program, a watcher or a hook's program runs only while its executable is the one I approved, and a hook only while what it acts on is too. Event data reaches a hook's prompt marked as outside data
 - **Frontends over one core**: the `procauto` CLI (the API), automator-ui on macOS, a tray on Linux, and Claude or any MCP client through `procauto mcp serve`
 - **Around runs**: run history, memories, notifications, a usage limit per backend, `doctor`, templates to share routines, a guided `setup`
 - **Distribution**: prebuilt, verified releases for macOS and Linux, one-command install, update and uninstall, a private Homebrew tap, and installing through an LLM (`AGENTS.md`)
@@ -19,7 +20,9 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 - Memories are mine: routines never write them
 
 ## Not in scope
-- **Hooks**: a prompt or a program run when something happens (a meeting starting, a new email), not on a schedule, with a menu item of their own. A hook declares its action and its trigger: a watcher, polled or streaming events, that the scheduler's daemon runs. Under the hood a schedule is one more trigger: runs already carry what triggered them
+- **Hooks in the frontends**: a menu item and pages of their own in the menu bar app and the Linux windows (the CLI, the MCP server and run status have them)
+- **The scheduler as one more source**: the scheduler's slots handed to the dispatcher that runs hooks, so a schedule is one more trigger under the hood; for now the scheduler keeps its own queue
+- **Watchers from plugins**: events from a plugin (an MCP server's resource subscriptions, say), beside watchers that are programs
 - **Programs compiled into a build**: programs a plugin registers as Go functions, beside the executables I add
 - **A program's result starting an LLM routine**: a program handing what it found to a routine to act on
 - **Install links**: one-click links that pre-fill installing a template or a plugin, still reviewed and approved by me

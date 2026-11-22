@@ -531,7 +531,7 @@ The one-at-a-time run queue exists because of the model's plan and usage limits,
 - **A queue of their own**: nothing they share needs taking turns
 
 ## Decision: a program runs in a defined environment, in a process group of its own
-A program started by the scheduler under launchd or systemd would otherwise see a minimal, changing environment, and a program started in a terminal the terminal's. It gets the same one every time: a fixed PATH per OS (the system's folders, and Homebrew's on macOS), my home folder, a temporary folder, its secrets and what the run is for, in its own data folder, which is kept between runs. It runs in a process group of its own, asked to end and then killed as a group on stop, timeout and shutdown, and whatever it leaves running when it exits is killed too, so a run never leaves processes behind. Its output is read through a pipe the app owns, and only its first and last 32 KiB are kept and logged: a runaway program can't fill the log or hold the run open, and a failing program's error, which comes last, is never what's cut.
+A program started by the scheduler under launchd or systemd would otherwise see a minimal, changing environment, and a program started in a terminal the terminal's. It gets the same one every time: a fixed PATH per OS (the system's folders, and Homebrew's on macOS), my home folder, a temporary folder, the desktop session's display (see below), its secrets and what the run is for, in its own data folder, which is kept between runs. It runs in a process group of its own, asked to end and then killed as a group on stop, timeout and shutdown, and whatever it leaves running when it exits is killed too, so a run never leaves processes behind. Its output is read through a pipe the app owns, and only its first and last 32 KiB are kept and logged: a runaway program can't fill the log or hold the run open, and a failing program's error, which comes last, is never what's cut.
 
 ### Rejected
 - **The login shell's PATH**, as agent CLIs and MCP servers get: whatever my shell profile does would change what a scheduled program finds; a program needing more names it in `args` or by absolute path
@@ -551,3 +551,90 @@ Through the app's MCP server Claude can list programs, run, stop and pause them 
 
 ### Rejected
 - **Letting Claude add programs, untrusted**: an executable Claude chose or built would sit one trust away from running, reviewed only by a checksum I can't read
+
+## Decision: hooks are kept apart from routines, with an action of their own
+A hook is the same kind of prompt or program as a routine, run when something happens instead of on a schedule. No case needs one action both on a schedule and on an event, so a hook contains its own action, and a routine requires a schedule where a hook has none. Hooks have their own folder, commands (`hooks …`) and run-status list, and never show among routines: "routine" keeps meaning a scheduled LLM routine. Everything around a run is shared, because a hook is an `engine.Runnable` whose action is an LLM routine's or a program's side: trust, turns, keeping awake, stop, timeout, history and notifications are the code routines use, not a copy.
+
+### Rejected
+- **A hook as a third kind of routine** (`routines list --kind hook`): a routine without a schedule already means "run by hand", and every routine list (frontends ask for `--kind all`) would fill with things that never run on one
+- **A trigger field on a routine**, so one file could have a schedule and an event: no case needs both, and every routine command would have to handle a routine whose schedule isn't when it runs
+- **Hooks naming a routine to run**: the action would live apart from what sets it off, and trusting the hook wouldn't cover what it does
+
+## Decision: watchers are programs, apart from hooks, polled or streaming
+What a hook acts on comes from a watcher: an executable with a description file, copied into the app and trusted by checksum like a program, since it's code the daemon runs unattended. It's kept apart from hooks so several can listen to one (one calendar watcher, a hook per kind of meeting). A watcher either is polled (run every interval with its cursor, printing what's new) or streams (one long-lived process), because some sources can only be asked and some push; both print JSON lines, the simplest protocol any language can speak. Watchers that plugins provide (an MCP server's resource subscriptions) would be a second kind of watcher behind the same event handling; prompts can never be watchers, since a model polling every minute is costly and unreliable at "what's new".
+
+### Rejected
+- **A watcher inside each hook**: two hooks on one calendar would poll it twice and could disagree on what's new
+- **One mode only**: polling a push source wastes its push; a stream for a source that can only be asked is a loop the watcher writes itself, with no cursor the app keeps
+- **Webhooks the app listens for**: a laptop has no stable address, and a local server would be a new way in to the app
+
+## Decision: one daemon, and a dispatcher the scheduler can move onto
+Watchers run in the scheduler's daemon, not a process of their own: one process starts at login, holds the locks and writes run status. Their events go through `dispatch.Dispatcher`, which runs a target for an occurrence with the scheduler's semantics (a target never overlaps itself, the queue by tightest staleness, staleness checked before the run), so the scheduler can become one more source of occurrences: under the hood a schedule is a trigger like any other. The scheduler isn't moved onto it yet: its sleep and wake handling was only just fixed and hasn't been proven on real hardware, and moving it changes no behaviour, so it waits.
+
+### Rejected
+- **A hook daemon of its own**: a second process to start, keep alive and quit, a second writer of run status and history, and a second place to handle sleep
+- **Moving the scheduler first**: rewriting what was just fixed, before anything needs it
+
+## Decision: an event is acted on at most once
+A watcher may print an event again (a poll's window overlapping the last one, a stream restarted), and the daemon may restart between printing and acting. Each watcher's cursor and the IDs of the events it has printed (for 7 days, at most 5000) are saved before an event is handed to its hooks, as the scheduler marks a slot handled before running it: a crash can lose an event's run, never repeat one. A poll that fails keeps its events and cursor out, so the next poll gets them again.
+
+### Rejected
+- **Saving after the run**: a crash mid-run would repeat it, and a hook opens an app or sends a message
+- **Trusting the cursor alone**: a watcher whose cursor is coarser than its events (a minute, a page) prints some twice
+
+## Decision: an event past its staleness is dropped without a record
+An event older than its hook's staleness, by when it happened, is dropped: opening a meeting's link an hour after it started, because the computer slept through it, helps no one. It's logged, but not recorded as a missed run: a sleeping laptop would wake to a red dot and a notification for every email it slept through, when nothing's wrong. An event that went stale while waiting for its turn (other runs took long) is recorded as missed, as a routine's slot would be. A watcher isn't polled in a Mac's maintenance wake (the poll would be cut off within seconds); one due while the computer slept polls as soon as it's fully awake, and staleness decides.
+
+### Rejected
+- **Recording every stale event as missed**: red and notified after every sleep, for what the hook was told to ignore
+- **Polling in maintenance wakes**: events would come when nothing can run them, and the poll is cut off with the wake
+
+## Decision: a rate per hook, and a pause far past it
+A watcher can flood (a mailbox's backlog, a bug), and a hook's action can set its own watcher off again: an LLM hook that sends an email on each new email. Each hook starts at most its rate of runs in any hour, dropping events past it; one due to run more than three times its rate in an hour is paused, recorded as a skipped run saying why, so health turns red and I'm notified. A self-loop of single events dies at the rate on its own; one that fans out, or a flood, gets paused. An LLM hook that expects floods takes them in batches: one run for everything that waited.
+
+### Rejected
+- **No limit**: a loop through an LLM hook spends the usage limit and writes for as long as it runs
+- **Stopping at the rate without pausing**: a flood would keep the hook dropping events, at its rate, silently
+- **Batching every hook**: a program gets one event, so its stdin stays a single object
+
+## Decision: event data reaches a prompt wrapped, and marked as outside data
+What a watcher prints comes from outside: an email's subject can say "ignore your instructions". In an LLM hook's prompt, every text from the event (its ID and data) is wrapped in `<untrusted>`…`</untrusted>` with `<` and `>` inside escaped, so it can't close the wrapping or pass for Dotprompt's role markers, and the events are added to the end of the prompt as JSON in an `<outside-event-data>` block that says they're data, never instructions; the prompt can't leave them out. The event's data never reaches `{{trigger.data}}` unwrapped. Trusting an LLM hook that can write warns that it acts on outside data, pointing to read-only tools or a program.
+
+### Rejected
+- **Raw inputs**: one email could rewrite the prompt
+- **Only the block, no inputs**: prompts couldn't say "open {{event.data.link}}", and writers would paste the JSON in themselves
+- **Refusing write tools on LLM hooks**: replying to an email is a hook's job; the warning makes it a choice
+
+## Decision: a program hook gets its event on stdin
+A program hook reads its event as one JSON object on stdin, from a private temporary file. Stdin has no size limit and needs no parsing of the environment, every language reads it, and a program can be tried by piping a sample in. `PA_TRIGGER` and `PA_FOR` say what the run is for, as for any program.
+
+### Rejected
+- **An environment variable**: limited in size (an email's body), visible to every process it starts, and awkward to read as JSON in shell
+- **Arguments**: the same limits, and in the process list
+
+## Decision: a hook fires with a sample event, not run now
+A hook runs for an event, so it has no run now: `hooks fire <hook>` gives it one, a line as its watcher would print it (a file, stdin, or JSON over MCP), whatever its staleness and rate, as a dry run or for real, recorded with trigger `manual`. The sample is what makes a run meaningful: a hook's prompt or program reads its data.
+
+### Rejected
+- **Run now with an empty event**: the action would run on nothing, and fail or do the wrong thing
+- **Replaying the watcher's last event**: the app keeps events' IDs, not their data, and the last one may have been handled
+
+## Decision: names are unique across routines, programs, hooks and watchers
+Trust, settings, run status, history and stop requests are keyed by name, so a hook named like a routine would share its trust record and history. Adding any of the four under a name another has is refused; the commands that take a name and mean any runnable (`stop`, `runs`, `routines pause|resume|trust`) find a hook by it, and those that mean a routine say it's a hook. A hook's settings are `hooks.<hook>.<field>` and a watcher's `watchers.<watcher>.enabled`: they're named explicitly, and never in the app-wide settings.
+
+### Rejected
+- **A name space per kind**: `stop backup` couldn't tell a hook from a routine
+- **Hooks' settings under `routines.`**: they'd read as routines' everywhere settings are listed
+
+## Decision: Claude can fire hooks, but not add or trust a hook or a watcher
+Through the MCP server Claude can list and show hooks and watchers, fire hooks (dry runs first), pause and stop them, as for programs. Adding, changing or trusting one stays mine: a hook acts unattended on outside data, and a watcher is code the daemon runs. Their `--from` takes a path and isn't a tool argument; `hooks fire`'s event comes as JSON on stdin, never a path to read.
+
+### Rejected
+- **Letting Claude add hooks, untrusted**: an action and a trigger Claude chose would be one trust away from acting on every email
+
+## Decision: programs get the desktop session's display
+A hook's action is often opening something: a meeting's link, an app. On macOS a LaunchAgent opens apps in my session as is; on Linux a program needs the display and the session bus. Every program is given the display variables the scheduler has (`DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY`, `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`, the session's type and desktop), and nothing else from its environment: they say where the desktop is, not what the app knows. Under systemd they're the user manager's, there when the desktop session imports them.
+
+### Rejected
+- **Only for hooks**: a scheduled program can open a report too, and two environments would be two things to document
+- **Passing the whole environment**: the app's own keys and whatever launchd or systemd happened to set

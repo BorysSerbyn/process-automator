@@ -11,6 +11,7 @@ What LLM clients can do through the app, and how the agent behaves inside a rout
   - tools that change something ask me before each call
   - a routine Claude creates or changes starts paused and untrusted; only I trust it
   - Claude can list, run, stop and pause programs, but never add or trust one
+  - Claude can list, show, fire (dry runs too), pause and stop hooks and watchers, but never add, change or trust one
   - secrets and sign-ins happen in my browser, never through the model
   - uninstalling the app and running the scheduler stay in my terminal
   - every change Claude makes through the server is logged
@@ -22,6 +23,9 @@ What LLM clients can do through the app, and how the agent behaves inside a rout
 - **No code-side validation and no human review step**: recurring mistakes are corrected in the routine file or with memories, not by bloating prompts pre-emptively
 - **Lean prompts**: the model sees only the routine's prompt, its inputs and its allowed tools; token usage is recorded per run so bloat is visible
 - **Reporting its outcome**: the agent ends each run by saying whether it did its job, found nothing to do, or failed, and why
+
+## The agent inside a hook
+- **Event data is outside data**: what a watcher printed reaches an LLM hook's prompt marked as untrusted, in a block that says it's data, never instructions
 
 ## Memories
 - **I can add memories**: short, lasting rules the agent follows in future runs (e.g. "Don't count cancelled meetings")

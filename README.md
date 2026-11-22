@@ -4,7 +4,7 @@
 
 # process-automator
 
-Scheduled LLM routines for macOS and Linux. Describe a task in a prompt file, choose when it runs, and a model does it in the background with the tools you allow it, from any MCP server. On its own the app does nothing; your routines give it a purpose.
+LLM routines on a schedule, and hooks on events, for macOS and Linux. Describe a task in a prompt file, choose when it runs (a time, or something happening: a meeting starting, a new email), and a model does it in the background with the tools you allow it, from any MCP server. A program can do the work instead, when it needs no model. On its own the app does nothing; your routines and hooks give it a purpose.
 
 ## Install
 
@@ -16,4 +16,4 @@ or `./install.sh` from a checkout. No GitHub account needed. Or ask Claude Code 
 
 ## Documentation
 
-[`docs/`](docs/Home.md) (an Obsidian vault): guides for using it, writing routines and adding plugins, and the spec. Working on the code: [Developing](docs/Guides/Developing.md).
+[`docs/`](docs/Home.md) (an Obsidian vault): guides for using it, writing routines, hooks and plugins, and the spec. Working on the code: [Developing](docs/Guides/Developing.md).

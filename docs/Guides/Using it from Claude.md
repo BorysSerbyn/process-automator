@@ -18,11 +18,13 @@ After `procauto update`, reconnect the server so the client sees new or changed 
 - Install templates, add plugins and try them, change settings
 - Read your routines, plugins and their tools, run history and outcomes, and explain why something failed (`doctor`)
 - Run, start, stop, pause and resume routines, programs too; add and remove memories
+- Show hooks and watchers, fire a hook with a sample event (a dry run first), pause and stop them
 
 ## What stays with you
 - **Approval**: tools that change something are marked so the client asks you before calling them
 - **Trust**: Claude can't trust a routine. Routines it creates start paused and untrusted, and only run for real once you've trusted them ([[Guides/Routines#Trust it|Trust it]])
 - **Programs**: Claude can't add one ([[Guides/Writing a program|Writing a program]])
+- **Hooks and watchers**: Claude can't add, change or trust one ([[Guides/Writing a hook|Writing a hook]])
 - **Secrets**: a sign-in asked for by Claude opens in your browser (an OAuth page, or a local page where you type a key). Keys and tokens never pass through the chat
 - **Uninstalling** and the scheduler itself are terminal-only
 
