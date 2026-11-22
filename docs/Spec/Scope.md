@@ -7,6 +7,7 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 - **Tools come from MCP servers**: any server I add (remote or local, or a folder I wrote), plus `notify` (`notify_me`), a plugin compiled into the app
 - **Four model backends**: Claude Code on my Claude plan (`claude-code`), an Anthropic API key (`claude-api`), my own OpenAI-compatible model server, local or hosted (`local`, experimental and untested), or OpenAI's Codex CLI on my Codex sign-in (`codex`, experimental and untested)
 - **A scheduler** that starts at login, catches up after sleep within each routine's staleness, and records every due run; the same daemon runs the watchers and the hooks
+- **Permissions, known before the first run**: what runs code (a plugin, a program, a watcher) declares what the OS must allow it (input monitoring, notifications, …); a prompt needs its plugins'. The scheduler checks them as the app, and one that isn't granted is a problem before anything runs
 - **Guardrails**: a tool allowlist per routine, dry runs that intercept every write, and trust: a routine runs for real only while what it can reach is what I approved; a program, a watcher or a hook's program runs only while its executable is the one I approved, and a hook only while what it acts on is too. Event data reaches a hook's prompt marked as outside data
 - **Frontends over one core**: the `procauto` CLI (the API), automator-ui on macOS, a tray on Linux, and Claude or any MCP client through `procauto mcp serve`
 - **Around runs**: run history, memories, notifications, a usage limit per backend, `doctor`, templates to share routines, a guided `setup`
@@ -20,7 +21,7 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 - Memories are mine: routines never write them
 
 ## Not in scope
-- **Hooks in the frontends**: a menu item and pages of their own in the menu bar app and the Linux windows (the CLI, the MCP server and run status have them)
+- **Permissions in the frontends**: a row in the turn-on review for each permission still needed, with **Grant…** asking for it (the CLI, the MCP server, the review's JSON and run status have them)
 - **The scheduler as one more source**: the scheduler's slots handed to the dispatcher that runs hooks, so a schedule is one more trigger under the hood; for now the scheduler keeps its own queue
 - **Watchers from plugins**: events from a plugin (an MCP server's resource subscriptions, say), beside watchers that are programs
 - **Programs compiled into a build**: programs a plugin registers as Go functions, beside the executables I add

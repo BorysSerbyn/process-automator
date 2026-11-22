@@ -12,6 +12,7 @@ What LLM clients can do through the app, and how the agent behaves inside a rout
   - a routine Claude creates or changes starts paused and untrusted; only I trust it
   - Claude can list, run, stop and pause programs, but never add or trust one
   - Claude can list, show, fire (dry runs too), pause and stop hooks and watchers, but never add, change or trust one
+  - Claude can see the permissions things need and have the OS ask me for one; only I grant it
   - secrets and sign-ins happen in my browser, never through the model
   - uninstalling the app and running the scheduler stay in my terminal
   - every change Claude makes through the server is logged

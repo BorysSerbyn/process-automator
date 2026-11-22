@@ -65,6 +65,15 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **The `notify` plugin**: desktop notifications from routines; this app compiles it in
 - **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
 
+## Permissions
+- **What the OS must allow, known before the first run**: what runs code declares the permissions it needs: a plugin (a plugin folder, a server added by URL or command, a plugin compiled in), a program, a program hook and a watcher. The set is macOS's: input monitoring, accessibility, screen recording, notifications, full disk access, calendars, contacts, reminders, microphone, camera and automation; any other is refused. The notify plugin declares notifications
+- **Prompts inherit theirs**: a routine or an LLM hook declares none; it needs those of the plugins it uses. A hook needs its action's and its watcher's
+- **Trust covers them**: a review lists every permission it needs, what needs each and its state; one added later needs a new review
+- **Checked by the scheduler, as the app**: every permission, on each of its passes; the CLI, the MCP server and the frontends show what it found, and "not checked yet" before it has, never granted
+- **One that isn't granted is a problem from the start**: a routine, program or hook that needs it doesn't run and isn't healthy, its problem naming the permission and where it's turned on; a watcher isn't started while one it declares isn't. One that can't be checked (full disk access and automation, which macOS has no check for) or isn't checked on this OS is never taken for missing
+- **Asking for one**: `permissions request <permission>` has the scheduler ask the OS, so macOS's prompt names the app (macOS asks once; after that, and for one an app can't ask for, it says where in System Settings it's turned on, with the address that opens it); `permissions list` shows what's needed, by what, and its state
+- **On Linux** input monitoring is read access to `/dev/input`; the others aren't checked
+
 ## Model backend
 - **Four backends**, chosen by a setting: Claude Code on my Claude plan (`claude-code`), Anthropic's API with my API key (`claude-api`), my own model server (`local`: Ollama on my machine by default, or another local or hosted OpenAI-compatible one, with an API key if it needs one), or OpenAI's Codex CLI on my Codex sign-in (`codex`). `local` and `codex` are experimental and untested, and said so where they're chosen
 - **Routines name Claude models**: on `local`, every routine runs on the one model I set for the server, unless it names another model there (`local/<model>`). On `claude-api`, a routine that names `local/<model>` runs on my server too; routines that only do need no Anthropic key
@@ -88,7 +97,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Status indicator
 - **Icon** in the macOS menu bar, or the Linux tray, with a status dot:
   - **Green**: every enabled routine is fine. A routine with no runs yet is fine while its next run is ahead
-  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled, didn't start at its time or is stuck; a hook that's on failed, was missed, was paused past its rate, or can't run (its watcher missing, untrusted, paused or failing); setup isn't finished; or the scheduler isn't responding
+  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled (a permission it needs not granted among the reasons), didn't start at its time or is stuck; a hook that's on failed, was missed, was paused past its rate, or can't run (its watcher missing, untrusted, paused or failing); setup isn't finished; or the scheduler isn't responding
   - **Grey**: no routines or hooks are enabled
   - **Pulsing**: a routine is running (whatever the colour); in the Linux tray the dot dims and brightens
 - Updates within seconds of anything changing
@@ -133,4 +142,4 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each
 - **Settings**: one generic `settings list/get/set/reset` surface reads and writes any setting, app-wide or per routine; values are checked before they're saved and apply without a restart
 - **Paths**: `paths` shows where the app keeps its config, routines, programs, hooks, watchers, run status, history, notifications, templates and the frontends' log
-- **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own (`guide plugins`), how to write a program (`guide programs`) and how to write a hook and a watcher (`guide hooks`), with examples that work, as text or `--json`; `routines create`, `routines update`, `hooks add`, `watchers add` and `plugins add` point to it
+- **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own, with the permissions one can declare (`guide plugins`), how to write a program (`guide programs`) and how to write a hook and a watcher (`guide hooks`), with examples that work, as text or `--json`; `routines create`, `routines update`, `hooks add`, `watchers add` and `plugins add` point to it

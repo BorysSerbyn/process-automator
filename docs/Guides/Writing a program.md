@@ -11,5 +11,8 @@ It has an example `program.yaml`, every key, what a program gets (its exit code,
 ## Building it
 Build it for the machine it runs on: a Go program for an Apple silicon Mac is `GOOS=darwin GOARCH=arm64 go build`. Anything it calls must be named by its full path or be on the guide's fixed PATH: it doesn't get your shell's.
 
+## Permissions
+If it needs something macOS guards (the screen, Calendars, Accessibility), list it in `program.yaml`'s `permissions`. Until each is granted it doesn't run and says which, with where it's turned on: `procauto permissions request <permission>` asks macOS as the app. Trusting it covers them: adding one later needs a new review.
+
 ## Changing it
 The executable and `program.yaml` are copied into the app's own folder, and that copy is what runs. After rebuilding, `procauto routines update <name> --from <folder>/program.yaml`, then trust it again: a new executable, or a changed `program.yaml`, needs a new review. Claude can list, run and stop programs, but only you add or trust one.

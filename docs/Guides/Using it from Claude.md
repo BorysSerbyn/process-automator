@@ -19,6 +19,7 @@ After `procauto update`, reconnect the server so the client sees new or changed 
 - Read your routines, plugins and their tools, run history and outcomes, and explain why something failed (`doctor`)
 - Run, start, stop, pause and resume routines, programs too; add and remove memories
 - Show hooks and watchers, fire a hook with a sample event (a dry run first), pause and stop them
+- Show which permissions things need and what the scheduler found (`permissions list`), and have macOS ask you for one (`permissions request`): the prompt is yours to answer
 
 ## What stays with you
 - **Approval**: tools that change something are marked so the client asks you before calling them

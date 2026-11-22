@@ -109,8 +109,8 @@ A **template** is a routine file tracked in the repository's `templates/` so any
 - **Shelling out to `osascript` or `notify-send`**: notifications attributed to Script Editor rather than the app, or a tool that may not be installed
 - **A click on the app's own opening a readable report of the run in another program**: leaves the app for a text file, when the routine's window shows the run with everything else about it
 
-## Decision: cgo for macOS notifications, and only there
-The core is pure Go, except one darwin-only cgo file in the notify plugin: UserNotifications has no command-line or pure-Go way in that keeps the notification the app's. It builds only with `darwin && cgo` (without cgo, macOS says notifications aren't supported), so Linux and Windows builds and cross-compiles stay CGO-free, and Linux uses D-Bus in pure Go.
+## Decision: cgo for macOS notifications and permission checks, and only there
+The core is pure Go, except two darwin-only cgo files: the notify plugin's, since UserNotifications has no command-line or pure-Go way in that keeps the notification the app's, and sysenv's permission checks (`permcheck_darwin.go`), since IOKit's, Accessibility's, CoreGraphics', UserNotifications', EventKit's, Contacts' and AVFoundation's answers are Objective-C or C calls that must come from the process macOS attributes to the app. Both build only with `darwin && cgo` (without cgo, notifications aren't supported and every permission is "unknown"), so Linux and Windows builds and cross-compiles stay CGO-free, and Linux uses D-Bus and file access in pure Go. The frameworks are linked directly: from the dyld shared cache they add no measurable start-up time to a command.
 
 ### Rejected
 - **A helper in automator-ui** (the core asks the Swift app to post): the plugin would depend on the menu bar app running, the coupling this removes
@@ -659,3 +659,40 @@ A hook's action is often opening something: a meeting's link, an app. On macOS a
 ### Rejected
 - **Only for hooks**: a scheduled program can open a report too, and two environments would be two things to document
 - **Passing the whole environment**: the app's own keys and whatever launchd or systemd happened to set
+
+## Decision: what runs code declares its permissions; a prompt needs its plugins'
+A key-press hook looked healthy until it fired: then its watcher failed for lack of Input Monitoring, and its action's `notify_me` failed because notifications were off for the app. What the OS must allow is known by whoever wrote the code that needs it, so that's where it's declared: a plugin (`plugin.yaml`, the config entry, or the Go plugin's one field), a program, a program hook and a watcher. A prompt runs no code of its own: it needs the permissions of the plugins in its `automator.servers`, and a hook needs its action's and its watcher's. The set is macOS's privacy permissions, closed, so a typo is refused rather than ignored.
+
+### Rejected
+- **Discovering them at the first run**: the failure that started this; health stays green until something fails, on a hook maybe days later, and the failure names a tool, not the permission
+- **Routines declaring their own**: a routine doesn't know what its plugins do with the OS, every routine using a plugin would repeat the plugin's list, and one forgetting it would look healthy; the plugin's author knows
+- **An open list of names**: a misspelled permission would be silently never checked
+
+## Decision: the scheduler checks permissions and records them; everything else reads the record
+macOS answers a permission check for the process responsible for the one checking: a command typed in a terminal gets the terminal's answer (on this Mac, `IOHIDCheckAccess` and `AXIsProcessTrusted` from Ghostty's shell say granted, with TCC's log naming `com.mitchellh.ghostty` as responsible), while the same binary launched by launchd gets its own (not granted, TCC naming the binary itself), and a child it starts is attributed to it. The scheduler is launched by launchd from the app's bundle and signed as the app, and it starts the watchers and the plugins' servers, so its answer is the one that matters. It checks every permission on each pass, not only those something declares now, so a review of something just added already has an answer, and writes them to `permissions.json`; the CLI, readiness, run status and the MCP server read it. With nothing recorded the state is "not checked", a problem like a missing one: the scheduler isn't running then, so health is red anyway. A permission that can't be checked is "unknown" and never a problem: a guess would be a false red.
+
+### Rejected
+- **Checking from the CLI**: from a terminal it would answer for the terminal, saying granted when the app isn't, the false green this exists to remove; from the menu bar app it would be right only by luck of who ran it
+- **Only what's enabled**: a review of something off would say "not checked" for the permission it's about to need
+- **Guessing Full Disk Access** (reading a protected file) **or Automation** (asking about some app): a heuristic that's wrong both ways; "unknown" says what's true
+
+## Decision: asking for a permission goes through the scheduler
+macOS shows its prompt, naming the app, only to a process attributed to the app, and only once; after that a permission is changed in System Settings. `permissions request` leaves a request file the scheduler takes within half a second; it asks macOS, records whether it could and what macOS says once answered, and the command prints that with the page's address, so a frontend's Grant… is that command, then opening the address when it's still missing.
+
+### Rejected
+- **The command asking itself**: right when the menu bar app runs it (it shares the app's identity), wrong from a terminal or an MCP client, where the prompt would name the terminal and the grant go to it
+- **Only opening System Settings**: Calendars, Contacts, Camera and Microphone list only apps that have asked, so there'd be nothing to turn on
+
+## Decision: pluginapi gets one field for permissions, `Plugin.Permissions`
+A compiled-in plugin declares its permissions in `Plugin.Permissions`, a list of names, meaningful for both kinds: what an in-process plugin's Go code needs, or what a preset external server needs. A config entry replacing a preset declares its own (`mcpServers.<name>.permissions`, in `config.Server`, the engine's), since it may be another server. Names are checked by `App.Validate`, so a typo stops the app at start.
+
+### Rejected
+- **A field on `ServerSpec`**: the config file's server entries would have it for free, but in-process plugins have no spec, so it would take a second field, and `ServerSpec` would carry something that isn't how to reach a server
+- **Typed constants in pluginapi**: more public surface to keep stable for eleven strings the engine checks anyway
+
+## Decision: trust covers permissions; what was trusted before them covers what it needs
+A routine's, a program's, a hook's or a watcher's approval includes the permissions it needs, so one a plugin or a file adds later is a change to review, said in words. Records written before permissions existed have none; they cover whatever is needed now, and `InitTrust` (run by edits, real runs and the scheduler) records that once, as trusting at first use did for routines older than trust. Every new record writes its list, empty included, so the two can't be confused.
+
+### Rejected
+- **Every routine untrusted after the update**: notify now declaring notifications would have untrusted every routine using it, asking me again about what I'd already approved and stopping them all until I did
+- **Ignoring permissions in trust**: a plugin could start needing Screen Recording and every routine using it would keep running without my seeing it

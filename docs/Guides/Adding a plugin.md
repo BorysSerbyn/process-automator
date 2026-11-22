@@ -6,7 +6,7 @@ A plugin is any MCP server: one that exists, or one you write. How to add one is
 procauto guide plugins
 ```
 
-It covers the three ways `procauto plugins add <name>` adds a server (`--url`, `--command`, `--dir`), a minimal plugin folder with its `plugin.yaml`, the annotation and secret rules, and the commands to check it. `plugins add --help` lists every flag. `procauto plugins remove <name>` takes a server out again and forgets its credentials. Names are lowercase letters, digits and dashes; `notify` is taken by the plugin the app ships with.
+It covers the three ways `procauto plugins add <name>` adds a server (`--url`, `--command`, `--dir`), a minimal plugin folder with its `plugin.yaml`, the permissions a server can declare, the annotation and secret rules, and the commands to check it. `plugins add --help` lists every flag. `procauto plugins remove <name>` takes a server out again and forgets its credentials. Names are lowercase letters, digits and dashes; `notify` is taken by the plugin the app ships with.
 
 ## Plugin folders
 - The folder is copied into the app, so where it was written doesn't matter; the server runs from the copy, which is its working directory. `--replace` installs a new version (the old one stays if the new one fails its trial); `plugins remove` deletes the copy
@@ -27,7 +27,10 @@ mcpServers:
     env:
       NOTES_TOKEN: "{notes-token}"   # asked for by `auth login notes`
       NOTES_MODE: fast               # plain values are fine too
+    permissions: [full-disk-access]  # what macOS must allow it (`guide plugins` lists them)
 ```
+
+A server's `permissions` (or `--permission` when adding it) are what routines using it need too: their review lists them, and they don't run while one isn't granted.
 
 ### Remote server
 

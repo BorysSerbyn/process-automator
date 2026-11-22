@@ -23,6 +23,7 @@ The menu lists each reason; click one to open the run it's about.
 | Setup isn't finished | Open **Finish Setup…**, or run `procauto setup` ([[Guides/Getting started#Set it up\|Set it up]]) |
 | *routine* can't be scheduled | Usually not trusted (after a change to what it can reach), a missing folder, a server that isn't added, or a required parameter without a value. The detail says which; `routines trust <name>` for trust |
 | *routine* needs a sign-in | `procauto auth login <server>` |
+| *routine* or *hook* needs a permission | A plugin, program or watcher it uses needs something macOS hasn't allowed the app (Input Monitoring, Notifications, …). `procauto permissions request <permission>` asks macOS; if it asked before, turn it on at the System Settings address the command prints. `procauto permissions list` shows what needs what. "Not checked yet" means the scheduler hasn't run yet |
 | *routine* failed | Read the run (`runs show <id>`, or click the reason). Fix it, then run it again |
 | *routine* was skipped | Over the usage limit ([[Guides/Settings#Usage limit\|Usage limit]]) |
 | *routine* missed its run | The computer was asleep or off past the routine's `staleness`, or other runs took too long. Run it by hand if it still matters (`run <name>`, or `run <name> --date <day>` for a past day) |
