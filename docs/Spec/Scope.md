@@ -19,5 +19,6 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 
 ## Not in scope
 - **Event triggers**: routines started by something happening (a new email, a file appearing), not only by time. Runs already carry what triggered them, so this would be an addition
+- **Programs**: routines that run an executable instead of a model: the binary plus a file giving its name, description, schedule and whether it writes. They share scheduling, run, stop, pause, history and trust with LLM routines and show up in the same lists; "routine" with no kind still means an LLM routine, everywhere
 - **Install links**: one-click links that pre-fill installing a template or a plugin, still reviewed and approved by me
 - **Code-side output validation**: code checking a routine's actions against rules declared in its file; output is left to the model's judgement, corrected with memories
