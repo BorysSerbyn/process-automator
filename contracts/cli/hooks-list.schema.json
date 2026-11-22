@@ -74,9 +74,15 @@
           "type": "string"
         },
         "type": "array",
-        "description": "Servers, Tools and Model are an LLM hook's, as an LLM routine's."
+        "description": "Servers, Tools, BuiltinTools and Model are an LLM hook's, as an LLM\nroutine's: BuiltinTools are the agent CLI built-in tools its runs may use."
       },
       "tools": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "builtinTools": {
         "items": {
           "type": "string"
         },

@@ -52,10 +52,12 @@ type HookInfo struct {
 	// Problem is why it can't run while it's on (its watcher missing,
 	// untrusted or failing, ...); empty when it can.
 	Problem string `json:"problem,omitempty"`
-	// Servers, Tools and Model are an LLM hook's, as an LLM routine's.
-	Servers []string `json:"servers,omitempty"`
-	Tools   []string `json:"tools,omitempty"`
-	Model   string   `json:"model,omitempty"`
+	// Servers, Tools, BuiltinTools and Model are an LLM hook's, as an LLM
+	// routine's: BuiltinTools are the agent CLI built-in tools its runs may use.
+	Servers      []string `json:"servers,omitempty"`
+	Tools        []string `json:"tools,omitempty"`
+	BuiltinTools []string `json:"builtinTools,omitempty"`
+	Model        string   `json:"model,omitempty"`
 	// Program is a program hook's own: what runs and with what.
 	Program *ProgramInfo `json:"program,omitempty"`
 	// LastRun is its latest outcome from run status.
@@ -166,6 +168,9 @@ func hookInfo(cmd *cobra.Command, a *engine.App, status *runstatus.Status, x eng
 	}
 	if r := h.Prompt; r != nil {
 		row.Servers, row.Tools, row.Model = r.Servers, r.Tools, r.Model
+		if rc, err := a.RoutineConfig(*r); err == nil {
+			row.BuiltinTools = rc.BuiltinTools
+		}
 	}
 	if p := h.Program; p != nil {
 		row.Program = programInfo(a, *p)

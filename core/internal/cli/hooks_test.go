@@ -112,8 +112,11 @@ func TestHookCommands(t *testing.T) {
 		list[1].Staleness != "2m" || list[1].Rate != 60 || list[1].Enabled || list[1].Trusted {
 		t.Fatalf("hooks list: %+v", list)
 	}
+	if brief := cliJSON[HookDetail](t, cfg, "hooks", "show", "brief"); strings.Join(brief.BuiltinTools, ",") != "Bash" {
+		t.Fatalf("an LLM hook's built-in tools: %+v", brief.BuiltinTools)
+	}
 	show := cliJSON[HookDetail](t, cfg, "hooks", "show", "open-meet")
-	if show.Watcher == nil || !show.Watcher.Trusted || show.Watcher.Interval != "30s" || len(show.Watcher.Hooks) != 2 || !strings.Contains(show.Source, "meeting.started") {
+	if len(show.BuiltinTools) != 0 || show.Watcher == nil || !show.Watcher.Trusted || show.Watcher.Interval != "30s" || len(show.Watcher.Hooks) != 2 || !strings.Contains(show.Source, "meeting.started") {
 		t.Fatalf("hooks show: %+v %+v", show, show.Watcher)
 	}
 

@@ -399,6 +399,10 @@ components:
         batch:
           description: Batch (an LLM hook's) gives one run every event that waited for it.
           type: boolean
+        builtinTools:
+          items:
+            type: string
+          type: array
         description:
           type: string
         enabled:
@@ -439,7 +443,9 @@ components:
           description: Rate is how many runs it may start in any hour.
           type: integer
         servers:
-          description: Servers, Tools and Model are an LLM hook's, as an LLM routine's.
+          description: |-
+            Servers, Tools, BuiltinTools and Model are an LLM hook's, as an LLM
+            routine's: BuiltinTools are the agent CLI built-in tools its runs may use.
           items:
             type: string
           type: array
@@ -484,6 +490,10 @@ components:
         batch:
           description: Batch (an LLM hook's) gives one run every event that waited for it.
           type: boolean
+        builtinTools:
+          items:
+            type: string
+          type: array
         description:
           type: string
         enabled:
@@ -524,7 +534,9 @@ components:
           description: Rate is how many runs it may start in any hour.
           type: integer
         servers:
-          description: Servers, Tools and Model are an LLM hook's, as an LLM routine's.
+          description: |-
+            Servers, Tools, BuiltinTools and Model are an LLM hook's, as an LLM
+            routine's: BuiltinTools are the agent CLI built-in tools its runs may use.
           items:
             type: string
           type: array
