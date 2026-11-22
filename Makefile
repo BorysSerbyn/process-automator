@@ -28,6 +28,9 @@ SOURCE_DIR    ?= $(CURDIR)
 SIGN_FLAGS    ?=
 # CPU architecture of the Linux package (amd64, arm64)
 LINUX_ARCH    ?= amd64
+# The Linux windows app (Fyne, so cgo): built in Docker (docker), or left out
+# of the package (none: the tray opens every window in a terminal)
+LINUX_WINDOWS ?= docker
 # The GitHub API private releases are read from (empty: api.github.com), and
 # the GitHub web address public ones are (empty: github.com)
 RELEASE_API   ?=
@@ -118,17 +121,23 @@ bundle: build check-identity ## Assemble and sign the .app
 package: bundle ## Release artifact for macOS (build/dist): the signed .app, zipped
 	scripts/package.sh macos "$(APP_BUILD)" "$(DIST)"
 
-package-linux: ## Release artifact for Linux (build/dist), for LINUX_ARCH=amd64|arm64: the core, the tray, templates, installer
+package-linux: ## Release artifact for Linux (build/dist), for LINUX_ARCH=amd64|arm64: the core, the tray, the windows app (Docker), templates, installer
 	@mkdir -p "$(BUILD)/linux-$(LINUX_ARCH)"
 	cd "$(GO_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=$(LINUX_ARCH) go build -trimpath -ldflags '$(LINUX_LDFLAGS)' \
 	  -o "$(BUILD)/linux-$(LINUX_ARCH)/$(CLI)" $(MAIN)
 	cd "$(TRAY_DIR)" && CGO_ENABLED=0 GOOS=linux GOARCH=$(LINUX_ARCH) go build -trimpath -ldflags '-s -w' \
 	  -o "$(BUILD)/linux-$(LINUX_ARCH)/automator-tray" .
-	rm -rf "$(BUILD)/linux-$(LINUX_ARCH)/tray"
+	rm -rf "$(BUILD)/linux-$(LINUX_ARCH)/tray" "$(BUILD)/linux-$(LINUX_ARCH)/automator-windows"
 	cd "$(TRAY_DIR)" && go run ./cmd/trayicons "$(LOGO)" "$(BUILD)/linux-$(LINUX_ARCH)/tray"
+	@case "$(LINUX_WINDOWS)" in \
+	  docker) scripts/build-linux-windows.sh "$(TRAY_DIR)" $(LINUX_ARCH) "$(BUILD)/linux-$(LINUX_ARCH)/automator-windows" ;; \
+	  none) echo "package-linux: without the windows app (LINUX_WINDOWS=none): the tray opens every window in a terminal" ;; \
+	  *) echo "package-linux: LINUX_WINDOWS is docker or none, not $(LINUX_WINDOWS)"; exit 1 ;; \
+	esac
 	@printf '%s\n' "$$LINUX_INSTALL_ENV" > "$(BUILD)/linux-$(LINUX_ARCH)/install.env"
 	TEMPLATES="$(TEMPLATES)" scripts/package.sh linux "$(BUILD)/linux-$(LINUX_ARCH)/$(CLI)" "$(DIST)" $(LINUX_ARCH) \
-	  "$(BUILD)/linux-$(LINUX_ARCH)/install.env" "$(BUILD)/linux-$(LINUX_ARCH)/automator-tray" "$(BUILD)/linux-$(LINUX_ARCH)/tray"
+	  "$(BUILD)/linux-$(LINUX_ARCH)/install.env" "$(BUILD)/linux-$(LINUX_ARCH)/automator-tray" "$(BUILD)/linux-$(LINUX_ARCH)/tray" \
+	  $(if $(filter docker,$(LINUX_WINDOWS)),"$(BUILD)/linux-$(LINUX_ARCH)/automator-windows")
 
 contracts: ## Regenerate contracts/ (CLI reference, output schemas, settings schema) from code
 	cd core && go run ./cmd/gencontracts ../contracts
@@ -136,11 +145,13 @@ contracts: ## Regenerate contracts/ (CLI reference, output schemas, settings sch
 test: ## Run all tests
 	cd core && go test -race ./...
 	cd automator-tray && go test -race ./...
+	cd automator-tray/windows && go test -race ./...
 	cd automator-ui && swift test
 
-lint: ## Lint Go and Swift (the tray as built for Linux, too)
+lint: ## Lint Go and Swift (the tray as built for Linux, too; the windows app as built here, with cgo)
 	cd core && golangci-lint run
 	cd automator-tray && golangci-lint run && GOOS=linux golangci-lint run
+	cd automator-tray/windows && golangci-lint run
 	cd automator-ui && swift format lint --recursive --strict Sources Tests
 
 fmt: ## Format Go and Swift
@@ -160,7 +171,7 @@ release: ## Tag a release: make release PART=major|minor|patch
 publish: ## Build, sign, test and publish the release tagged at HEAD (SIGN_IDENTITY or SIGN_P12): see scripts/publish.sh
 	scripts/publish.sh
 
-ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, the Linux package, and the macOS artifact's install test
+ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, the Linux package (Docker, for the windows app), and the macOS artifact's install test
 	$(MAKE) test lint
 	cd core && GOOS=linux go build ./... && GOOS=windows go build ./...
 	cd automator-tray && for arch in amd64 arm64; do CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build ./... || exit 1; done
@@ -170,8 +181,9 @@ ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, t
 	rm -rf "$(BUILD)/ci"
 	$(MAKE) package-linux BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
 	@tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/bin/automator-tray$$' && \
+	  tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/bin/automator-windows$$' && \
 	  tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/share/[^/]+/tray/status-green-dim\.png$$' || \
-	  { echo "the Linux package lacks the tray or its icons"; exit 1; }
+	  { echo "the Linux package lacks the tray, the windows app or the tray's icons"; exit 1; }
 	$(MAKE) package SIGN_IDENTITY=- BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
 	scripts/test-install.sh "$(BUILD)"/ci/*-macos.zip
 
