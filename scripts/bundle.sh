@@ -33,7 +33,12 @@ xattr -cr "$app"
 # The core is signed as the app (its bundle ID): macOS attributes the notify plugin's notifications by the
 # caller's signing identifier, so the core shares the app's permission to notify.
 # shellcheck disable=SC2086 # SIGN_FLAGS is a list of flags
-codesign --force ${SIGN_FLAGS:-} --sign "$identity" --identifier "$BUNDLE_ID" "$app/Contents/MacOS/$COMMAND"
+# Both carry the entitlements (scripts/entitlements.plist) that let the hardened runtime ask for calendars,
+# contacts, the camera, the microphone and Apple Events, matching Info.plist's usage descriptions; without
+# them macOS refuses those outright. Nothing is asked for until something turned on needs it and I grant it
+# (permissions request). The file can't hold comments: codesign's parser rejects them.
+codesign --force ${SIGN_FLAGS:-} --entitlements "$scripts/entitlements.plist" --sign "$identity" --identifier "$BUNDLE_ID" \
+  "$app/Contents/MacOS/$COMMAND"
 # shellcheck disable=SC2086
-codesign --force ${SIGN_FLAGS:-} --sign "$identity" "$app"
+codesign --force ${SIGN_FLAGS:-} --entitlements "$scripts/entitlements.plist" --sign "$identity" "$app"
 echo "$app"
