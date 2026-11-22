@@ -26,7 +26,7 @@ procauto settings reset llm.backend         # back to the default
 | `update.source-dir` | | The checkout `update` builds from when no release has a download for this machine (empty: the one this build came from) |
 
 ## Per routine
-Each routine has settings `routines.<name>.<field>`: `enabled`, `schedule`, `staleness`, `timeout`, `effort`, `folder`, `session`, `concurrency`, `builtinTools`, and `params.<param>` for each parameter. The routine's file gives the defaults; a setting overrides the file without editing it. What each one means is in [[Guides/Writing a routine#Frontmatter|Writing a routine]].
+Each routine has settings `routines.<name>.<field>`: `enabled`, `schedule`, `staleness`, `timeout`, `effort`, `folder`, `session`, `concurrency`, `builtinTools`, and `params.<param>` for each parameter. The routine's file gives the defaults; a setting overrides the file without editing it. `procauto guide routines` says what each one means ([[Guides/Writing a routine|Writing a routine]]).
 
 ```sh
 procauto settings set routines.digest.timeout 30m

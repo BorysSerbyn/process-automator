@@ -10,7 +10,7 @@ Process Automator runs **routines**: prompt files that a model (Claude, through 
 - **memories** routines read, desktop **notifications** routines send, **templates** to start from, an **LLM budget** that keeps scheduled runs from overspending, and **guardrails**: a routine runs for real only once trusted with what it can reach;
 - a menu bar app on macOS (status, routines, settings, setup), a tray in Linux desktop sessions (status, routines, notifications, updates), and `doctor` to explain anything red.
 
-**All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. On the `claude-code` backend, setup connects Claude Code to it (the `mcp` step below); for another MCP client, its stdio command is `procauto mcp serve`.
+**All of it is yours through the app's MCP server**, and it's very powerful: every CLI command is a tool, so through it you can do basically anything the person can, such as writing and testing new routines, adding plugins, reading run history, changing settings and running routines. On the `claude-code` backend, setup connects Claude Code to it (the `mcp` step below); for another MCP client, its stdio command is `procauto mcp serve`. How to write a routine and how to add a plugin is in the app: `procauto guide routines` and `procauto guide plugins` (the `guide` tool over MCP); read them before doing either.
 
 Tools that change things are marked so the client asks first, and sign-ins happen in the person's browser, never through you. A few things stay with the person, by design: trusting a routine to run for real, uninstalling the app, and the scheduler itself.
 
@@ -82,4 +82,4 @@ Setup is finished when `procauto setup --json` says `"done": true`. Steps they s
 Tell them:
 - what's installed and running (`procauto routines list`, and the hourglass in the macOS menu bar or the Linux tray; on GNOME the tray needs the AppIndicator extension, which Ubuntu enables by default);
 - `procauto doctor` explains a red light; `procauto update` installs new releases (the menu offers them too); `procauto uninstall` removes the app (`--purge` also removes their config, routines, history, logs and secrets);
-- you (or any MCP client) can do basically anything with the app from now on through its MCP server (on `claude-code`, setup connected it to Claude Code; after a restart `/mcp` lists `procauto`): offer to help them write their first routine.
+- you (or any MCP client) can do basically anything with the app from now on through its MCP server (on `claude-code`, setup connected it to Claude Code; after a restart `/mcp` lists `procauto`): offer to help them write their first routine (`procauto guide routines` says how).

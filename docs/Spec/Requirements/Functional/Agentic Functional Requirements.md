@@ -4,6 +4,7 @@ What LLM clients can do through the app, and how the agent behaves inside a rout
 
 ## Making routines with Claude
 - **Claude as a frontend**: I can create and manage routines by talking to Claude (Claude Code, Claude Desktop or any MCP client): I describe what I want, and Claude writes the routine, picks its servers and tools, sets its schedule and parameters, installs templates, adds plugins, and dry-runs the routine to show me what it would do
+- **Claude learns how from the app**: the MCP server tells Claude to read the guide before writing a routine or adding a server, and that what it creates starts paused and untrusted
 - **Claude sees what's possible**: the plugins and their tools (and which only read), the templates, my routines and their settings, recent runs and their outcomes, and why something is red
 - **Parity with the CLI**: anything the CLI does, Claude can do through the MCP server, except what stays with me (below)
 - **I stay in control**:

@@ -1,32 +1,17 @@
 Back to [[Home]]. See also [[Guides/Plugins and sign-ins|Plugins and sign-ins]], [[Guides/Writing a routine|Writing a routine]].
 
-A plugin is any MCP server. Add it with `procauto plugins add <name>` (`--url` for a remote server, `--command` for a local one, `--dir` for a folder; see `plugins add --help`), or by hand under `mcpServers` in the config file (`procauto paths` shows where). Then list it in a routine's `automator.servers` and allow its tools in `tools:`. No code needed. `procauto plugins remove <name>` takes it out again and forgets its credentials.
+A plugin is any MCP server: one that exists, or one you write. How to add one is in the app itself:
 
 ```sh
-procauto plugins add github --url https://api.githubcopilot.com/mcp/
-procauto plugins add example --url https://example.com/mcp --auth headers --header 'Authorization=Bearer {example-key}'
-procauto plugins add files --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ~/notes
-procauto plugins add weather --dir ./weather-mcp
+procauto guide plugins
 ```
 
-`plugins add` tries the server first (starts it, does the MCP handshake, lists its tools) and adds nothing if that fails. A server that needs credentials is tried as far as it can be: sign in with `auth login <name>`, then `plugins check <name>` tries it fully. `plugins check` with no name tries every plugin. `--replace` replaces a server of the same name. Names are lowercase letters, digits and dashes; `notify` is taken by the plugin the app ships with.
+It covers the three ways `procauto plugins add <name>` adds a server (a remote `--url`, a local `--command`, or a plugin folder with `--dir`), writing your own server (a minimal one in Go) and its `plugin.yaml`, what `plugins add` checks before adding anything, secrets, and using it in a routine. `procauto plugins remove <name>` takes one out again and forgets its credentials. Names are lowercase letters, digits and dashes; `notify` is taken by the plugin the app ships with.
 
-## Plugin folder (your own server)
-A server you wrote (or Claude Code wrote) can be installed as a folder: `procauto plugins add weather --dir ./weather-mcp`. The folder is copied into the app, so it doesn't matter where it was written; `--replace` installs a new version (the old one stays if the new one fails its trial), and `plugins remove` deletes the copy. It needs a `plugin.yaml`:
+## In the config file
+Servers can also be written by hand under `mcpServers` in the config file (`procauto paths` shows where). Unknown or misspelled fields are an error, so a typo shows up immediately instead of being ignored. Secrets are `{secret-key}` references in `env` or `headers`, asked for by `procauto auth login <name>`; then `procauto plugins check <name>` tries the server.
 
-```yaml
-description: Weather forecasts for my routines
-command: ./server          # relative paths resolve inside the folder; or e.g. python3 / npx
-args: [--stdio]
-env:
-  WEATHER_KEY: "{weather-key}"   # asked for by `auth login weather`
-```
-
-Every tool must declare its annotations, with `readOnlyHint` (true for reads, false for writes): dry runs run read-only tools and intercept the rest, so a folder plugin with an undeclared tool is rejected.
-
-Secrets never go in the config: reference them as `{secret-key}` in `env` or `headers`, and `procauto auth login <name>` asks for each one and keeps it in the Keychain (on Linux, the Secret Service keyring).
-
-## Local command (stdio)
+### Local command (stdio)
 
 ```yaml
 mcpServers:
@@ -40,7 +25,7 @@ mcpServers:
 
 Local apps that approve clients themselves and then show a credential once also set `pairing: "<what to click>"`: `auth login` connects first so the app can ask, then asks you to paste the credential.
 
-## Remote server
+### Remote server
 
 ```yaml
 mcpServers:
@@ -74,16 +59,3 @@ mcpServers:
     auth: headers
     headers: {X-API-Key: "{legacy-key}"}
 ```
-
-## Check it
-
-```sh
-procauto auth login <name>     # if it needs secrets or a sign-in
-procauto auth status
-procauto plugins check <name>  # its tools, counted as read-only or write
-procauto mcp tools <name>      # the tools you can allow in a routine (--json marks readOnly)
-```
-
-Tools a server doesn't mark read-only are treated as writes: dry runs intercept them.
-
-Unknown or misspelled fields are an error, so a typo shows up immediately instead of being ignored.

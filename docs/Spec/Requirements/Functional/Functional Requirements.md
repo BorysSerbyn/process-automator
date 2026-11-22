@@ -85,3 +85,4 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each
 - **Settings**: one generic `settings list/get/set/reset` surface reads and writes any setting, app-wide or per routine; values are checked before they're saved and apply without a restart
 - **Paths**: `paths` shows where the app keeps its config, routines, run status, history, notifications and templates
+- **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own (`guide plugins`), with examples that work, as text or `--json`; `routines create`, `routines update` and `plugins add` point to it

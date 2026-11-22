@@ -426,3 +426,13 @@ Every chat request to the local server carries `keep_alive` (`llm.local.keep-ali
 - **Asking `/api/ps` first**: it says what's loaded and until when, not whether anyone is using it
 - **`OLLAMA_KEEP_ALIVE`**: the server's own setting, for everything on it, not the app's to change
 
+
+## Decision: the guide is in the binary, generated from code where it can be
+How to write a routine and how to add a plugin is a command, `guide`, so every installed app has it at its own version, and MCP clients read it through the server like any other tool. What the code defines (the routine keys, each backend's models and built-in tools, the inputs, `plugin.yaml`'s fields, `plugins add`'s flags) is generated into it, so it can't drift from what the app accepts; the rest is written once, next to the code, and its examples are files the tests build, install and create. The guides in `docs/` link to it instead of restating it. Over MCP it's one tool with the topic as an enum argument, served as text: one entry in the tool list, whose description names the topics, and prose the model reads as it is.
+
+### Rejected
+- **Shipping the docs folder with the app**: written for people reading a vault (wiki links, anchors across pages), with nothing generated, so it drifts; and a client would have to find and read files
+- **Pointing to the repository**: installs don't have it, it may be ahead of or behind the installed version, and an agent may not reach it
+- **One MCP tool per topic**: more tools in every client's list for one command, and each new topic another override
+- **Serving it as `--json` over MCP**: the same text, escaped, with its tables repeated as data
+- **Putting it in the MCP server's instructions**: they're sent with every session; the guide is read when it's needed
