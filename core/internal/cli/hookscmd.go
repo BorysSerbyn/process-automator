@@ -49,6 +49,10 @@ type HookInfo struct {
 	// is what I trusted); Untrusted says why not.
 	Trusted   bool   `json:"trusted"`
 	Untrusted string `json:"untrusted,omitempty"`
+	// TurnOn is true while turning it on (`hooks trust <hook> --yes
+	// --resume`) has something to do: it's off, or it or its watcher isn't
+	// trusted. Frontends offer Turn On… while it is.
+	TurnOn bool `json:"turnOn,omitempty"`
 	// Problem is why it can't run while it's on (its watcher missing,
 	// untrusted or failing, ...); empty when it can.
 	Problem string `json:"problem,omitempty"`
@@ -175,6 +179,12 @@ func hookInfo(cmd *cobra.Command, a *engine.App, status *runstatus.Status, x eng
 	if p := h.Program; p != nil {
 		row.Program = programInfo(a, *p)
 	}
+	row.TurnOn = !row.Trusted || !row.Enabled
+	if w, err := a.FindWatcher(h.On.Watcher); err == nil {
+		if why, err := a.WatcherUntrusted(w); err == nil && why != "" {
+			row.TurnOn = true
+		}
+	}
 	row.LastRun = status.LastRun(x.Name())
 	return row
 }
@@ -230,7 +240,7 @@ func newHooksAddCmd(update bool) *cobra.Command {
 		Short: short,
 		Long: "--from is the hook's file: a Dotprompt file (an LLM hook), or a hook.yaml naming the executable beside it " +
 			"(a program hook), which is copied with it. A hook is added off and untrusted: review and turn it on with `" +
-			product.Command + " hooks trust <hook> --resume` (its watcher needs trusting too). Only you add a hook, from a " +
+			product.Command + " hooks trust <hook> --resume` (which trusts its watcher too). Only you add a hook, from a " +
 			"terminal. How to write one: `" + product.Command + " guide hooks`.",
 		Example: "  " + product.Command + " hooks add open-meet --from ./open-meet/hook.yaml\n" +
 			"  " + product.Command + " hooks add triage --from ./triage.prompt",
@@ -342,10 +352,11 @@ func newHooksTrustCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "trust <hook>",
 		Short: "Review what a hook acts on and what it can reach, and trust it (--resume: and turn it on)",
-		Long: "Shows what the hook acts on (its watcher and event type), whether its watcher is trusted (it needs its own " +
-			"trust: `" + product.Command + " watchers trust`), and its action: an LLM hook's servers and tools, or a program " +
-			"hook's executable. An LLM hook that can write is flagged: it acts on outside data. Another watcher, event type or " +
-			"action takes the trust away until you trust it again. With --resume it also turns the hook on, in the same yes.",
+		Long: "Shows what the hook acts on (its watcher and event type), its action (an LLM hook's servers and tools, or a " +
+			"program hook's executable), what its watcher runs when it isn't trusted yet, and the sign-ins it still needs. An " +
+			"LLM hook that can write is flagged: it acts on outside data. The same yes trusts its watcher too, when it isn't " +
+			"trusted. Another watcher, event type or action takes the trust away until you trust it again. With --resume it " +
+			"also turns the hook on.",
 		Example: "  " + product.Command + " hooks trust open-meet --check --json   # review only\n" +
 			"  " + product.Command + " hooks trust open-meet --yes --resume    # trust it and turn it on",
 		Args: cobra.ExactArgs(1),

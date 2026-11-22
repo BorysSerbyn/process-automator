@@ -254,7 +254,8 @@ func newWatchersAddCmd(update bool) *cobra.Command {
 			out := WatcherChange{Watcher: name, Path: w.Path, Enabled: &enabled}
 			if !update {
 				return emit(cmd, out, fmt.Sprintf("Added the watcher %s (%s), not trusted: it runs only once you trust it.\n"+
-					"Trust it: %s watchers trust %s", name, w.Path, product.Command, name))
+					"Trusting a hook that listens to it trusts it too (%s hooks trust <hook> --resume), or: %s watchers trust %s",
+					name, w.Path, product.Command, product.Command, name))
 			}
 			text := fmt.Sprintf("Updated the watcher %s (%s).", name, w.Path)
 			if why, err := a.WatcherUntrusted(w); err == nil && why != "" {

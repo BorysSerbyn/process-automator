@@ -465,6 +465,12 @@ components:
             Trusted is whether it may run for real (what it reaches and acts on
             is what I trusted); Untrusted says why not.
           type: boolean
+        turnOn:
+          description: |-
+            TurnOn is true while turning it on (`hooks trust <hook> --yes
+            --resume`) has something to do: it's off, or it or its watcher isn't
+            trusted. Frontends offer Turn On… while it is.
+          type: boolean
         untrusted:
           type: string
         watcher:
@@ -552,6 +558,12 @@ components:
           description: |-
             Trusted is whether it may run for real (what it reaches and acts on
             is what I trusted); Untrusted says why not.
+          type: boolean
+        turnOn:
+          description: |-
+            TurnOn is true while turning it on (`hooks trust <hook> --yes
+            --resume`) has something to do: it's off, or it or its watcher isn't
+            trusted. Frontends offer Turn On… while it is.
           type: boolean
         untrusted:
           type: string
@@ -1265,6 +1277,12 @@ components:
             Trusted is whether it may run for real (what it can reach is what I
             trusted); Untrusted says why not.
           type: boolean
+        turnOn:
+          description: |-
+            TurnOn is true while turning it on (`routines trust <name> --yes
+            --resume`) has something to do: it isn't trusted, or it's paused with
+            a schedule. Frontends offer Turn On… while it is.
+          type: boolean
         untrusted:
           type: string
       required:
@@ -1366,6 +1384,12 @@ components:
           description: |-
             Trusted is whether it may run for real (what it can reach is what I
             trusted); Untrusted says why not.
+          type: boolean
+        turnOn:
+          description: |-
+            TurnOn is true while turning it on (`routines trust <name> --yes
+            --resume`) has something to do: it isn't trusted, or it's paused with
+            a schedule. Frontends offer Turn On… while it is.
           type: boolean
         untrusted:
           type: string
@@ -2068,6 +2092,14 @@ components:
           type: boolean
         routine:
           type: string
+        signIns:
+          description: |-
+            SignIns are the sign-ins it still needs before it works (`auth login
+            <name>`): its servers', its own secrets' (a program's, a hook's), and
+            its watcher's. Trusting doesn't wait for them.
+          items:
+            type: string
+          type: array
         surface:
           $ref: '#/components/schemas/Surface'
         tools:
@@ -2095,7 +2127,9 @@ components:
           type: array
         watcher:
           $ref: '#/components/schemas/WatcherTrust'
-          description: Watcher is the hook's watcher, which needs trusting of its own.
+          description: |-
+            Watcher is the hook's watcher: trusting the hook (--yes) trusts it
+            too when it isn't trusted, so its review is part of the hook's.
       required:
         - routine
         - surface
@@ -2367,10 +2401,28 @@ components:
       type: object
     WatcherTrust:
       additionalProperties: false
-      description: WatcherTrust is whether a hook's watcher is trusted.
+      description: 'WatcherTrust is a hook''s watcher in the hook''s review: whether it''s trusted, and what trusting it approves.'
       properties:
+        changes:
+          description: Changes since it was last trusted (empty for a first trust).
+          items:
+            type: string
+          type: array
+        description:
+          description: |-
+            Description, Mode and Program are what it is and runs (absent when
+            there's no such watcher): its executable by checksum, its arguments
+            and secrets, each stored or not.
+          type: string
+        mode:
+          enum:
+            - poll
+            - stream
+          type: string
         name:
           type: string
+        program:
+          $ref: '#/components/schemas/ProgramInfo'
         trusted:
           type: boolean
         untrusted:

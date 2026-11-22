@@ -64,6 +64,10 @@
     "untrusted": {
       "type": "string"
     },
+    "turnOn": {
+      "type": "boolean",
+      "description": "TurnOn is true while turning it on (`hooks trust \u003chook\u003e --yes\n--resume`) has something to do: it's off, or it or its watcher isn't\ntrusted. Frontends offer Turn On… while it is."
+    },
     "problem": {
       "type": "string",
       "description": "Problem is why it can't run while it's on (its watcher missing,\nuntrusted or failing, ...); empty when it can."

@@ -53,7 +53,7 @@ A watcher prints JSON lines on stdout. An event:
 - **poll**: run every `interval` with `$%{cursorEnv}`; it prints what's new since then, a cursor line, and exits 0. A poll that fails (exits non-zero, prints a line that's neither) changes nothing: the next one gets the same cursor. It isn't polled during a Mac's maintenance wake; one missed while the computer slept runs as it wakes
 - **stream**: started once, printing events as they happen. When it ends it's started again: at once after running a minute, else after a pause that doubles, up to %{maxBackoff}
 - **Environment**: a program's (a fixed PATH, `HOME`, `TMPDIR`, its secrets, and the desktop session's display variables when the app has them), `$%{cursorEnv}` and `$%{watcherEnv}`, in a folder of its own. What it prints on stderr goes to the daemon's log
-- It runs only once trusted, while it isn't paused and a hook that's on listens to it
+- It runs only once trusted (trusting a hook that listens to it trusts it too), while it isn't paused and a hook that's on listens to it
 
 ## Hooks
 A program hook's `hook.yaml`:
@@ -70,8 +70,8 @@ Their settings (`hooks.<hook>.<key>`, set in the file as `<key>` or `automator.<
 - **Runs**: one at a time per hook; an LLM hook takes its turn in the run queue, a program hook doesn't. At most `rate` runs start in an hour; past %{loopFactor} times that (its action setting it off again, say) the hook is paused, with a run saying why
 
 ## After writing them
-1. `%{command} watchers add <name> --from <folder>/watcher.yaml`, then `%{command} watchers trust <name>`, and `%{command} auth login <name>` for its secrets
+1. `%{command} watchers add <name> --from <folder>/watcher.yaml`, and `%{command} auth login <name>` for its secrets
 2. `%{command} hooks add <name> --from <file>` (a `.prompt` file, or a `hook.yaml` with its executable beside it): it starts off and untrusted. Only the person adds or trusts a hook or a watcher, never Claude
 3. `%{command} hooks fire <name> --event sample.json --dry-run`: tries it with a sample event, one line as the watcher would print it
-4. `%{command} hooks trust <name> --resume`: the person reviews it, trusts it and turns it on
+4. `%{command} hooks trust <name> --resume`: the person reviews it (its watcher too, while that isn't trusted), trusts both and turns the hook on
 5. `%{command} hooks list`, `%{command} runs <name>`; `%{command} hooks pause <name>`, `%{command} stop <name>`

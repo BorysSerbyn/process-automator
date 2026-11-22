@@ -169,7 +169,7 @@ func TestHookTrustCoversTriggerAndWatcher(t *testing.T) {
 	}
 	rd := a.Assess(x)
 	if rd.Untrusted != "" || len(rd.Problems) != 1 || !strings.Contains(rd.Problems[0].Text, "its watcher cal isn't trusted") ||
-		rd.All()[0].Fix != "procauto watchers trust cal" {
+		!strings.HasPrefix(rd.All()[0].Fix, "procauto hooks trust ") {
 		t.Fatalf("readiness %+v", rd)
 	}
 	if err := a.TrustWatcher(w); err != nil {

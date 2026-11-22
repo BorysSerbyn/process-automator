@@ -203,7 +203,7 @@ func (a *App) listening(h hooks.Hook, failing bool) []Problem {
 	case err != nil:
 		return []Problem{{Text: err.Error()}}
 	case why != "":
-		return []Problem{{Text: "its watcher " + w + " isn't trusted (" + why + ")", Fix: product.Command + " watchers trust " + w}}
+		return []Problem{{Text: "its watcher " + w + " isn't trusted (" + why + ")", Fix: product.Command + " hooks trust " + h.Name + " (it trusts its watcher too)"}}
 	}
 	if on, err := a.WatcherEnabled(found); err == nil && !on {
 		return []Problem{{Text: "its watcher " + w + " is paused, so it hears nothing", Fix: product.Command + " watchers resume " + w}}

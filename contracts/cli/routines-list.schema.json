@@ -81,6 +81,10 @@
       "untrusted": {
         "type": "string"
       },
+      "turnOn": {
+        "type": "boolean",
+        "description": "TurnOn is true while turning it on (`routines trust \u003cname\u003e --yes\n--resume`) has something to do: it isn't trusted, or it's paused with\na schedule. Frontends offer Turn On… while it is."
+      },
       "agentModel": {
         "type": "string",
         "description": "AgentModel and AgentEffort are the model and effort as the configured\nbackend's agent CLI takes them (claude --model/--effort; codex --model and\nmodel_reasoning_effort), worked out by the core so frontends never\ntranslate; empty means the CLI's default."

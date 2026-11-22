@@ -55,6 +55,10 @@ type RoutineInfo struct {
 	// trusted); Untrusted says why not.
 	Trusted   bool   `json:"trusted"`
 	Untrusted string `json:"untrusted,omitempty"`
+	// TurnOn is true while turning it on (`routines trust <name> --yes
+	// --resume`) has something to do: it isn't trusted, or it's paused with
+	// a schedule. Frontends offer Turn On… while it is.
+	TurnOn bool `json:"turnOn,omitempty"`
 	// AgentModel and AgentEffort are the model and effort as the configured
 	// backend's agent CLI takes them (claude --model/--effort; codex --model and
 	// model_reasoning_effort), worked out by the core so frontends never
@@ -204,6 +208,7 @@ func routineInfo(cmd *cobra.Command, a *engine.App, def engine.BackendDef, statu
 			row.Next = &n
 		}
 	}
+	row.TurnOn = !row.Trusted || (!c.Enabled && c.Schedule != "")
 	row.LastRun = status.LastRun(x.Name())
 	// What only one kind has.
 	if r, _, err := engine.AsRoutine(x, ""); err == nil {

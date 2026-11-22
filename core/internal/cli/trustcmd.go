@@ -50,19 +50,35 @@ type TrustOutput struct {
 	// acts on, which trusting it covers too.
 	Hook    bool           `json:"hook,omitempty"`
 	Trigger *trust.Trigger `json:"trigger,omitempty"`
-	// Watcher is the hook's watcher, which needs trusting of its own.
+	// Watcher is the hook's watcher: trusting the hook (--yes) trusts it
+	// too when it isn't trusted, so its review is part of the hook's.
 	Watcher *WatcherTrust `json:"watcher,omitempty"`
 	// Warnings are what to weigh before trusting it: an LLM hook with
 	// write tools acts on outside event data.
 	Warnings []string `json:"warnings,omitempty"`
+	// SignIns are the sign-ins it still needs before it works (`auth login
+	// <name>`): its servers', its own secrets' (a program's, a hook's), and
+	// its watcher's. Trusting doesn't wait for them.
+	SignIns []string `json:"signIns,omitempty"`
 }
 
-// WatcherTrust is whether a hook's watcher is trusted.
+// WatcherTrust is a hook's watcher in the hook's review: whether it's
+// trusted, and what trusting it approves.
 type WatcherTrust struct {
 	Name    string `json:"name"`
 	Trusted bool   `json:"trusted"`
 	// Untrusted says why not (no such watcher, not trusted yet, changed).
 	Untrusted string `json:"untrusted,omitempty"`
+	// Description, Mode and Program are what it is and runs (absent when
+	// there's no such watcher): its executable by checksum, its arguments
+	// and secrets, each stored or not.
+	Description string       `json:"description,omitempty"`
+	Mode        string       `json:"mode,omitempty" jsonschema:"enum=poll,enum=stream"`
+	Program     *ProgramInfo `json:"program,omitempty"`
+	// Changes since it was last trusted (empty for a first trust).
+	Changes []string `json:"changes,omitempty"`
+
+	approval *trust.Approval // what trusting it records; nil without a watcher
 }
 
 func newRoutinesTrustCmd() *cobra.Command {
@@ -117,6 +133,13 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 	}
 	h, isHook := engine.AsHook(x)
 	out := TrustOutput{Routine: name, Kind: x.Kind().Written(), Surface: trust.Surface{}.Normalized(), Changes: []string{}, Hook: isHook, Trigger: approval.Trigger}
+	if isHook {
+		out.Watcher = hookWatcher(a, f, h.On.Watcher)
+	}
+	// A hook's watcher that isn't trusted is trusted with it: one review,
+	// one yes.
+	trustWatcher := out.Watcher != nil && !out.Watcher.Trusted && out.Watcher.approval != nil
+	out.SignIns = signInsNeeded(a, x, out.Watcher)
 	if approval.Surface != nil {
 		out.Surface = approval.Surface.Normalized()
 	}
@@ -132,13 +155,16 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 		turnOn = "turn it on (it runs on " + h.On.String() + ")"
 	}
 	question := "Trust " + name + " to run for real with this"
+	if trustWatcher {
+		question = "Trust " + name + " and its watcher " + out.Watcher.Name + " to run for real with this"
+	}
 	if resuming {
 		question += ", and " + turnOn
 	}
 	switch {
-	case out.Trusted && !check && !resuming:
+	case out.Trusted && !check && !resuming && !trustWatcher:
 		return emit(cmd, out, name+" is already trusted with what it can reach now.")
-	case out.Trusted && !check:
+	case out.Trusted && !check && !trustWatcher:
 		// Nothing to review: only the schedule to turn on.
 		if !wantsJSON(cmd) {
 			fmt.Fprintln(cmd.OutOrStdout(), name+" is already trusted with what it can reach now.")
@@ -163,6 +189,9 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 		}
 		if !wantsJSON(cmd) {
 			describeSurface(cmd, out, toolsErr)
+			if len(out.SignIns) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "It needs signing in before it works: %s.\n", signInCommands(out.SignIns))
+			}
 		}
 		if check {
 			note := "\nNothing trusted (--check only reviews)."
@@ -182,13 +211,26 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 		}
 	}
 	var done []string
+	// What was shown is what's trusted: the hook, and its watcher with it.
+	approve := map[string]trust.Approval{}
 	if !out.Trusted {
-		// What was shown is what's trusted.
-		if err := a.TrustStore().Trust(map[string]trust.Approval{name: approval}, time.Now()); err != nil {
+		approve[name] = approval
+	}
+	if trustWatcher {
+		approve[out.Watcher.Name] = *out.Watcher.approval
+	}
+	if len(approve) > 0 {
+		if err := a.TrustStore().Trust(approve, time.Now()); err != nil {
 			return err
 		}
+	}
+	if !out.Trusted {
 		out.Trusted = true
 		done = append(done, "Trusted "+name)
+	}
+	if trustWatcher {
+		out.Watcher.Trusted, out.Watcher.Untrusted = true, ""
+		done = append(done, "Trusted its watcher "+out.Watcher.Name)
 	}
 	if resuming {
 		st := settings.Store{Path: a.Layout.Config(), Extra: x.Settings()}
@@ -203,7 +245,10 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 		}
 	}
 	if out.Watcher != nil && !out.Watcher.Trusted {
-		done = append(done, "It hears nothing until its watcher is trusted too: "+product.Command+" watchers trust "+out.Watcher.Name)
+		done = append(done, "It hears nothing: its watcher "+out.Watcher.Name+" "+out.Watcher.Untrusted)
+	}
+	if len(out.SignIns) > 0 {
+		done = append(done, "It still needs signing in: "+signInCommands(out.SignIns))
 	}
 	return emit(cmd, out, strings.Join(done, ". ")+".")
 }
@@ -298,15 +343,6 @@ func describeProgram(w io.Writer, out TrustOutput) {
 // can write and acts on outside data. It returns why its tools couldn't be
 // checked (an LLM hook's).
 func hookReview(cmd *cobra.Command, a *engine.App, h hooks.Hook, out *TrustOutput) error {
-	wt := &WatcherTrust{Name: h.On.Watcher}
-	if w, err := a.FindWatcher(h.On.Watcher); err != nil {
-		wt.Untrusted = err.Error()
-	} else if why, err := a.WatcherUntrusted(w); err != nil {
-		wt.Untrusted = err.Error()
-	} else {
-		wt.Trusted, wt.Untrusted = why == "", why
-	}
-	out.Watcher = wt
 	if h.Program != nil {
 		out.Program = programInfo(a, *h.Program)
 	}
@@ -338,6 +374,74 @@ func hookReview(cmd *cobra.Command, a *engine.App, h hooks.Hook, out *TrustOutpu
 	return err
 }
 
+// hookWatcher is a hook's watcher as the hook's review shows it: whether
+// it's trusted, what it runs, what changed, and what trusting it records.
+func hookWatcher(a *engine.App, f *trust.File, name string) *WatcherTrust {
+	wt := &WatcherTrust{Name: name}
+	w, err := a.FindWatcher(name)
+	if err != nil {
+		wt.Untrusted = err.Error()
+		return wt
+	}
+	info := watcherInfo(a, w, []engine.Runnable{})
+	wt.Description, wt.Mode = info.Description, info.Mode
+	wt.Program = &ProgramInfo{Executable: info.Executable, Checksum: info.Checksum, Args: info.Args, Secrets: info.Secrets}
+	ap, err := a.WatcherApproval(w)
+	if err != nil {
+		wt.Untrusted = err.Error()
+		return wt
+	}
+	if rec, ok := f.Routines[name]; ok {
+		wt.Changes = ap.Changes(rec.Approval)
+		wt.Trusted = ap.Equal(rec.Approval)
+		if !wt.Trusted {
+			wt.Untrusted = "changed since it was trusted"
+		}
+	} else {
+		wt.Untrusted = "not trusted yet"
+	}
+	if !wt.Trusted {
+		wt.approval = &ap
+	}
+	return wt
+}
+
+// signInsNeeded are the sign-ins x still needs before it works: its
+// servers', its own secrets' (a program's or a hook's), and its watcher's.
+func signInsNeeded(a *engine.App, x engine.Runnable, w *WatcherTrust) []string {
+	names := []string{x.Name()}
+	if r, _, err := engine.AsRoutine(x, ""); err == nil {
+		names = append(names, r.Servers...)
+	}
+	if h, ok := engine.AsHook(x); ok && h.Prompt != nil {
+		names = append(names, h.Prompt.Servers...)
+	}
+	if w != nil && w.Program != nil {
+		names = append(names, w.Name)
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, n := range names {
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		if s, ok := a.FindSignIn(n); ok && a.Missing(s) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// signInCommands are the commands that sign in to names.
+func signInCommands(names []string) string {
+	var cmds []string
+	for _, n := range names {
+		cmds = append(cmds, "`"+product.Command+" auth login "+n+"`")
+	}
+	return strings.Join(cmds, ", ")
+}
+
 // describeHook prints what a hook acts on, and what to weigh, before its
 // action.
 func describeHook(w io.Writer, out TrustOutput) {
@@ -349,12 +453,29 @@ func describeHook(w io.Writer, out TrustOutput) {
 	}
 	fmt.Fprintln(w, ".")
 	if wt := out.Watcher; wt != nil {
-		if wt.Trusted {
+		switch {
+		case wt.Trusted:
 			fmt.Fprintf(w, "Its watcher %s is trusted.\n", wt.Name)
-		} else {
-			fmt.Fprintf(w, "Its watcher %s isn't trusted (%s): `%s watchers trust %s` too.\n", wt.Name, wt.Untrusted, product.Command, wt.Name)
+		case wt.approval == nil:
+			fmt.Fprintf(w, "Its watcher %s can't be trusted: %s.\n", wt.Name, wt.Untrusted)
+		default:
+			fmt.Fprintf(w, "Its watcher %s isn't trusted (%s); trusting the hook trusts it too. It runs:\n", wt.Name, wt.Untrusted)
+			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+			fmt.Fprintf(tw, "  executable\t%s\n", wt.Program.Executable)
+			fmt.Fprintf(tw, "  sha-256\t%s\n", wt.Program.Checksum)
+			if len(wt.Program.Args) > 0 {
+				fmt.Fprintf(tw, "  arguments\t%s\n", strings.Join(wt.Program.Args, " "))
+			}
+			for _, s := range wt.Program.Secrets {
+				fmt.Fprintf(tw, "  secret\t%s (as $%s)\n", s.Name, s.Env)
+			}
+			_ = tw.Flush()
+			if len(wt.Changes) > 0 {
+				fmt.Fprintf(w, "Since you last trusted it, it %s.\n", strings.Join(wt.Changes, "; "))
+			}
 		}
 	}
+
 	for _, warn := range out.Warnings {
 		fmt.Fprintf(w, "Warning: %s.\n", warn)
 	}

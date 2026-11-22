@@ -213,7 +213,7 @@ func TestGuideHooksCoversTheCode(t *testing.T) {
 	out := guideOut(t, "hooks")
 	want := []string{"$" + watchers.CursorEnv, "$" + watchers.NameEnv, "$" + programs.TriggerEnv, "$" + programs.ForEnv,
 		"$" + programs.ResultEnv, engine.UntrustedOpen, engine.UntrustedClose, "<" + engine.EventBlockTag + ">",
-		"watchers add <name> --from", "watchers trust <name>", "hooks add <name> --from", "hooks fire <name> --event",
+		"watchers add <name> --from", "hooks add <name> --from", "hooks fire <name> --event",
 		"--dry-run", "hooks trust <name> --resume", "hooks pause <name>", "stop <name>", "auth login <name>",
 		"{{event}}", "{{events}}", "automator.batch", "on stdin", `{"cursor": "..."}`}
 	for _, f := range hooks.Fields {
