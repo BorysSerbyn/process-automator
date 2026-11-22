@@ -67,6 +67,8 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## UI
 Managing the app is possible entirely from macOS's menu bar app (automator-ui), without a terminal. The CLI does all of it too; the UI is another way in, not a replacement.
 - **Menu** (the menu bar app's and the Linux tray's): the version; the status in words (each reason the dot is red, opening the run it's about); Finish Setup… while setup has steps left; **Routines ›** (all routines, then each with its status); updates; Settings; Quit
+- **Quit** stops the app: the menu bar app or tray, and the scheduler (no routine runs on its schedule until I open the app again); both start again at the next login. When the scheduler can't be stopped, it says why and quits anyway
+- **Opening the app** starts the scheduler if it isn't running, so opening it after a Quit brings everything back; opening it while it runs opens the Setup window while setup has steps left, else the Settings window
 - **Routines window**: every routine with its health, schedule in words, last run and status
 - **A routine's window**:
   - status: last run (when, outcome, reason), next run, why it can't be scheduled
@@ -84,5 +86,5 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 ## CLI
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each
 - **Settings**: one generic `settings list/get/set/reset` surface reads and writes any setting, app-wide or per routine; values are checked before they're saved and apply without a restart
-- **Paths**: `paths` shows where the app keeps its config, routines, run status, history, notifications and templates
+- **Paths**: `paths` shows where the app keeps its config, routines, run status, history, notifications, templates and the frontends' log
 - **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own (`guide plugins`), with examples that work, as text or `--json`; `routines create`, `routines update` and `plugins add` point to it

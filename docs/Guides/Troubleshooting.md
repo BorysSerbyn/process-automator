@@ -18,7 +18,7 @@ The menu lists each reason; click one to open the run it's about.
 
 | Reason | What to do |
 |---|---|
-| Not responding | The scheduler isn't running. It starts at login: log out and in, or run the installer again, which restarts it. `procauto login-items status` shows whether it starts at login; `procauto daemon` in a terminal shows why it stops |
+| Not responding | The scheduler isn't running (after **Quit**, until you open the app or log in again). Open the app, or run `procauto login-items start`. `procauto login-items status` shows whether it starts at login; if it keeps stopping, `procauto daemon` in a terminal shows why |
 | The scheduler can't work | The detail says why (on hover, or in `doctor`) |
 | Setup isn't finished | Open **Finish Setup…**, or run `procauto setup` ([[Guides/Getting started#Set it up\|Set it up]]) |
 | *routine* can't be scheduled | Usually not trusted (after a change to what it can reach), a missing folder, a server that isn't added, or a required parameter without a value. The detail says which; `routines trust <name>` for trust |
@@ -39,12 +39,12 @@ A routine stays red until its next run goes well (or you pause it).
 |---|---|
 | Scheduler (macOS) | `~/Library/Logs/process-automator/scheduler.log` |
 | Scheduler (Linux) | `journalctl --user -u procauto-scheduler` |
-| Tray (Linux) | the desktop session's log (`journalctl --user -b`) when the session started it; none when the installer did |
+| Tray and its windows (Linux) | `frontend.log` in the data folder (started again past 1 MB; the one before is `frontend.log.old`): why a window opened in a terminal, why the scheduler didn't start |
 | Runs started in the background (`start`, **Run Now** in the menu bar app) | `start.log` in the data folder |
 | Updates started from the menu | `update.log` in the data folder |
 | Changes made by Claude through the MCP server | `mcp-changes.jsonl` in the data folder |
 
-`procauto paths` shows the data folder.
+`procauto paths` shows the data folder (and `frontend log`).
 
 ## Common problems
 - **A server's tool is missing from `routines check`**: the server doesn't offer it, often for lack of a scope or permission on your account. Check the server's scopes, sign in again, and look at `procauto mcp tools <server>`

@@ -14,6 +14,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Technical/Distribution|Technical:
 - **Updates keep everything**: my routines, settings, sign-ins and whether the app starts at login
 - **Uninstalling keeps my data**: config, routines, history, logs and secrets stay unless I ask for them to go too
 - **Starts at login**: install sets the scheduler, and the menu bar app on macOS or the tray in Linux desktop sessions, to start at login and starts them now (the tray only in a desktop session: a headless machine runs without it)
+- **Found where apps are**: on macOS the app is in `~/Applications`; on Linux install adds it to the desktop's app menu, and uninstall removes it
 - **Seamless dev updates**: reinstalling a local build is one quick command; no re-granting permissions, no re-entering secrets, no logging out; running apps restart on the new build
 - **Homebrew**: a private tap, for invited people (a cask on macOS, a formula on Linux)
 

@@ -1,6 +1,8 @@
 Back to [[Home]]. See also [[Guides/Routines|Routines]], [[Guides/Settings|Settings]], [[Guides/Troubleshooting|Troubleshooting]].
 
-The menu bar app (automator-ui, macOS) starts at login. On Linux the tray takes its place: see [[#The Linux tray|The Linux tray]]. It's an hourglass in the menu bar with a status dot; everything it does is also a `procauto` command. If you quit it, open **Process Automator** from `~/Applications` to bring it back.
+The menu bar app (automator-ui, macOS) starts at login. On Linux the tray takes its place: see [[#The Linux tray|The Linux tray]]. It's an hourglass in the menu bar with a status dot; everything it does is also a `procauto` command.
+
+**Quit** stops the app: the menu bar app and the scheduler, so no routine runs until you open it again. Both start again at your next login, as before. **Opening the app** (**Process Automator** in `~/Applications`, Spotlight or Launchpad) starts the scheduler if it isn't running; opening it while it runs opens **Setup** while setup has steps left, else **Settings**. In a terminal, `procauto login-items stop` and `procauto login-items start` do the same.
 
 ## The dot
 | Dot | Means |
@@ -15,7 +17,7 @@ The menu bar app (automator-ui, macOS) starts at login. On Linux the tray takes 
 - **Finish Setup…** while setup has steps left: opens the Setup window
 - **Routines ›**: **All Routines…**, then each routine with its status ("Next: tomorrow 09:20", "Paused", "Running since 09:20", "digest failed"). Click one to open its window
 - **Update to X…** when a newer release exists (or **Check for Updates**); **Updating to X…** while one installs, which opens the Updating window: what it's doing (downloading, checking it's genuine, installing, or building from the checkout, which takes a few minutes) and the latest line of its output. Close it any time: the update carries on and the app restarts when it's done. If it fails, the window says why
-- **Settings**, **Quit**
+- **Settings**, **Quit** (the scheduler stops too)
 
 ## Routines window
 Every routine with its health, schedule in words, last run and status. Its toolbar opens **Setup** and **Settings**. Click a routine to open its window.
@@ -44,7 +46,7 @@ What routines tell you with `notify_me` isn't the menu bar app's: the `notify` p
 macOS asks once whether the app may show notifications (for both); until you allow it, the app's own wait.
 
 ## The Linux tray
-In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the routines list. It starts at login; **Quit** stops it until the next login (or run `~/.local/lib/process-automator/bin/automator-tray &` to bring it back).
+In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the routines list. It starts at login. **Quit** stops it and the scheduler, as on macOS, until you open the app again or log in again. The app is in your desktop's app menu (search for **Process Automator**): opening it starts the scheduler and brings the tray back, or, while the tray runs, opens Setup or Settings as on macOS. The tray's log is `frontend.log` in the data folder (see [[Guides/Troubleshooting#Logs|Logs]]).
 
 **Finish Setup…** and **Settings** open the same Setup and Settings windows as on macOS ([[#Setup window]], [[#Settings window]]); opening one again brings it to the front. The other windows aren't on Linux yet: those menu items run their `procauto` command in your terminal (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`), which stays open until you press Enter:
 
