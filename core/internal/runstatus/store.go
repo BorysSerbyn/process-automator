@@ -33,38 +33,63 @@ func Load(path string) (*Status, error) {
 // Record stores a routine's latest run. A routine Sync hasn't listed yet is
 // added as enabled; the next Sync corrects that.
 func Record(path, routine string, run Run, now time.Time) error {
+	return record(path, routine, false, run, now)
+}
+
+// RecordHook stores a hook's latest run, as Record does a routine's.
+func RecordHook(path, hook string, run Run, now time.Time) error {
+	return record(path, hook, true, run, now)
+}
+
+func record(path, name string, hook bool, run Run, now time.Time) error {
 	return update(path, now, func(s *Status) {
-		for i := range s.Routines {
-			if s.Routines[i].Name == routine {
-				s.Routines[i].LastRun = &run
-				return
+		for _, list := range [][]Routine{s.Routines, s.Hooks} {
+			for i := range list {
+				if list[i].Name == name {
+					list[i].LastRun = &run
+					return
+				}
 			}
 		}
-		s.Routines = append(s.Routines, Routine{Name: routine, Enabled: true, LastRun: &run})
+		entry := Routine{Name: name, Enabled: true, LastRun: &run}
+		if hook {
+			s.Hooks = append(s.Hooks, entry)
+		} else {
+			s.Routines = append(s.Routines, entry)
+		}
 	})
 }
 
-// Setup is how a routine is set up on the device, as Sync records it.
+// Setup is how a routine (or a hook) is set up on the device, as Sync
+// records it.
 type Setup struct {
 	Enabled   bool
 	NextRunAt *time.Time
 	Problem   string
+	// Hook lists it among the hooks.
+	Hook bool
 }
 
-// Sync makes the file list exactly the routines set up on the device, keeping
-// their last runs. Removed routines (and their old failures) drop out.
-func Sync(path string, routines map[string]Setup, now time.Time) error {
+// Sync makes the file list exactly the routines and hooks set up on the
+// device, keeping their last runs. Removed ones (and their old failures)
+// drop out.
+func Sync(path string, setups map[string]Setup, now time.Time) error {
 	return update(path, now, func(s *Status) {
 		last := map[string]*Run{}
-		for _, r := range s.Routines {
+		for _, r := range append(slices.Clone(s.Routines), s.Hooks...) {
 			last[r.Name] = r.LastRun
 		}
-		s.Routines = s.Routines[:0]
-		for name, setup := range routines {
-			s.Routines = append(s.Routines, Routine{
+		s.Routines, s.Hooks = s.Routines[:0], nil
+		for name, setup := range setups {
+			entry := Routine{
 				Name: name, Enabled: setup.Enabled, Problem: setup.Problem,
 				NextRunAt: setup.NextRunAt, LastRun: last[name],
-			})
+			}
+			if setup.Hook {
+				s.Hooks = append(s.Hooks, entry)
+			} else {
+				s.Routines = append(s.Routines, entry)
+			}
 		}
 	})
 }
@@ -103,6 +128,19 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 			continue
 		}
 		if why := whyUnhealthy(r, now); why.Text != "" {
+			reasons = append(reasons, why)
+		}
+		verdict = HealthOK
+	}
+	for _, h := range s.Hooks {
+		if !h.Enabled {
+			continue
+		}
+		if why := whyUnhealthy(h, now); why.Text != "" {
+			why.Hook = true
+			if strings.HasSuffix(why.Text, " can't be scheduled") {
+				why.Text = h.Name + " can't run"
+			}
 			reasons = append(reasons, why)
 		}
 		verdict = HealthOK
@@ -147,6 +185,19 @@ func routineState(r Routine, now time.Time) (Health, string) {
 	return HealthOK, "Runs by hand"
 }
 
+// hookState is a hook's own health and summary: as a routine's, but it
+// runs when its events come.
+func hookState(h Routine, now time.Time) (Health, string) {
+	health, summary := routineState(h, now)
+	if summary == "Runs by hand" {
+		return health, "Waiting for events"
+	}
+	if health == HealthError && h.Problem != "" {
+		return health, h.Name + " can't run"
+	}
+	return health, summary
+}
+
 // when is a time soon, as people say it: "today 09:20", "tomorrow 09:20",
 // "Mon 09:20", or "Nov 30 09:20" further off.
 func when(t, now time.Time) string {
@@ -165,9 +216,9 @@ func when(t, now time.Time) string {
 	}
 }
 
-// busy reports whether a routine is running right now.
+// busy reports whether a routine (or a hook) is running right now.
 func busy(s *Status, now time.Time) bool {
-	for _, r := range s.Routines {
+	for _, r := range append(slices.Clone(s.Routines), s.Hooks...) {
 		if run := r.LastRun; run != nil && run.Outcome == OutcomeRunning && !stuck(*run, now) {
 			return true
 		}
@@ -242,15 +293,17 @@ func SetProblem(path, problem string, now time.Time) error {
 func MarkInterrupted(path string, now time.Time) (map[string]Run, error) {
 	marked := map[string]Run{}
 	err := update(path, now, func(s *Status) {
-		for i := range s.Routines {
-			if run := s.Routines[i].LastRun; run != nil && (run.Outcome == OutcomeRunning || run.Outcome == OutcomeQueued) {
-				fin := now
-				run.Reason = "interrupted: the scheduler stopped during the run"
-				if run.Outcome == OutcomeQueued {
-					run.Reason = "interrupted: the scheduler stopped while the run waited for its turn"
+		for _, list := range [][]Routine{s.Routines, s.Hooks} {
+			for i := range list {
+				if run := list[i].LastRun; run != nil && (run.Outcome == OutcomeRunning || run.Outcome == OutcomeQueued) {
+					fin := now
+					run.Reason = "interrupted: the scheduler stopped during the run"
+					if run.Outcome == OutcomeQueued {
+						run.Reason = "interrupted: the scheduler stopped while the run waited for its turn"
+					}
+					run.FinishedAt, run.Outcome = &fin, OutcomeFailed
+					marked[list[i].Name] = *run
 				}
-				run.FinishedAt, run.Outcome = &fin, OutcomeFailed
-				marked[s.Routines[i].Name] = *run
 			}
 		}
 	})
@@ -270,6 +323,10 @@ func update(path string, now time.Time, fn func(*Status)) error {
 		s.SchemaVersion, s.UpdatedAt = SchemaVersion, now
 		for i := range s.Routines {
 			s.Routines[i].Health, s.Routines[i].Summary = routineState(s.Routines[i], now)
+		}
+		sort.Slice(s.Hooks, func(i, j int) bool { return s.Hooks[i].Name < s.Hooks[j].Name })
+		for i := range s.Hooks {
+			s.Hooks[i].Health, s.Hooks[i].Summary = hookState(s.Hooks[i], now)
 		}
 		s.Health, s.Reasons = assess(s, now)
 		s.Summary = summary(s.Health)

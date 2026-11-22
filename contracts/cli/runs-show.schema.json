@@ -19,7 +19,7 @@
     },
     "trigger": {
       "type": "string",
-      "description": "Trigger is what started the run: \"schedule\", \"manual\" or \"backfill\"."
+      "description": "Trigger is what started the run: \"schedule\", \"manual\", \"backfill\" or\n(a hook's) \"event\"."
     },
     "triggerId": {
       "type": "string",
@@ -206,6 +206,47 @@
         "dryRun"
       ],
       "description": "Program is how a program's run went, for runs that got as far as\nstarting it."
+    },
+    "hook": {
+      "type": "boolean",
+      "description": "Hook is true for a hook's run."
+    },
+    "events": {
+      "items": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID identifies it among its watcher's events: one seen before is\ndropped (a watcher may print an event again; it acts once)."
+          },
+          "type": {
+            "type": "string",
+            "description": "Type is what happened (meeting.started, email.received): hooks listen\nfor a type."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "At is when it happened (RFC 3339); when the watcher gives none, when it\nwas printed. A hook drops an event older than its staleness."
+          },
+          "watcher": {
+            "type": "string",
+            "description": "Watcher is the watcher it came from (set by the app)."
+          },
+          "data": {
+            "type": "object",
+            "description": "Data is what the watcher says about it: outside data, never\ninstructions."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "at"
+        ],
+        "description": "Event is one thing that happened, as a watcher prints it on a line of its own, and as a hook's action gets it."
+      },
+      "type": "array",
+      "description": "Events are what a hook's run was for: the event (a batch: the events)\nits watcher printed, or the sample it was fired with."
     },
     "error": {
       "type": "string",

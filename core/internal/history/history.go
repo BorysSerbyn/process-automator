@@ -19,6 +19,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
+	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 )
 
 // stamp names a record after its start time (seconds; unique per routine).
@@ -38,7 +39,8 @@ type Entry struct {
 	// Kind is the routine's kind: program for a program; absent for an LLM
 	// routine (llm).
 	Kind string `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
-	// Trigger is what started the run: "schedule", "manual" or "backfill".
+	// Trigger is what started the run: "schedule", "manual", "backfill" or
+	// (a hook's) "event".
 	Trigger string `json:"trigger"`
 	// TriggerID identifies the occurrence, e.g. "schedule:2026-11-19T09:20:00".
 	TriggerID string `json:"triggerId,omitempty"`
@@ -65,6 +67,11 @@ type Entry struct {
 	// Program is how a program's run went, for runs that got as far as
 	// starting it.
 	Program *programs.Execution `json:"program,omitempty"`
+	// Hook is true for a hook's run.
+	Hook bool `json:"hook,omitempty"`
+	// Events are what a hook's run was for: the event (a batch: the events)
+	// its watcher printed, or the sample it was fired with.
+	Events []watchers.Event `json:"events,omitempty"`
 	// Error is how records written before outcomes were recorded said a run failed.
 	Error string `json:"error,omitempty"`
 }
@@ -75,7 +82,9 @@ type Summary struct {
 	Routine string `json:"routine"`
 	// Kind is the routine's kind: program for a program; absent for an LLM
 	// routine (llm).
-	Kind       string            `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
+	Kind string `json:"kind,omitempty" jsonschema:"enum=llm,enum=program"`
+	// Hook is true for a hook's run.
+	Hook       bool              `json:"hook,omitempty"`
 	Trigger    string            `json:"trigger"`
 	For        *time.Time        `json:"for,omitempty"`
 	SessionID  string            `json:"sessionId,omitempty"`
@@ -126,7 +135,7 @@ func List(dir string, f Filter) ([]Summary, error) {
 			continue
 		}
 		s := Summary{
-			ID: e.ID, Routine: e.Routine, Kind: e.Kind, Trigger: e.Trigger, For: e.For, SessionID: e.SessionID, Folder: e.Folder, StartedAt: e.StartedAt,
+			ID: e.ID, Routine: e.Routine, Kind: e.Kind, Hook: e.Hook, Trigger: e.Trigger, For: e.For, SessionID: e.SessionID, Folder: e.Folder, StartedAt: e.StartedAt,
 			FinishedAt: e.FinishedAt, Outcome: e.Outcome, Reason: e.Reason,
 		}
 		if e.Result != nil {

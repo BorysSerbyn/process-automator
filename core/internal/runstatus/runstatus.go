@@ -71,6 +71,9 @@ type Status struct {
 	// file doesn't load); set and cleared by the scheduler on every check.
 	Problem  string    `json:"problem,omitempty"`
 	Routines []Routine `json:"routines"`
+	// Hooks are the hooks, as routines are: each with its last run, its
+	// health and summary. A hook is never among Routines.
+	Hooks []Routine `json:"hooks,omitempty"`
 	// Reasons say why health is error, in words, for frontends to show as
 	// they are; empty when it isn't. They come from the same rules as health.
 	Reasons []Reason `json:"reasons,omitempty"`
@@ -80,6 +83,8 @@ type Status struct {
 type Reason struct {
 	// Routine it's about; empty for the scheduler itself.
 	Routine string `json:"routine,omitempty"`
+	// Hook is true when Routine names a hook, not a routine.
+	Hook bool `json:"hook,omitempty"`
 	// Text is a short headline ("standup failed"); Detail the full story (the
 	// run's reason), for frontends to show on demand.
 	Text   string `json:"text"`
@@ -111,8 +116,9 @@ type Routine struct {
 
 // Run is the most recent run of a routine.
 type Run struct {
-	// Trigger is what started the run: "schedule", "manual" or "backfill"
-	// (empty in records from before triggers were recorded).
+	// Trigger is what started the run: "schedule", "manual", "backfill" or
+	// (a hook's) "event" (empty in records from before triggers were
+	// recorded).
 	Trigger string `json:"trigger,omitempty"`
 	// For is the time the run is for (the schedule slot, the backfilled day).
 	For *time.Time `json:"for,omitempty"`
@@ -138,15 +144,17 @@ type Run struct {
 	Reason   string     `json:"reason,omitempty"`
 }
 
-// LastRun is a routine's last run; nil when it has none, or there's no
-// status.
+// LastRun is a routine's (or a hook's) last run; nil when it has none, or
+// there's no status.
 func (s *Status) LastRun(routine string) *Run {
 	if s == nil {
 		return nil
 	}
-	for _, r := range s.Routines {
-		if r.Name == routine {
-			return r.LastRun
+	for _, list := range [][]Routine{s.Routines, s.Hooks} {
+		for _, r := range list {
+			if r.Name == routine {
+				return r.LastRun
+			}
 		}
 	}
 	return nil

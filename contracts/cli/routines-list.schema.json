@@ -97,7 +97,7 @@
         "properties": {
           "trigger": {
             "type": "string",
-            "description": "Trigger is what started the run: \"schedule\", \"manual\" or \"backfill\"\n(empty in records from before triggers were recorded)."
+            "description": "Trigger is what started the run: \"schedule\", \"manual\", \"backfill\" or\n(a hook's) \"event\" (empty in records from before triggers were\nrecorded)."
           },
           "for": {
             "type": "string",

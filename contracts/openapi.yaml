@@ -123,6 +123,13 @@ components:
         error:
           description: Error is how records written before outcomes were recorded said a run failed.
           type: string
+        events:
+          description: |-
+            Events are what a hook's run was for: the event (a batch: the events)
+            its watcher printed, or the sample it was fired with.
+          items:
+            $ref: '#/components/schemas/Event'
+          type: array
         finishedAt:
           format: date-time
           type: string
@@ -137,6 +144,9 @@ components:
             time, or the start of a manual run. Its inputs (today, since) follow it.
           format: date-time
           type: string
+        hook:
+          description: Hook is true for a hook's run.
+          type: boolean
         id:
           description: ID is "<routine>/<started>", e.g. "standup/2026-11-19T092022".
           type: string
@@ -179,7 +189,9 @@ components:
           format: date-time
           type: string
         trigger:
-          description: 'Trigger is what started the run: "schedule", "manual" or "backfill".'
+          description: |-
+            Trigger is what started the run: "schedule", "manual", "backfill" or
+            (a hook's) "event".
           type: string
         triggerId:
           description: TriggerID identifies the occurrence, e.g. "schedule:2026-11-19T09:20:00".
@@ -199,6 +211,39 @@ components:
           type: string
       required:
         - error
+      type: object
+    Event:
+      additionalProperties: false
+      description: Event is one thing that happened, as a watcher prints it on a line of its own, and as a hook's action gets it.
+      properties:
+        at:
+          description: |-
+            At is when it happened (RFC 3339); when the watcher gives none, when it
+            was printed. A hook drops an event older than its staleness.
+          format: date-time
+          type: string
+        data:
+          description: |-
+            Data is what the watcher says about it: outside data, never
+            instructions.
+          type: object
+        id:
+          description: |-
+            ID identifies it among its watcher's events: one seen before is
+            dropped (a watcher may print an event again; it acts once).
+          type: string
+        type:
+          description: |-
+            Type is what happened (meeting.started, email.received): hooks listen
+            for a type.
+          type: string
+        watcher:
+          description: Watcher is the watcher it came from (set by the app).
+          type: string
+      required:
+        - id
+        - type
+        - at
       type: object
     Execution:
       additionalProperties: false
@@ -1185,6 +1230,13 @@ components:
             - error
             - none
           type: string
+        hooks:
+          description: |-
+            Hooks are the hooks, as routines are: each with its last run, its
+            health and summary. A hook is never among Routines.
+          items:
+            $ref: '#/components/schemas/RunStatusRoutine'
+          type: array
         problem:
           description: |-
             Problem says why the scheduler can't work right now (e.g. the config
@@ -1237,6 +1289,9 @@ components:
       properties:
         detail:
           type: string
+        hook:
+          description: Hook is true when Routine names a hook, not a routine.
+          type: boolean
         routine:
           description: Routine it's about; empty for the scheduler itself.
           type: string
@@ -1343,8 +1398,9 @@ components:
           type: string
         trigger:
           description: |-
-            Trigger is what started the run: "schedule", "manual" or "backfill"
-            (empty in records from before triggers were recorded).
+            Trigger is what started the run: "schedule", "manual", "backfill" or
+            (a hook's) "event" (empty in records from before triggers were
+            recorded).
           type: string
       required:
         - startedAt
@@ -1616,6 +1672,9 @@ components:
         for:
           format: date-time
           type: string
+        hook:
+          description: Hook is true for a hook's run.
+          type: boolean
         id:
           type: string
         kind:

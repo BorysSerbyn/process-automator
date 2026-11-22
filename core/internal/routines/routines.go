@@ -73,6 +73,24 @@ type Routine struct {
 	// (automator.plugins.<name>), as written; the plugin decodes its own.
 	Plugins map[string]any
 	Source  string
+	// Hook is set for a hook's prompt (ParseHook): its settings are
+	// hooks.<name>.<field>, it has no schedule, and HookKeys holds the keys
+	// only a hook's file has (on, batch), as written.
+	Hook     bool
+	HookKeys map[string]any
+}
+
+// HookOnlyKeys are the automator.* keys only a hook's prompt has: what it
+// listens for, and whether it takes events in batches.
+var HookOnlyKeys = []string{"on", "batch"}
+
+// Key is the setting key of one of its fields: routines.<name>.<field>, or
+// a hook's hooks.<name>.<field>.
+func (r Routine) Key(field string) string {
+	if r.Hook {
+		return "hooks." + r.Name + "." + field
+	}
+	return "routines." + r.Name + "." + field
 }
 
 // Field is one of the app's frontmatter keys (automator.<Name>) that isn't a
@@ -158,6 +176,9 @@ func (r Routine) Supports(backend string) bool {
 // Settings are the routine's per-routine settings, with defaults from its
 // file: the declared fields, then one per parameter.
 func (r Routine) Settings() []settings.Setting {
+	if r.Hook {
+		return settings.HookSettings(r.Name, r.File, true)
+	}
 	out := settings.RoutineSettings(r.Name, r.File)
 	for _, p := range r.Params {
 		out = append(out, p.Setting(r.Name))
@@ -274,10 +295,10 @@ func parse(path, name string) (Routine, error) {
 	if err != nil {
 		return Routine{}, err
 	}
-	return parseSource(path, name, raw)
+	return parseSource(path, name, raw, false)
 }
 
-func parseSource(path, name string, raw []byte) (Routine, error) {
+func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 	if err := checkFrontmatter(raw); err != nil {
 		return Routine{}, err
 	}
@@ -300,6 +321,19 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 			for name, section := range entries {
 				plugins[name] = section
 			}
+		case hook && ns == Namespace+".on":
+			// automator.on.watcher: ..., written dotted.
+			on := map[string]any{}
+			for field, v := range entries {
+				on[field] = v
+			}
+			if _, dup := ext["on"]; dup {
+				return Routine{}, fmt.Errorf("%s.on is written twice", Namespace)
+			}
+			if ext == nil {
+				ext = map[string]any{}
+			}
+			ext["on"] = on
 		case strings.HasPrefix(ns, Namespace+"."):
 			for field := range entries {
 				return Routine{}, fmt.Errorf("%s.* fields: unknown field %q", Namespace, strings.TrimPrefix(ns, Namespace+".")+"."+field)
@@ -310,9 +344,14 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 	for _, f := range Fields {
 		fields[f.Name] = true
 	}
-	for _, n := range settings.RoutineFieldNames() {
+	settingNames := settings.RoutineFieldNames()
+	if hook {
+		settingNames = settings.HookFieldNames(true)
+	}
+	for _, n := range settingNames {
 		fields[n] = true
 	}
+	hookKeys := map[string]any{}
 	file := map[string]any{}
 	var servers, platforms, backends []string
 	var params []Param
@@ -324,6 +363,8 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 			}{&servers}); err != nil {
 				return Routine{}, fmt.Errorf("%s.servers: %w", Namespace, err)
 			}
+		case hook && k == "parameters":
+			return Routine{}, fmt.Errorf("%s.* fields: unknown field %q (a hook has no parameters)", Namespace, k)
 		case k == "parameters":
 			var written []paramInput
 			if err := decodeStrict(map[string]any{"p": v}, &struct {
@@ -357,6 +398,10 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 			}{&backends}); err != nil {
 				return Routine{}, fmt.Errorf("%s.backends: %w", Namespace, err)
 			}
+		case hook && slices.Contains(HookOnlyKeys, k):
+			hookKeys[k] = v
+		case hook && k == "schedule":
+			return Routine{}, fmt.Errorf("a hook has no %s.schedule: it runs when its events come (%s.on)", Namespace, Namespace)
 		case fields[k]:
 			file[k] = v
 		default:
@@ -369,6 +414,9 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 	r := Routine{
 		Name: name, Path: path, Servers: servers, Tools: doc.Tools, Model: doc.Model, Description: doc.Description,
 		File: file, Params: params, Platforms: platforms, Backends: backends, Source: string(raw),
+	}
+	if hook {
+		r.Hook, r.HookKeys = true, hookKeys
 	}
 	if len(plugins) > 0 {
 		r.Plugins = plugins
@@ -401,7 +449,7 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 			}
 		}
 	}
-	if _, ok := file["staleness"]; ok && !r.Scheduled() {
+	if _, ok := file["staleness"]; ok && !r.Scheduled() && !hook {
 		return Routine{}, fmt.Errorf("%s.staleness needs %s.schedule", Namespace, Namespace)
 	}
 	// Validate every field with the same rules `settings set` uses.
@@ -508,7 +556,20 @@ func Parse(name, source string) (Routine, error) {
 	if strings.TrimSpace(source) == "" {
 		return Routine{}, errors.New("the routine file is empty")
 	}
-	return parseSource(name+Ext, name, []byte(source))
+	return parseSource(name+Ext, name, []byte(source), false)
+}
+
+// ParseHook validates source as the prompt of the hook name: a routine's
+// file without a schedule, whose automator.on says what it listens for (see
+// HookOnlyKeys) and whose settings are a hook's. path is where it's kept.
+func ParseHook(path, name, source string) (Routine, error) {
+	if !nameRE.MatchString(name) {
+		return Routine{}, fmt.Errorf("%q can't name a hook: lowercase letters, digits and dashes", name)
+	}
+	if strings.TrimSpace(source) == "" {
+		return Routine{}, errors.New("the hook's prompt is empty")
+	}
+	return parseSource(path, name, []byte(source), true)
 }
 
 // Create validates source and writes it as a new routine in dir; it never

@@ -112,11 +112,51 @@ type Program struct {
 	Secrets []string `json:"secrets,omitempty"`
 }
 
-// Approval is what a routine is trusted with: an LLM routine's surface, or a
-// program's section.
+// Trigger is what a hook was trusted to act on: a watcher's events, of one
+// type (empty: every type), one at a time or in batches.
+type Trigger struct {
+	Watcher string `json:"watcher"`
+	Type    string `json:"type,omitempty"`
+	Batch   bool   `json:"batch,omitempty"`
+}
+
+func (t Trigger) changes(old Trigger) []string {
+	var out []string
+	if t.Watcher != old.Watcher {
+		out = append(out, fmt.Sprintf("listens to the watcher %s, not %s", t.Watcher, old.Watcher))
+	}
+	if t.Type != old.Type {
+		if t.Type == "" {
+			out = append(out, "acts on every type of event, not only "+old.Type)
+		} else {
+			out = append(out, "acts on "+t.Type+" events, not "+orEvery(old.Type))
+		}
+	}
+	if t.Batch != old.Batch {
+		if t.Batch {
+			out = append(out, "takes events in batches")
+		} else {
+			out = append(out, "no longer takes events in batches")
+		}
+	}
+	return out
+}
+
+func orEvery(t string) string {
+	if t == "" {
+		return "every type"
+	}
+	return t + " ones"
+}
+
+// Approval is what a routine, a hook or a watcher is trusted with: an LLM
+// routine's surface or a program's section (a hook's action is one or the
+// other) and a hook's trigger; or a watcher's executable.
 type Approval struct {
 	Surface *Surface `json:"surface,omitempty"`
 	Program *Program `json:"program,omitempty"`
+	Trigger *Trigger `json:"trigger,omitempty"`
+	Watcher *Program `json:"watcher,omitempty"`
 }
 
 // Normalized sorts what's listed, so equal approvals compare equal.
@@ -134,6 +174,15 @@ func (a Approval) Normalized() Approval {
 		}
 		a.Program = &p
 	}
+	if a.Watcher != nil {
+		w := *a.Watcher
+		w.Secrets = slices.Clone(w.Secrets)
+		sort.Strings(w.Secrets)
+		if len(w.Secrets) == 0 {
+			w.Secrets = nil
+		}
+		a.Watcher = &w
+	}
 	return a
 }
 
@@ -147,7 +196,26 @@ func (a Approval) Equal(o Approval) bool {
 // Changes describes how a differs from the trusted approval old.
 func (a Approval) Changes(old Approval) []string {
 	a, old = a.Normalized(), old.Normalized()
+	var trig []string
 	switch {
+	case a.Trigger != nil && old.Trigger != nil:
+		trig = a.Trigger.changes(*old.Trigger)
+	case a.Trigger != nil:
+		trig = []string{"is a hook now, acting on events"}
+	case old.Trigger != nil:
+		trig = []string{"is no longer a hook"}
+	}
+	a.Trigger, old.Trigger = nil, nil
+	return append(a.actionChanges(old), trig...)
+}
+
+// actionChanges describes how what it runs differs.
+func (a Approval) actionChanges(old Approval) []string {
+	switch {
+	case a.Watcher != nil && old.Watcher != nil:
+		return a.Watcher.changes(*old.Watcher)
+	case a.Watcher != nil || old.Watcher != nil:
+		return []string{"is something else now"}
 	case a.Program != nil && old.Program == nil:
 		return []string{"is a program now, not an LLM routine"}
 	case a.Program == nil && old.Program != nil:

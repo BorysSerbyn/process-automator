@@ -63,7 +63,7 @@
             "properties": {
               "trigger": {
                 "type": "string",
-                "description": "Trigger is what started the run: \"schedule\", \"manual\" or \"backfill\"\n(empty in records from before triggers were recorded)."
+                "description": "Trigger is what started the run: \"schedule\", \"manual\", \"backfill\" or\n(a hook's) \"event\" (empty in records from before triggers were\nrecorded)."
               },
               "for": {
                 "type": "string",
@@ -147,12 +147,123 @@
       },
       "type": "array"
     },
+    "hooks": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "problem": {
+            "type": "string",
+            "description": "Problem says why the routine can't be scheduled (e.g. its file doesn't\nparse). It's current state, cleared as soon as the routine is fixed."
+          },
+          "nextRunAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "NextRunAt is the next slot the scheduler will handle (enabled, scheduled\nroutines only). The scheduler moves it forward as soon as it picks a slot\nup, so one more than SchedulerGrace in the past means it didn't."
+          },
+          "lastRun": {
+            "properties": {
+              "trigger": {
+                "type": "string",
+                "description": "Trigger is what started the run: \"schedule\", \"manual\", \"backfill\" or\n(a hook's) \"event\" (empty in records from before triggers were\nrecorded)."
+              },
+              "for": {
+                "type": "string",
+                "format": "date-time",
+                "description": "For is the time the run is for (the schedule slot, the backfilled day)."
+              },
+              "id": {
+                "type": "string",
+                "description": "ID is the run's history ID (as `runs show` takes)."
+              },
+              "sessionId": {
+                "type": "string",
+                "description": "SessionID is the run's saved agent CLI session (routines with\nsession: save): set when the run starts if the app picks its ID, when\nit ends if the CLI does (Backend says which CLI resumes it)."
+              },
+              "backend": {
+                "type": "string",
+                "description": "Backend is the model backend running it, or that ran it (llm.backend's\nvalue), once it got as far as the model."
+              },
+              "folder": {
+                "type": "string",
+                "description": "Folder is the folder the run worked in (where its session resumes\nfrom), unless it was an empty temporary one."
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "finishedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deadline": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Deadline is when a running run is stopped (its routine's timeout)."
+              },
+              "queuedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "QueuedAt is when the run started waiting for its turn, if it had to."
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "failed",
+                  "skipped",
+                  "missed",
+                  "needs-reauth",
+                  "running",
+                  "queued",
+                  "stopped"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "startedAt",
+              "outcome"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "description": "Health is the routine's own verdict: error when it makes the app's\nhealth error, ok while it's enabled and fine, none while it's paused."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Summary is its state in a few words (\"Next: tomorrow 09:20\", \"standup\nfailed\", \"Paused\"), for frontends to show as is."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "enabled"
+        ],
+        "description": "Routine is one routine's entry."
+      },
+      "type": "array",
+      "description": "Hooks are the hooks, as routines are: each with its last run, its\nhealth and summary. A hook is never among Routines."
+    },
     "reasons": {
       "items": {
         "properties": {
           "routine": {
             "type": "string",
             "description": "Routine it's about; empty for the scheduler itself."
+          },
+          "hook": {
+            "type": "boolean",
+            "description": "Hook is true when Routine names a hook, not a routine."
           },
           "text": {
             "type": "string",

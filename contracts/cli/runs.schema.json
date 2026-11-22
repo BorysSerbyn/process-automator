@@ -17,6 +17,10 @@
         ],
         "description": "Kind is the routine's kind: program for a program; absent for an LLM\nroutine (llm)."
       },
+      "hook": {
+        "type": "boolean",
+        "description": "Hook is true for a hook's run."
+      },
       "trigger": {
         "type": "string"
       },
