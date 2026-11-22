@@ -272,7 +272,11 @@ func describeSurface(cmd *cobra.Command, out TrustOutput, toolsErr error) {
 // describeProgram prints what trusting a program approves.
 func describeProgram(w io.Writer, out TrustOutput) {
 	p := out.Program
-	fmt.Fprintf(w, "%s is a program; trusting it lets it run:\n", out.Routine)
+	if out.Hook {
+		fmt.Fprintln(w, "Trusting it lets it run:")
+	} else {
+		fmt.Fprintf(w, "%s is a program; trusting it lets it run:\n", out.Routine)
+	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  executable\t%s\n", p.Executable)
 	fmt.Fprintf(tw, "  sha-256\t%s\n", p.Checksum)
@@ -303,6 +307,9 @@ func hookReview(cmd *cobra.Command, a *engine.App, h hooks.Hook, out *TrustOutpu
 		wt.Trusted, wt.Untrusted = why == "", why
 	}
 	out.Watcher = wt
+	if h.Program != nil {
+		out.Program = programInfo(a, *h.Program)
+	}
 	if h.Prompt == nil {
 		return nil
 	}

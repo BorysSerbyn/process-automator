@@ -180,7 +180,7 @@ func (h *hook) problems(a *App) []Problem {
 }
 
 // listening is what keeps a hook from hearing its watcher's events: no such
-// watcher, one that doesn't load or isn't trusted, and (failing) one whose
+// watcher, one that doesn't load, isn't trusted or is paused, and (failing) one whose
 // polls fail or whose stream keeps ending.
 func (a *App) listening(h hooks.Hook, failing bool) []Problem {
 	w := h.On.Watcher
@@ -204,6 +204,9 @@ func (a *App) listening(h hooks.Hook, failing bool) []Problem {
 		return []Problem{{Text: err.Error()}}
 	case why != "":
 		return []Problem{{Text: "its watcher " + w + " isn't trusted (" + why + ")", Fix: product.Command + " watchers trust " + w}}
+	}
+	if on, err := a.WatcherEnabled(found); err == nil && !on {
+		return []Problem{{Text: "its watcher " + w + " is paused, so it hears nothing", Fix: product.Command + " watchers resume " + w}}
 	}
 	if failing {
 		if st, err := watchers.LoadState(a.Layout.WatcherState()); err == nil {

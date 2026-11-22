@@ -243,6 +243,12 @@ func newHooksAddCmd(update bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if parsed.Prompt != nil {
+				// As routines create does: no servers or tools that don't exist.
+				if err := checkRoutineTools(cmd, a, *parsed.Prompt); err != nil {
+					return err
+				}
+			}
 			if parsed.Program != nil && len(parsed.Program.Secrets) > 0 {
 				if s, ok := a.FindSignIn(name); ok && s.Kind != "hook" {
 					return fmt.Errorf("%s is already a sign-in's name (`%s auth login %s`): give a hook with secrets another name", name, product.Command, name)

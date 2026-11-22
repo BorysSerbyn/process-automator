@@ -45,13 +45,13 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Events**: each has an ID, a type, when it happened and its data. A watcher's event is acted on once, even when it's printed again or the app restarts
 - **Kept apart, run alike**: hooks and watchers live in their own folders, with their own commands (`hooks`, `watchers`), and never show among routines, not even with `--kind all`. A hook's runs share everything around a run with routines: trust, the run queue for an LLM hook (a program hook skips it), keeping the computer awake, waiting for a full wake, stop, pause, timeout, run status, history, notifications and the status dot
 - **One name space**: names are unique across routines, programs, hooks and watchers; the commands that take a name find a hook by it (`stop`, `runs`, `routines pause`, `resume`, `trust`), and the routine-only ones (run, show, check) say it's a hook
-- **Adding one**: from its file's path, in a terminal; a program hook's executable, and a watcher's, are copied with it, and the copy is what runs. A hook starts off and untrusted. Deleting one removes its copy, settings, trust and secrets, and keeps its run history
+- **Adding one**: from its file's path, in a terminal, an LLM hook validated as a routine is (its servers must exist and offer its tools, when they can be asked); a program hook's executable, and a watcher's, are copied with it, and the copy is what runs. A hook starts off and untrusted. Deleting one removes its copy, settings, trust and secrets, and keeps its run history
 - **Trust**: a hook runs only while its action and its trigger are what I trusted, a program hook's dry runs included; a watcher runs only while its executable is the one I trusted. A hook hears nothing until its watcher is trusted too. Trusting an LLM hook that can write warns that it acts on outside data
 - **Trying one**: there's no run now for a hook; it fires with a sample event (a file or stdin), as a dry run or for real
 - **What an action gets**: an LLM hook's prompt gets the event, or every event that waited for it when it takes them in batches, each text from the watcher marked as outside data; a program hook gets its event as JSON on stdin, and the desktop session's display, so it can open an app
 - **Sleep**: an event older than the hook's staleness is dropped; a watcher isn't polled while a Mac is in a maintenance wake, and a poll due while it slept runs as it wakes
 - **Floods and loops**: a hook starts at most its rate of runs an hour, and an event past it is dropped; one due to run more than three times its rate in an hour is paused, with a run saying why
-- **Pause and resume**: a hook can be turned off and on; pausing a watcher stops it, and its hooks hear nothing until it's resumed
+- **Pause and resume**: a hook can be turned off and on; pausing a watcher stops it, and the hooks that are on and listen to it show that as their problem until it's resumed
 
 ## Templates
 - **Templates are shareable routines**: files in the repository's `templates/` folder, shipped with the app as files; the app ships none of its own and works with none
@@ -88,7 +88,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Status indicator
 - **Icon** in the macOS menu bar, or the Linux tray, with a status dot:
   - **Green**: every enabled routine is fine. A routine with no runs yet is fine while its next run is ahead
-  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled, didn't start at its time or is stuck; a hook that's on failed, was missed, was paused past its rate, or can't run (its watcher missing, untrusted or failing); setup isn't finished; or the scheduler isn't responding
+  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled, didn't start at its time or is stuck; a hook that's on failed, was missed, was paused past its rate, or can't run (its watcher missing, untrusted, paused or failing); setup isn't finished; or the scheduler isn't responding
   - **Grey**: no routines or hooks are enabled
   - **Pulsing**: a routine is running (whatever the colour); in the Linux tray the dot dims and brightens
 - Updates within seconds of anything changing
@@ -123,4 +123,4 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
 - **Everything is a command**: every feature, including what the UI does, with `--help` on each
 - **Settings**: one generic `settings list/get/set/reset` surface reads and writes any setting, app-wide or per routine; values are checked before they're saved and apply without a restart
 - **Paths**: `paths` shows where the app keeps its config, routines, programs, hooks, watchers, run status, history, notifications, templates and the frontends' log
-- **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own (`guide plugins`) how to write a program (`guide programs`) and how to write a hook and a watcher (`guide hooks`), with examples that work, as text or `--json`; `routines create`, `routines update` and `plugins add` point to it
+- **Guide**: `guide` explains, from the app itself, how to write a routine (`guide routines`) and how to add a plugin or write my own (`guide plugins`), how to write a program (`guide programs`) and how to write a hook and a watcher (`guide hooks`), with examples that work, as text or `--json`; `routines create`, `routines update`, `hooks add`, `watchers add` and `plugins add` point to it

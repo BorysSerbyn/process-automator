@@ -65,8 +65,27 @@ func TestHookCommands(t *testing.T) {
 	if added.Kind != "program" || added.Enabled == nil || *added.Enabled {
 		t.Fatalf("%+v", added)
 	}
+	// Like routines create, it refuses servers and tools that don't exist.
+	bogus := filepath.Join(t.TempDir(), "bogus.prompt")
+	if err := os.WriteFile(bogus, []byte("---\nautomator.on: {watcher: cal}\nautomator.servers: [nowhere]\n---\nHi\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := cli(t, cfg, "hooks", "add", "bogus", "--from", bogus); err == nil || !strings.Contains(out, "no installed plugin or server provides") {
+		t.Fatalf("a hook with an unknown server was added: %v %s", err, out)
+	}
 	if out, err := cli(t, cfg, "hooks", "add", "brief", "--from", prompt); err != nil || !strings.Contains(out, "off and not trusted") {
 		t.Fatalf("hooks add: %v %s", err, out)
+	}
+	// An LLM hook has memories of its own ({{> memories}} reads them); a
+	// program hook doesn't.
+	if out, err := cli(t, cfg, "memory", "add", "--routine", "brief", "Standups are in room 4"); err != nil {
+		t.Fatalf("memory add for an LLM hook: %v %s", err, out)
+	}
+	if out, err := cli(t, cfg, "memory", "list", "--routine", "brief"); err != nil || !strings.Contains(out, "room 4") {
+		t.Fatalf("memory list for an LLM hook: %v %s", err, out)
+	}
+	if out, err := cli(t, cfg, "memory", "add", "--routine", "open-meet", "x"); err == nil || !strings.Contains(out, "program hook") {
+		t.Fatalf("memory add for a program hook: %v %s", err, out)
 	}
 	// Names are unique across routines, programs, hooks and watchers.
 	for _, args := range [][]string{
@@ -127,6 +146,14 @@ func TestHookCommands(t *testing.T) {
 	if !trustOut.Hook || trustOut.Trigger == nil || trustOut.Trigger.Watcher != "cal" || trustOut.Watcher == nil || !trustOut.Watcher.Trusted ||
 		len(trustOut.Warnings) != 1 || !strings.Contains(trustOut.Warnings[0], "Bash") {
 		t.Fatalf("hooks trust --check: %+v", trustOut)
+	}
+	// A program hook's review is what it runs, not an LLM routine's surface.
+	progReview := cliJSON[TrustOutput](t, cfg, "hooks", "trust", "open-meet", "--check")
+	if progReview.Program == nil || progReview.Program.Checksum == "" {
+		t.Fatalf("a program hook's review lacks what it runs: %+v", progReview)
+	}
+	if out, _ := cli(t, cfg, "hooks", "trust", "open-meet", "--check"); !strings.Contains(out, "sha-256") || strings.Contains(out, "can reach") {
+		t.Fatalf("a program hook's review: %s", out)
 	}
 	if out, err := cli(t, cfg, "hooks", "trust", "open-meet", "--yes", "--resume"); err != nil || !strings.Contains(out, "Turned open-meet on") {
 		t.Fatalf("hooks trust --resume: %v %s", err, out)

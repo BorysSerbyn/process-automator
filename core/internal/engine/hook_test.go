@@ -15,6 +15,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
+	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
 )
@@ -176,6 +177,18 @@ func TestHookTrustCoversTriggerAndWatcher(t *testing.T) {
 	}
 	if rd := a.Assess(x); len(rd.All()) != 0 {
 		t.Fatalf("still a problem: %+v", rd.All())
+	}
+	// A paused watcher is a problem for the hooks listening to it.
+	st := settings.Store{Path: a.Layout.Config(), Extra: settings.WatcherSettings("cal")}
+	if _, err := st.Set("watchers.cal.enabled", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if all := a.Assess(x).All(); len(all) != 1 || !strings.Contains(all[0].Text, "its watcher cal is paused") ||
+		all[0].Fix != "procauto watchers resume cal" {
+		t.Fatalf("a paused watcher: %+v", all)
+	}
+	if _, err := st.Set("watchers.cal.enabled", "true"); err != nil {
+		t.Fatal(err)
 	}
 
 	// Another event type takes the hook's trust away, saying so.

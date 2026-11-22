@@ -32,10 +32,23 @@ func (f *scopeFlag) scope(a *engine.App) (string, error) {
 	if f.routine == "" {
 		return memory.Global, nil
 	}
-	if _, _, err := a.Routine(f.routine, "memories"); err != nil {
+	if err := memoryOwner(a, f.routine); err != nil {
 		return "", err
 	}
 	return f.routine, nil
+}
+
+// memoryOwner checks name has memories: an LLM routine, or an LLM hook
+// (whose {{> memories}} reads its own too).
+func memoryOwner(a *engine.App, name string) error {
+	if h, err := a.FindHook(name); err == nil {
+		if h.Kind() == engine.KindLLM {
+			return nil
+		}
+		return fmt.Errorf("%s is a program hook: only prompts have memories", name)
+	}
+	_, _, err := a.Routine(name, "memories")
+	return err
 }
 
 func scopeName(scope string) string {
@@ -70,8 +83,12 @@ func newMemoryListCmd() *cobra.Command {
 				return err
 			}
 			if sf.routine != "" {
-				if x, err := a.Find(sf.routine); err == nil {
-					if _, _, err := engine.AsRoutine(x, "memories"); err != nil {
+				// One that doesn't exist (any more) lists nothing; one without
+				// memories is refused.
+				_, routineErr := a.Find(sf.routine)
+				_, hookErr := a.FindHook(sf.routine)
+				if routineErr == nil || hookErr == nil {
+					if err := memoryOwner(a, sf.routine); err != nil {
 						return err
 					}
 				}

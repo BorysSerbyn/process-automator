@@ -29,7 +29,7 @@ What LLM clients can do through the app, and how the agent behaves inside a rout
 
 ## Memories
 - **I can add memories**: short, lasting rules the agent follows in future runs (e.g. "Don't count cancelled meetings")
-- **Global or per routine**: a memory applies to every routine or to one
+- **Global or per routine**: a memory applies to every routine or to one; an LLM hook has its own too (`memory --routine <hook>`), a program has none
 - **User-driven only**: the agent never creates, edits or removes memories, and the model backend's own memory features are off; Claude can add them over MCP only with my approval
 - **Kept small**: each memories file has a cap; past it, I'm asked to compact them first. Compacting merges duplicates and drops outdated ones, after showing me the result
 - **Facts that must be applied exactly** (e.g. which project maps to which code) belong in the routine's prompt or parameters, not in memories
