@@ -210,8 +210,8 @@ func TestUsageLimitPlan(t *testing.T) {
 	if out, _ := cli(t, cfg, "doctor"); !strings.Contains(out, "scheduled runs don't start") {
 		t.Errorf("doctor doesn't say:\n%s", out)
 	}
-	if out, _ := cli(t, cfg, "settings", "list"); !strings.Contains(out, "[only used with llm.backend api]") {
-		t.Errorf("budgets aren't marked as the api backend's:\n%s", out)
+	if out, _ := cli(t, cfg, "settings", "list"); !strings.Contains(out, "[only used with llm.backend claude-api]") {
+		t.Errorf("budgets aren't marked as the claude-api backend's:\n%s", out)
 	}
 }
 
@@ -240,16 +240,20 @@ func (b limitBackend) Run(context.Context, agent.Job) (*agent.Output, error) { r
 func TestUsageLimitBudget(t *testing.T) {
 	a, set := enginetest.Fixture(t, map[string]string{"r": "queue"}, nil)
 	cfg := a.Layout.Config()
-	for _, kv := range [][2]string{{"llm.backend", "api"}, {"llm.budget.window-usd", "1"}} {
+	for _, kv := range [][2]string{{"llm.backend", "claude-api"}, {"llm.budget.window-usd", "1"}} {
 		if _, err := cli(t, cfg, "settings", "set", kv[0], kv[1]); err != nil {
 			t.Fatal(err)
 		}
 	}
 	at := time.Now().Add(-time.Hour)
-	for i, b := range []string{"api", "claude-code"} { // a plan's run never counts
+	// api is claude-api's former name, in older runs; a plan's run never counts.
+	for i, run := range []struct {
+		backend string
+		cost    float64
+	}{{"api", 1}, {"claude-api", 0.5}, {"claude-code", 1.5}} {
 		started := at.Add(time.Duration(i) * time.Minute)
 		_ = history.Save(a.Layout.History(), history.Entry{ID: history.RunID("r", started), Routine: "r", Trigger: trigger.Manual,
-			StartedAt: started, Outcome: runstatus.OutcomeSuccess, Result: &agent.Result{Backend: b, CostUSD: 1.5}})
+			StartedAt: started, Outcome: runstatus.OutcomeSuccess, Result: &agent.Result{Backend: run.backend, CostUSD: run.cost}})
 	}
 	a = enginetest.Load(t, cfg)
 	if out, _ := cli(t, cfg, "usage"); !strings.Contains(out, "$1.50") || !strings.Contains(out, "past its $1.00 budget") {
@@ -479,8 +483,8 @@ func TestSetupInteractiveBackend(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"    1. claude-code  Claude Code on your Claude subscription (recommended)\n",
-		"    2. api          Claude through Anthropic's API",
-		"    3. codex        OpenAI's Codex CLI",
+		"    2. claude-api   Anthropic's API, paid per token\n",
+		"    3. codex        OpenAI's Codex CLI (experimental, untested)\n",
 		`"9" isn't one of them: a number from 1 to 3, or a name`,
 	} {
 		if !strings.Contains(got, want) {
@@ -489,5 +493,27 @@ func TestSetupInteractiveBackend(t *testing.T) {
 	}
 	if v, _ := cli(t, cfg, "settings", "get", "llm.backend"); !strings.Contains(v, "codex") {
 		t.Errorf("backend after choosing 3: %s", v)
+	}
+}
+
+// A config that still names the api backend runs on claude-api, its new
+// name, and says so; the file keeps what it says.
+func TestFormerBackendName(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(cfg, []byte("settings:\n  llm.backend: api\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := cli(t, cfg, "settings", "get", "llm.backend"); err != nil || !strings.Contains(out, "claude-api") {
+		t.Errorf("settings get: %v\n%s", err, out)
+	}
+	a := enginetest.Load(t, cfg)
+	if def, err := a.BackendDef(); err != nil || def.Name != "claude-api" || !def.Priced {
+		t.Errorf("backend: %+v %v", def.Name, err)
+	}
+	if b, err := a.BackendReady(); err != nil || !strings.HasPrefix(b.Status(), "Runs with claude-api") {
+		t.Errorf("status: %+v %v", b, err)
+	}
+	if raw, _ := os.ReadFile(cfg); !strings.Contains(string(raw), "llm.backend: api") {
+		t.Errorf("the config was rewritten:\n%s", raw)
 	}
 }

@@ -131,7 +131,7 @@ func TestEffectiveConfig(t *testing.T) {
 }
 
 func TestBackendModelMapping(t *testing.T) {
-	for name, want := range map[string]string{"api": "anthropic/claude-haiku-5-5", "claude-code": "claude-haiku-5-5", "codex": ""} {
+	for name, want := range map[string]string{"claude-api": "anthropic/claude-haiku-5-5", "claude-code": "claude-haiku-5-5", "codex": ""} {
 		if name == "codex" {
 			if _, err := Backends[name].AgentModel("anthropic/claude-haiku-5-5"); err == nil {
 				t.Error("codex took a Claude model")

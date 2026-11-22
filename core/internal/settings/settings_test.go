@@ -252,7 +252,7 @@ func TestValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Int("history.retention-days") != 30 || v.String("llm.backend") != "api" || !v.Bool("runs.failure-notifications") ||
+	if v.Int("history.retention-days") != 30 || v.String("llm.backend") != "claude-api" || !v.Bool("runs.failure-notifications") ||
 		v.Float("llm.budget.weekly-usd") != 20 || !slices.Equal(v.List("routines.r.builtinTools"), []string{"Read"}) {
 		t.Fatalf("values: %+v", v)
 	}
@@ -278,5 +278,37 @@ func TestEnumHelpCoversTheChoices(t *testing.T) {
 		if len(s.EnumHelp) != len(s.Enum) {
 			t.Errorf("%s: help for values it doesn't have: %v", s.Key, s.EnumHelp)
 		}
+	}
+}
+
+// A former enum value (llm.backend's api) is read as the one it became,
+// shown so, and taken by `settings set`; the config file keeps what it says.
+func TestEnumAliases(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("settings:\n  llm.backend: api\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Store{Path: path}
+	if st, err := s.Get("llm.backend"); err != nil || st.Value != "claude-api" || st.ValueText != "claude-api" || st.IsDefault {
+		t.Fatalf("get: %+v %v", st, err)
+	}
+	states, _ := s.List()
+	for _, st := range states {
+		if st.Key == "llm.budget.window" && st.Inactive != "" {
+			t.Errorf("claude-api's settings are inactive on api: %q", st.Inactive)
+		}
+	}
+	if raw, _ := os.ReadFile(path); !strings.Contains(string(raw), "llm.backend: api") {
+		t.Errorf("the file was rewritten:\n%s", raw)
+	}
+	if st, err := s.Set("llm.backend", "api"); err != nil || st.Value != "claude-api" {
+		t.Errorf("set api: %+v %v", st, err)
+	}
+	def, _ := Lookup("llm.backend")
+	if got := def.Canonical("codex"); got != "codex" {
+		t.Errorf("canonical codex: %q", got)
+	}
+	if _, err := def.Parse("apis"); err == nil {
+		t.Error("an unknown value was taken")
 	}
 }

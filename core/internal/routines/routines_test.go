@@ -3,6 +3,7 @@ package routines
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -131,6 +132,7 @@ func TestParameters(t *testing.T) {
 	write("badplatform", "automator.platforms: [windows]\n")
 	write("badbackend", "automator.backends: [gpt]\n")
 	write("clionly", "automator.backends: [claude-code]\n")
+	write("oldname", "automator.backends: [api]\n") // claude-api's former name
 	set, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -146,11 +148,14 @@ func TestParameters(t *testing.T) {
 	if keys["routines.ok.params.lookback"] != "72h" || keys["routines.ok.params.tone"] != nil {
 		t.Fatalf("parameter settings: %v", keys)
 	}
-	if r, err := set.Find("clionly"); err != nil || !r.Supports("claude-code") || r.Supports("api") {
+	if r, err := set.Find("clionly"); err != nil || !r.Supports("claude-code") || r.Supports("claude-api") {
 		t.Errorf("backends: %+v %v", r.Backends, err)
 	}
-	if !r.Supports("api") {
-		t.Error("a routine without backends doesn't support api")
+	if !r.Supports("claude-api") {
+		t.Error("a routine without backends doesn't support claude-api")
+	}
+	if r, err := set.Find("oldname"); err != nil || !slices.Equal(r.Backends, []string{"claude-api"}) || !r.Supports("claude-api") {
+		t.Errorf("backends: [api] isn't claude-api: %+v %v", r.Backends, err)
 	}
 	for _, bad := range []string{"badtype", "baddefault", "reserved", "badname", "noenum", "badplatform", "badbackend"} {
 		if _, err := set.Find(bad); err == nil {

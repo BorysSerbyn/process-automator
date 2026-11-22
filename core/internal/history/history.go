@@ -76,7 +76,7 @@ type Summary struct {
 	ToolCalls  int               `json:"toolCalls,omitempty"`
 	// Backend is what ran it (an llm.backend value), when it got as far as the model.
 	Backend string `json:"backend,omitempty"`
-	// CostUSD is the run's cost at API list prices: api runs only (a Claude
+	// CostUSD is the run's cost at API list prices: claude-api runs only (a Claude
 	// plan's runs have no cost).
 	CostUSD float64 `json:"costUsd,omitempty"`
 }

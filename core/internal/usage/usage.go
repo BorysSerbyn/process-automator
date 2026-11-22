@@ -1,6 +1,6 @@
 // Package usage is the LLM usage limit, which means what the backend's cost
 // means: on a Claude plan (claude-code), how much of the plan's own usage
-// limits is used, against llm.usage-limit; with an API key (api), what runs
+// limits is used, against llm.usage-limit; with an API key (claude-api), what runs
 // spent at list prices, against the llm.budget.* budgets; on a backend whose
 // usage the app can't read (codex), there's none. Past the limit, scheduled
 // runs don't start.
@@ -17,7 +17,7 @@ const Week = 7 * 24 * time.Hour
 // Report is usage against the limit, for the backend in use.
 type Report struct {
 	// Kind is "plan" (claude-code: the Claude plan's usage against
-	// llm.usage-limit), "budget" (api: spend against llm.budget.*) or "none"
+	// llm.usage-limit), "budget" (claude-api: spend against llm.budget.*) or "none"
 	// (a backend with no usage limit in the app, e.g. codex: no windows, never over).
 	Kind string `json:"kind" jsonschema:"enum=plan,enum=budget,enum=none"`
 	// LimitPercent is llm.usage-limit (plan).

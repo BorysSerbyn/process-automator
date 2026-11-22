@@ -101,7 +101,7 @@ type Result struct {
 	InputTokens  int    `json:"inputTokens"`
 	OutputTokens int    `json:"outputTokens"`
 	CachedTokens int    `json:"cachedTokens"`
-	// CostUSD is the run's cost at API list prices: api runs only (agent CLI
+	// CostUSD is the run's cost at API list prices: claude-api runs only (agent CLI
 	// runs are on the CLI's own plan, and the app never works out a cost for them).
 	CostUSD      float64 `json:"costUsd,omitempty"`
 	PromptSource string  `json:"promptSource"` // the routine file

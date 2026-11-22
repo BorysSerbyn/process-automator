@@ -548,7 +548,7 @@ commands:
     jsonOutput: cli/update-progress.schema.json
   - command: usage
     usage: procauto usage [flags]
-    summary: 'LLM usage against its limit: the Claude plan''s usage (claude-code) or API spend (api); none on codex'
+    summary: 'LLM usage against its limit: the Claude plan''s usage (claude-code) or API spend (claude-api); none on codex'
     flags:
       - name: --json
         type: bool

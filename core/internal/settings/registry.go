@@ -50,8 +50,12 @@ type Setting struct {
 	// EnumHelp says in a line what each enum value means, for choosing one:
 	// setup lists them, the Settings window shows the selected one's.
 	EnumHelp map[string]string `json:"enumHelp,omitempty"`
-	Min      *float64          `json:"min,omitempty"`
-	Max      *float64          `json:"max,omitempty"`
+	// EnumAliases are former enum values still taken, each read as the value
+	// it became: a config file or routine that names one keeps working, and
+	// it's shown as the new value. The file isn't rewritten.
+	EnumAliases map[string]string `json:"-"`
+	Min         *float64          `json:"min,omitempty"`
+	Max         *float64          `json:"max,omitempty"`
 	// NotImplemented marks a setting declared ahead of the feature that uses it:
 	// it can be set, but has no effect yet.
 	NotImplemented bool `json:"notImplemented,omitempty"`
@@ -64,16 +68,17 @@ func ptr(f float64) *float64 { return &f }
 // Registry lists every setting. Keys are dotted, lowercase, kebab-case segments.
 var Registry = []Setting{
 	{
-		Key: "llm.backend", Type: TypeEnum, Default: "api", Enum: []string{"claude-code", "api", "codex"},
+		Key: "llm.backend", Type: TypeEnum, Default: "claude-api", Enum: []string{"claude-code", "claude-api", "codex"},
 		Description: "What runs your routines.",
 		EnumHelp: map[string]string{
 			"claude-code": "Claude Code on your Claude subscription (recommended)",
-			"api":         "Claude through Anthropic's API, paid per token: needs an API key. Can also run local models such as Ollama (experimental, untested)",
-			"codex":       "OpenAI's Codex CLI on your ChatGPT plan or OpenAI API key (experimental, untested)",
+			"claude-api":  "Anthropic's API, paid per token",
+			"codex":       "OpenAI's Codex CLI (experimental, untested)",
 		},
+		EnumAliases: map[string]string{"api": "claude-api"},
 	},
 	{
-		Key: "llm.openai-compat.base-url", Type: TypeString, Default: "http://localhost:11434/v1", Backend: "api",
+		Key: "llm.openai-compat.base-url", Type: TypeString, Default: "http://localhost:11434/v1", Backend: "claude-api",
 		Description: "Experimental, untested: the OpenAI-compatible server that runs routines whose model is openai-compat/<model> " +
 			"(e.g. openai-compat/qwen3:8b). The default is Ollama on this machine; llama.cpp's llama-server, vLLM, LM Studio and hosted APIs " +
 			"such as DeepSeek, Qwen (DashScope) or Kimi (Moonshot) work too. A server that needs an API key gets it with `auth login openai-compat`. " +
@@ -86,15 +91,15 @@ var Registry = []Setting{
 			"scheduled runs until it resets.",
 	},
 	{
-		Key: "llm.budget.window", Type: TypeDuration, Default: "5h", Backend: "api",
+		Key: "llm.budget.window", Type: TypeDuration, Default: "5h", Backend: "claude-api",
 		Description: "Length of the rolling short budget window.",
 	},
 	{
-		Key: "llm.budget.window-usd", Type: TypeNumber, Default: 2.0, Min: ptr(0), Unit: "USD", Backend: "api",
+		Key: "llm.budget.window-usd", Type: TypeNumber, Default: 2.0, Min: ptr(0), Unit: "USD", Backend: "claude-api",
 		Description: "API spend allowed in the rolling short window (0: no limit); past it, scheduled runs don't start.",
 	},
 	{
-		Key: "llm.budget.weekly-usd", Type: TypeNumber, Default: 20.0, Min: ptr(0), Unit: "USD", Backend: "api",
+		Key: "llm.budget.weekly-usd", Type: TypeNumber, Default: 20.0, Min: ptr(0), Unit: "USD", Backend: "claude-api",
 		Description: "API spend allowed in the rolling 7 days (0: no limit); past it, scheduled runs don't start.",
 	},
 	{
@@ -278,6 +283,7 @@ func (s Setting) Parse(input string) (any, error) {
 		}
 		return in, nil
 	case TypeEnum:
+		in = s.Canonical(in)
 		for _, e := range s.Enum {
 			if in == e {
 				return in, nil
@@ -303,17 +309,26 @@ func (s Setting) Parse(input string) (any, error) {
 	return nil, fmt.Errorf("%s: unsupported type %s", s.Key, s.Type)
 }
 
+// Canonical is an enum value as the setting takes it now: a former value
+// (EnumAliases) is the one it became; any other is returned as it is.
+func (s Setting) Canonical(v string) string {
+	if to, ok := s.EnumAliases[v]; ok {
+		return to
+	}
+	return v
+}
+
 // checkItems validates a list's items against Enum (when set).
 func (s Setting) checkItems(items []string) ([]string, error) {
-	if items == nil {
-		items = []string{}
-	}
+	out := make([]string, 0, len(items))
 	for _, item := range items {
+		item = s.Canonical(item)
 		if len(s.Enum) > 0 && !slices.Contains(s.Enum, item) {
 			return nil, fmt.Errorf("%s: %q isn't one of %s", s.Key, item, strings.Join(s.Enum, ", "))
 		}
+		out = append(out, item)
 	}
-	return items, nil
+	return out, nil
 }
 
 // Normalize converts a value read from the config file (YAML-decoded) to canonical

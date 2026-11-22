@@ -18,7 +18,7 @@ const OpenAICompatKey = "openai-compat-api-key"
 // OpenAICompatURLSetting is the setting with the OpenAI-compatible server's URL.
 const OpenAICompatURLSetting = "llm.openai-compat.base-url"
 
-// OpenAICompat is the OpenAI-compatible server the api backend runs
+// OpenAICompat is the OpenAI-compatible server the claude-api backend runs
 // openai-compat/<model> models on: its URL from the settings, its API key
 // when one is stored.
 func (a *App) OpenAICompat() (agent.OpenAICompat, error) {
@@ -33,7 +33,7 @@ func (a *App) OpenAICompat() (agent.OpenAICompat, error) {
 	return agent.OpenAICompat{BaseURL: vals.String(OpenAICompatURLSetting), APIKey: key}, nil
 }
 
-// apiModelProblem is what keeps a routine's model from running on the api
+// apiModelProblem is what keeps a routine's model from running on the claude-api
 // backend, as far as can be told without connecting: a provider the backend
 // doesn't run, or one that isn't set up (no Anthropic API key; no URL for the
 // OpenAI-compatible server). A routine without a model has no problem here:
@@ -86,7 +86,7 @@ func apiReachModel(ctx context.Context, a *App, model string) *Problem {
 }
 
 // onlyOpenAICompat is whether the routines run only models on the
-// OpenAI-compatible server: then the api backend needs no Anthropic API key.
+// OpenAI-compatible server: then the claude-api backend needs no Anthropic API key.
 // With no routines it does (the backend's usual way).
 func onlyOpenAICompat(a *App) bool {
 	set, err := routines.Load(a.Layout.Routines())

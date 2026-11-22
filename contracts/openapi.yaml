@@ -593,7 +593,7 @@ components:
         kind:
           description: |-
             Kind is "plan" (claude-code: the Claude plan's usage against
-            llm.usage-limit), "budget" (api: spend against llm.budget.*) or "none"
+            llm.usage-limit), "budget" (claude-api: spend against llm.budget.*) or "none"
             (a backend with no usage limit in the app, e.g. codex: no windows, never over).
           enum:
             - plan
@@ -647,7 +647,7 @@ components:
           type: array
         costUsd:
           description: |-
-            CostUSD is the run's cost at API list prices: api runs only (agent CLI
+            CostUSD is the run's cost at API list prices: claude-api runs only (agent CLI
             runs are on the CLI's own plan, and the app never works out a cost for them).
           type: number
         dryRun:
@@ -1136,7 +1136,7 @@ components:
         signIn:
           description: |-
             SignIn is what the step still needs signed in (`auth login <signIn>
-            --browser`): a server, or the API key the api backend needs.
+            --browser`): a server, or the API key the claude-api backend needs.
           type: string
         status:
           description: |-
@@ -1292,7 +1292,7 @@ components:
           type: string
         costUsd:
           description: |-
-            CostUSD is the run's cost at API list prices: api runs only (a Claude
+            CostUSD is the run's cost at API list prices: claude-api runs only (a Claude
             plan's runs have no cost).
           type: number
         finishedAt:

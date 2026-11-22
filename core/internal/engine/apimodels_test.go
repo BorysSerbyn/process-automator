@@ -67,7 +67,7 @@ func TestAPIReadiness(t *testing.T) {
 		t.Errorf("no routines: %+v %v", b, err)
 	}
 	local := writeRoutine(t, a, "local", "openai-compat/qwen3:8b")
-	if b, _ := a.BackendReady(); b.Problem != "" || b.Status() != "Runs with api, ready" {
+	if b, _ := a.BackendReady(); b.Problem != "" || b.Status() != "Runs with claude-api, ready" {
 		t.Errorf("only an OpenAI-compatible model, no key: %+v", b)
 	}
 	if p := problemsOf(a, local); p != "" {
@@ -106,7 +106,7 @@ func TestAPIReadiness(t *testing.T) {
 		t.Errorf("not a URL: %s", p)
 	}
 	other := writeRoutine(t, a, "other", "openai/gpt-5.5")
-	if p := problemsOf(a, other); !strings.Contains(p, `its model "openai/gpt-5.5" isn't one the api backend runs`) {
+	if p := problemsOf(a, other); !strings.Contains(p, `its model "openai/gpt-5.5" isn't one the claude-api backend runs`) {
 		t.Errorf("another provider: %s", p)
 	}
 
@@ -207,7 +207,7 @@ func TestOpenAICompatRunsArentPriced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Backend != "api" || res.Outcome != "done" || res.InputTokens != 2000 || res.CostUSD != 0 {
+	if res.Backend != "claude-api" || res.Outcome != "done" || res.InputTokens != 2000 || res.CostUSD != 0 {
 		t.Errorf("result: %+v", res)
 	}
 
@@ -241,13 +241,13 @@ func TestUnreadableSecrets(t *testing.T) {
 	claude := writeRoutine(t, a, "claude", "anthropic/claude-sonnet-5-5")
 	a.Connector.Secrets = lockedStore{secrets.NewMemory()}
 	if b, _ := a.BackendReady(); !strings.HasPrefix(b.Problem, "the Anthropic API key can't be read: the keychain is locked") || b.SignIn != "" {
-		t.Errorf("api readiness: %+v", b)
+		t.Errorf("claude-api readiness: %+v", b)
 	}
 	if p := problemsOf(a, claude); !strings.Contains(p, "needs the Anthropic API key, which can't be read: the keychain is locked") {
 		t.Errorf("claude's model: %s", p)
 	}
-	if _, err := Backends["api"].New(a); err == nil || !strings.Contains(err.Error(), "can't read the Anthropic API key") {
-		t.Errorf("api run: %v", err)
+	if _, err := Backends["claude-api"].New(a); err == nil || !strings.Contains(err.Error(), "can't read the Anthropic API key") {
+		t.Errorf("claude-api run: %v", err)
 	}
 	if _, err := a.OpenAICompat(); err == nil || !strings.Contains(err.Error(), "can't read the OpenAI-compatible server's API key") {
 		t.Errorf("openai-compat: %v", err)

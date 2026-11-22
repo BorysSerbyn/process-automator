@@ -101,7 +101,7 @@ func TestEffortReachesClaudeCode(t *testing.T) {
 		t.Fatal(`"default" means no effort`)
 	}
 	if _, err := (&Genkit{}).Run(context.Background(), Job{Effort: "high"}); err == nil || !strings.Contains(err.Error(), "effort") {
-		t.Fatalf("api backend must reject effort: %v", err)
+		t.Fatalf("claude-api backend must reject effort: %v", err)
 	}
 }
 

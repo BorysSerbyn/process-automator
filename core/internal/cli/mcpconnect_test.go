@@ -115,11 +115,11 @@ func TestMCPConnect(t *testing.T) {
 	if s, _ = step(); !s.Done {
 		t.Errorf("not replaced: %+v", s)
 	}
-	// On the api backend there's no such step.
-	if _, err := cli(t, cfg, "settings", "set", "llm.backend", "api"); err != nil {
+	// On the claude-api backend there's no such step.
+	if _, err := cli(t, cfg, "settings", "set", "llm.backend", "claude-api"); err != nil {
 		t.Fatal(err)
 	}
 	if s, _ = step(); s.Step != "" {
-		t.Errorf("a Claude Code step on the api backend: %+v", s)
+		t.Errorf("a Claude Code step on the claude-api backend: %+v", s)
 	}
 }

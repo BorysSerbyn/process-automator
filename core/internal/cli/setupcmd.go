@@ -49,7 +49,7 @@ type SetupStep struct {
 	// to show, and have done, first. `auth login` shows them too.
 	Prepare string `json:"prepare,omitempty"`
 	// SignIn is what the step still needs signed in (`auth login <signIn>
-	// --browser`): a server, or the API key the api backend needs.
+	// --browser`): a server, or the API key the claude-api backend needs.
 	SignIn string `json:"signIn,omitempty"`
 	// Setting is the setting the step chooses, for frontends to show and set
 	// (backend: llm.backend).
@@ -228,12 +228,12 @@ func backendStep(a *engine.App) (SetupStep, error) {
 	if b.SignIn != "" {
 		st.Commands = append(st.Commands, product.Command+" auth login "+b.SignIn+" --browser")
 	}
-	// The api backend's other provider, offered for the routines that name it.
+	// The claude-api backend's other provider, offered for the routines that name it.
 	compat, _ := settings.Lookup(engine.OpenAICompatURLSetting)
 	st.Commands = append(st.Commands,
-		fmt.Sprintf("%s settings set %s <url>   # api only, experimental and untested: for routines whose model is openai-compat/<model>, on an OpenAI-compatible server other than the default (%v, Ollama on this machine)",
+		fmt.Sprintf("%s settings set %s <url>   # claude-api only, experimental and untested: for routines whose model is openai-compat/<model>, on an OpenAI-compatible server other than the default (%v, Ollama on this machine)",
 			product.Command, compat.Key, compat.Default),
-		product.Command+" auth login openai-compat --browser   # api only, experimental and untested: when that OpenAI-compatible server needs an API key (hosted ones do; Ollama doesn't)")
+		product.Command+" auth login openai-compat --browser   # claude-api only, experimental and untested: when that OpenAI-compatible server needs an API key (hosted ones do; Ollama doesn't)")
 	return st, nil
 }
 

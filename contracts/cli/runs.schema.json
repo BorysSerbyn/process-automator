@@ -45,7 +45,7 @@
       },
       "costUsd": {
         "type": "number",
-        "description": "CostUSD is the run's cost at API list prices: api runs only (a Claude\nplan's runs have no cost)."
+        "description": "CostUSD is the run's cost at API list prices: claude-api runs only (a Claude\nplan's runs have no cost)."
       }
     },
     "additionalProperties": false,

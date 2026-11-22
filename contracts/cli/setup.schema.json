@@ -50,7 +50,7 @@
           },
           "signIn": {
             "type": "string",
-            "description": "SignIn is what the step still needs signed in (`auth login \u003csignIn\u003e\n--browser`): a server, or the API key the api backend needs."
+            "description": "SignIn is what the step still needs signed in (`auth login \u003csignIn\u003e\n--browser`): a server, or the API key the claude-api backend needs."
           },
           "setting": {
             "type": "string",

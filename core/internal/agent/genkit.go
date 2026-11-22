@@ -17,7 +17,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
-// Model providers the api backend runs, as a routine's model names them
+// Model providers the claude-api backend runs, as a routine's model names them
 // (<provider>/<model>).
 const (
 	// AnthropicProvider is the Anthropic API (pay per token, an API key).
@@ -40,9 +40,9 @@ type Genkit struct {
 }
 
 // Name implements Backend.
-func (*Genkit) Name() string { return "api" }
+func (*Genkit) Name() string { return "claude-api" }
 
-// APIModel checks that a routine's model is one the api backend runs
+// APIModel checks that a routine's model is one the claude-api backend runs
 // (anthropic/<model> or openai-compat/<model>), and returns its provider.
 // No model ("") is left to Genkit, which has no default: a run fails.
 func APIModel(model string) (provider string, err error) {
@@ -52,9 +52,9 @@ func APIModel(model string) (provider string, err error) {
 	provider, id, ok := strings.Cut(model, "/")
 	switch {
 	case !ok || id == "":
-		return "", fmt.Errorf("its model %q names no provider: the api backend runs %s/<model> and %s/<model> models", model, AnthropicProvider, OpenAICompatProvider)
+		return "", fmt.Errorf("its model %q names no provider: the claude-api backend runs %s/<model> and %s/<model> models", model, AnthropicProvider, OpenAICompatProvider)
 	case provider != AnthropicProvider && provider != OpenAICompatProvider:
-		return "", fmt.Errorf("its model %q isn't one the api backend runs: it runs %s/<model> and %s/<model> models", model, AnthropicProvider, OpenAICompatProvider)
+		return "", fmt.Errorf("its model %q isn't one the claude-api backend runs: it runs %s/<model> and %s/<model> models", model, AnthropicProvider, OpenAICompatProvider)
 	}
 	return provider, nil
 }
@@ -62,7 +62,7 @@ func APIModel(model string) (provider string, err error) {
 // Run implements Backend.
 func (b *Genkit) Run(ctx context.Context, j Job) (*Output, error) {
 	if j.Effort != "" {
-		return nil, fmt.Errorf("effort %q isn't supported by the api backend yet; leave it at default or use an agent CLI backend (claude-code or codex)", j.Effort)
+		return nil, fmt.Errorf("effort %q isn't supported by the claude-api backend yet; leave it at default or use an agent CLI backend (claude-code or codex)", j.Effort)
 	}
 	if j.Folder != "" || j.SaveSession || j.SessionID != "" || len(j.BuiltinTools) > 0 {
 		return nil, errors.New("folder, session and builtinTools need an agent CLI backend (llm.backend claude-code or codex)")
@@ -160,7 +160,7 @@ func (b *Genkit) Run(ctx context.Context, j Job) (*Output, error) {
 // provider is the provider that runs model, once it's set up.
 func (b *Genkit) provider(model string) (string, error) {
 	if model == "" {
-		return "", errors.New("the routine names no model, and the api backend has no default: " +
+		return "", errors.New("the routine names no model, and the claude-api backend has no default: " +
 			"set its model (e.g. " + AnthropicProvider + "/claude-sonnet-5-5, or " + OpenAICompatProvider + "/<model> for an OpenAI-compatible server)")
 	}
 	provider, err := APIModel(model)

@@ -132,7 +132,7 @@ func TestOpenAICompatRunCallsToolsThroughTheGateway(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Text != "All posted." || res.Outcome != OutcomeDone || res.Backend != "api" {
+	if res.Text != "All posted." || res.Outcome != OutcomeDone || res.Backend != "claude-api" {
 		t.Errorf("result: %+v", res)
 	}
 	if len(res.Calls) != 2 || res.Calls[0].Tool != "read" || res.Calls[1].Tool != "post" || !res.Calls[1].Write || len(res.Writes) != 1 {
@@ -277,7 +277,7 @@ func TestGenkitRoutesByProvider(t *testing.T) {
 	for model, want := range map[string]string{
 		"anthropic/claude-sonnet-5-5": "needs an Anthropic API key, and none is stored",
 		"openai-compat/qwen3":         "needs the OpenAI-compatible server's URL",
-		"openai/gpt-5.5":              "isn't one the api backend runs",
+		"openai/gpt-5.5":              "isn't one the claude-api backend runs",
 		"claude-sonnet-5-5":           "names no provider",
 	} {
 		if err := run(&Genkit{}, model); err == nil || !strings.Contains(err.Error(), want) {

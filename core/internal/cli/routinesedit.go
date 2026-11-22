@@ -262,7 +262,7 @@ func newRoutinesCheckCmd() *cobra.Command {
 		Long: "Without calling the model or any tool: parses each routine file, resolves its settings (required " +
 			"parameters set, folder exists), checks every server it uses is provided, connects to its servers and " +
 			"confirms each allowlisted tool is offered by exactly one of them, as a run would, checks the servers " +
-			"its plugins reach are signed in, and checks its model's provider is set up (on the api backend, an " +
+			"its plugins reach are signed in, and checks its model's provider is set up (on the claude-api backend, an " +
 			"OpenAI-compatible server is asked for its models). Fails if any routine has a problem.",
 		Annotations: readOnly(),
 		Args:        cobra.MaximumNArgs(1),

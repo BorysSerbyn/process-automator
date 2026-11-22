@@ -13,7 +13,7 @@ type price struct {
 // cacheWriteFactor is what a 5-minute prompt-cache write costs relative to input.
 const cacheWriteFactor = 1.25
 
-// prices are Anthropic's list prices for the models the api backend runs.
+// prices are Anthropic's list prices for the models the claude-api backend runs.
 // Keep them current: a model missing here has no cost, so its runs don't
 // count toward the LLM budgets (the run's log says so).
 var prices = map[string]price{

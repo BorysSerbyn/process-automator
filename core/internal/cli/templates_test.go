@@ -95,14 +95,14 @@ func TestTemplateBackends(t *testing.T) {
 	product.TemplatesDir = tdir
 	t.Cleanup(func() { product.TemplatesDir = old })
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
-	if _, err := cli(t, cfg, "settings", "set", "llm.backend", "api"); err != nil {
+	if _, err := cli(t, cfg, "settings", "set", "llm.backend", "claude-api"); err != nil {
 		t.Fatal(err)
 	}
 	out, _ := cli(t, cfg, "templates", "list", "--json")
 	var rows []TemplateInfo
 	if err := json.Unmarshal([]byte(out), &rows); err != nil || len(rows) != 1 || rows[0].SupportsBackend ||
 		len(rows[0].Backends) != 1 || rows[0].Backends[0] != "claude-code" {
-		t.Fatalf("list on api: %v\n%s", err, out)
+		t.Fatalf("list on claude-api: %v\n%s", err, out)
 	}
 	a, err := loadTest(cfg, nil)
 	if err != nil {
@@ -112,9 +112,9 @@ func TestTemplateBackends(t *testing.T) {
 		t.Errorf("setup offers %d templates on a backend they don't support", n)
 	}
 	_, err = cli(t, cfg, "templates", "install", "personal/sweep")
-	if err == nil || !strings.Contains(err.Error(), "works only with the claude-code backend, and llm.backend is api") ||
+	if err == nil || !strings.Contains(err.Error(), "works only with the claude-code backend, and llm.backend is claude-api") ||
 		!strings.Contains(err.Error(), "settings set llm.backend claude-code") {
-		t.Fatalf("install on api: %v", err)
+		t.Fatalf("install on claude-api: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(cfg), "routines", "sweep.prompt")); !os.IsNotExist(err) {
 		t.Fatal("a refused install left a routine behind")

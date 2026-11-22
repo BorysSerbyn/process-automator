@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Budgets are the llm.budget.* settings (the api backend).
+// Budgets are the llm.budget.* settings (the claude-api backend).
 type Budgets struct {
 	// Window is the short window's length.
 	Window time.Duration

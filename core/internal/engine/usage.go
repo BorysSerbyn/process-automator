@@ -16,7 +16,7 @@ const PlanUsageMaxAge = 10 * time.Minute
 // Usage is the LLM usage limit now, as the backend in use means it: the
 // Claude plan's usage against llm.usage-limit (claude-code, read from Claude
 // Code when the last reading is older than PlanUsageMaxAge), API spend
-// against the llm.budget.* budgets (api), or none (a backend with neither).
+// against the llm.budget.* budgets (claude-api), or none (a backend with neither).
 func (a *App) Usage(ctx context.Context, now time.Time) (usage.Report, error) {
 	vals, err := a.Settings()
 	if err != nil {
@@ -38,7 +38,7 @@ func (a *App) Usage(ctx context.Context, now time.Time) (usage.Report, error) {
 	return usage.AssessPlan(plan, vals.Float("llm.usage-limit"), now), nil
 }
 
-// apiBudget is what api runs spent, from the run history, against the budgets.
+// apiBudget is what claude-api runs spent, from the run history, against the budgets.
 func apiBudget(a *App, vals settings.Values, now time.Time) (usage.Report, error) {
 	b := usage.Budgets{WindowUSD: vals.Float("llm.budget.window-usd"), WeeklyUSD: vals.Float("llm.budget.weekly-usd")}
 	var err error
@@ -51,7 +51,7 @@ func apiBudget(a *App, vals settings.Values, now time.Time) (usage.Report, error
 	}
 	var runs []usage.Run
 	for _, s := range list {
-		if s.Backend == "api" {
+		if s.Backend == "claude-api" || s.Backend == "api" { // api: its former name, in older runs
 			runs = append(runs, usage.Run{StartedAt: s.StartedAt, CostUSD: s.CostUSD})
 		}
 	}

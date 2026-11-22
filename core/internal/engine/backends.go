@@ -27,7 +27,7 @@ type BackendDef struct {
 	// PlanUsage reads the plan's usage limits, for a backend whose plan's
 	// usage the app can read (claude-code); nil for others.
 	PlanUsage func(ctx context.Context, a *App) ([]usage.Limit, error)
-	// Priced is a backend paid per token (api): its runs have a cost, and
+	// Priced is a backend paid per token (claude-api): its runs have a cost, and
 	// the llm.budget.* budgets apply. A backend neither priced nor with
 	// PlanUsage has no usage limit in the app.
 	Priced bool
@@ -53,7 +53,7 @@ type BackendDef struct {
 // agent CLI, as an agent.CLITool) is one entry here plus its value in the
 // setting's enum (a test keeps the two in sync).
 var Backends = map[string]BackendDef{
-	"api": {
+	"claude-api": {
 		New: func(a *App) (agent.Backend, error) {
 			// Each provider's set-up is checked when a routine's model needs it.
 			key, _, err := secrets.Lookup(a.Connector.Secrets, AnthropicKey)

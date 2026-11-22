@@ -365,7 +365,9 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 		}
 	}
 	if def, ok := settings.Lookup("llm.backend"); ok {
-		for _, b := range backends {
+		for i, b := range backends {
+			b = def.Canonical(b) // a former name is the backend it became
+			backends[i] = b
 			if !slices.Contains(def.Enum, b) {
 				return Routine{}, fmt.Errorf("%s.backends: unknown backend %q (want %s)", Namespace, b, strings.Join(def.Enum, " or "))
 			}

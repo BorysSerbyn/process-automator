@@ -9,7 +9,7 @@
         "budget",
         "none"
       ],
-      "description": "Kind is \"plan\" (claude-code: the Claude plan's usage against\nllm.usage-limit), \"budget\" (api: spend against llm.budget.*) or \"none\"\n(a backend with no usage limit in the app, e.g. codex: no windows, never over)."
+      "description": "Kind is \"plan\" (claude-code: the Claude plan's usage against\nllm.usage-limit), \"budget\" (claude-api: spend against llm.budget.*) or \"none\"\n(a backend with no usage limit in the app, e.g. codex: no windows, never over)."
     },
     "limitPercent": {
       "type": "number",

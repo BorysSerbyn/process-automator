@@ -41,7 +41,7 @@ func TestOpenAICompatSetup(t *testing.T) {
 		return SetupStep{}
 	}
 	s := backend()
-	if s.Done || s.SignIn != "anthropic" || !strings.Contains(s.Ask, "Can also run local models such as Ollama (experimental, untested)") {
+	if s.Done || s.SignIn != "anthropic" || !strings.Contains(s.Ask, "claude-api: Anthropic's API, paid per token") {
 		t.Errorf("no routines: %+v", s)
 	}
 	var offered int
@@ -60,7 +60,7 @@ func TestOpenAICompatSetup(t *testing.T) {
 	enginetest.Set(t, cfg, engine.OpenAICompatURLSetting, down)
 	_ = os.MkdirAll(a.Layout.Routines(), 0o700)
 	_ = os.WriteFile(filepath.Join(a.Layout.Routines(), "local.prompt"), []byte("---\nmodel: openai-compat/qwen3:8b\n---\nGo. {{> memories}}\n"), 0o600)
-	if s := backend(); !s.Done || s.Status != "Runs with api, ready" {
+	if s := backend(); !s.Done || s.Status != "Runs with claude-api, ready" {
 		t.Errorf("only an OpenAI-compatible model: %+v", s)
 	}
 	out, err := cli(t, cfg, "doctor")
