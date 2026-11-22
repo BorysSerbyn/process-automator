@@ -2,9 +2,12 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -235,13 +238,62 @@ func whoNeeds(self string, by []PermissionSource) string {
 // to the app). Every permission, not only the ones things declare now, so
 // a review of something just added has an answer.
 func (a *App) RecordPermissions(now time.Time) error {
+	found := checkAll()
+	return permissions.Update(a.Layout.Permissions(), func(s *permissions.State) {
+		s.CheckedAt, s.Permissions = now, found
+	})
+}
+
+// PermissionsProbeEnv makes the app's binary, when it's set in its environment, print
+// what the OS allows it, as JSON, and exit, before anything else runs
+// (automator.Main): the scheduler's fresh check on every pass.
+const PermissionsProbeEnv = "PA_PERMISSIONS_PROBE"
+
+// probeTimeout is how long one fresh check may take.
+const probeTimeout = 20 * time.Second
+
+// PrintPermissionsProbe writes every permission's status, as this process
+// finds it, as JSON: what the binary does with PermissionsProbeEnv set.
+func PrintPermissionsProbe(w io.Writer) error { return json.NewEncoder(w).Encode(checkHere()) }
+
+// checkHere is every permission's status as this process finds it.
+func checkHere() map[string]permissions.Status {
 	found := map[string]permissions.Status{}
 	for _, name := range permissions.Names() {
 		found[name] = checkPermission(name)
 	}
-	return permissions.Update(a.Layout.Permissions(), func(s *permissions.State) {
-		s.CheckedAt, s.Permissions = now, found
-	})
+	return found
+}
+
+// checkAll is every permission's status, checked in a fresh child process
+// (this binary, with PermissionsProbeEnv): macOS caches its answers in a
+// process that keeps running, so the scheduler asking itself again would
+// keep saying what it found first, granted after I've taken a permission
+// away. A child of the scheduler is attributed to the app as a watcher or a
+// plugin's server is, so its answer is theirs. When the child can't answer,
+// the check is this process's own. A variable for tests.
+var checkAll = checkInChild
+
+func checkInChild() map[string]permissions.Status {
+	exe, err := os.Executable()
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, exe)
+		cmd.Env = append(os.Environ(), PermissionsProbeEnv+"=1")
+		var out []byte
+		if out, err = cmd.Output(); err == nil {
+			var found map[string]permissions.Status
+			if err = json.Unmarshal(out, &found); err == nil && len(found) == len(permissions.Names()) {
+				return found
+			}
+			if err == nil {
+				err = fmt.Errorf("it answered for %d permissions, not %d", len(found), len(permissions.Names()))
+			}
+		}
+	}
+	logf("permissions: a fresh check failed (%v): checking in the scheduler itself", err)
+	return checkHere()
 }
 
 // PermissionRequest is how asking the OS for a permission went

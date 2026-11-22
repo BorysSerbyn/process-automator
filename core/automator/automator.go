@@ -17,6 +17,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/cli"
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/templates"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
@@ -73,6 +74,11 @@ var (
 // Main runs the app's command line (os.Args) and returns its error, which
 // it has already printed. Call it once, from main.
 func Main(app App) error {
+	// The scheduler's fresh permission check: answer and exit, before
+	// anything else (engine.PermissionsProbeEnv).
+	if os.Getenv(engine.PermissionsProbeEnv) != "" {
+		return engine.PrintPermissionsProbe(os.Stdout)
+	}
 	if err := app.Validate(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error: this build's App:", err)
 		return err
