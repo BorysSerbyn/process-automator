@@ -39,7 +39,7 @@ func addFailureNotification(a *App, routine string, run runstatus.Run) {
 	}
 	_, err := notifications.Add(a.Layout.Notifications(), notifications.Notification{
 		Kind: notifications.KindFailure, Title: title, Body: body,
-		Routine: routine, Run: history.RunID(routine, run.StartedAt),
+		Routine: routine, Run: history.RunID(routine, run.StartedAt), Hook: a.IsHook(routine),
 	}, time.Now())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "warning: could not record a notification:", err)

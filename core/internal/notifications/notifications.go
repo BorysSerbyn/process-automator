@@ -55,6 +55,8 @@ type Notification struct {
 	// Routine and Run (a run ID, as in `runs show`) are what it's about, if any.
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
+	// Hook is true when Routine names a hook, not a routine.
+	Hook bool `json:"hook,omitempty"`
 	// DeliveredAt is when a frontend showed it; absent until then.
 	DeliveredAt *time.Time `json:"deliveredAt,omitempty"`
 }

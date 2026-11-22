@@ -17,6 +17,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/dispatch"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
@@ -256,6 +257,11 @@ func TestRateLimitAndLoopPause(t *testing.T) {
 	}
 	if got := gotEvents(a, "open-meet"); len(got) != 1 {
 		t.Fatalf("it ran again: %v", got)
+	}
+	// I'm told, on the hook's page.
+	f, err := notifications.Load(a.Layout.Notifications())
+	if err != nil || len(f.Notifications) != 1 || !f.Notifications[0].Hook || f.Notifications[0].Routine != "open-meet" {
+		t.Fatalf("notifications %+v %v", f, err)
 	}
 }
 

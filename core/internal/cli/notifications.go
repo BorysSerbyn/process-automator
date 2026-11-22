@@ -25,6 +25,8 @@ type ClickOutput struct {
 	// Routine and Run, for show-run.
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
+	// Hook is true when Routine names a hook: show the hook's window.
+	Hook bool `json:"hook,omitempty"`
 }
 
 func newNotificationsCmd() *cobra.Command {
@@ -102,7 +104,7 @@ func newNotificationsOpenCmd() *cobra.Command {
 			}
 			out := ClickOutput{Notification: n.ID, Action: "show-app"}
 			if n.Run != "" {
-				out.Action, out.Routine, out.Run = "show-run", n.Routine, n.Run
+				out.Action, out.Routine, out.Run, out.Hook = "show-run", n.Routine, n.Run, n.Hook
 			}
 			return emit(cmd, out, strings.TrimSpace(out.Action+" "+out.Run))
 		}),

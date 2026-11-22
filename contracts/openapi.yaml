@@ -70,6 +70,9 @@ components:
             - show-run
             - show-app
           type: string
+        hook:
+          description: 'Hook is true when Routine names a hook: show the hook''s window.'
+          type: boolean
         notification:
           type: string
         routine:
@@ -699,6 +702,9 @@ components:
           description: DeliveredAt is when a frontend showed it; absent until then.
           format: date-time
           type: string
+        hook:
+          description: Hook is true when Routine names a hook, not a routine.
+          type: boolean
         id:
           type: string
         kind:

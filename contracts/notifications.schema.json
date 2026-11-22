@@ -36,6 +36,10 @@
           "run": {
             "type": "string"
           },
+          "hook": {
+            "type": "boolean",
+            "description": "Hook is true when Routine names a hook, not a routine."
+          },
           "deliveredAt": {
             "type": "string",
             "format": "date-time",

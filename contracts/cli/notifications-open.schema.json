@@ -19,6 +19,10 @@
     },
     "run": {
       "type": "string"
+    },
+    "hook": {
+      "type": "boolean",
+      "description": "Hook is true when Routine names a hook: show the hook's window."
     }
   },
   "additionalProperties": false,
