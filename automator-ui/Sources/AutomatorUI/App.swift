@@ -44,10 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             updates: updates, quit: { [weak self] in self?.quit() },
             openSettings: { [weak self] in self?.openSettings() },
             openRoutines: { [weak self] in self?.routineWindows?.showList() },
-            openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name) },
+            openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name, review: true) },
             openRun: { [weak self] id in self?.openRun(id) },
             openHooks: { [weak self] in self?.routineWindows?.showHooks() },
-            openHook: { [weak self] name, run in self?.routineWindows?.showHook(name, run: run) },
+            openHook: { [weak self] name, run in self?.routineWindows?.showHook(name, run: run, review: run == nil) },
             openSetup: { [weak self] in self?.setupWindow?.show() })
         notifier.setUp(cli: cli) { [weak self] click in self?.show(click) }
         followStatus()

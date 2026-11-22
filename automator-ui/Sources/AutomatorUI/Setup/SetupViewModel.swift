@@ -38,6 +38,12 @@ final class SetupViewModel: ObservableObject {
     /// the local backend's server and model), in the core's order.
     @Published var backendSettings: [SettingState] = []
     @Published var reviews: [String: TrustReview] = [:]
+    /// Why a routine's review couldn't be read, by routine.
+    @Published var reviewErrors: [String: String] = [:]
+    /// A sign-in a review asked for, waiting for me in the browser (its
+    /// name), and why the last one failed.
+    @Published var signingIn: String?
+    @Published var signInError: String?
     /// Steps the core does without asking (`auto`) that were started once
     /// already: a failed one waits for its button.
     private var autoStarted: Set<String> = []
@@ -226,11 +232,25 @@ final class SetupViewModel: ObservableObject {
     }
 
     func review(_ routine: String, _ step: SetupStep) {
+        reviewErrors[routine] = nil
         Task {
             switch await cli.background({ $0.trustCheck(routine) }) {
             case .success(let review): reviews[routine] = review
-            case .failure(let failure): errors[Self.id(step)] = failure.message
+            case .failure(let failure): reviewErrors[routine] = failure.message
             }
+        }
+    }
+
+    /// Signs in where a turn-on review says one is still needed, then reads
+    /// the steps (and their reviews) again.
+    func signIn(named name: String) {
+        signingIn = name
+        Task {
+            let failure = await cli.background { $0.signIn(name) }
+            signingIn = nil
+            signInError = failure?.message
+            if failure == nil { changed() }
+            load()
         }
     }
 

@@ -192,14 +192,21 @@ struct SetupStepView: View {
         case .turn_hyphen_on:
             // What it can reach, then one button: trusting it and running it
             // on its schedule (the question above says which it needs).
-            if let routine = step.subject, let review = model.reviews[routine] {
-                SettingsCard(nested: true) {
-                    TrustReviewView(
-                        review: review, error: nil, trust: step.done ? nil : { model.turnOn(step) },
-                        working: model.working.contains(id), actionTitle: "Turn On", note: nil)
+            // The same review as a window's Turn On…, then its one confirm.
+            if let routine = step.subject {
+                TurnOnReview(
+                    summary: nil, review: model.reviews[routine], loadError: model.reviewErrors[routine],
+                    retry: { model.review(routine, step) }, signingIn: model.signingIn,
+                    signInError: model.signInError, signIn: model.signIn(named:))
+                if !step.done, let review = model.reviews[routine] {
+                    HStack {
+                        if model.working.contains(id) { ProgressView().controlSize(.small) }
+                        Spacer()
+                        Button(review.confirmTitle) { model.turnOn(step) }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.working.contains(id))
+                    }
                 }
-            } else if model.errors[id] == nil {
-                ProgressView().controlSize(.small)
             }
         case .usage:
             // The core wraps the user's Claude Code status line to record usage.

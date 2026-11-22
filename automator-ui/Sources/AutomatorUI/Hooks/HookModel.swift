@@ -43,7 +43,10 @@ final class HookModel: ObservableObject, RunHistoryModel, MemoriesModel {
     @Published var trustReview: TrustReview?
     @Published var trustError: String?
     @Published var accessOpen = false
-    @Published var signingIn = false
+    /// Turning it on: its one review and confirm.
+    let turnOn: TurnOn
+    /// The sign-in waiting for me in the browser: its name.
+    @Published var signingIn: String?
     @Published var signInError: String?
     @Published var actionError: String?
     @Published var working = false
@@ -56,12 +59,17 @@ final class HookModel: ObservableObject, RunHistoryModel, MemoriesModel {
     @Published var fireError: String?
     /// Called once the hook is deleted (its window closes).
     var onDeleted: () -> Void = {}
+    /// Opened to turn it on (from the menu, a reason, the list's Turn On…):
+    /// the review shows once it's read, if it needs turning on.
+    var reviewWhenLoaded = false
     private var openedLatestRun = false
 
     init(name: String, cli: CLI, status: RunStatus?) {
         self.name = name
         self.cli = cli
         self.status = status
+        turnOn = TurnOn(name: name, kind: .hook, cli: cli)
+        turnOn.turnedOn = { [weak self] in self?.load() }
     }
 
     /// Its entry in run status (health, summary, last run, problem).
@@ -96,8 +104,10 @@ final class HookModel: ObservableObject, RunHistoryModel, MemoriesModel {
                 self.detail = detail
                 loadError = nil
                 if !detail.isProgram, memories == nil, memoryError == nil { loadMemories() }
-                accessOpen = accessOpen || !detail.trusted
-                if !detail.trusted, trustReview == nil { loadTrust() }
+                if reviewWhenLoaded {
+                    reviewWhenLoaded = false
+                    if detail.turnOn == true { turnOn.start() }
+                }
             case .failure(let failure):
                 loadError = failure.message
             }
@@ -282,35 +292,19 @@ final class HookModel: ObservableObject, RunHistoryModel, MemoriesModel {
         }
     }
 
-    /// Signs in to a program hook's secrets in the browser, then reads
-    /// what's stored again.
-    func signIn() {
-        signingIn = true
+    /// Signs in where the review (or a program hook's secrets) says, in
+    /// the browser, then reads what's stored, and the review, again.
+    func signIn(_ signInName: String) {
+        signingIn = signInName
         Task {
-            let failure = await cli.background { [name] in $0.signIn(name) }
-            signingIn = false
+            let failure = await cli.background { $0.signIn(signInName) }
+            signingIn = nil
             signInError = failure?.message
             loadDetail()
             if trustReview != nil { loadTrust() }
         }
     }
 
-    /// Trusts it with what it acts on and can reach; `turnOn` also turns it
-    /// on (an off hook).
-    func trust(turnOn: Bool) {
-        working = true
-        Task {
-            let result = await cli.background { [name] in $0.trustHook(name, turnOn: turnOn) }
-            working = false
-            switch result {
-            case .success(let review):
-                trustReview = review
-                trustError = nil
-                loadDetail()
-                loadSettings()
-            case .failure(let failure):
-                trustError = failure.message
-            }
-        }
-    }
+    /// Turn On…: its review, in a sheet, read afresh.
+    func startTurnOn() { turnOn.start() }
 }

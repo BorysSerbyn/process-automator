@@ -200,3 +200,28 @@ extension CLI {
         call(Components.Schemas.WatcherChange.self, ["watchers", "delete", name])
     }
 }
+
+/// Turning something on (a routine, a program, a hook) as its review puts
+/// it: words for what the core's review says.
+extension Components.Schemas.TrustOutput {
+    /// Whether confirming trusts anything: it isn't trusted, or (a hook)
+    /// its watcher isn't, which trusting the hook trusts too.
+    public var needsTrust: Bool { !trusted || watcherToTrust != nil }
+
+    /// The hook's watcher that confirming trusts with it (nil: none to trust).
+    public var watcherToTrust: Components.Schemas.WatcherTrust? {
+        guard let watcher, !watcher.trusted, watcher.program != nil else { return nil }
+        return watcher
+    }
+
+    /// The hook's watcher that can't be trusted: there's no such watcher,
+    /// so the hook hears nothing (nil: there's one).
+    public var missingWatcher: Components.Schemas.WatcherTrust? {
+        guard let watcher, !watcher.trusted, watcher.program == nil else { return nil }
+        return watcher
+    }
+
+    /// The review's one button: "Trust and Turn On", or "Turn On" when
+    /// there's nothing left to trust.
+    public var confirmTitle: String { needsTrust ? "Trust and Turn On" : "Turn On" }
+}

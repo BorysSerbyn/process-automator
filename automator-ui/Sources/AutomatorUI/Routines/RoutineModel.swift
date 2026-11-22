@@ -39,8 +39,11 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
     @Published var trustReview: TrustReview?
     @Published var trustError: String?
     @Published var accessOpen = false
-    /// A program's sign-in (`auth login <program> --browser`) is waiting for me.
-    @Published var signingIn = false
+    /// Turning it on: its one review and confirm.
+    let turnOn: TurnOn
+    /// The sign-in waiting for me in the browser (`auth login <name>
+    /// --browser`): its name.
+    @Published var signingIn: String?
     @Published var signInError: String?
     /// Why the last control (run, stop, pause, delete) failed.
     @Published var actionError: String?
@@ -48,12 +51,17 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
     @Published var working = false
     /// Called once the routine is deleted (its window closes).
     var onDeleted: () -> Void = {}
+    /// Opened to turn it on (from the menu, a reason, a list's Turn On…):
+    /// the review shows once it's read, if it needs turning on.
+    var reviewWhenLoaded = false
     private var openedLatestRun = false
 
     init(name: String, cli: CLI, status: RunStatus?) {
         self.name = name
         self.cli = cli
         self.status = status
+        turnOn = TurnOn(name: name, kind: .routine, cli: cli)
+        turnOn.turnedOn = { [weak self] in self?.load() }
     }
 
     /// Its entry in run status (health, summary, last and next run, problem).
@@ -92,8 +100,10 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
                 self.detail = detail
                 loadError = nil
                 if !detail.isProgram, memories == nil, memoryError == nil { loadMemories() }
-                accessOpen = accessOpen || !detail.trusted
-                if !detail.trusted, trustReview == nil { loadTrust() }
+                if reviewWhenLoaded {
+                    reviewWhenLoaded = false
+                    if detail.turnOn == true { turnOn.start() }
+                }
             case .failure(let failure):
                 loadError = failure.message
             }
@@ -285,33 +295,20 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
         }
     }
 
-    /// Signs in to a program's secrets: the core opens a page in the browser
-    /// to enter them, as setup's sign-in step does. Then what's stored is
-    /// read again.
-    func signIn() {
-        signingIn = true
+    /// Signs in where the review (or a program's secrets) says: the core
+    /// opens a page in the browser to enter them, as setup's sign-in step
+    /// does. Then what's stored, and the review, are read again.
+    func signIn(_ signInName: String) {
+        signingIn = signInName
         Task {
-            let failure = await cli.background { [name] in $0.signIn(name) }
-            signingIn = false
+            let failure = await cli.background { $0.signIn(signInName) }
+            signingIn = nil
             signInError = failure?.message
             loadDetail()
             if trustReview != nil { loadTrust() }
         }
     }
 
-    func trust() {
-        working = true
-        Task {
-            let result = await cli.background { [name] in $0.trust(name) }
-            working = false
-            switch result {
-            case .success(let review):
-                trustReview = review
-                trustError = nil
-                loadDetail()
-            case .failure(let failure):
-                trustError = failure.message
-            }
-        }
-    }
+    /// Turn On…: its review, in a sheet, read afresh.
+    func startTurnOn() { turnOn.start() }
 }

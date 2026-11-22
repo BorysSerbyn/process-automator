@@ -463,3 +463,114 @@ private func loggingCLI(reply: String) throws -> (CLI, URL) {
     let fired = try cli.fireHook("open-meet", event: "{}", dryRun: true).get()
     #expect(fired.kind == .program && fired.program?.dryRun == true)
 }
+
+// MARK: Turning on
+
+/// A stand-in CLI answering each command (by its arguments) from `replies`
+/// ("!message": the core's error), logging what it's given; others get {}.
+private func scriptedCLI(_ replies: [String: String]) throws -> (CLI, URL) {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "automator-ui-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let log = dir.appending(path: "log")
+    var cases = ""
+    for (index, (args, reply)) in replies.enumerated() {
+        let file = dir.appending(path: "reply\(index)")
+        let failing = reply.hasPrefix("!")
+        let body = failing ? #"{"error":"\#(reply.dropFirst())"}"# : reply
+        try body.write(to: file, atomically: true, encoding: .utf8)
+        cases += "  '\(args)') cat '\(file.path)'; exit \(failing ? 1 : 0) ;;\n"
+    }
+    let script = dir.appending(path: "procauto")
+    try """
+    #!/bin/sh
+    echo "$*" >> '\(log.path)'
+    case "$*" in
+    \(cases)  *) echo '{}' ;;
+    esac
+    """.write(to: script, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    return (CLI(executable: script), log)
+}
+
+private let hookReview = """
+    {"routine":"open-meet","kind":"program","surface":{"servers":[],"tools":[]},"changes":[],"trusted":false,"hook":true,
+     "program":{"executable":"/h/act","checksum":"be2b","args":[],"writes":false,"secrets":[]},
+     "trigger":{"watcher":"cal","type":"meeting.started"},
+     "watcher":{"name":"cal","trusted":false,"untrusted":"not trusted yet","mode":"poll","description":"My calendar",
+       "program":{"executable":"/w/watch","checksum":"4ef3","args":[],"writes":false,
+         "secrets":[{"name":"cal-token","env":"CAL_TOKEN","stored":false}]}},
+     "signIns":["cal"]}
+    """
+
+@MainActor
+@Test func turningAHookOnIsOneReviewAndOneConfirm() async throws {
+    let on = hookReview.replacingOccurrences(
+        of: #""trusted":false,"hook""#, with: #""trusted":true,"resumed":true,"hook""#)
+    let (cli, log) = try scriptedCLI([
+        "hooks trust open-meet --check --json": hookReview,
+        "hooks trust open-meet --yes --resume --json": on,
+    ])
+    let turnOn = TurnOn(name: "open-meet", kind: .hook, cli: cli)
+    var reloaded = 0
+    turnOn.turnedOn = { reloaded += 1 }
+    turnOn.showing = true
+    await turnOn.load()
+    let review = try #require(turnOn.review)
+    // The review covers its watcher, and the sign-in still needed.
+    #expect(review.needsTrust && review.confirmTitle == "Trust and Turn On")
+    #expect(review.watcherToTrust?.program?.executable == "/w/watch")
+    #expect(review.missingWatcher == nil)
+    #expect(review.signIns == ["cal"])
+    await turnOn.confirm()
+    #expect(!turnOn.showing && turnOn.error == nil && reloaded == 1)
+    #expect(ran(log) == ["hooks trust open-meet --check --json", "hooks trust open-meet --yes --resume --json"])
+}
+
+@MainActor
+@Test func turningARoutineOnSaysWhyItCouldnt() async throws {
+    let review = #"{"routine":"digest","surface":{"servers":[],"tools":[]},"changes":[],"trusted":true}"#
+    let (cli, log) = try scriptedCLI([
+        "routines trust digest --check --json": review,
+        "routines trust digest --yes --resume --json": "!the config file is locked",
+        "routines trust gone --check --json": "!no routine named gone",
+    ])
+    let turnOn = TurnOn(name: "digest", kind: .routine, cli: cli)
+    turnOn.showing = true
+    await turnOn.load()
+    // Trusted already (paused): nothing to trust, only to turn on.
+    #expect(turnOn.review?.confirmTitle == "Turn On")
+    await turnOn.confirm()
+    // The confirm failed: why stays in the review, which stays open.
+    #expect(turnOn.showing && turnOn.error == "the config file is locked" && !turnOn.working)
+    #expect(ran(log).last == "routines trust digest --yes --resume --json")
+    // A review that can't be read says why.
+    let gone = TurnOn(name: "gone", kind: .routine, cli: cli)
+    await gone.load()
+    #expect(gone.review == nil && gone.loadError == "no routine named gone")
+}
+
+@MainActor
+@Test func signingInFromTheReviewReadsItAgain() async throws {
+    let (cli, log) = try scriptedCLI(["hooks trust open-meet --check --json": hookReview])
+    let turnOn = TurnOn(name: "open-meet", kind: .hook, cli: cli)
+    await turnOn.signIn("cal")
+    #expect(turnOn.signingIn == nil && turnOn.signInError == nil && turnOn.review != nil)
+    #expect(ran(log) == ["auth login cal --browser", "hooks trust open-meet --check --json"])
+}
+
+@Test func aHookWithNoWatcherSaysSo() throws {
+    let json = """
+        {"routine":"lonely","surface":{"servers":[],"tools":[]},"changes":[],"trusted":false,"hook":true,
+         "watcher":{"name":"nowhere","trusted":false,"untrusted":"no watcher named nowhere"}}
+        """
+    let review = try CoreJSON.decoder().decode(Components.Schemas.TrustOutput.self, from: Data(json.utf8))
+    #expect(review.watcherToTrust == nil && review.missingWatcher?.name == "nowhere")
+    #expect(review.confirmTitle == "Trust and Turn On")
+    // Lists say what needs turning on.
+    let rows = try CoreJSON.decoder().decode(
+        [Components.Schemas.HookInfo].self,
+        from: Data(
+            #"[{"name":"lonely","path":"/h","on":{"watcher":"nowhere"},"enabled":false,"staleness":"10m","timeout":"20m","rate":60,"trusted":false,"turnOn":true}]"#
+                .utf8))
+    #expect(rows.first?.turnOn == true)
+}

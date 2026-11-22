@@ -60,6 +60,8 @@ final class HooksModel: ObservableObject {
 struct HooksListView: View {
     @ObservedObject var model: HooksModel
     let openHook: (String) -> Void
+    /// Opens a hook's window on its Turn On review.
+    let turnOn: (String) -> Void
     let openWatcher: (String) -> Void
 
     var body: some View {
@@ -105,7 +107,10 @@ struct HooksListView: View {
             SettingsCard {
                 ForEach(Array(model.hooks.enumerated()), id: \.element.name) { index, hook in
                     if index > 0 { Divider().padding(.leading, 38) }
-                    HookListRow(hook: hook, status: model.status?.hook(hook.name)) { openHook(hook.name) }
+                    HStack(spacing: 0) {
+                        HookListRow(hook: hook, status: model.status?.hook(hook.name)) { openHook(hook.name) }
+                        if hook.turnOn == true { TurnOnButton { turnOn(hook.name) } }
+                    }
                 }
             }
         }
@@ -143,8 +148,6 @@ struct HookListRow: View {
                 HStack(spacing: 6) {
                     Text(hook.name).font(.title3.weight(.semibold))
                     Tag(text: HookWords.kind(program: hook.isProgram))
-                    if !hook.enabled { Tag(text: "Off") }
-                    if !hook.trusted { Tag(text: "Not trusted", tint: .orange) }
                 }
                 Text("On \(hook.on.text)").font(.subheadline).foregroundStyle(.secondary)
                 if let last = status?.lastRun ?? hook.lastRun {

@@ -36,12 +36,12 @@ struct RoutineDetailView: View {
                         title: "Couldn't read \(model.name)", message: error, systemImage: "xmark.octagon.fill",
                         tint: .red)
                 }
-                if let detail = model.detail, !detail.trusted {
-                    Banner(title: "Not trusted", message: detail.untrusted, systemImage: "lock.shield") {
-                        Button("Review…") {
-                            model.tab = .overview
-                            if !model.accessOpen { model.toggleAccess() }
-                        }
+                if let detail = model.detail, detail.turnOn == true {
+                    Banner(
+                        title: "\(model.name) isn't on", message: detail.untrusted ?? "It's paused.",
+                        systemImage: "power"
+                    ) {
+                        Button("Turn On…", action: model.startTurnOn)
                     }
                 }
                 Picker("Show", selection: $model.tab) {
@@ -64,6 +64,7 @@ struct RoutineDetailView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(minWidth: 600, idealWidth: 680, minHeight: 480, idealHeight: 760)
+        .modifier(TurnOnPresenter(turnOn: model.turnOn, summary: turnOnSummary))
         .alert("Delete \(model.name)?", isPresented: $confirmingDelete) {
             Button("Delete", role: .destructive) { model.delete() }
             Button("Cancel", role: .cancel) {}
@@ -118,15 +119,26 @@ struct RoutineDetailView: View {
             .fixedSize()
             .help(runHelp)
         }
-        if let enabled = model.detail?.enabled {
-            Button {
-                model.setPaused(enabled)
-            } label: {
-                Label(enabled ? "Pause" : "Resume", systemImage: enabled ? "pause.fill" : "play.circle")
+        if let detail = model.detail {
+            if detail.turnOn == true {
+                Button(action: model.startTurnOn) {
+                    Label("Turn On…", systemImage: "power")
+                }
+                .buttonStyle(.borderedProminent)
+                .help("Review what it can reach, then turn it on")
+            } else if detail.enabled {
+                Button {
+                    model.setPaused(true)
+                } label: {
+                    Label("Pause", systemImage: "pause.fill")
+                }
+                .help("Stop running it on its schedule")
             }
-            .help(enabled ? "Stop running it on its schedule" : "Run it on its schedule again")
         }
         Menu {
+            if model.detail?.turnOn == false, model.detail?.enabled == false {
+                Button("Resume") { model.setPaused(false) }
+            }
             Button("Delete…", role: .destructive) { confirmingDelete = true }
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -135,6 +147,13 @@ struct RoutineDetailView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("More")
+    }
+
+    /// What it does, in a line, for its Turn On review.
+    private var turnOnSummary: String? {
+        guard let detail = model.detail else { return nil }
+        let when = detail.scheduleText.map { "Runs: \($0)." }
+        return [detail.description, when].compactMap { $0 }.joined(separator: " ")
     }
 
     private var runHelp: String {
@@ -235,17 +254,19 @@ struct RoutineAccess: View {
         }
     }
 
-    /// The review's surface once it's read, else the routine's own. A
-    /// program's secrets that aren't stored can be signed in to here.
+    /// The review's surface once it's read, else the routine's own; read
+    /// only: Turn On… is where it's trusted. A program's secrets that aren't
+    /// stored can be signed in to here.
     private var review: TrustReviewView {
         let surface = model.trustReview?.surface
-        let trust: (() -> Void)? = detail.trusted ? nil : { [model] in model.trust() }
         var view = TrustReviewView(
             servers: surface?.servers ?? detail.servers, tools: surface?.tools ?? detail.tools,
             builtinTools: surface?.builtinTools ?? detail.builtinTools, folder: surface?.folder ?? detail.folder,
             program: model.trustReview?.program ?? detail.program,
-            review: model.trustReview, error: model.trustError, trust: trust, working: model.working)
-        view.signIn = SignInAction(working: model.signingIn, error: model.signInError) { [model] in model.signIn() }
+            review: model.trustReview, error: model.trustError, trust: nil, working: model.working)
+        view.signIn = SignInAction(working: model.signingIn != nil, error: model.signInError) { [model] in
+            model.signIn(model.name)
+        }
         return view
     }
 }

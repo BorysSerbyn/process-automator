@@ -288,14 +288,24 @@ struct WatcherView: View {
             }
         }
         if let error = model.trustError {
-            RowError(message: error)
-                .padding(.horizontal, SettingsMetrics.rowInset)
-                .padding(.bottom, 8)
+            HStack(spacing: 8) {
+                RowError(message: error)
+                if model.review == nil { Button("Try Again", action: model.loadTrust) }
+            }
+            .padding(.horizontal, SettingsMetrics.rowInset)
+            .padding(.bottom, 8)
+        } else if !detail.trusted, model.review == nil {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Reading what it runs…").font(.subheadline).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, SettingsMetrics.rowInset)
+            .padding(.bottom, 8)
         }
         if !detail.trusted {
             Divider().padding(.leading, SettingsMetrics.rowInset)
             HStack(spacing: 12) {
-                Text("Trusting it lets this executable run, for the hooks listening to it.")
+                Text("Turning on a hook that listens to it trusts it too; this trusts it alone.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

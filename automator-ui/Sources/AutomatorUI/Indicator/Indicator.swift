@@ -174,7 +174,8 @@ final class Indicator: NSObject, NSMenuDelegate {
 
     /// What the status is, in the core's words: why it's red (each reason
     /// opens the run it's about; one about a hook, the hook's window, on its
-    /// run if it names one), or its summary.
+    /// run if it names one, else on its Turn On review if it needs one; one
+    /// about a routine with no run, the routine's), or its summary.
     private func statusItems() -> [NSMenuItem] {
         guard RunStatus.responding(status), let status else {
             return [NSMenuItem(title: "Not responding", action: nil, keyEquivalent: "")]
@@ -186,6 +187,10 @@ final class Indicator: NSObject, NSMenuDelegate {
                     click = { [weak self] in self?.openHook(hook, reason.run) }
                 } else if let id = reason.run {
                     click = { [weak self] in self?.openRun(id) }
+                } else if let routine = reason.routine, !routine.isEmpty {
+                    // Nothing ran (it isn't trusted, say): its window, on
+                    // its Turn On review when it needs turning on.
+                    click = { [weak self] in self?.openRoutine(routine) }
                 }
                 return textItem(
                     MenuTextView(

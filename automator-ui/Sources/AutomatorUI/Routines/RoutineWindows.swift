@@ -39,6 +39,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
             let view = RoutinesListView(
                 model: model,
                 openRoutine: { [weak self] in self?.showRoutine($0) },
+                turnOn: { [weak self] in self?.showRoutine($0, review: true) },
                 openSettings: { [weak self] in self?.openSettings() },
                 openSetup: { [weak self] in self?.openSetup() })
             let window = makeWindow(view, title: "Routines", size: NSSize(width: 600, height: 460))
@@ -48,8 +49,9 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
         bringToFront(list?.window)
     }
 
-    /// Shows a routine's window, on one of its runs if given.
-    func showRoutine(_ name: String, run: String? = nil) {
+    /// Shows a routine's window, on one of its runs if given; `review`
+    /// opens its Turn On review once it's read, if it needs turning on.
+    func showRoutine(_ name: String, run: String? = nil, review: Bool = false) {
         if details[name] == nil {
             let model = RoutineModel(name: name, cli: cli, status: status)
             model.onDeleted = { [weak self] in
@@ -60,6 +62,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
             details[name] = (window, model)
             cascade(window)
         }
+        if review { details[name]?.model.reviewWhenLoaded = true }
         details[name]?.model.load()
         if let run { details[name]?.model.showRun(run) }
         bringToFront(details[name]?.window)
@@ -71,6 +74,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
             let model = HooksModel(cli: cli, status: status)
             let view = HooksListView(
                 model: model, openHook: { [weak self] in self?.showHook($0) },
+                turnOn: { [weak self] in self?.showHook($0, review: true) },
                 openWatcher: { [weak self] in self?.showWatcher($0) })
             hooksList = (makeWindow(view, title: "Hooks", size: NSSize(width: 620, height: 520)), model)
         }
@@ -78,8 +82,9 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
         bringToFront(hooksList?.window)
     }
 
-    /// Shows a hook's window, on one of its runs if given.
-    func showHook(_ name: String, run: String? = nil) {
+    /// Shows a hook's window, on one of its runs if given; `review` opens
+    /// its Turn On review once it's read, if it needs turning on.
+    func showHook(_ name: String, run: String? = nil, review: Bool = false) {
         if hooks[name] == nil {
             let model = HookModel(name: name, cli: cli, status: status)
             model.onDeleted = { [weak self] in
@@ -91,6 +96,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
             hooks[name] = (window, model)
             cascade(window)
         }
+        if review { hooks[name]?.model.reviewWhenLoaded = true }
         hooks[name]?.model.load()
         if let run { hooks[name]?.model.showRun(run) }
         bringToFront(hooks[name]?.window)

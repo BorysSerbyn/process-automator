@@ -47,6 +47,8 @@ final class RoutinesModel: ObservableObject {
 struct RoutinesListView: View {
     @ObservedObject var model: RoutinesModel
     let openRoutine: (String) -> Void
+    /// Opens a routine's window on its Turn On review.
+    let turnOn: (String) -> Void
     let openSettings: () -> Void
     let openSetup: () -> Void
 
@@ -75,8 +77,13 @@ struct RoutinesListView: View {
                     SettingsCard {
                         ForEach(Array(model.routines.enumerated()), id: \.element.name) { index, routine in
                             if index > 0 { Divider().padding(.leading, 38) }
-                            RoutineListRow(routine: routine, status: model.status?.routine(routine.name)) {
-                                openRoutine(routine.name)
+                            HStack(spacing: 0) {
+                                RoutineListRow(routine: routine, status: model.status?.routine(routine.name)) {
+                                    openRoutine(routine.name)
+                                }
+                                if routine.turnOn == true {
+                                    TurnOnButton { turnOn(routine.name) }
+                                }
                             }
                         }
                     }
@@ -126,7 +133,6 @@ struct RoutineListRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(routine.name).font(.title3.weight(.semibold))
-                        if !routine.trusted { Tag(text: "Not trusted", tint: .orange) }
                     }
                     Text(routine.scheduleText ?? "No schedule")
                         .font(.subheadline)
@@ -162,5 +168,18 @@ struct RoutineListRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help("Show \(routine.name)")
+    }
+}
+
+/// Turn On… on a list's row: opens the window on its review.
+struct TurnOnButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button("Turn On…", action: action)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .padding(.trailing, SettingsMetrics.rowInset)
+            .help("Review it, then turn it on")
     }
 }

@@ -38,22 +38,13 @@ struct HookDetailView: View {
                         title: "Couldn't read \(model.name)", message: error, systemImage: "xmark.octagon.fill",
                         tint: .red)
                 }
-                if let detail = model.detail, !detail.trusted {
-                    Banner(title: "Not trusted", message: detail.untrusted, systemImage: "lock.shield") {
-                        Button("Review…") {
-                            model.tab = .overview
-                            if !model.accessOpen { model.toggleAccess() }
-                        }
-                    }
-                }
-                if let watcher = model.detail?.watcher, !watcher.trusted {
+                if let detail = model.detail, detail.turnOn == true {
                     Banner(
-                        title: "Its watcher \(watcher.name) isn't trusted",
-                        message: "\(model.name) hears nothing until it is.",
-                        systemImage: "antenna.radiowaves.left.and.right"
+                        title: "\(model.name) isn't on",
+                        message: detail.untrusted ?? (detail.enabled ? detail.problem : nil) ?? "It's off.",
+                        systemImage: "power"
                     ) {
-                        Button("Review \(watcher.name)…") { openWatcher(watcher.name) }
-                            .help("Open \(watcher.name): review what it runs, and trust it")
+                        Button("Turn On…", action: model.startTurnOn)
                     }
                 }
                 Picker("Show", selection: $model.tab) {
@@ -99,6 +90,14 @@ struct HookDetailView: View {
             Spacer(minLength: 12)
             controls.disabled(model.working || model.detail == nil)
         }
+        // On the header, not beside Fire…'s: two sheets on one view clash.
+        .modifier(TurnOnPresenter(turnOn: model.turnOn, summary: turnOnSummary))
+    }
+
+    /// What it does, in a line, for its Turn On review.
+    private var turnOnSummary: String? {
+        guard let detail = model.detail else { return nil }
+        return [detail.description, "It runs on \(detail.on.text)."].compactMap { $0 }.joined(separator: " ")
     }
 
     @ViewBuilder private var controls: some View {
@@ -115,13 +114,21 @@ struct HookDetailView: View {
             }
             .help("Fire with a sample event: run it now, as a dry run or for real, as its watcher's event would")
         }
-        if let enabled = model.detail?.enabled {
-            Button {
-                model.setPaused(enabled)
-            } label: {
-                Label(enabled ? "Pause" : "Resume", systemImage: enabled ? "pause.fill" : "play.circle")
+        if let detail = model.detail {
+            if detail.turnOn == true {
+                Button(action: model.startTurnOn) {
+                    Label("Turn On…", systemImage: "power")
+                }
+                .buttonStyle(.borderedProminent)
+                .help("Review what it does and what tells it, then turn it on")
+            } else {
+                Button {
+                    model.setPaused(true)
+                } label: {
+                    Label("Pause", systemImage: "pause.fill")
+                }
+                .help("Turn it off: it no longer runs on its events")
             }
-            .help(enabled ? "Turn it off: it no longer runs on its events" : "Turn it on: it runs on its events again")
         }
         Menu {
             Button("Delete…", role: .destructive) { confirmingDelete = true }
@@ -257,48 +264,69 @@ struct HookOverview: View {
     }
 }
 
-/// What a hook acts on (its trigger): its watcher, with its state and a
-/// link to it, the event type, batches, staleness and rate.
+/// When a hook runs, in a line ("On cal's meeting.started events"), with
+/// its watcher's state when it needs me (paused, failing) and a link to it;
+/// the rest (event type, batches, staleness, rate) folded underneath.
 struct HookTrigger: View {
     let detail: HookDetail
     let openWatcher: (String) -> Void
+    @State private var open = false
+
+    private func toggle() { withAnimation { open.toggle() } }
 
     var body: some View {
-        CardTitle("What it acts on", systemImage: "bolt")
-        Divider().padding(.leading, SettingsMetrics.rowInset)
-        InfoRow(label: "Watcher") {
+        DisclosureRow(open: open, help: "when it runs", toggle: toggle) {
+            Image(systemName: "bolt").foregroundStyle(.secondary).frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("When it runs").font(.headline)
+                Text("On \(detail.on.text)").font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
             if let watcher = detail.watcher {
-                HStack(spacing: 6) {
-                    Button(watcher.name) { openWatcher(watcher.name) }
-                        .buttonStyle(.link)
-                        .help("Open \(watcher.name)")
-                    WatcherTags(trusted: watcher.trusted, enabled: watcher.enabled, error: watcher.error)
+                if !watcher.enabled { Tag(text: "\(watcher.name) paused") }
+                if let error = watcher.error, !error.isEmpty { Tag(text: "\(watcher.name) failing", tint: .red) }
+            } else {
+                Tag(text: "No watcher \(detail.on.watcher)", tint: .red)
+            }
+        }
+        if let watcher = detail.watcher, let error = watcher.error, !error.isEmpty {
+            InfoRow(label: "Watcher") {
+                RowError(message: error)
+                if let at = watcher.errorAt {
+                    Text("Since \(Formats.when(at))").font(.subheadline).foregroundStyle(.secondary)
                 }
-                Text(watcher.modeText).font(.subheadline).foregroundStyle(.secondary)
-                if let error = watcher.error, !error.isEmpty {
-                    RowError(message: error)
-                    if let at = watcher.errorAt {
-                        Text("Since \(Formats.when(at))").font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        if open {
+            Divider().padding(.leading, SettingsMetrics.rowInset)
+            InfoRow(label: "Watcher") {
+                if let watcher = detail.watcher {
+                    HStack(spacing: 6) {
+                        Button(watcher.name) { openWatcher(watcher.name) }
+                            .buttonStyle(.link)
+                            .help("Open \(watcher.name)")
+                        WatcherTags(trusted: watcher.trusted, enabled: watcher.enabled, error: watcher.error)
                     }
+                    Text(watcher.modeText).font(.subheadline).foregroundStyle(.secondary)
+                } else {
+                    Text(detail.on.watcher).font(.callout.monospaced())
+                    Text("There's no watcher by that name.").font(.subheadline).foregroundStyle(.red)
                 }
-            } else {
-                Text(detail.on.watcher).font(.callout.monospaced())
-                Text("There's no watcher by that name.").font(.subheadline).foregroundStyle(.red)
             }
-        }
-        InfoRow(label: "Events") {
-            if let type = detail.on._type, !type.isEmpty {
-                Text(verbatim: type).font(.callout.monospaced())
-            } else {
-                Text("Every type")
+            InfoRow(label: "Events") {
+                if let type = detail.on._type, !type.isEmpty {
+                    Text(verbatim: type).font(.callout.monospaced())
+                } else {
+                    Text("Every type")
+                }
             }
+            if !detail.isProgram {
+                InfoRow(label: "Batches") { Text(HookWords.batch(detail.batch ?? false)) }
+            }
+            InfoRow(label: "Staleness") { Text(HookWords.staleness(detail.staleness)) }
+            InfoRow(label: "Rate") { Text(HookWords.rate(detail.rate)) }
+                .padding(.bottom, 4)
         }
-        if !detail.isProgram {
-            InfoRow(label: "Batches") { Text(HookWords.batch(detail.batch ?? false)) }
-        }
-        InfoRow(label: "Staleness") { Text(HookWords.staleness(detail.staleness)) }
-        InfoRow(label: "Rate") { Text(HookWords.rate(detail.rate)) }
-            .padding(.bottom, 4)
     }
 }
 
@@ -320,8 +348,7 @@ struct WatcherTags: View {
 }
 
 /// What a hook can reach (an LLM hook's servers and tools) or runs (a
-/// program hook's executable), with what it acts on, which trusting it
-/// covers too; warnings before Trust (or Turn On, for one that's off).
+/// program hook's executable), read only: Turn On… is where it's trusted.
 struct HookAccess: View {
     @ObservedObject var model: HookModel
     let detail: HookDetail
@@ -342,53 +369,20 @@ struct HookAccess: View {
         }
         if model.accessOpen {
             Divider().padding(.leading, SettingsMetrics.rowInset)
-            if let warnings = model.trustReview?.warnings, !warnings.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(warnings, id: \.self) { warning in
-                        Banner(
-                            title: "Before you trust it", message: warning, systemImage: "exclamationmark.triangle.fill"
-                        )
-                    }
-                }
-                .padding(.horizontal, SettingsMetrics.rowInset)
-                .padding(.vertical, 8)
-            }
-            InfoRow(label: "Acts on") {
-                Text(
-                    (model.trustReview?.trigger.map { Components.Schemas.On(_type: $0._type, watcher: $0.watcher) }
-                        ?? detail.on).text)
-                Text("Trusting it covers this too: another watcher or event type needs trusting again.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let error = model.trustReview?.toolsError, !error.isEmpty {
-                InfoRow(label: "Tools") { RowError(message: error) }
-            }
             review
         }
     }
 
     private var review: TrustReviewView {
         let surface = model.trustReview?.surface
-        let turnOn = !detail.enabled
-        let trust: (() -> Void)? = detail.trusted ? nil : { [model] in model.trust(turnOn: turnOn) }
         var view = TrustReviewView(
             servers: surface?.servers ?? detail.servers ?? [], tools: surface?.tools ?? detail.tools ?? [],
             builtinTools: surface?.builtinTools ?? detail.builtinTools, folder: surface?.folder ?? detail.folder,
             program: model.trustReview?.program ?? detail.program,
-            review: model.trustReview, error: model.trustError, trust: trust, working: model.working)
-        if turnOn {
-            view.actionTitle = "Turn On"
-            view.note =
-                "Turning it on trusts it with what's listed above and has it run on its events. Dry runs never need it."
-            view.programNote = "Turning it on trusts this executable (dry runs included) and has it run on its events."
-        } else {
-            view.note =
-                "Trusting it lets it run for real on its events with what's listed above. Dry runs never need it."
-            view.programNote = "Trusting it lets this executable run on its events, dry runs included."
+            review: model.trustReview, error: model.trustError, trust: nil, working: model.working)
+        view.signIn = SignInAction(working: model.signingIn != nil, error: model.signInError) { [model] in
+            model.signIn(model.name)
         }
-        view.signIn = SignInAction(working: model.signingIn, error: model.signInError) { [model] in model.signIn() }
         return view
     }
 }
