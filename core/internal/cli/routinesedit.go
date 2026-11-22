@@ -129,7 +129,7 @@ func newRoutinesCreateCmd() *cobra.Command {
 		Short: "Add a routine file, validated first; it starts disabled",
 		Long: "Writes <routine>.prompt to the routines folder after validating it like any routine (never over an " +
 			"existing one). The routine starts paused and untrusted: try it with `run <routine> --dry-run`, then turn " +
-			"it on with `routines trust <routine> --resume`.",
+			"it on with `routines trust <routine> --resume`. How to write the file: `" + product.Command + " guide routines`.",
 		Example: "  " + product.Command + " routines create standup --from ./standup.prompt",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -231,7 +231,9 @@ func newRoutinesUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <routine>",
 		Short: "Replace a routine's file, validated first (its settings are kept)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Replaces <routine>.prompt after validating it like any routine. Its settings are kept; changing what " +
+			"it can reach takes its trust away. How to write the file: `" + product.Command + " guide routines`.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			a, unlock, err := loadAppForEdit(cmd)
 			if err != nil {

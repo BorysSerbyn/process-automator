@@ -1,0 +1,3 @@
+description: My notes, for routines
+command: ./server                  # go build -o server .
+# env: {NOTES_KEY: "{notes-key}"}  # a secret: `auth login notes` asks for it

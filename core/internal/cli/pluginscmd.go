@@ -100,7 +100,7 @@ func newPluginsAddCmd() *cobra.Command {
 			"declare annotations (readOnlyHint). A server that needs credentials is tried as far as it can be; " +
 			"sign in with `auth login <name>`, then `plugins check <name>`. Secrets are referenced as {key} in " +
 			"--header/--env values (or the manifest's env), never given here. Routines use it by listing <name> " +
-			"in automator.servers.",
+			"in automator.servers. How to add one, or write your own: `" + product.Command + " guide plugins`.",
 		Example: "  " + product.Command + " plugins add notion --url https://mcp.notion.com/mcp\n" +
 			"  " + product.Command + " plugins add weather --dir ./weather-mcp\n" +
 			"  " + product.Command + " plugins add acme --url https://mcp.acme.dev --auth headers --header 'Authorization=Bearer {acme-key}'\n" +

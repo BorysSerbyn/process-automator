@@ -14,7 +14,7 @@ For another MCP client, add a stdio server whose command is `procauto mcp serve`
 After `procauto update`, reconnect the server so the client sees new or changed tools.
 
 ## What Claude can do
-- Write a routine from your description: pick its servers and tools, set its schedule and parameters, create it, check it and dry-run it to show you what it would do
+- Write a routine from your description (it reads `procauto guide routines` first): pick its servers and tools, set its schedule and parameters, create it, check it and dry-run it to show you what it would do
 - Install templates, add plugins and try them, change settings
 - Read your routines, plugins and their tools, run history and outcomes, and explain why something failed (`doctor`)
 - Run, start, stop, pause and resume routines; add and remove memories

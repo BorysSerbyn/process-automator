@@ -1,0 +1,21 @@
+---
+description: Tells me each weekday morning about my notes on a topic
+automator.schedule: "0 9 * * 1-5"   # cron, local time; left out, it runs only by hand
+automator.timeout: 10m
+automator.servers: [notes, notify]  # the servers its tools come from
+automator.parameters:
+  - name: topic
+    type: string
+    default: work
+    description: Only notes about this
+model: anthropic/claude-sonnet-5-5
+tools: [list_notes, notify_me]      # the only tools the model may call
+---
+{{role "system"}}
+You read my notes for me, unattended: no one answers questions during a run.
+{{> memories}}
+
+{{role "user"}}
+Today is {{today}}. List my notes and pick those about {{topic}}.
+If there are any, notify me once: a short title, one line per note.
+Reply with the notification you sent, or that there was nothing.

@@ -75,6 +75,30 @@ type Routine struct {
 	Source  string
 }
 
+// Field is one of the app's frontmatter keys (automator.<Name>) that isn't a
+// per-routine setting; settings.RoutineFields are the others. Parsing
+// takes these and those, and nothing else under automator.
+type Field struct {
+	Name string
+	// Written is how a file writes it, when that isn't automator.<Name>.
+	Written     string
+	Type        string
+	Description string
+}
+
+// Fields are the app's frontmatter keys that aren't settings.
+var Fields = []Field{
+	{Name: "servers", Type: "list", Description: "The servers its tools come from: the app's plugins and the MCP servers added " +
+		"with `plugins add`. Needed when it lists tools."},
+	{Name: "parameters", Type: "list of parameters", Description: "Values that differ per person or project, each a " +
+		"per-routine setting (routines.<routine>.params.<name>); see Parameters."},
+	{Name: "platforms", Type: "list", Description: "The platforms it runs on (" + strings.Join(Platforms, ", ") + "); left out, all."},
+	{Name: "backends", Type: "list", Description: "The llm.backend values it works with; left out, all. A template " +
+		"that doesn't list the selected backend won't install."},
+	{Name: "plugins", Written: Namespace + ".plugins.<name>", Type: "section", Description: "Settings for an in-process " +
+		"plugin that takes them from routines; the plugin must be one of its servers."},
+}
+
 // Param is one routine parameter. Its value is a per-routine setting; a
 // parameter without a default is required.
 type Param struct {
@@ -108,8 +132,9 @@ func (p Param) Setting(routine string) settings.Setting {
 	}
 }
 
-// Platforms routines can name; Platform is the one this process runs on.
-var knownPlatforms = map[string]bool{"macos": true, "linux": true}
+// Platforms are the platforms automator.platforms can name; Platform is
+// the one this process runs on.
+var Platforms = []string{"macos", "linux"}
 
 // Platform is this OS as routines name it.
 func Platform() string {
@@ -281,7 +306,10 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 			}
 		}
 	}
-	fields := map[string]bool{"servers": true, "parameters": true, "platforms": true, "backends": true, "plugins": true}
+	fields := map[string]bool{}
+	for _, f := range Fields {
+		fields[f.Name] = true
+	}
 	for _, n := range settings.RoutineFieldNames() {
 		fields[n] = true
 	}
@@ -360,8 +388,8 @@ func parseSource(path, name string, raw []byte) (Routine, error) {
 		}
 	}
 	for _, p := range platforms {
-		if !knownPlatforms[p] {
-			return Routine{}, fmt.Errorf("%s.platforms: unknown platform %q (want macos or linux)", Namespace, p)
+		if !slices.Contains(Platforms, p) {
+			return Routine{}, fmt.Errorf("%s.platforms: unknown platform %q (want %s)", Namespace, p, strings.Join(Platforms, " or "))
 		}
 	}
 	if def, ok := settings.Lookup("llm.backend"); ok {

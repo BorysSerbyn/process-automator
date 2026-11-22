@@ -38,9 +38,9 @@ The app ships with no integrations; one plugin comes with it and needs no sign-i
 
 | Server | What routines get |
 |---|---|
-| `notify` | `notify_me`: a desktop notification to you, shown by the plugin itself (macOS, Linux) ([[Guides/Writing a routine#Notifying you\|Notifying you]]) |
+| `notify` | `notify_me`: a desktop notification to you, shown by the plugin itself (macOS, Linux) ([[Guides/Writing a routine\|Writing a routine]]) |
 
-Everything else is a server you add: see [[Guides/Adding a plugin|Adding a plugin]].
+Everything else is a server you add: see `procauto guide plugins` and [[Guides/Adding a plugin|Adding a plugin]].
 
 ## Signing in to what you add
 What `auth login <server>` asks for depends on how the server was added:

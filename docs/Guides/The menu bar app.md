@@ -39,7 +39,7 @@ Setup's steps, grouped: **Templates** (tick templates, fill in their parameters,
 ## Notifications
 The menu bar app shows the app's own desktop notifications: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), and update results. Clicking one opens the app: a run's opens its routine's window on that run; an update's opens the Routines window.
 
-What routines tell you with `notify_me` isn't the menu bar app's: the `notify` plugin shows it itself, also as the app (see [[Guides/Writing a routine#Notifying you|Notifying you]]).
+What routines tell you with `notify_me` isn't the menu bar app's: the `notify` plugin shows it itself, also as the app (see [[Guides/Writing a routine|Writing a routine]]).
 
 macOS asks once whether the app may show notifications (for both); until you allow it, the app's own wait.
 

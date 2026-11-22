@@ -41,6 +41,9 @@ type mcpOverride struct {
 	handle func(ctx context.Context, s *automatorServer, req *sdk.CallToolRequest, t cliTool, args map[string]any) (*sdk.CallToolResult, error)
 	// after is added to a successful result.
 	after string
+	// plain serves the command's text output instead of its --json: prose a
+	// model reads as it is, which the JSON would only escape and repeat.
+	plain bool
 }
 
 // mcpOverrides is the one place a tool differs from its command, by command path.
@@ -59,6 +62,7 @@ func mcpOverrides() map[string]mcpOverride {
 		"routines trust":   {exclude: "trusting a routine is my decision, after reviewing what it can reach"},
 		"uninstall":        {exclude: "removing the app (and this server with it) is mine, from a terminal"},
 		"usage statusline": {exclude: "it's Claude Code's status line; it reads Claude Code's input on stdin"},
+		"guide":            {plain: true},
 		"update": {after: "Later calls run the new version, but this server's tool list is from before " +
 			"the update: reconnect the " + product.Command + " MCP server to pick up new or changed tools."},
 	}
@@ -199,6 +203,9 @@ func (s *automatorServer) toolsFor(c *cobra.Command, key string, ov mcpOverride)
 	if roFlag != "" && c.Flags().Lookup(roFlag) != nil {
 		out = append(out, s.newTool(c, key, toolName(append(strings.Fields(key), roFlag)...), true, roFlag, roFlag, noFlags))
 	}
+	for i := range out {
+		out[i].jsonOut = out[i].jsonOut && !ov.plain
+	}
 	return out
 }
 
@@ -211,7 +218,11 @@ func (s *automatorServer) newTool(c *cobra.Command, key, name string, ro bool, r
 		optional := strings.HasPrefix(tok, "[")
 		raw := strings.Trim(tok, "[]<>.")
 		prop := toolName(strings.Split(raw, "|")[0])
-		props[prop] = map[string]any{"type": "string", "description": "argument " + tok}
+		schema := map[string]any{"type": "string", "description": "argument " + tok}
+		if len(t.args) == 0 && len(c.ValidArgs) > 0 { // the values the first argument takes
+			schema["enum"] = c.ValidArgs
+		}
+		props[prop] = schema
 		t.args = append(t.args, cliArg{prop: prop, required: !optional})
 		if !optional {
 			required = append(required, prop)
@@ -370,14 +381,18 @@ func (t cliTool) argv(configPath string, args map[string]any) (argv []string, st
 	return out, stdin, nil
 }
 
+// mcpInstructions tell a client what the server is and how to use it.
+var mcpInstructions = product.Command + " runs scheduled LLM routines (Dotprompt files) with tools from MCP servers " +
+	"(plugins). These tools are its CLI. Before writing a routine, read guide with topic routines; before adding " +
+	"an MCP server, guide with topic plugins. Routines start paused and untrusted: dry-run one (run_dry_run), then " +
+	"the user trusts and resumes it themselves (`" + product.Command + " routines trust <name> --resume`; it isn't " +
+	"a tool). Sign-ins are done by the user in their browser (auth_login opens it); never ask them to paste a " +
+	"secret into the chat."
+
 // build makes the MCP server.
 func (s *automatorServer) build() (*sdk.Server, error) {
 	srv := sdk.NewServer(&sdk.Implementation{Name: product.Command, Version: product.Version}, &sdk.ServerOptions{
-		Instructions: product.Command + " runs scheduled LLM routines (Dotprompt .prompt files) with tools from MCP servers " +
-			"(plugins). These tools are its CLI: read routines, runs, settings and plugins; create or change " +
-			"routines (they start disabled: dry-run them, then enable with settings_set routines.<name>.enabled true); " +
-			"add plugins; sign in (auth_login asks the user in their browser; never ask the user to paste a secret " +
-			"into the chat). Routine files use dotted frontmatter keys (automator.servers, automator.schedule).",
+		Instructions: mcpInstructions,
 	})
 	overrides := mcpOverrides()
 	for _, t := range s.tools() {
