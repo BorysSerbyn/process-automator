@@ -66,7 +66,7 @@ procauto schedule build --days mon,wed,fri --at 08:30           # the cron for t
 procauto settings set routines.digest.schedule '0 17 * * 5'
 ```
 
-If your computer was asleep or off at a scheduled time, the run starts when the scheduler is back, as long as it's no later than the routine's `staleness`; later than that it's recorded as missed.
+If your computer was asleep or off at a scheduled time, the run starts when the scheduler is back, as long as it's no later than the routine's `staleness`; later than that it's recorded as missed. A Mac waking briefly in the night for maintenance doesn't start runs; they wait until it's properly awake. A run cut off by the computer going to sleep runs again once it's awake, as long as it hadn't changed anything yet.
 
 ## Run it now, stop it
 ```sh

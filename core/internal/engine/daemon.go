@@ -29,6 +29,12 @@ const (
 	// HeartbeatTTL is how long one heartbeat holds. If the daemon stops (crash,
 	// not running) the status expires, which frontends report as not responding.
 	HeartbeatTTL = time.Minute
+	// WakeSettle is how long the daemon gives the network to come back after
+	// the computer wakes, before starting runs.
+	WakeSettle = 15 * time.Second
+	// awakePoll is how often a run waiting for the computer to wake fully
+	// (not a maintenance wake) checks again.
+	awakePoll = 15 * time.Second
 )
 
 // Daemon runs routines on their schedules until ctx ends, re-reading config,
@@ -124,6 +130,10 @@ func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)
 				fail(err)
 				return
 			}
+			if !untilFullyAwake(ctx, name) {
+				fail(errors.New("interrupted before it started (the scheduler stopped while waiting for the computer to wake fully)"))
+				return
+			}
 			logf("%s: running (slot %s)", name, occ.At.Format("Mon 15:04"))
 			res, err := cur.Execute(ctx, set, r, RunOptions{
 				Occurrence: occ, QueuedAt: queuedAt, StaleAfter: occ.At.Add(j.Staleness), Log: logWriter{name},
@@ -153,7 +163,15 @@ func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)
 	go stopWaiting(ctx, a, s, queued)
 
 	lastPrune := time.Time{}
+	lastTick := time.Now()
 	for {
+		// Just woken: the network can take a few seconds to come back, and
+		// a run that starts without it fails.
+		if slept := sysenv.SleptSince(lastTick); slept >= sysenv.SleepGap {
+			logf("the computer woke up (asleep %s)", slept.Round(time.Minute))
+			sleepCtx(ctx, WakeSettle) // if ctx ends meanwhile, the select below stops the daemon
+		}
+		lastTick = time.Now()
 		// A scheduler that can't work (e.g. the config doesn't load) is a
 		// problem in run status, so health turns red; cleared once it works.
 		problem := ""
@@ -184,6 +202,36 @@ func (a *App) Daemon(ctx context.Context, setupLeft func(*App) ([]string, error)
 			return nil
 		case <-time.After(TickInterval):
 		}
+	}
+}
+
+// untilFullyAwake waits until the computer is awake for work before a
+// scheduled run starts: a Mac in a maintenance wake ("dark wake") sleeps again
+// within seconds, cutting the run off. Once it has waited, it gives the network
+// WakeSettle to come back. The run's staleness is checked after this, so a
+// long wait makes it missed. False when ctx ended first.
+func untilFullyAwake(ctx context.Context, name string) bool {
+	if sysenv.FullyAwake() {
+		return true
+	}
+	logf("%s: waiting for the computer to wake fully (it's in a maintenance wake)", name)
+	for !sysenv.FullyAwake() {
+		if !sleepCtx(ctx, awakePoll) {
+			return false
+		}
+	}
+	return sleepCtx(ctx, WakeSettle)
+}
+
+// sleepCtx waits for d, or until ctx ends (false).
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
 	}
 }
 

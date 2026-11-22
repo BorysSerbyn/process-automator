@@ -188,14 +188,27 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 			}
 		}
 		ag := &agent.Agent{Connector: a.Connector, Backend: backend, DryRun: o.DryRun, Log: o.Log}
-		res, err := ag.Run(runCtx, agent.Request{
-			Name: r.Name, Source: r.Source, Origin: r.Path,
-			Input: withParams(inputs, cfg.Params), Tools: r.Tools, Servers: r.Servers,
-			Run:      RunOf(r, cfg.WorkFolder, history.RunID(r.Name, started)),
-			Partials: set.PromptPartials(mem),
-			Effort:   cfg.Effort,
-			Folder:   cfg.WorkFolder, SaveSession: saveSession, SessionID: sessionID, BuiltinTools: cfg.BuiltinTools,
-		})
+		attempt := func() (*agent.Result, error) {
+			return ag.Run(runCtx, agent.Request{
+				Name: r.Name, Source: r.Source, Origin: r.Path,
+				Input: withParams(inputs, cfg.Params), Tools: r.Tools, Servers: r.Servers,
+				Run:      RunOf(r, cfg.WorkFolder, history.RunID(r.Name, started)),
+				Partials: set.PromptPartials(mem),
+				Effort:   cfg.Effort,
+				Folder:   cfg.WorkFolder, SaveSession: saveSession, SessionID: sessionID, BuiltinTools: cfg.BuiltinTools,
+			})
+		}
+		res, err := attempt()
+		if err != nil && runCtx.Err() == nil && slept(started) && safeToRetry(res, cfg.BuiltinTools, err) {
+			// The computer slept mid-run (a closed lid, a maintenance wake
+			// ending): its connections died with it. Nothing was changed yet,
+			// so it runs again from the start, once.
+			logTo(o.Log, "the computer slept during the run (%v); running it again", err)
+			if saveSession && !agent.PicksSessionID(backend) {
+				sessionID = newSessionID() // the first attempt's may be taken
+			}
+			res, err = attempt()
+		}
 		if res != nil && res.SessionID != "" {
 			sessionID = res.SessionID // the one the CLI kept
 		}
@@ -205,6 +218,25 @@ func (a *App) Execute(ctx context.Context, set *routines.Set, r routines.Routine
 		return res, err
 	}()
 	return res, ended(started, res, runErr)
+}
+
+// slept is whether the computer slept since a time (a variable for tests).
+var slept = sysenv.Slept
+
+// safeToRetry is whether a failed run can run again from the start without
+// doing anything twice: it made no changes through its tools, can't have made
+// any through the agent CLI's own (it has none), and didn't fail on something
+// a retry can't fix (a sign-in, the plan's limit).
+func safeToRetry(res *agent.Result, builtinTools []string, err error) bool {
+	var limit *agent.PlanLimitError
+	switch {
+	case len(builtinTools) > 0, errors.Is(err, mcp.ErrNeedsReauth), errors.As(err, &limit):
+		return false
+	case res == nil:
+		return true
+	default:
+		return len(res.Writes) == 0
+	}
 }
 
 // forOccurrence adds what the run is for to its run-status record.

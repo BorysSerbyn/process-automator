@@ -252,3 +252,41 @@ func TestBackendPicksSessionID(t *testing.T) {
 		t.Errorf("dry run job keeps a session: %+v", j)
 	}
 }
+
+// failsOnce is a backend whose first run fails as a dropped connection does.
+type failsOnce struct {
+	enginetest.Backend
+	runs int
+}
+
+func (b *failsOnce) Run(ctx context.Context, j agent.Job) (*agent.Output, error) {
+	b.runs++
+	if b.runs == 1 {
+		return nil, errors.New("read tcp: connection reset by peer")
+	}
+	return b.Backend.Run(ctx, j)
+}
+
+// A run the computer's sleep cut off runs again, once, and is recorded as how
+// the second attempt ended; without the sleep, the failure stands.
+func TestRunCutOffBySleepRunsAgain(t *testing.T) {
+	for _, sleep := range []bool{true, false} {
+		t.Run(map[bool]string{true: "slept", false: "awake"}[sleep], func(t *testing.T) {
+			a, set := enginetest.Fixture(t, map[string]string{"r": "queue"}, nil)
+			b := &failsOnce{}
+			enginetest.UseBackend(t, b)
+			if sleep {
+				engine.FakeSleep(t)
+			}
+			r, _ := set.Find("r")
+			_, err := a.Execute(context.Background(), set, r, engine.RunOptions{})
+			run := enginetest.LastRun(a, "r")
+			switch {
+			case sleep && (err != nil || b.runs != 2 || run.Outcome != runstatus.OutcomeSuccess):
+				t.Fatalf("err %v, %d runs, recorded %+v", err, b.runs, run)
+			case !sleep && (err == nil || b.runs != 1 || run.Outcome != runstatus.OutcomeFailed):
+				t.Fatalf("err %v, %d runs, recorded %+v", err, b.runs, run)
+			}
+		})
+	}
+}

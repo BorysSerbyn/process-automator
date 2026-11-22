@@ -181,12 +181,20 @@ systemd's user manager reads units from its own `XDG_CONFIG_HOME` (usually none:
 - **The installing shell's `XDG_CONFIG_HOME` written into the unit**: an update run from the tray, whose session may not have it, would write the unit without it and move the scheduler to another config folder
 - **Enabling lingering**: `sudo` in an installer that otherwise never needs it
 
-## Decision: on Linux, runs don't keep the computer awake
-logind gives sleep and idle inhibitors to sessions; the scheduler runs as a systemd user service, outside any session, and polkit refuses it one (`systemd-inhibit`: "Access denied") unless an administrator's rule allows it. Servers rarely suspend, and a desktop's own idle settings are mine to set.
+## Decision: on Linux, runs hold the idle inhibitor logind allows
+logind gives sleep inhibitors to sessions; the scheduler runs as a systemd user service, outside any session, and polkit refuses it one ("interactive authentication required") unless an administrator's rule allows it. An idle inhibitor polkit allows anyone, so runs take `sleep:idle` when allowed and `idle` otherwise: logind's own idle action honours it, a desktop's idle suspend may not. A run that suspend cuts off is retried once if it changed nothing, so the gap costs a retry, not a failure.
 
 ### Rejected
 - **A polkit rule installed with the app**: root, for an installer that never needs it
 - **Inhibiting from the tray**: only while a desktop session runs it, and frontends don't act on run status beyond showing it
+
+## Decision: sleep is detected from the clocks, and only a run that changed nothing is retried
+Go's monotonic clock stops while macOS and Linux sleep; wall-clock time doesn't, so the difference is time asleep, the same on both with no OS calls. A run that failed after sleeping is retried from the start only when it can't do anything twice: no writes through the gateway and no agent CLI built-in tools, whose effects the app can't see. On macOS a maintenance wake runs apps for seconds and sleeps again with the lid closed, so a scheduled run waits for a full wake instead of being cut off.
+
+### Rejected
+- **Resuming the run where it stopped**: the backend's connections and the agent CLI's state don't survive, and tool calls aren't replayable
+- **Retrying any failed run after sleep**: one that already posted would post twice
+- **Waiting for a wake notification (IOKit, logind's `PrepareForSleep`)**: cgo on macOS, a D-Bus subscription on Linux, for what the clocks already tell
 
 ## Decision: opening something doesn't wait for xdg-open to finish
 Outside GNOME, KDE and Xfce, `xdg-open` runs the browser itself and returns only when it's closed, so a sign-in waiting on it would wait for the browser. A failure (no handler, no display) shows in its first seconds, so it's given 5 and, still running, taken to have opened it.

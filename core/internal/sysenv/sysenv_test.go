@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMergePathKeepsOrderAndDedupes(t *testing.T) {
@@ -68,5 +69,12 @@ func TestSavedLoginShellPath(t *testing.T) {
 	}
 	if got, want := os.Getenv("PATH"), strings.Join([]string{"/usr/bin", "/bin", "/opt/tools"}, sep); got != want {
 		t.Errorf("PATH %q, want %q", got, want)
+	}
+}
+
+func TestNoSleepSinceJustNow(t *testing.T) {
+	start := time.Now()
+	if d := SleptSince(start); d < -time.Second || d > time.Second || Slept(start) {
+		t.Fatalf("slept %s since just now", d)
 	}
 }
