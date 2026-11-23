@@ -29,6 +29,23 @@ type TemplateInfo struct {
 	// Installed is true when one of its kind with the template's name exists
 	// (a routine of either kind, a hook, a watcher).
 	Installed bool `json:"installed"`
+	// WithWatcher is a hook template's watcher template: installing the hook
+	// installs it too while it isn't installed, so the two are one choice.
+	// Its parameters are among the hook's (params) while it isn't
+	// installed. A watcher template a hook comes with isn't listed on its
+	// own.
+	WithWatcher *TemplateWatcher `json:"withWatcher,omitempty"`
+}
+
+// TemplateWatcher is the watcher template a hook template comes with.
+type TemplateWatcher struct {
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	Params      []routines.Param `json:"params,omitempty"`
+	// Installed is true when the watcher is there already: installing the
+	// hook then uses it.
+	Installed bool `json:"installed"`
 }
 
 // Installable says the template can be installed now: for this OS and the
@@ -77,15 +94,51 @@ func (a *App) Templates(all bool) ([]TemplateInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows := []TemplateInfo{}
+	// A hook and the watcher it listens to are one choice: the watcher
+	// templates hooks come with aren't listed on their own.
+	withWatcher := map[string]templates.Template{}
+	comesWithHook := map[string]bool{}
 	for _, t := range list {
-		if !all && !t.RunsHere() {
+		if t.Kind != templates.KindHook {
 			continue
 		}
-		rows = append(rows, TemplateInfo{Template: t, RunsHere: t.RunsHere(), SupportsBackend: t.Supports(backend.Name),
-			Installed: a.templateInstalled(set, t)})
+		if w, err := templates.WatcherOf(list, t); err == nil {
+			withWatcher[t.ID], comesWithHook[w.ID] = w, true
+		}
+	}
+	rows := []TemplateInfo{}
+	for _, t := range list {
+		if comesWithHook[t.ID] {
+			continue
+		}
+		row := TemplateInfo{Template: t, RunsHere: t.RunsHere(), SupportsBackend: t.Supports(backend.Name),
+			Installed: a.templateInstalled(set, t)}
+		if w, ok := withWatcher[t.ID]; ok {
+			installed := watchers.Exists(a.Layout.Watchers(), w.Name)
+			row.WithWatcher = &TemplateWatcher{ID: w.ID, Name: w.Name, Description: w.Description, Params: w.Params, Installed: installed}
+			row.RunsHere = row.RunsHere && (installed || w.RunsHere())
+			if !installed {
+				row.Params = hookAndWatcherParams(t.Params, w.Params)
+			}
+		}
+		if !all && !row.RunsHere {
+			continue
+		}
+		rows = append(rows, row)
 	}
 	return rows, nil
+}
+
+// hookAndWatcherParams are a hook's parameters and those of the watcher installed
+// with it, one for a name both declare (it takes one value).
+func hookAndWatcherParams(hook, watcher []routines.Param) []routines.Param {
+	out := slices.Clone(hook)
+	for _, p := range watcher {
+		if !slices.ContainsFunc(out, func(q routines.Param) bool { return q.Name == p.Name }) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // templateInstalled reports whether one of t's kind and name is installed.
@@ -151,11 +204,7 @@ func (a *App) PlanTemplate(id string) (TemplatePlan, error) {
 		return TemplatePlan{}, fmt.Errorf("%s listens to the watcher %s, which runs on %s, not %s", t.ID, w.ID, strings.Join(w.Platforms, ", "), routines.Platform())
 	}
 	plan.Watcher = &w
-	for _, p := range w.Params {
-		if !slices.ContainsFunc(plan.Params, func(q routines.Param) bool { return q.Name == p.Name }) {
-			plan.Params = append(plan.Params, p)
-		}
-	}
+	plan.Params = hookAndWatcherParams(t.Params, w.Params)
 	return plan, nil
 }
 

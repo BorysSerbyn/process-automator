@@ -34,6 +34,9 @@ func TestTemplatesInstallFolders(t *testing.T) {
 	put("personal/cleaner/template.yaml", "description: Cleans up\n", 0o600)
 	put("personal/cleaner/program.yaml", "executable: ./clean\nwrites: true\n", 0o600)
 	put("personal/cleaner/clean", "#!/bin/sh\ntrue\n", 0o755)
+	put("personal/lonely/template.yaml", "description: A watcher no hook uses\n", 0o600)
+	put("personal/lonely/watcher.yaml", "executable: ./w\nmode: poll\ninterval: 5m\nevents: {x.y: An x}\n", 0o600)
+	put("personal/lonely/w", "#!/bin/sh\ntrue\n", 0o755)
 	old := product.TemplatesDir
 	product.TemplatesDir = tdir
 	t.Cleanup(func() { product.TemplatesDir = old })
@@ -48,6 +51,35 @@ func TestTemplatesInstallFolders(t *testing.T) {
 		root.SetArgs(append(args, "--config", cfg))
 		err := root.Execute()
 		return out.String(), err
+	}
+	// The hook and its watcher are one entry, the hook's, with both's
+	// parameters; a watcher no hook uses is its own.
+	list := func() map[string]engine.TemplateInfo {
+		t.Helper()
+		var rows []engine.TemplateInfo
+		out, _ := run("templates", "list", "--json")
+		if err := json.Unmarshal([]byte(out), &rows); err != nil {
+			t.Fatalf("list: %v %s", err, out)
+		}
+		byID := map[string]engine.TemplateInfo{}
+		for _, r := range rows {
+			byID[r.ID] = r
+		}
+		return byID
+	}
+	rows := list()
+	hook, listed := rows["github/pr-review-requested"]
+	if _, watcher := rows["github/gh-reviews"]; watcher || !listed || len(rows) != 3 {
+		t.Fatalf("listed %v", rows)
+	}
+	if w := hook.WithWatcher; w == nil || w.ID != "github/gh-reviews" || w.Installed || len(hook.Params) != 1 || hook.Params[0].Name != "login" {
+		t.Fatalf("hook: %+v %+v", hook, hook.WithWatcher)
+	}
+	if _, ok := rows["personal/lonely"]; !ok {
+		t.Fatal("a watcher no hook uses isn't listed")
+	}
+	if out, _ := run("templates", "list"); !strings.Contains(out, "comes with the watcher gh-reviews") {
+		t.Fatalf("list: %s", out)
 	}
 	if _, err := run("templates", "install", "github/pr-review-requested"); err == nil || !strings.Contains(err.Error(), "login") {
 		t.Fatalf("its watcher's required parameter: %v", err)
@@ -79,14 +111,15 @@ func TestTemplatesInstallFolders(t *testing.T) {
 	if out, err := run("templates", "install", "personal/cleaner"); err != nil || !strings.Contains(out, "routines trust cleaner --resume") {
 		t.Fatalf("program: %v %s", err, out)
 	}
-	var rows []engine.TemplateInfo
-	out, _ = run("templates", "list", "--json")
-	if json.Unmarshal([]byte(out), &rows) != nil || len(rows) != 3 {
-		t.Fatalf("list: %s", out)
+	rows = list()
+	if h := rows["github/pr-review-requested"]; !h.Installed || h.WithWatcher == nil || !h.WithWatcher.Installed || len(h.Params) != 0 {
+		t.Fatalf("installed hook: %+v %+v", h, h.WithWatcher)
 	}
-	for _, r := range rows {
-		if !r.Installed {
-			t.Errorf("%s isn't installed", r.ID)
-		}
+	if !rows["personal/cleaner"].Installed {
+		t.Error("the program isn't installed")
+	}
+	// A watcher template is still installed by its ID, alone.
+	if _, err := run("templates", "install", "github/gh-reviews", "--as", "gh-other", "--set", "login=morty"); err != nil {
+		t.Fatalf("a watcher by its ID: %v", err)
 	}
 }

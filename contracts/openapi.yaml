@@ -2513,6 +2513,14 @@ components:
             Watcher is a hook's: the watcher it listens to, installed with it (from
             its template) when it isn't there.
           type: string
+        withWatcher:
+          $ref: '#/components/schemas/TemplateWatcher'
+          description: |-
+            WithWatcher is a hook template's watcher template: installing the hook
+            installs it too while it isn't installed, so the two are one choice.
+            Its parameters are among the hook's (params) while it isn't
+            installed. A watcher template a hook comes with isn't listed on its
+            own.
       required:
         - id
         - name
@@ -2520,6 +2528,30 @@ components:
         - tags
         - runsHere
         - supportsBackend
+        - installed
+      type: object
+    TemplateWatcher:
+      additionalProperties: false
+      description: TemplateWatcher is the watcher template a hook template comes with.
+      properties:
+        description:
+          type: string
+        id:
+          type: string
+        installed:
+          description: |-
+            Installed is true when the watcher is there already: installing the
+            hook then uses it.
+          type: boolean
+        name:
+          type: string
+        params:
+          items:
+            $ref: '#/components/schemas/Param'
+          type: array
+      required:
+        - id
+        - name
         - installed
       type: object
     ToolInfo:

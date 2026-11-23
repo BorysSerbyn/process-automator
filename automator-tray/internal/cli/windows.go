@@ -138,6 +138,16 @@ type TemplateInfo struct {
 	Project     string  `json:"project,omitempty"`
 	Installed   bool    `json:"installed"`
 	Params      []Param `json:"params,omitempty"`
+	// WithWatcher is a hook's watcher template, installed with it while
+	// the watcher isn't installed (its params are among Params then).
+	WithWatcher *TemplateWatcher `json:"withWatcher,omitempty"`
+}
+
+// TemplateWatcher is the watcher template a hook template comes with.
+type TemplateWatcher struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Installed bool   `json:"installed"`
 }
 
 // Param is a template parameter.

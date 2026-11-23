@@ -46,8 +46,12 @@ func newTemplatesListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Annotations: readOnly(),
-		Short:       "List templates for this OS (--all for every OS)",
-		Args:        cobra.NoArgs,
+		Short:       "List templates for this OS (--all for every OS); a hook comes with its watcher, as one",
+		Long: "Lists the templates to install. A hook template and the watcher template it listens to are one " +
+			"entry, the hook's: withWatcher is the watcher installed with it (while it isn't installed, its parameters " +
+			"are among the hook's), and that watcher template isn't listed on its own; `templates install <watcher>` " +
+			"still installs it alone.",
+		Args: cobra.NoArgs,
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			rows, err := a.Templates(all)
 			if err != nil {
@@ -83,7 +87,11 @@ func newTemplatesListCmd() *cobra.Command {
 				if r.Kind != templates.KindRoutine {
 					backends = "-"
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%v\t%s\n", r.ID, r.Kind, orDash(strings.Join(params, ", ")), platforms, backends, r.Installed, oneLine(r.Description, 60))
+				description := oneLine(r.Description, 60)
+				if w := r.WithWatcher; w != nil && !w.Installed {
+					description += " (comes with the watcher " + w.Name + ")"
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%v\t%s\n", r.ID, r.Kind, orDash(strings.Join(params, ", ")), platforms, backends, r.Installed, description)
 			}
 			_ = tw.Flush()
 			fmt.Fprintln(out, "\n* required. Install with: "+product.Command+" templates install <template> [--as <name>] [--set param=value]")

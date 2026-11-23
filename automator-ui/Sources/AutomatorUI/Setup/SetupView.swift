@@ -454,6 +454,11 @@ struct TemplateRow: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    if let watcher = template.withWatcher, !watcher.installed {
+                        Text("Comes with the watcher \(watcher.name) (\(watcher.id)), installed with it")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .toggleStyle(.checkbox)

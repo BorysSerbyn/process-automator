@@ -687,7 +687,7 @@ commands:
     jsonOutput: cli/templates-install.schema.json
   - command: templates list
     usage: procauto templates list [flags]
-    summary: List templates for this OS (--all for every OS)
+    summary: List templates for this OS (--all for every OS); a hook comes with its watcher, as one
     flags:
       - name: --all
         type: bool

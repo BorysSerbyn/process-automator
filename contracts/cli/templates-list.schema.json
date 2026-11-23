@@ -120,6 +120,69 @@
       "installed": {
         "type": "boolean",
         "description": "Installed is true when one of its kind with the template's name exists\n(a routine of either kind, a hook, a watcher)."
+      },
+      "withWatcher": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "params": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "default": true,
+                "description": {
+                  "type": "string"
+                },
+                "enum": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "required": {
+                  "type": "boolean",
+                  "description": "Required is true for a parameter without a default; DefaultText is the\ndefault written as `templates install --set` takes it. Both are worked\nout when the routine is parsed."
+                },
+                "defaultText": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "name",
+                "type",
+                "required"
+              ],
+              "description": "Param is one routine parameter."
+            },
+            "type": "array"
+          },
+          "installed": {
+            "type": "boolean",
+            "description": "Installed is true when the watcher is there already: installing the\nhook then uses it."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "installed"
+        ],
+        "description": "WithWatcher is a hook template's watcher template: installing the hook\ninstalls it too while it isn't installed, so the two are one choice.\nIts parameters are among the hook's (params) while it isn't\ninstalled. A watcher template a hook comes with isn't listed on its\nown."
       }
     },
     "additionalProperties": false,

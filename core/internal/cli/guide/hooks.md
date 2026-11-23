@@ -83,4 +83,4 @@ Their settings (`hooks.<hook>.<key>`, set in the file as `<key>` or `automator.<
 5. `%{command} hooks list`, `%{command} runs <name>`; `%{command} hooks pause <name>`, `%{command} stop <name>`
 
 ## Sharing them as templates
-A hook or a watcher is a template folder, as a program is (`%{command} guide programs`): its `hook.yaml` (or `hook.prompt`) or `watcher.yaml`, its executable or source with a `build`, and `template.yaml`; `{{param}}` fills a watcher's `args`, say. Installing a hook's template installs its watcher's template too (the one named as its `on.watcher`) when the person doesn't have that watcher
+A hook or a watcher is a template folder, as a program is (`%{command} guide programs`): its `hook.yaml` (or `hook.prompt`) or `watcher.yaml`, its executable or source with a `build`, and `template.yaml`; `{{param}}` fills a watcher's `args`, say. Installing a hook's template installs its watcher's template too (the one named as its `on.watcher`) when the person doesn't have that watcher; `templates list` shows the two as one entry, the hook's (`withWatcher`): offer them as one choice

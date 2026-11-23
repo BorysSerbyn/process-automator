@@ -141,6 +141,7 @@ A program, hook or watcher shared as a template is a folder: its description fil
 ### Rejected
 - **Prebuilt binaries per OS and architecture**: a build matrix and binaries in git nobody can review, trusted by a checksum of something no one read; on macOS, unsigned downloads carry quarantine, and a binary built here doesn't
 - **Building on first run**: the trusted checksum would be of something that doesn't exist yet, and a missing toolchain would surface as a failed run, not at install
+- **Listing a hook's watcher template as an entry of its own**: Claude offered the two as separate choices, and a watcher alone does nothing; the hook's entry carries it (`withWatcher`), and the watcher stays installable by its ID
 - **A hook template naming its watcher's template ID**: the hook's file already names its watcher; the template of that name is found, and the templates' check makes sure there's exactly one
 - **Parameters as settings (`hooks.<name>.params.<param>`)**: no program, hook or watcher reads settings for its arguments, and a setting changing them would change what was trusted without a review
 

@@ -144,10 +144,10 @@ func templatesStep(set *routines.Set, offered int) SetupStep {
 	st := SetupStep{Step: StepTemplates, Title: "Templates", Done: len(set.Routines) > 0, Optional: true, Status: "No routines installed yet",
 		Ask: "First, on its own: which of the templates' projects do you work on (name each one, even if there's " +
 			"only one)? Then, each template as its own choice: which should be installed as routines, of those of " +
-			"your projects and those for any project? Templates with the same name are alternatives. None are " +
-			"picked by default.",
+			"your projects and those for any project? Templates with the same name are alternatives. A hook comes " +
+			"with the watcher it listens to (withWatcher): it's one choice, installed together. None are picked by default.",
 		Commands: []string{
-			product.Command + " templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none, and only those with supportsBackend (the others need another llm.backend)",
+			product.Command + " templates list --json   # each template's project (none: for any project); offer only the ones of the projects they work on, and those with none, and only those with supportsBackend (the others need another llm.backend); a hook with withWatcher is one choice with its watcher, its params theirs together",
 			product.Command + " templates install <template> [--set <param>=<value>]...",
 		}}
 	if offered == 0 {

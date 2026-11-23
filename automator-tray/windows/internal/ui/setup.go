@@ -775,6 +775,9 @@ func (s *Setup) templateRow(t cli.TemplateInfo) fyne.CanvasObject {
 	if t.Description != "" {
 		about.Add(secondary(t.Description))
 	}
+	if w := t.WithWatcher; w != nil && !w.Installed {
+		about.Add(secondary("Comes with the watcher " + w.Name + " (" + w.ID + "), installed with it"))
+	}
 	box := container.NewVBox(container.NewBorder(nil, nil, container.NewVBox(check), nil, about))
 	if s.chosen[t.ID] && len(t.Params) > 0 {
 		params := container.NewVBox()
