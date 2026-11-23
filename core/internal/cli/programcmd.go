@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -26,27 +25,8 @@ func addProgram(cmd *cobra.Command, a *engine.App, name string, src sourceFlags,
 		return errors.New("a program is added from its description file's path (--from <path>/" + programs.DescriptionFile +
 			"), in a terminal: its executable is found beside it")
 	}
-	raw, err := os.ReadFile(src.from)
+	p, err := a.AddProgram(name, src.from, replace)
 	if err != nil {
-		return err
-	}
-	parsed, err := programs.Parse(name, string(raw))
-	if err != nil {
-		return err
-	}
-	if s, ok := a.FindSignIn(name); ok && s.Kind != "program" && len(parsed.Secrets) > 0 {
-		return fmt.Errorf("%s is already a sign-in's name (`%s auth login %s`): give a program with secrets another name", name, product.Command, name)
-	}
-	undo := func() {}
-	if !replace {
-		// Disabled before it exists, so the scheduler never sees it enabled.
-		if undo, err = disableNew(a, name, parsed.Settings()); err != nil {
-			return err
-		}
-	}
-	p, err := programs.Add(a.Layout.Programs(), name, src.from, replace)
-	if err != nil {
-		undo()
 		return err
 	}
 	out := RoutineChange{Routine: p.Name, Kind: engine.KindProgram.Written(), Path: p.Path}

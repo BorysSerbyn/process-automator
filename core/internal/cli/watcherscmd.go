@@ -264,25 +264,7 @@ func newWatchersAddCmd(update bool) *cobra.Command {
 			if from == "" || from == "-" {
 				return errors.New("a watcher is added from its description file's path (--from <path>/" + watchers.DescriptionFile + "), in a terminal")
 			}
-			raw, err := os.ReadFile(from)
-			if err != nil {
-				return err
-			}
-			parsed, err := watchers.Parse(name, string(raw))
-			if err != nil {
-				return err
-			}
-			if len(parsed.Program.Secrets) > 0 {
-				if s, ok := a.FindSignIn(name); ok && s.Kind != "watcher" {
-					return fmt.Errorf("%s is already a sign-in's name (`%s auth login %s`): give a watcher with secrets another name", name, product.Command, name)
-				}
-			}
-			if !update {
-				if why := a.NameTaken(name); why != "" {
-					return errors.New(why)
-				}
-			}
-			w, err := watchers.Add(a.Layout.Watchers(), name, from, update)
+			w, err := a.AddWatcher(name, from, update)
 			if err != nil {
 				return err
 			}

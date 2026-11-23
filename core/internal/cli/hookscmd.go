@@ -252,47 +252,16 @@ func newHooksAddCmd(update bool) *cobra.Command {
 			if from == "" || from == "-" {
 				return errors.New("a hook is added from its file's path (--from <path>), in a terminal")
 			}
-			raw, err := os.ReadFile(from)
-			if err != nil {
+			if err := checkHookTools(cmd, a, name, from); err != nil {
 				return err
-			}
-			parsed, err := hooks.Parse(name, from, string(raw))
-			if err != nil {
-				return err
-			}
-			// Its type is one its watcher declares it prints.
-			if err := a.CheckOn(parsed.On); err != nil {
-				return err
-			}
-			if parsed.Prompt != nil {
-				// As routines create does: no servers or tools that don't exist.
-				if err := checkRoutineTools(cmd, a, *parsed.Prompt); err != nil {
-					return err
-				}
-			}
-			if parsed.Program != nil && len(parsed.Program.Secrets) > 0 {
-				if s, ok := a.FindSignIn(name); ok && s.Kind != "hook" {
-					return fmt.Errorf("%s is already a sign-in's name (`%s auth login %s`): give a hook with secrets another name", name, product.Command, name)
-				}
 			}
 			off := false
 			out := HookChange{Hook: name}
 			if !update {
-				if why := a.NameTaken(name); why != "" {
-					return errors.New(why)
-				}
-				// Off before it exists, so the daemon never sees it on.
-				st := settings.Store{Path: a.Layout.Config(), Extra: parsed.Settings()}
-				if _, err := st.Set("hooks."+name+".enabled", "false"); err != nil {
-					return err
-				}
 				out.Enabled = &off
 			}
-			h, err := hooks.Add(a.Layout.Hooks(), name, from, update)
+			h, err := a.AddHook(name, from, update)
 			if err != nil {
-				if !update {
-					_, _ = (settings.Store{Path: a.Layout.Config(), Extra: parsed.Settings()}).Reset("hooks." + name + ".enabled")
-				}
 				return err
 			}
 			out.Path = h.Path
@@ -476,4 +445,18 @@ func newHooksFireCmd() *cobra.Command {
 	_ = cmd.Flags().SetAnnotation("event-json", annViaStdin, []string{"event"})
 	jsonFlag(cmd.Flags(), RunOutput{})
 	return cmd
+}
+
+// checkHookTools checks an LLM hook's servers and tools, as routines create
+// does (no servers or tools that don't exist); a program hook has none.
+func checkHookTools(cmd *cobra.Command, a *engine.App, name, from string) error {
+	raw, err := os.ReadFile(from)
+	if err != nil {
+		return err
+	}
+	parsed, err := hooks.Parse(name, from, string(raw))
+	if err != nil || parsed.Prompt == nil {
+		return err
+	}
+	return checkRoutineTools(cmd, a, *parsed.Prompt)
 }

@@ -229,15 +229,7 @@ func checkRoutineTools(cmd *cobra.Command, a *engine.App, r routines.Routine) er
 // either kind (whose setting isn't ours to change); undo removes the setting
 // again if writing the routine fails.
 func disableNew(a *engine.App, name string, defs []settings.Setting) (undo func(), err error) {
-	if why := a.NameTaken(name); why != "" {
-		return nil, errors.New(why)
-	}
-	st := settings.Store{Path: a.Layout.Config(), Extra: defs}
-	key := "routines." + name + ".enabled"
-	if _, err := st.Set(key, "false"); err != nil {
-		return nil, err
-	}
-	return func() { _, _ = st.Reset(key) }, nil
+	return a.DisableNew(name, defs)
 }
 
 func newRoutinesUpdateCmd() *cobra.Command {
