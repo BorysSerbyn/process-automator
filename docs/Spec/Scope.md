@@ -11,7 +11,7 @@ Back to [[Home]]. Details live in the [[Spec/Requirements/Functional/Functional 
 - **Guardrails**: a tool allowlist per routine, dry runs that intercept every write, and trust: a routine runs for real only while what it can reach is what I approved; a program, a watcher or a hook's program runs only while its executable is the one I approved, and a hook only while what it acts on is too. Event data reaches a hook's prompt marked as outside data
 - **Frontends over one core**: the `procauto` CLI (the API), automator-ui on macOS, a tray on Linux, and Claude or any MCP client through `procauto mcp serve`
 - **Around runs**: run history, memories, notifications, a usage limit per backend, `doctor`, templates to share routines, a guided `setup`
-- **Distribution**: prebuilt, verified releases for macOS and Linux, one-command install, update and uninstall, a private Homebrew tap, and installing through an LLM (`AGENTS.md`)
+- **Distribution**: prebuilt, verified releases for macOS and Linux, one-command install, update and uninstall, automatic updates, a private Homebrew tap, and installing through an LLM (`AGENTS.md`)
 
 ## What it isn't
 - Not a chat assistant or an open-ended agent: routines are fixed prompts run unattended, with no one answering questions mid-run

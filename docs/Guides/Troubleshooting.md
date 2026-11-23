@@ -44,7 +44,7 @@ A routine stays red until its next run goes well (or you pause it).
 | Scheduler (Linux) | `journalctl --user -u procauto-scheduler` |
 | Tray and its windows (Linux) | `frontend.log` in the data folder (started again past 1 MB; the one before is `frontend.log.old`): why a window opened in a terminal, why the scheduler didn't start |
 | Runs started in the background (`start`, **Run Now** in the menu bar app) | `start.log` in the data folder |
-| Updates started from the menu | `update.log` in the data folder |
+| Updates (installed automatically, or from Manage Updates) | `update.log` in the data folder |
 | Changes made by Claude through the MCP server | `mcp-changes.jsonl` in the data folder |
 
 `procauto paths` shows the data folder (and `frontend log`).
