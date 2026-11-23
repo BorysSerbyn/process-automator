@@ -36,6 +36,14 @@ func TestTheAcknowledgementsWindow(t *testing.T) {
 	f.mustHaveRun(t, "notifications ack n7 --json", "runs show marco-scout/2026-11-21T090000 --open", "notifications ack --all --json")
 	mustShow(t, a.Content(), "the notifications file is locked")
 
+	// A long text is folded to its first lines, and opens to all of it.
+	mustShow(t, a.Content(), "Report\nline 1 of the scout's report…")
+	mustNotShow(t, a.Content(), "line 39 of the scout's report")
+	test.Tap(button(t, a.Content(), "Show All"))
+	mustShow(t, a.Content(), "line 39 of the scout's report")
+	test.Tap(button(t, a.Content(), "Show Less"))
+	mustNotShow(t, a.Content(), "line 39 of the scout's report")
+
 	empty := NewAcknowledgements(newFakeCLI(t, map[string]string{"notifications list --waiting --json": "[]"}).CLI, now)
 	empty.Load()
 	mustShow(t, empty.Content(), "Nothing waits for you.")

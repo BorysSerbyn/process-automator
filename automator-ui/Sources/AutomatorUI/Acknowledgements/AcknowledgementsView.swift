@@ -69,13 +69,16 @@ struct AcknowledgementsView: View {
     }
 }
 
-/// One notification waiting: what sent it and when, its title and text
-/// (the routine's words, shown as plain text), Show Run, and Acknowledge.
+/// One notification waiting: what sent it and when, its title, and its
+/// text (the routine's words, plain text), folded to two lines and opening
+/// to all of it (a scout's whole report: it scrolls, and can be selected
+/// and copied); Show Run, and Acknowledge.
 struct AcknowledgementRow: View {
     let note: CoreNotification
     let working: Bool
     let acknowledge: () -> Void
     let openRun: (() -> Void)?
+    @State private var open = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -85,7 +88,26 @@ struct AcknowledgementRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: note.title).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                 if let body = note.body, !body.isEmpty {
-                    Text(verbatim: body).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    if open || !(body.count > 140 || body.contains("\n")) {
+                        FittingScrollView(maxHeight: 320) {
+                            Text(verbatim: body)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                        }
+                        .background(
+                            Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    } else {
+                        Text(verbatim: body).lineLimit(2).truncationMode(.tail).foregroundStyle(.secondary)
+                    }
+                    if body.count > 140 || body.contains("\n") {
+                        Button(open ? "Show Less" : "Show All") {
+                            withAnimation(.easeInOut(duration: 0.18)) { open.toggle() }
+                        }
+                        .buttonStyle(.link)
+                        .font(.subheadline)
+                    }
                 }
                 HStack(spacing: 6) {
                     if let routine = note.routine { Text(verbatim: routine).font(.subheadline.monospaced()) }

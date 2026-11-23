@@ -206,11 +206,7 @@ final class Indicator: NSObject, NSMenuDelegate {
         return [NSMenuItem(title: status.summary ?? "", action: nil, keyEquivalent: "")]
     }
 
-    private func textItem(_ view: NSView) -> NSMenuItem {
-        let item = NSMenuItem()
-        item.view = view
-        return item
-    }
+    private func textItem(_ view: MenuTextView) -> NSMenuItem { view.menuItem() }
 
     // MARK: Icon
 
