@@ -187,6 +187,16 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 		reasons = append(reasons, Reason{Text: fmt.Sprintf("Setup isn't finished (%d to do)", n),
 			Detail: "Still to do: " + strings.Join(s.SetupLeft, ", ")})
 	}
+	if n := len(s.Waiting); n > 0 {
+		text, titles := "(1) Acknowledgement pending", []string{}
+		if n > 1 {
+			text = fmt.Sprintf("(%d) Acknowledgements pending", n)
+		}
+		for _, w := range s.Waiting {
+			titles = append(titles, w.Title)
+		}
+		reasons = append(reasons, Reason{Acknowledge: true, Text: text, Detail: strings.Join(titles, "\n")})
+	}
 	verdict := HealthNone
 	for _, r := range s.Routines {
 		if !r.Enabled {
@@ -384,6 +394,29 @@ func SetSetup(path string, left []string, now time.Time) error {
 	return update(path, now, func(s *Status) { s.SetupLeft = left })
 }
 
+// SetWaiting records the notifications waiting to be acknowledged, as
+// waiting gives them: called under the run-status lock, so the last of
+// several writers records what the notifications file says last.
+// Unchanged, it writes nothing.
+func SetWaiting(path string, waiting func() ([]Waiting, error), now time.Time) error {
+	return atomicfile.Locked(path, func() error {
+		list, err := waiting()
+		if err != nil {
+			return err
+		}
+		s, err := Load(path)
+		if err != nil {
+			return err
+		}
+		if slices.Equal(s.Waiting, list) {
+			return nil
+		}
+		s.Waiting = list
+		recompute(s, now)
+		return atomicfile.WriteJSON(path, s)
+	})
+}
+
 // SetProblem records why the scheduler can't work; "" clears it.
 func SetProblem(path, problem string, now time.Time) error {
 	return update(path, now, func(s *Status) { s.Problem = problem })
@@ -418,21 +451,28 @@ func MarkInterrupted(path string, now time.Time) (map[string]Run, error) {
 func update(path string, now time.Time, fn func(*Status)) error {
 	return atomicfile.UpdateJSON(path, Load, func(s *Status) error {
 		fn(s)
-		sort.Slice(s.Routines, func(i, j int) bool { return s.Routines[i].Name < s.Routines[j].Name })
-		if s.Routines == nil {
-			s.Routines = []Routine{}
-		}
-		s.SchemaVersion, s.UpdatedAt = SchemaVersion, now
-		for i := range s.Routines {
-			s.Routines[i].Health, s.Routines[i].Summary = routineState(s.Routines[i], now)
-		}
-		sort.Slice(s.Hooks, func(i, j int) bool { return s.Hooks[i].Name < s.Hooks[j].Name })
-		for i := range s.Hooks {
-			s.Hooks[i].Health, s.Hooks[i].Summary = hookState(s.Hooks[i], now)
-		}
-		s.Health, s.Reasons = assess(s, now)
-		s.Summary = summary(s.Health)
-		s.Busy = busy(s, now)
+		recompute(s, now)
 		return nil
 	})
+}
+
+// recompute sorts the lists and works out each entry's and the app's
+// health, as of now.
+func recompute(s *Status, now time.Time) {
+	sort.Slice(s.Routines, func(i, j int) bool { return s.Routines[i].Name < s.Routines[j].Name })
+	if s.Routines == nil {
+		s.Routines = []Routine{}
+	}
+	s.SchemaVersion, s.UpdatedAt = SchemaVersion, now
+	for i := range s.Routines {
+		s.Routines[i].Health, s.Routines[i].Summary = routineState(s.Routines[i], now)
+	}
+	sort.Slice(s.Hooks, func(i, j int) bool { return s.Hooks[i].Name < s.Hooks[j].Name })
+	for i := range s.Hooks {
+		s.Hooks[i].Health, s.Hooks[i].Summary = hookState(s.Hooks[i], now)
+	}
+	s.PendingAcknowledgements = len(s.Waiting)
+	s.Health, s.Reasons = assess(s, now)
+	s.Summary = summary(s.Health)
+	s.Busy = busy(s, now)
 }

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "notifications-ack.schema.json",
+  "properties": {
+    "acknowledged": {
+      "items": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "failure",
+              "app",
+              "acknowledge"
+            ],
+            "description": "Kind is \"failure\" (a run that failed, needs a sign-in, or was skipped\nor missed), \"app\" (about the app, e.g. an update) or \"acknowledge\" (a\nroutine's or hook's, through a plugin, waiting to be acknowledged)."
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "routine": {
+            "type": "string",
+            "description": "Routine and Run (a run ID, as in `runs show`) are what it's about, if any."
+          },
+          "run": {
+            "type": "string"
+          },
+          "hook": {
+            "type": "boolean",
+            "description": "Hook is true when Routine names a hook, not a routine."
+          },
+          "urgent": {
+            "type": "boolean",
+            "description": "Urgent breaks through focus modes where the OS allows (macOS\ntime-sensitive, Linux critical urgency)."
+          },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "DeliveredAt is when a frontend showed it; absent until then."
+          },
+          "acknowledge": {
+            "type": "boolean",
+            "description": "Acknowledge is true when it waits for me to acknowledge it (kind\nacknowledge): frontends show it with an Acknowledge action that runs\n`notifications ack \u003cid\u003e`, and health is error until then."
+          },
+          "acknowledgedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "AcknowledgedAt is when I acknowledged it; absent while it waits."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "kind",
+          "title"
+        ],
+        "description": "Notification is one thing to tell me."
+      },
+      "type": "array"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "acknowledged"
+  ],
+  "title": "procauto notifications ack --json",
+  "description": "AckOutput is `notifications ack --json`: the notifications acknowledged (none for ones acknowledged already)."
+}

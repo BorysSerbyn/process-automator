@@ -99,6 +99,21 @@ type Host interface {
 	RoutineConfig(v any) error
 	// Run is the routine run this session serves; zero when there's none.
 	Run() Run
+	// AskToAcknowledge hands n to the app as one of its own notifications,
+	// about the run this session serves, that waits for me to acknowledge
+	// it: the app's frontends show it with an Acknowledge button and list it
+	// until I do, and the app's health is error meanwhile. It returns the
+	// notification's ID (`notifications ack <id>`).
+	AskToAcknowledge(n Notice) (id string, err error)
+}
+
+// Notice is a notification a plugin asks the app to show
+// (Host.AskToAcknowledge).
+type Notice struct {
+	Title, Body string
+	// Urgent breaks through focus modes where the OS allows (macOS
+	// time-sensitive, Linux critical urgency).
+	Urgent bool
 }
 
 // Run is the routine run a plugin session serves. It's zero outside a run

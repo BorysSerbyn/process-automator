@@ -267,6 +267,17 @@ commands:
   - command: memory rm
     usage: procauto memory rm <id>
     summary: Forget a memory
+  - command: notifications ack
+    usage: procauto notifications ack [<id>...] [flags]
+    summary: Acknowledge notifications waiting for it
+    flags:
+      - name: --all
+        type: bool
+        usage: every notification waiting
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/notifications-ack.schema.json
   - command: notifications delivered
     usage: procauto notifications delivered <id>...
     summary: Mark notifications delivered (frontends call this after showing them)
@@ -280,6 +291,9 @@ commands:
       - name: --pending
         type: bool
         usage: only those not delivered yet
+      - name: --waiting
+        type: bool
+        usage: only those waiting for me to acknowledge them
     jsonOutput: cli/notifications-list.schema.json
   - command: notifications open
     usage: procauto notifications open <id> [flags]

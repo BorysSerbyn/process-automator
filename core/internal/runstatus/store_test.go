@@ -1,6 +1,7 @@
 package runstatus
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -396,5 +397,39 @@ func TestOneReasonPerWatcher(t *testing.T) {
 	_ = Sync(path, map[string]Setup{"home-joke": {Hook: true, Enabled: true, Watcher: "home-key", WatcherProblem: "home-key is paused"}}, t0)
 	if s = load(t, path); len(s.Reasons) != 1 || s.Reasons[0].Text != "home-key is paused (home-joke listens to it)" {
 		t.Fatalf("one hook: %+v", s.Reasons)
+	}
+}
+
+// A notification waiting to be acknowledged makes health error, with a
+// reason to choose; none waiting, health is what it otherwise is.
+func TestWaitingNotifications(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run-status.json")
+	if err := Sync(path, map[string]Setup{"a": {Enabled: true, NextRunAt: at(time.Hour)}}, t0); err != nil {
+		t.Fatal(err)
+	}
+	set := func(w ...Waiting) *Status {
+		t.Helper()
+		if err := SetWaiting(path, func() ([]Waiting, error) { return w, nil }, t0); err != nil {
+			t.Fatal(err)
+		}
+		s, _ := Load(path)
+		return s
+	}
+	s := set(Waiting{ID: "1", Title: "Ana asked for the report"})
+	if s.Health != HealthError || s.PendingAcknowledgements != 1 || len(s.Reasons) != 1 || !s.Reasons[0].Acknowledge ||
+		s.Reasons[0].Text != "(1) Acknowledgement pending" || s.Reasons[0].Detail != "Ana asked for the report" {
+		t.Fatalf("one waiting: %+v", s)
+	}
+	if s := set(Waiting{ID: "1", Title: "x"}, Waiting{ID: "2", Title: "y"}); s.Reasons[0].Text != "(2) Acknowledgements pending" {
+		t.Fatalf("two waiting: %+v", s.Reasons)
+	}
+	if s := set(); s.Health != HealthOK || len(s.Reasons) != 0 || s.Waiting != nil || s.PendingAcknowledgements != 0 {
+		t.Fatalf("none waiting: %+v", s)
+	}
+	before, _ := os.Stat(path)
+	time.Sleep(10 * time.Millisecond)
+	set()
+	if after, _ := os.Stat(path); !after.ModTime().Equal(before.ModTime()) {
+		t.Error("an unchanged list was written")
 	}
 }

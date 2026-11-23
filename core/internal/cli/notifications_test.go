@@ -73,3 +73,55 @@ func lastRunID(t *testing.T, a *engine.App, routine string) string {
 	}
 	return routine + "/" + run.StartedAt.Format("2006-01-02T150405")
 }
+
+// Notifications waiting to be acknowledged: listed as waiting, in run
+// status (red) until `notifications ack`, one by one or all.
+func TestNotificationsAck(t *testing.T) {
+	a, _ := enginetest.Fixture(t, map[string]string{"r": "queue"}, nil)
+	cfg := a.Layout.Config()
+	var ids []string
+	for _, title := range []string{"Ana asked for the report", "Ben asked for a review"} {
+		n, err := notifications.Add(a.Layout.Notifications(), notifications.Notification{Kind: notifications.KindAcknowledge, Title: title, Routine: "r"}, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, n.ID)
+	}
+	if err := a.SyncStatus(time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	var waiting []notifications.Notification
+	if out, err := cli(t, cfg, "notifications", "list", "--waiting", "--json"); err != nil || json.Unmarshal([]byte(out), &waiting) != nil ||
+		len(waiting) != 2 || !waiting[0].Acknowledge || waiting[0].AcknowledgedAt != nil {
+		t.Fatalf("waiting: %s %v", out, err)
+	}
+	if out, _ := cli(t, cfg, "status"); !strings.Contains(out, "(2) Acknowledgements pending") {
+		t.Fatalf("status: %s", out)
+	}
+	if out, _ := cli(t, cfg, "doctor", "--json"); !strings.Contains(out, `"area": "notifications"`) || !strings.Contains(out, "notifications ack "+ids[0]) {
+		t.Fatalf("doctor: %s", out)
+	}
+	if _, err := cli(t, cfg, "notifications", "ack"); err == nil {
+		t.Fatal("ack with nothing named")
+	}
+	if _, err := cli(t, cfg, "notifications", "ack", "--all", ids[0]); err == nil {
+		t.Fatal("ack with both")
+	}
+	if out, err := cli(t, cfg, "notifications", "ack", ids[0]); err != nil || !strings.Contains(out, "Acknowledged 1: Ana asked") {
+		t.Fatalf("ack: %s %v", out, err)
+	}
+	if out, _ := cli(t, cfg, "status"); !strings.Contains(out, "(1) Acknowledgement pending") {
+		t.Fatalf("status: %s", out)
+	}
+	var acked AckOutput
+	if out, err := cli(t, cfg, "notifications", "ack", "--all", "--json"); err != nil || json.Unmarshal([]byte(out), &acked) != nil ||
+		len(acked.Acknowledged) != 1 || acked.Acknowledged[0].ID != ids[1] {
+		t.Fatalf("ack --all: %s %v", out, err)
+	}
+	if out, _ := cli(t, cfg, "status"); strings.Contains(out, "Acknowledgement") {
+		t.Fatalf("still waiting: %s", out)
+	}
+	if out, _ := cli(t, cfg, "notifications", "list", "--waiting", "--json"); strings.TrimSpace(out) != "[]" {
+		t.Fatalf("waiting after: %s", out)
+	}
+}

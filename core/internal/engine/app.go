@@ -88,7 +88,7 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 		}
 		dataDir := files.PluginData(p.Name)
 		conn.Builtins[p.Name] = func(run mcp.Run) (*sdk.Server, error) {
-			return p.InProcess.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, config: path, run: run})
+			return p.InProcess.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, config: path, files: files, run: run})
 		}
 	}
 	return &App{Config: cfg, Layout: files, Connector: conn, Plugins: plugins, Accounts: cfg.Accounts, builtin: builtin}, nil
@@ -225,7 +225,7 @@ func (a *App) KnownServer(name string) bool {
 
 // pluginHost is a plugin's host outside any run (for reading its config).
 func (a *App) pluginHost(p pluginapi.Plugin) *host {
-	return &host{plugin: p, cfg: a.Config, conn: a.Connector, dataDir: a.Layout.PluginData(p.Name), config: a.Layout.Config()}
+	return &host{plugin: p, cfg: a.Config, conn: a.Connector, dataDir: a.Layout.PluginData(p.Name), config: a.Layout.Config(), files: a.Layout}
 }
 
 // host is the engine side of pluginapi.Host for one in-process plugin.
@@ -236,6 +236,7 @@ type host struct {
 	conn    *mcp.Connector
 	dataDir string
 	config  string // the config file, for ConnectApp
+	files   Layout // the app's files, for AskToAcknowledge
 	run     mcp.Run
 }
 

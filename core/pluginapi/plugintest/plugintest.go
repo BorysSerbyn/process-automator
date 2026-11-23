@@ -19,8 +19,8 @@ import (
 // AppName is Name ("Test App" when empty), Config decodes YAML strictly (as
 // the engine does), Secret reads Secrets, DataDir is Data (made on first
 // use; none: an error), RoutineConfig decodes Routine (the plugin's routine
-// section, as a routine file would give it) strictly, and Run is a run in
-// Folder.
+// section, as a routine file would give it) strictly, Run is a run in
+// Folder, and AskToAcknowledge appends to Asked.
 type Host struct {
 	Servers map[string]*sdk.Server
 	// App opens a session to the app's MCP server: InMemory for a fake, or
@@ -32,6 +32,8 @@ type Host struct {
 	Data    string
 	Routine any
 	Folder  string
+	// Asked are the notices AskToAcknowledge was given, in order.
+	Asked []pluginapi.Notice
 }
 
 var _ pluginapi.Host = (*Host)(nil)
@@ -91,6 +93,13 @@ func (h *Host) RoutineConfig(v any) error {
 
 // Run implements pluginapi.Host.
 func (h *Host) Run() pluginapi.Run { return pluginapi.Run{Folder: h.Folder} }
+
+// AskToAcknowledge implements pluginapi.Host: the notice is kept in Asked,
+// its ID its place there ("1" for the first).
+func (h *Host) AskToAcknowledge(n pluginapi.Notice) (string, error) {
+	h.Asked = append(h.Asked, n)
+	return fmt.Sprint(len(h.Asked)), nil
+}
 
 // InMemory is a Host.App serving s in memory.
 func InMemory(s *sdk.Server) func(context.Context) (*sdk.ClientSession, error) {

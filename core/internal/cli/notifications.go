@@ -31,15 +31,18 @@ type ClickOutput struct {
 
 func newNotificationsCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "notifications", Short: "Notifications the core recorded for frontends to deliver"}
-	cmd.AddCommand(newNotificationsListCmd(), newNotificationsDeliveredCmd(), newNotificationsOpenCmd())
+	cmd.AddCommand(newNotificationsListCmd(), newNotificationsDeliveredCmd(), newNotificationsOpenCmd(), newNotificationsAckCmd())
 	return cmd
 }
 
 func newNotificationsListCmd() *cobra.Command {
-	var pending bool
+	var pending, waiting bool
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List notifications, newest last",
+		Use:   "list",
+		Short: "List notifications, newest last",
+		Long: "The app's notifications, newest last. Those waiting for me to acknowledge them (a routine's or hook's, " +
+			"asked for through a plugin, such as notify_me with acknowledge) have acknowledge set, and no acknowledgedAt until " +
+			"`notifications ack`.",
 		Annotations: readOnly(),
 		Args:        cobra.NoArgs,
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
@@ -48,30 +51,44 @@ func newNotificationsListCmd() *cobra.Command {
 				return err
 			}
 			list := f.Notifications
+			if waiting {
+				list = f.Waiting()
+			}
 			if pending {
-				list = list[:0:0]
-				for _, n := range f.Notifications {
+				var undelivered []notifications.Notification
+				for _, n := range list {
 					if n.DeliveredAt == nil {
-						list = append(list, n)
+						undelivered = append(undelivered, n)
 					}
 				}
+				list = undelivered
+			}
+			if list == nil {
+				list = []notifications.Notification{}
 			}
 			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), list)
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "ID\tAT\tKIND\tTITLE\tDELIVERED")
+			fmt.Fprintln(tw, "ID\tAT\tKIND\tTITLE\tDELIVERED\tACKNOWLEDGED")
 			for _, n := range list {
-				delivered := "no"
+				delivered, acked := "no", ""
 				if n.DeliveredAt != nil {
 					delivered = "yes"
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", n.ID, n.At.Local().Format("Mon Jan 2 15:04"), n.Kind, n.Title, delivered)
+				switch {
+				case n.Waiting():
+					acked = "waiting"
+				case n.AcknowledgedAt != nil:
+					acked = "yes"
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", n.ID, n.At.Local().Format("Mon Jan 2 15:04"), n.Kind, n.Title, delivered, acked)
 			}
 			return tw.Flush()
 		}),
 	}
 	cmd.Flags().BoolVar(&pending, "pending", false, "only those not delivered yet")
+	cmd.Flags().BoolVar(&waiting, "waiting", false, "only those waiting for me to acknowledge them")
 	jsonFlag(cmd.Flags(), []notifications.Notification{})
 	return cmd
 }
@@ -110,5 +127,45 @@ func newNotificationsOpenCmd() *cobra.Command {
 		}),
 	}
 	jsonFlag(cmd.Flags(), ClickOutput{})
+	return cmd
+}
+
+// AckOutput is `notifications ack --json`: the notifications acknowledged
+// (none for ones acknowledged already).
+type AckOutput struct {
+	Acknowledged []notifications.Notification `json:"acknowledged"`
+}
+
+func newNotificationsAckCmd() *cobra.Command {
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "ack [<id>...]",
+		Short: "Acknowledge notifications waiting for it",
+		Long: "Acknowledges notifications waiting for me to acknowledge them (`notifications list --waiting`): " +
+			"they stop waiting, and once none waits, health no longer counts them. One acknowledged already stays so.",
+		Args: func(_ *cobra.Command, args []string) error {
+			if all == (len(args) > 0) {
+				return fmt.Errorf("name the notifications to acknowledge, or pass --all")
+			}
+			return nil
+		},
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			done, err := a.Acknowledge(args, all, time.Now())
+			if err != nil {
+				return err
+			}
+			titles := make([]string, len(done))
+			for i, n := range done {
+				titles[i] = n.Title
+			}
+			text := "Nothing was waiting."
+			if len(done) > 0 {
+				text = fmt.Sprintf("Acknowledged %d: %s", len(done), strings.Join(titles, "; "))
+			}
+			return emit(cmd, AckOutput{Acknowledged: done}, text)
+		}),
+	}
+	cmd.Flags().BoolVar(&all, "all", false, "every notification waiting")
+	jsonFlag(cmd.Flags(), AckOutput{})
 	return cmd
 }

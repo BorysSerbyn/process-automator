@@ -29,6 +29,32 @@
       "type": "array",
       "description": "SetupLeft names the setup steps still to do (`setup --json`'s titles;\nempty when setup is done). Unfinished setup makes health error."
     },
+    "pendingAcknowledgements": {
+      "type": "integer",
+      "description": "PendingAcknowledgements is how many notifications wait for me to\nacknowledge them (Waiting's length); any makes health error."
+    },
+    "waiting": {
+      "items": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID is the notification's (`notifications ack \u003cid\u003e`)."
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "description": "Waiting is a notification waiting for me to acknowledge it."
+      },
+      "type": "array",
+      "description": "Waiting are those notifications (`notifications list --waiting`),\noldest first."
+    },
     "busy": {
       "type": "boolean",
       "description": "Busy is true while a routine is running (not counting runs stuck past\nMaxRunDuration); frontends show activity from it."
@@ -303,6 +329,10 @@
           "run": {
             "type": "string",
             "description": "Run is the run it's about (a history ID, as `runs show` takes), if any."
+          },
+          "acknowledge": {
+            "type": "boolean",
+            "description": "Acknowledge is true when it's about notifications waiting for me to\nacknowledge them: choosing it shows them (`notifications list\n--waiting`), to acknowledge."
           }
         },
         "additionalProperties": false,

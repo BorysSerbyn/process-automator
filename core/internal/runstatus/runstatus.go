@@ -61,6 +61,12 @@ type Status struct {
 	// SetupLeft names the setup steps still to do (`setup --json`'s titles;
 	// empty when setup is done). Unfinished setup makes health error.
 	SetupLeft []string `json:"setupLeft,omitempty"`
+	// PendingAcknowledgements is how many notifications wait for me to
+	// acknowledge them (Waiting's length); any makes health error.
+	PendingAcknowledgements int `json:"pendingAcknowledgements,omitempty"`
+	// Waiting are those notifications (`notifications list --waiting`),
+	// oldest first.
+	Waiting []Waiting `json:"waiting,omitempty"`
 	// Busy is true while a routine is running (not counting runs stuck past
 	// MaxRunDuration); frontends show activity from it.
 	Busy bool `json:"busy"`
@@ -95,6 +101,17 @@ type Reason struct {
 	Detail string `json:"detail,omitempty"`
 	// Run is the run it's about (a history ID, as `runs show` takes), if any.
 	Run string `json:"run,omitempty"`
+	// Acknowledge is true when it's about notifications waiting for me to
+	// acknowledge them: choosing it shows them (`notifications list
+	// --waiting`), to acknowledge.
+	Acknowledge bool `json:"acknowledge,omitempty"`
+}
+
+// Waiting is a notification waiting for me to acknowledge it.
+type Waiting struct {
+	// ID is the notification's (`notifications ack <id>`).
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // Routine is one routine's entry. Sync owns Enabled, NextRunAt and Problem

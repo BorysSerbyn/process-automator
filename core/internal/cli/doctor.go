@@ -15,8 +15,8 @@ import (
 
 // Finding is one problem doctor found, with what fixes it.
 type Finding struct {
-	// Area is what it's about: scheduler, usage, routine, hook or run.
-	Area    string `json:"area" jsonschema:"enum=scheduler,enum=usage,enum=routine,enum=hook,enum=run"`
+	// Area is what it's about: scheduler, usage, notifications, routine, hook or run.
+	Area    string `json:"area" jsonschema:"enum=scheduler,enum=usage,enum=notifications,enum=routine,enum=hook,enum=run"`
 	Subject string `json:"subject"`
 	Problem string `json:"problem"`
 	Fix     string `json:"fix,omitempty"`
@@ -97,6 +97,13 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 				product.Command+" daemon` in a terminal shows why")
 	case status.Problem != "":
 		add("scheduler", "scheduler", status.Problem, "")
+	}
+
+	if status != nil {
+		for _, w := range status.Waiting {
+			add("notifications", w.Title, "waits for me to acknowledge it",
+				"acknowledge it from its notification or the app, or `"+product.Command+" notifications ack "+w.ID+"`")
+		}
 	}
 
 	if r, err := a.Usage(cmd.Context(), now); err != nil {

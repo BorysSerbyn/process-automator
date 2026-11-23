@@ -194,6 +194,9 @@ func (a *App) Daemon(ctx context.Context) error {
 		if err := runstatus.SetProblem(statusPath, problem, time.Now()); err != nil {
 			logf("run status: %v", err)
 		}
+		if err := syncWaiting(a.Layout, time.Now()); err != nil {
+			logf("run status: notifications waiting: %v", err)
+		}
 		if time.Since(lastPrune) > time.Hour {
 			if cur, err := reload(); err == nil {
 				pruneHistory(cur)
@@ -269,16 +272,18 @@ func heartbeat(ctx context.Context, path string) {
 // next run, why it can't be scheduled), as the scheduler does on each pass:
 // after a command changes a routine, frontends see it at once, not up to a
 // pass later. Until the scheduler has first recorded what's trusted, it's
-// left to the scheduler.
+// left to the scheduler. The notifications waiting to be acknowledged are
+// recorded either way.
 func (a *App) SyncStatus(now time.Time) error {
+	waitErr := syncWaiting(a.Layout, now)
 	if _, initialized, err := a.TrustStore().Load(); err != nil || !initialized {
-		return err
+		return errors.Join(waitErr, err)
 	}
 	jobs, problems, err := scheduledJobs(a)
 	if err != nil {
 		return err
 	}
-	return runstatus.Sync(a.Layout.RunStatus(), allSetups(a, jobs, problems, now), now)
+	return errors.Join(waitErr, runstatus.Sync(a.Layout.RunStatus(), allSetups(a, jobs, problems, now), now))
 }
 
 // allSetups are the routines' setups (statusSetups) and the hooks'.

@@ -13,11 +13,12 @@
             "enum": [
               "scheduler",
               "usage",
+              "notifications",
               "routine",
               "hook",
               "run"
             ],
-            "description": "Area is what it's about: scheduler, usage, routine, hook or run."
+            "description": "Area is what it's about: scheduler, usage, notifications, routine, hook or run."
           },
           "subject": {
             "type": "string"
