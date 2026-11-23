@@ -49,6 +49,9 @@ public typealias RunStatusReason = Components.Schemas.RunStatusReason
 extension RunStatusReason {
     /// What choosing a reason opens.
     public enum Target: Equatable, Sendable {
+        /// The Acknowledgements window: notifications waiting for me
+        /// ("(2) Acknowledgements pending").
+        case acknowledgements
         /// A watcher's window: what's wrong is the watcher's, for every hook on it.
         case watcher(String)
         /// A hook's window, on its run if it names one.
@@ -61,6 +64,7 @@ extension RunStatusReason {
 
     /// What choosing it opens, from what it's about (nil: nothing).
     public var target: Target? {
+        if acknowledge == true { return .acknowledgements }
         if let watcher, !watcher.isEmpty { return .watcher(watcher) }
         if hook == true, let routine, !routine.isEmpty { return .hook(routine, run: run) }
         if let run, !run.isEmpty { return .run(run) }

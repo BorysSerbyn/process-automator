@@ -16,6 +16,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// Whether the core is being asked for pending ones (one ask at a time).
     private var asking = false
 
+    nonisolated static let acknowledgeCategory = "acknowledge"
+    nonisolated static let acknowledgeAction = "acknowledge"
+
     /// Notifications need the app bundle (not `swift run`).
     private var canNotify: Bool { Bundle.main.bundleIdentifier != nil }
 
@@ -25,6 +28,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         guard canNotify else { return }
         let center = UNUserNotificationCenter.current()
         center.delegate = self
+        // A routine's or hook's notification that waits for me has an
+        // Acknowledge button.
+        let acknowledge = UNNotificationAction(identifier: Self.acknowledgeAction, title: "Acknowledge", options: [])
+        center.setNotificationCategories([
+            UNNotificationCategory(identifier: Self.acknowledgeCategory, actions: [acknowledge], intentIdentifiers: [])
+        ])
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
@@ -57,6 +66,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 content.body = note.body ?? ""
                 content.sound = .default
                 content.userInfo = ["id": note.id]
+                if note.needsAcknowledging { content.categoryIdentifier = Self.acknowledgeCategory }
+                if note.urgent == true { content.interruptionLevel = .timeSensitive }
                 do {
                     try await center.add(UNNotificationRequest(identifier: note.id, content: content, trigger: nil))
                     delivered.append(note.id)
@@ -74,10 +85,16 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
     ) async {
-        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-            let id = response.notification.request.content.userInfo["id"] as? String,
-            let cli = CLI.bundled
+        guard let id = response.notification.request.content.userInfo["id"] as? String, let cli = CLI.bundled
         else { return }
+        // Acknowledge, on one that waits for me: the core stops waiting.
+        if response.actionIdentifier == Self.acknowledgeAction {
+            if case .failure(let failure) = await cli.background({ $0.acknowledge([id]) }) {
+                await MainActor.run { showAlert("Couldn't acknowledge it", failure.message) }
+            }
+            return
+        }
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else { return }
         let result = await cli.background { $0.openNotification(id) }
         await MainActor.run {
             switch result {

@@ -18,6 +18,7 @@ final class Indicator: NSObject, NSMenuDelegate {
     private let openRoutine: (String) -> Void
     private let openRun: (String) -> Void
     private let openHooks: () -> Void
+    private let openAcknowledgements: () -> Void
     private let openHook: (String, String?) -> Void
     private let openWatcher: (String) -> Void
     private let openSetup: () -> Void
@@ -33,11 +34,13 @@ final class Indicator: NSObject, NSMenuDelegate {
         openRoutines: @escaping () -> Void,
         openRoutine: @escaping (String) -> Void, openRun: @escaping (String) -> Void,
         openHooks: @escaping () -> Void, openHook: @escaping (String, String?) -> Void,
+        openAcknowledgements: @escaping () -> Void,
         openWatcher: @escaping (String) -> Void, openSetup: @escaping () -> Void
     ) {
         self.openSetup = openSetup
         self.openWatcher = openWatcher
         self.openHooks = openHooks
+        self.openAcknowledgements = openAcknowledgements
         self.openHook = openHook
         self.updates = updates
         self.quit = quit
@@ -175,7 +178,8 @@ final class Indicator: NSObject, NSMenuDelegate {
     }
 
     /// What the status is, in the core's words: why it's red (each reason
-    /// opens what it's about, `RunStatusReason.target`: the run; a hook's
+    /// opens what it's about, `RunStatusReason.target`: the Acknowledgements
+    /// window for "(2) Acknowledgements pending"; the run; a hook's
     /// window, on its run if it names one, else on its Turn On review if it
     /// needs one; a routine's with no run; a watcher's), or its summary.
     private func statusItems() -> [NSMenuItem] {
@@ -186,6 +190,7 @@ final class Indicator: NSObject, NSMenuDelegate {
             return reasons.map { reason in
                 var click: (() -> Void)?
                 switch reason.target {
+                case .acknowledgements: click = { [weak self] in self?.openAcknowledgements() }
                 case .watcher(let watcher): click = { [weak self] in self?.openWatcher(watcher) }
                 case .hook(let hook, let run): click = { [weak self] in self?.openHook(hook, run) }
                 case .run(let id): click = { [weak self] in self?.openRun(id) }

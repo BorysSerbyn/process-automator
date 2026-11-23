@@ -779,3 +779,65 @@ private func permissionFlippingCLI() throws -> CLI {
     turnOn.showing = false
     await turnOn.statusChanged()
 }
+
+// MARK: Acknowledgements
+
+private let waitingNote = """
+    [{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"acknowledge","title":"Scout found a match","body":"3 new listings",
+      "routine":"marco-scout","run":"marco-scout/2026-11-23T090000","acknowledge":true}]
+    """
+
+@Test func decodesWhatWaitsForAcknowledging() throws {
+    // The reason that's the menu's status line opens the Acknowledgements window.
+    let status = try RunStatus.decode(
+        Data(
+            """
+            {"schemaVersion":1,"updatedAt":"2026-11-23T09:00:00Z","health":"error","busy":false,"routines":[],
+             "pendingAcknowledgements":2,"waiting":[{"id":"n7","title":"a"},{"id":"n8","title":"b"}],
+             "reasons":[{"text":"(2) Acknowledgements pending","detail":"a\\nb","acknowledge":true},
+                        {"routine":"digest","text":"digest can't be scheduled"}]}
+            """.utf8))
+    #expect(status.reasons?.map(\.target) == [.acknowledgements, .routine("digest")])
+    #expect(status.waiting?.map(\.id) == ["n7", "n8"])
+    let notes = try CoreJSON.decoder().decode([CoreNotification].self, from: Data(waitingNote.utf8))
+    #expect(notes[0].needsAcknowledging)
+    let acked = try CoreJSON.decoder().decode(
+        [CoreNotification].self,
+        from: Data(
+            waitingNote.replacingOccurrences(
+                of: #""acknowledge":true"#, with: #""acknowledge":true,"acknowledgedAt":"2026-11-23T09:05:00Z""#
+            )
+            .utf8))
+    #expect(!acked[0].needsAcknowledging)
+}
+
+@MainActor
+@Test func acknowledgingRunsTheCoresCommands() async throws {
+    let (cli, log) = try scriptedCLI([
+        "notifications list --waiting --json": waitingNote,
+        "notifications ack n7 --json": #"{"acknowledged":[]}"#,
+        "notifications ack --all --json": "!the notifications file is locked",
+    ])
+    let model = Acknowledgements(cli: cli)
+    let status = { (ids: [String]) in
+        try RunStatus.decode(
+            Data(
+                """
+                {"schemaVersion":1,"updatedAt":"2026-11-23T09:00:00Z","health":"error","busy":false,"routines":[],
+                 "pendingAcknowledgements":\(ids.count),"waiting":[\(ids.map { #"{"id":"\#($0)","title":"t"}"# }.joined(separator: ","))]}
+                """.utf8))
+    }
+    await model.update(try status(["n7"]))
+    #expect(model.waiting.map(\.title) == ["Scout found a match"])
+    // The same notifications waiting (a heartbeat): not read again.
+    await model.update(try status(["n7"]))
+    await model.acknowledge("n7")
+    #expect(model.error == nil && model.acknowledging.isEmpty)
+    await model.acknowledgeAll()
+    #expect(model.error == "the notifications file is locked")
+    #expect(
+        ran(log) == [
+            "notifications list --waiting --json", "notifications ack n7 --json", "notifications list --waiting --json",
+            "notifications ack --all --json", "notifications list --waiting --json",
+        ])
+}

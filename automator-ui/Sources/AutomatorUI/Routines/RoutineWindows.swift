@@ -17,6 +17,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
     private var hooksList: (window: NSWindow, model: HooksModel)?
     private var hooks: [String: (window: NSWindow, model: HookModel)] = [:]
     private var watchers: [String: (window: NSWindow, model: WatcherModel)] = [:]
+    private var acknowledgements: (window: NSWindow, model: Acknowledgements)?
 
     init(cli: CLI, openSettings: @escaping () -> Void, openSetup: @escaping () -> Void) {
         self.cli = cli
@@ -31,6 +32,26 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
         hooksList?.model.update(status)
         for hook in hooks.values { hook.model.update(status) }
         for watcher in watchers.values { watcher.model.update(status) }
+        if let model = acknowledgements?.model { Task { await model.update(status) } }
+    }
+
+    /// Shows the Acknowledgements window: the notifications waiting for me.
+    func showAcknowledgements() {
+        if acknowledgements == nil {
+            let model = Acknowledgements(cli: cli)
+            let view = AcknowledgementsView(model: model) { [weak self] name, run, hook in
+                if hook {
+                    self?.showHook(name, run: run)
+                } else {
+                    self?.showRoutine(name, run: run)
+                }
+            }
+            acknowledgements = (
+                makeWindow(view, title: "Acknowledgements", size: NSSize(width: 560, height: 440)), model
+            )
+        }
+        if let model = acknowledgements?.model { Task { await model.load() } }
+        bringToFront(acknowledgements?.window)
     }
 
     func showList() {
@@ -151,6 +172,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
                 self.details[name] = nil
             }
             if self.hooksList?.window === window { self.hooksList = nil }
+            if self.acknowledgements?.window === window { self.acknowledgements = nil }
             if let name = self.hooks.first(where: { $0.value.window === window })?.key { self.hooks[name] = nil }
             if let name = self.watchers.first(where: { $0.value.window === window })?.key {
                 self.watchers[name] = nil
