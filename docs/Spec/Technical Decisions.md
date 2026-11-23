@@ -163,7 +163,7 @@ The core is pure Go, except two darwin-only cgo files: the notify plugin's, sinc
 ## Decision: frontends talk to the core through the CLI only
 The CLI is the API: a frontend runs commands with `--json` to read state and make changes, and follows run status with `status --watch`, a long-running command that prints a JSON line at once and on each change. It reads none of the core's files, so the files' places and shapes stay the core's to change, and a frontend needs nothing but the CLI. The core never needs to know a frontend exists, either side restarts independently, and the same works on any OS. Frontends hold no logic: the core decides health, and the one thing a frontend judges is whether the core is responding (the scheduler's heartbeat, `validUntil`).
 
-`status --watch` checks the file's time and size once a second: a stat, next to nothing, with no file-watching dependency, and the dot follows within a second.
+`status --watch` checks the file's time and size every 250 ms: a stat, next to nothing, with no file-watching dependency, and the dot and the windows follow at once (a second was long enough to see Run Now wait before it became Stop).
 
 ### Rejected
 - **Frontends reading the run-status and notifications files** (as they used to, with a folder watch): a second interface beside the CLI, tying the UI to the core's file layout

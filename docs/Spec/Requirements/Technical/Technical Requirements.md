@@ -52,7 +52,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 - **Files are written atomically**, and shared state written during runs has one writer per file
 
 ## Frontends and the contract
-- **The CLI is the API**: every command a frontend needs supports `--json` with a stable shape; frontends read none of the core's files (config, run status, notifications, history): only what the CLI prints. Run status comes from `status --json`, or `status --watch`, which prints it as one JSON line at once and again whenever it changes (it checks the file once a second) until stopped; the MCP server doesn't offer `--watch`, which never ends. automator-ui, the Linux tray (automator-tray) and Claude (through `mcp serve`) are frontends over it; none has its own logic or routines, and anything a frontend needs is added to the core for every frontend
+- **The CLI is the API**: every command a frontend needs supports `--json` with a stable shape; frontends read none of the core's files (config, run status, notifications, history): only what the CLI prints. Run status comes from `status --json`, or `status --watch`, which prints it as one JSON line at once and again whenever it changes (it checks the file every 250 ms) until stopped; the MCP server doesn't offer `--watch`, which never ends. automator-ui, the Linux tray (automator-tray) and Claude (through `mcp serve`) are frontends over it; none has its own logic or routines, and anything a frontend needs is added to the core for every frontend
 - **Contract in `contracts/`**, generated from code by `make contracts` and committed; a test fails when it drifts:
 
 | File | What |

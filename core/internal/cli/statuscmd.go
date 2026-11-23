@@ -16,8 +16,9 @@ import (
 )
 
 // watchPoll is how often `status --watch` looks for a new status: a stat of
-// the file, so it costs next to nothing.
-var watchPoll = time.Second
+// the file, so it costs next to nothing, and a click (Run Now turning into
+// Stop) shows at once.
+var watchPoll = 250 * time.Millisecond
 
 func newStatusCmd() *cobra.Command {
 	var watch bool
