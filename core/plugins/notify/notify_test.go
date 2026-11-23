@@ -49,6 +49,11 @@ func TestNotifyMe(t *testing.T) {
 	if len(shown) != 1 || len(h.Asked) != 1 || h.Asked[0] != (pluginapi.Notice{Title: "Ana asked for the report", Body: "in #team"}) {
 		t.Fatalf("shown %+v, asked %+v", shown, h.Asked)
 	}
+	res, err = acs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me",
+		Arguments: map[string]any{"title": "Ana asked for the report", "acknowledge": true}})
+	if err != nil || !res.IsError || len(h.Asked) != 1 {
+		t.Errorf("one to acknowledge without a body was accepted: %+v %v", res, err)
+	}
 	Deliver = func(Note) error { return errors.New("notifications are turned off") }
 	if res := call(map[string]any{"title": "x"}); !res.IsError {
 		t.Error("a failed delivery wasn't the model's to see")

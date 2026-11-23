@@ -52,7 +52,7 @@ func serve(h pluginapi.Host) (*sdk.Server, error) {
 	s := sdk.NewServer(&sdk.Implementation{Name: Name, Version: "1"}, nil)
 	type in struct {
 		Title       string `json:"title" jsonschema:"short, like a headline"`
-		Body        string `json:"body,omitempty" jsonschema:"a sentence or two"`
+		Body        string `json:"body,omitempty" jsonschema:"a sentence or two; required with acknowledge, where it may be long (a whole report): the banner shows its start, the app's Acknowledgements window all of it"`
 		Urgent      bool   `json:"urgent,omitempty" jsonschema:"only for something I must see now: it breaks through focus modes"`
 		Acknowledge bool   `json:"acknowledge,omitempty" jsonschema:"true when I must act on it, e.g. someone asked me for something: it waits, with an Acknowledge button, and the app's status stays red until I acknowledge it"`
 	}
@@ -69,6 +69,9 @@ func serve(h pluginapi.Host) (*sdk.Server, error) {
 			return nil, nil, errors.New("title is required")
 		}
 		if args.Acknowledge {
+			if strings.TrimSpace(args.Body) == "" {
+				return nil, nil, errors.New("body is required with acknowledge: say what it's about, in full if need be")
+			}
 			id, err := h.AskToAcknowledge(pluginapi.Notice{Title: args.Title, Body: args.Body, Urgent: args.Urgent})
 			if err != nil {
 				return nil, nil, err
