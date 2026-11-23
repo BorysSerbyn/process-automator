@@ -21,7 +21,8 @@ import (
 
 // Daemon timings.
 const (
-	// TickInterval is how often the daemon checks for due routines.
+	// TickInterval is how often the daemon checks for due routines; a
+	// change to what it runs makes a pass at once (see wake.go).
 	TickInterval = 30 * time.Second
 	// HeartbeatInterval is how often the daemon confirms it's alive in run status.
 	HeartbeatInterval = 10 * time.Second
@@ -36,9 +37,16 @@ const (
 	awakePoll = 15 * time.Second
 )
 
+// The daemon's work outside the app's files when it starts (variables for
+// tests, which never run the login shell or read the plan's usage).
+var (
+	saveLoginPath = sysenv.SaveLoginShellPath
+	refreshUsage  = func(ctx context.Context, a *App) error { _, err := a.Usage(ctx, time.Now()); return err }
+)
+
 // Daemon runs routines on their schedules until ctx ends, re-reading config,
-// settings and routine files on every check. Only one runs at a time (a
-// lock).
+// settings and routine files on every pass: every TickInterval, and at once
+// when woken (Wake). Only one runs at a time (a lock).
 func (a *App) Daemon(ctx context.Context) error {
 	unlock, err := filelock.Lock(a.Layout.DaemonLock(), false)
 	if err != nil {
@@ -71,14 +79,14 @@ func (a *App) Daemon(ctx context.Context) error {
 	// tools routines start (claude, MCP servers) are found as in a terminal.
 	// After the heartbeat starts, so a slow shell profile can't delay status.
 	pathStart := time.Now()
-	if err := sysenv.SaveLoginShellPath(a.Layout.LoginPath()); err != nil {
+	if err := saveLoginPath(a.Layout.LoginPath()); err != nil {
 		logf("login shell PATH: %v (keeping %s)", err, os.Getenv("PATH"))
 	} else {
 		logf("login shell PATH added (%s)", time.Since(pathStart).Round(100*time.Millisecond))
 	}
 	// Know the plan's usage before the first run (and for frontends to show).
 	go func() {
-		if _, err := a.Usage(ctx, time.Now()); err != nil {
+		if err := refreshUsage(ctx, a); err != nil {
 			logf("usage: %v", err)
 		}
 	}()
@@ -86,6 +94,12 @@ func (a *App) Daemon(ctx context.Context) error {
 	// Hooks run in this daemon too: their watchers, and their runs through
 	// the dispatcher (see events.go).
 	ev := newEvents(a, reload)
+	// A change to what it runs makes a pass at once. Its first pass covers
+	// a wake left from before it started.
+	wake := newWaker()
+	ev.wake = wake.poke
+	_ = os.Remove(a.Layout.WakeRequest())
+	go watchWake(ctx, a.Layout.WakeRequest(), wake)
 	s := &scheduler.Scheduler{
 		StatePath: a.Layout.SchedulerState(),
 		Jobs: func() ([]scheduler.Job, error) {
@@ -158,7 +172,7 @@ func (a *App) Daemon(ctx context.Context) error {
 	}
 
 	go stopWaiting(ctx, a, s, ev.disp)
-	go servePermissionRequests(ctx, a, ev, reload)
+	go servePermissionRequests(ctx, a, ev, reload, newFollower(wake))
 
 	lastPrune := time.Time{}
 	lastTick := time.Now()
@@ -199,6 +213,7 @@ func (a *App) Daemon(ctx context.Context) error {
 			logf("daemon stopped")
 			return nil
 		case <-time.After(TickInterval):
+		case <-wake.c:
 		}
 	}
 }

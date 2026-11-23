@@ -374,6 +374,8 @@ func newHooksTrustCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&resume, "resume", false, "also turn it on, if it's off")
 	cmd.MarkFlagsMutuallyExclusive("check", "yes")
 	cmd.MarkFlagsMutuallyExclusive("check", "resume")
+	// --check only reviews: it changes nothing, so it doesn't wake the scheduler.
+	cmd.Annotations = map[string]string{annReadOnlyWith: "check"}
 	jsonFlag(cmd.Flags(), TrustOutput{})
 	return cmd
 }

@@ -64,6 +64,9 @@ type events struct {
 	// awakePoll how often one waiting for a full wake checks (variables for
 	// tests).
 	minBackoff, awakePoll time.Duration
+	// wake asks the daemon for a pass now (nil: none), after a change made
+	// here: a hook paused for its rate stops its watcher at once.
+	wake func()
 
 	mu        sync.Mutex
 	state     *watchers.State
@@ -108,7 +111,8 @@ func newEvents(a *App, reload func() (*App, error)) *events {
 
 // sync starts the watchers that hooks that are on listen to (trusted, not
 // paused, every permission they declare granted) and stops the others, on
-// every pass of the daemon, so changes apply without a restart.
+// every pass of the daemon (one comes at once after a change: see wake.go),
+// so changes apply without a restart.
 func (e *events) sync(ctx context.Context, a *App) {
 	all, _, err := a.Hooks()
 	if err != nil {
@@ -496,6 +500,9 @@ func (e *events) pause(a *App, x Runnable, occ trigger.Occurrence, why string) {
 		e.listening[w] = kept
 	}
 	e.mu.Unlock()
+	if e.wake != nil {
+		e.wake()
+	}
 	e.spaced(name)
 	now := time.Now()
 	recordRun(a, name, occ, runstatus.Run{StartedAt: now, FinishedAt: &now, Outcome: runstatus.OutcomeSkipped, Reason: why}, nil)

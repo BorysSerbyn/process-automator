@@ -118,6 +118,8 @@ func newRoutinesTrustCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&resume, "resume", false, "also let it run on its schedule, if it's paused (turns it on in one step)")
 	cmd.MarkFlagsMutuallyExclusive("check", "yes")
 	cmd.MarkFlagsMutuallyExclusive("check", "resume")
+	// --check only reviews: it changes nothing, so it doesn't wake the scheduler.
+	cmd.Annotations = map[string]string{annReadOnlyWith: "check"}
 	jsonFlag(cmd.Flags(), TrustOutput{})
 	return cmd
 }

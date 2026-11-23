@@ -416,7 +416,7 @@ func TestRequestPermission(t *testing.T) {
 	if err := runstatus.Heartbeat(a.Layout.RunStatus(), time.Now(), time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	go servePermissionRequests(ctx, a, newEvents(a, nil), func() (*App, error) { return a, nil })
+	go servePermissionRequests(ctx, a, newEvents(a, nil), func() (*App, error) { return a, nil }, newFollower(newWaker()))
 	out, err = a.RequestPermission(ctx, "input-monitoring", time.Now())
 	if err != nil || !out.Asked || out.State != permissions.Granted {
 		t.Fatalf("asked: %+v %v", out, err)

@@ -113,10 +113,13 @@ func adoptLoginPath(cmd *cobra.Command) {
 //     but the read-only ones, `usage` (it reads the plan's usage again) and
 //     `setup --json` (the setup window and the menu agree); written only when
 //     they changed;
-//   - each routine's state (paused, next run, problem), after a command
-//     that changes something (not one run read-only, like `setup --json`).
+//   - each routine's and hook's state (paused, next run, problem), after a
+//     command that changes something (not one run read-only, like `setup
+//     --json`), and the scheduler woken to act on the change within about
+//     a second (engine.App.Changed): a hook turned on hears its watcher at
+//     once, a paused one stops it.
 //
-// It only reads files.
+// It only reads files, but the scheduler's wake file.
 func refreshStatus(cmd *cobra.Command) {
 	path := strings.TrimPrefix(cmd.CommandPath(), cmd.Root().Name()+" ")
 	if isReadOnly(cmd) && path != "usage" {
@@ -136,7 +139,7 @@ func refreshStatus(cmd *cobra.Command) {
 		return
 	}
 	if !ranReadOnly(cmd) {
-		_ = a.SyncStatus(time.Now())
+		_ = a.Changed(time.Now())
 	}
 	left, err := a.SetupLeft()
 	if err != nil {

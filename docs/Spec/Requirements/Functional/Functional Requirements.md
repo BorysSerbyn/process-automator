@@ -52,6 +52,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Sleep**: an event older than the hook's staleness is dropped; a watcher isn't polled while a Mac is in a maintenance wake, and a poll due while it slept runs as it wakes
 - **Floods and loops**: a hook starts at most its rate of runs an hour, and an event past it is dropped; one due to run more than three times its rate in an hour is paused, with a run saying why
 - **Pause and resume**: a hook can be turned off and on; pausing a watcher stops it, and the hooks that are on and listen to it show that as their problem until it's resumed
+- **Changes take effect at once**: trusting, turning on or off, pausing, resuming, adding, updating or deleting a routine, program, hook or watcher, a setting, and a permission allowed (asked for from the app, or turned on in the OS's settings after asking) reach the scheduler within about a second: a hook turned on hears its watcher's events from then, one paused stops its watcher, and the status shows it straight away
 
 ## Templates
 - **Templates are shareable routines**: files in the repository's `templates/` folder, shipped with the app as files; the app ships none of its own and works with none

@@ -447,8 +447,10 @@ func waitFor(ctx context.Context, d time.Duration, done func() bool) bool {
 
 // servePermissionRequests takes requests to ask the OS for a permission
 // (RequestPermission) until ctx ends: it asks, from the daemon, and records
-// what the OS says once it has answered, with run status brought up to date.
-func servePermissionRequests(ctx context.Context, a *App, ev *events, reload func() (*App, error)) {
+// what the OS says once it has answered, with run status brought up to date
+// and a pass at once. Meanwhile f follows the permission, for one turned on
+// in the OS's settings.
+func servePermissionRequests(ctx context.Context, a *App, ev *events, reload func() (*App, error), f *follower) {
 	t := time.NewTicker(requestPoll)
 	defer t.Stop()
 	dir := a.Layout.PermissionRequests()
@@ -482,6 +484,9 @@ func servePermissionRequests(ctx context.Context, a *App, ev *events, reload fun
 			}); err != nil {
 				logf("permissions: %v", err)
 			}
+			// Turned on in the OS's settings, where a request often sends
+			// me, it's acted on at once.
+			go f.follow(ctx, a, name)
 			if !ok {
 				logf("permissions: can't ask the OS for %s: %s", name, why)
 				continue
@@ -505,6 +510,7 @@ func servePermissionRequests(ctx context.Context, a *App, ev *events, reload fun
 				if err := cur.SyncStatus(time.Now()); err != nil {
 					logf("run status: %v", err)
 				}
+				f.wake.poke() // a pass acts on it: the watchers it lets run start
 			}()
 		}
 	}

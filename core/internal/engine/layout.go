@@ -143,3 +143,7 @@ func (l Layout) PermissionRequests() string { return l.in("permission-requests")
 
 // DaemonLock is held by the one running daemon.
 func (l Layout) DaemonLock() string { return l.in("daemon.lock") }
+
+// WakeRequest is the file a command that changed what the scheduler runs
+// writes, for it to make a pass at once (Wake).
+func (l Layout) WakeRequest() string { return l.in("wake") }

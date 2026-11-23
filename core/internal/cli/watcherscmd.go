@@ -371,6 +371,8 @@ func newWatchersTrustCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&yes, "yes", false, "don't ask (after reviewing it)")
 	cmd.Flags().BoolVar(&check, "check", false, "only show what it runs and what changed; trust nothing")
 	cmd.MarkFlagsMutuallyExclusive("check", "yes")
+	// --check only reviews: it changes nothing, so it doesn't wake the scheduler.
+	cmd.Annotations = map[string]string{annReadOnlyWith: "check"}
 	jsonFlag(cmd.Flags(), WatcherTrustOutput{})
 	return cmd
 }
@@ -403,7 +405,7 @@ func newWatchersPauseCmd(resume bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   use,
 		Short: short,
-		Long: "Pausing a watcher stops it (the daemon ends its process within a pass, about 30 seconds) and keeps it " +
+		Long: "Pausing a watcher stops it (the daemon ends its process within about a second) and keeps it " +
 			"stopped: the hooks listening to it hear nothing until it's resumed. Its cursor and the events it has seen are kept.",
 		Args: cobra.ExactArgs(1),
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {

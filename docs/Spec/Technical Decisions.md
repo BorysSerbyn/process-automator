@@ -723,3 +723,13 @@ A watcher shared by several hooks put its error in the red dot's reasons once pe
 - **Keeping one reason per hook**: the same problem repeated, and each opened a hook's window, one step from where it's fixed
 - **Dropping the watcher's problem from the hooks**: a hook's window would look fine while it hears nothing
 - **Frontends grouping reasons themselves**: that's a decision about health, which is the core's
+
+## Decision: a change wakes the scheduler through a file it looks for every 250 ms
+Turning a hook on started its watcher only on the scheduler's next pass, up to 30 seconds later: key presses in between were lost, and it looked broken. Every change to what the daemon runs reaches it within about a second instead. A command that changes something writes a `wake` file from the CLI's one post-command hook (`App.Changed`, with run status brought up to date), so no command can forget it and read-only ones (`trust --check`, polled by an open review) never wake it; the daemon looks for the file every 250 ms, as it looks for permission requests, removes it and makes a pass then, the same pass as every 30 seconds. Removing it before the pass gives a change made during the pass a pass of its own. A permission is changed outside the app, so after a request the daemon follows that permission for a few minutes, checking it every 2 seconds in a fresh child process, and makes a pass once it changes.
+
+### Rejected
+- **A shorter pass**: every pass loads everything and checks permissions in a child process; once a second all day costs more than a missing file checked four times a second
+- **File-system notifications** (FSEvents, inotify): a dependency and an OS-specific path for what one failed remove does on any OS
+- **A socket or a signal to the daemon**: something to listen on, find and clean up, and a signal means knowing its process, which `login-items` owns
+- **Each command waking it itself**: a command added later would forget, and the rule would live in many places
+- **Checking every permission every few seconds**: a child process that often for a change that happens rarely; following one only after it's asked for covers Grant…

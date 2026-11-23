@@ -239,3 +239,41 @@ func TestHooksOverMCP(t *testing.T) {
 		t.Fatalf("hooks_fire's event isn't sent on stdin: %v %q", argv, stdin)
 	}
 }
+
+// A command that changes what the scheduler runs wakes it (it makes a pass
+// within about a second); one that only reads doesn't.
+func TestChangesWakeTheScheduler(t *testing.T) {
+	a, _ := enginetest.Fixture(t, map[string]string{"standup": "queue"}, nil)
+	cfg := a.Layout.Config()
+	woken := func() bool {
+		_, err := os.Stat(a.Layout.WakeRequest())
+		_ = os.Remove(a.Layout.WakeRequest())
+		return err == nil
+	}
+	watcher := hookFiles(t, watchers.DescriptionFile, "executable: ./watch\nmode: stream\n", "watch", "true\n")
+	program := hookFiles(t, hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: keys}\n", "act", "true\n")
+	for _, args := range [][]string{
+		{"watchers", "add", "keys", "--from", watcher},
+		{"hooks", "add", "on-key", "--from", program},
+		{"hooks", "trust", "on-key", "--yes", "--resume"},
+		{"hooks", "pause", "on-key"},
+		{"watchers", "pause", "keys"},
+		{"routines", "pause", "standup"},
+		{"settings", "set", "hooks.on-key.rate", "10"},
+	} {
+		if out, err := cli(t, cfg, args...); err != nil {
+			t.Fatalf("%v: %v %s", args, err, out)
+		}
+		if !woken() {
+			t.Errorf("%v didn't wake the scheduler", args)
+		}
+	}
+	for _, args := range [][]string{{"hooks", "list"}, {"watchers", "show", "keys"}, {"hooks", "trust", "on-key", "--check"}, {"setup", "--json"}} {
+		if out, err := cli(t, cfg, args...); err != nil {
+			t.Fatalf("%v: %v %s", args, err, out)
+		}
+		if woken() {
+			t.Errorf("%v woke the scheduler", args)
+		}
+	}
+}
