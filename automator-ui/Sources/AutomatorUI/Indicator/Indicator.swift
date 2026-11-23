@@ -4,7 +4,8 @@ import QuartzCore
 
 /// The indicator: the app's glyph in the menu bar with a status dot (pulsing
 /// while a routine runs), and its menu: the version, the status in the core's
-/// words, Finish Setup… while setup isn't done; Routines › (each routine with
+/// words (while setup isn't done, its reason "Finish Setup (N to do)…",
+/// opening Setup); Routines › (each routine with
 /// its status), Hooks › (each hook with its status, while there are any),
 /// updates, Settings; Quit.
 @MainActor
@@ -73,13 +74,6 @@ final class Indicator: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         menu.addItem(textItem(MenuTextView(text: "\(AppInfo.name) \(AppInfo.version)", lines: 1, dimmed: true)))
         for item in statusItems() { menu.addItem(item) }
-        // Finish Setup… while run status names setup steps still to do (the
-        // Routines window always has Setup).
-        if RunStatus.responding(status), status?.setupLeft?.isEmpty == false {
-            let setup = NSMenuItem(title: "Finish Setup…", action: #selector(setupChosen), keyEquivalent: "")
-            setup.target = self
-            menu.addItem(setup)
-        }
         menu.addItem(.separator())
         menu.addItem(routinesItem())
         if let hooks = hooksItem() { menu.addItem(hooks) }
@@ -100,8 +94,6 @@ final class Indicator: NSObject, NSMenuDelegate {
 
     /// Takes the icon out of the menu bar (quitting).
     func hide() { statusItem.isVisible = false }
-
-    @objc private func setupChosen() { openSetup() }
 
     /// Routines ›: All Routines… (a menu item with a submenu can't be chosen
     /// itself), then every routine with its health and summary as the core

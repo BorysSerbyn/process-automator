@@ -18,7 +18,7 @@ const (
 	lineError = `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","validUntil":"2026-11-17T08:06:00Z","health":"error","busy":true,` +
 		`"setupLeft":["Choose the model backend"],"routines":[{"name":"standup","enabled":true,"health":"error","summary":"standup failed"}],` +
 		`"reasons":[{"routine":"standup","text":"standup needs a sign-in","detail":"tracker: token expired","run":"r-42"},` +
-		`{"text":"Setup isn't finished","setup":true}]}`
+		`{"text":"Finish Setup (1 to do)…","setup":true}]}`
 	lineNone = `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","validUntil":"2026-11-17T08:06:00Z","health":"none","busy":false,` +
 		`"summary":"No routines enabled","routines":[]}`
 	// lineHooks has hooks beside the routines, reasons about them, and one
@@ -142,15 +142,14 @@ func TestTheMenu(t *testing.T) {
 			MenuItem{Text: "weekly_report — Next: tomorrow 09:20", Health: "ok", Action: review(RoutineWindow, "weekly_report")},
 			MenuItem{Text: "standup — Paused", Health: "none", Action: review(RoutineWindow, "standup")},
 		)...)},
-		{"error: each reason (one about a run opens it), and Finish Setup… while setup is left", lineError, fresh, append([]MenuItem{
+		{"error: each reason (one about a run opens it; setup's, Setup), and no Finish Setup… of its own", lineError, fresh, append([]MenuItem{
 			version,
 			{Text: "standup needs a sign-in", Action: Action{Kind: OpenRun, Run: "r-42"}},
-			{Text: "Setup isn't finished", Action: window(SetupWindow, "")},
-			{Text: "Finish Setup…", Action: window(SetupWindow, "")},
+			{Text: "Finish Setup (1 to do)…", Action: window(SetupWindow, "")},
 		}, tail(
 			MenuItem{Text: "standup — standup failed", Health: "error", Action: review(RoutineWindow, "standup")},
 		)...)},
-		{"stale: not responding, no Finish Setup…, the last routines stand", lineError, stale, append([]MenuItem{
+		{"stale: not responding, the last routines stand", lineError, stale, append([]MenuItem{
 			version, {Text: "Not responding"},
 		}, tail(
 			MenuItem{Text: "standup — standup failed", Health: "error", Action: review(RoutineWindow, "standup")},

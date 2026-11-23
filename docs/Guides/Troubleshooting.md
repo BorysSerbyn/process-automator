@@ -20,7 +20,7 @@ The menu lists each reason; click one to open the run it's about.
 |---|---|
 | Not responding | The scheduler isn't running (after **Quit**, until you open the app or log in again). Open the app, or run `procauto login-items start`. `procauto login-items status` shows whether it starts at login; if it keeps stopping, `procauto daemon` in a terminal shows why |
 | The scheduler can't work | The detail says why (on hover, or in `doctor`) |
-| Setup isn't finished | Open **Finish Setup…**, or run `procauto setup` ([[Guides/Getting started#Set it up\|Set it up]]) |
+| Finish Setup (N to do)… | Click it, or run `procauto setup` ([[Guides/Getting started#Set it up\|Set it up]]) |
 | *routine* can't be scheduled | Usually not trusted (after a change to what it can reach), a missing folder, a server that isn't added, or a required parameter without a value. The detail says which; `routines trust <name>` for trust |
 | *routine* needs a sign-in | `procauto auth login <server>` |
 | *routine* or *hook* needs a permission | A plugin, program or watcher it uses needs something macOS hasn't allowed the app (Input Monitoring, Notifications, …). `procauto permissions request <permission>` asks macOS; if it asked before, turn it on at the System Settings address the command prints. `procauto permissions list` shows what needs what. "Not checked yet" means the scheduler hasn't run yet |

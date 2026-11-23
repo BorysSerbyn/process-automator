@@ -188,7 +188,7 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 		reasons = append(reasons, Reason{Text: "The scheduler can't work", Detail: s.Problem})
 	}
 	if n := len(s.SetupLeft); n > 0 {
-		reasons = append(reasons, Reason{Setup: true, Text: fmt.Sprintf("Setup isn't finished (%d to do)", n),
+		reasons = append(reasons, Reason{Setup: true, Text: fmt.Sprintf("Finish Setup (%d to do)…", n),
 			Detail: "Still to do: " + strings.Join(s.SetupLeft, ", ")})
 	}
 	if n := len(s.Waiting); n > 0 {

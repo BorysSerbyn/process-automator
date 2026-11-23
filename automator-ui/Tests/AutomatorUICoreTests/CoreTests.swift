@@ -851,7 +851,7 @@ private let waitingNote = """
              "hooks":[{"name":"pr-reviewed","enabled":true,"problem":"it isn't trusted","turnOn":true,"health":"error",
                        "summary":"Needs turning on"}],
              "setupLeft":["Turn on pr-reviewed"],
-             "reasons":[{"text":"Setup isn't finished (1 to do)","detail":"Still to do: Turn on pr-reviewed","setup":true}]}
+             "reasons":[{"text":"Finish Setup (1 to do)…","detail":"Still to do: Turn on pr-reviewed","setup":true}]}
             """.utf8))
     #expect(status.reasons?.map(\.target) == [.setup])
     #expect(status.hooks?.first?.turnOn == true)

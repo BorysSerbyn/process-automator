@@ -126,15 +126,12 @@ func separator() MenuItem { return MenuItem{Separator: true} }
 const MenuText = 80
 
 // Menu is the tray's menu for a status, as automator-ui's: the version, the
-// status in the core's words, Finish Setup… while setup isn't done,
-// Routines › (each routine with its health and summary), Hooks › (each
+// status in the core's words (while setup isn't done, its reason "Finish
+// Setup (N to do)…", opening Setup), Routines › (each routine with its health and summary), Hooks › (each
 // hook, while there are any), the update item, Settings, Quit.
 func Menu(name, version string, s *cli.RunStatus, now time.Time, update MenuItem) []MenuItem {
 	items := []MenuItem{{Text: name + " " + version}}
 	items = append(items, statusItems(s, now)...)
-	if Responding(s, now) && len(s.SetupLeft) > 0 {
-		items = append(items, MenuItem{Text: "Finish Setup…", Action: Action{Kind: ShowWindow, Window: Window{Kind: SetupWindow}}})
-	}
 	items = append(items, separator(), routinesItem(s))
 	if s != nil && len(s.Hooks) > 0 {
 		items = append(items, hooksItem(s))

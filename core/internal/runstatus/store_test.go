@@ -277,7 +277,7 @@ func TestSetupLeft(t *testing.T) {
 		t.Fatal(err)
 	}
 	s, _ := Load(path)
-	if s.Health != HealthError || len(s.Reasons) != 1 || s.Reasons[0].Text != "Setup isn't finished (2 to do)" ||
+	if s.Health != HealthError || len(s.Reasons) != 1 || s.Reasons[0].Text != "Finish Setup (2 to do)…" || !s.Reasons[0].Setup ||
 		!strings.Contains(s.Reasons[0].Detail, "Model backend, Trust standup") {
 		t.Errorf("unfinished setup: %s %+v", s.Health, s.Reasons)
 	}
@@ -455,7 +455,7 @@ func TestWhatNeedsTurningOnIsSetups(t *testing.T) {
 	for _, r := range s.Reasons {
 		texts = append(texts, r.Text)
 	}
-	if len(s.Reasons) != 2 || !s.Reasons[0].Setup || s.Reasons[0].Text != "Setup isn't finished (3 to do)" ||
+	if len(s.Reasons) != 2 || !s.Reasons[0].Setup || s.Reasons[0].Text != "Finish Setup (3 to do)…" ||
 		s.Reasons[1].Text != "broken can't be scheduled" || s.Health != HealthError {
 		t.Fatalf("reasons %q", texts)
 	}
