@@ -36,6 +36,11 @@ LINUX_WINDOWS ?= docker
 RELEASE_API   ?=
 RELEASE_WEB   ?=
 BUILD         ?= $(CURDIR)/build
+# Where each step's time is recorded (scripts/timed.sh): make ci sets it, and
+# scripts/publish.sh; empty: steps say their time, unrecorded
+TIMINGS       ?=
+# The Go tests' race detector (-race; empty: without it)
+RACE          ?= -race
 # The build's version, from git tags (scripts/version.sh)
 ifeq ($(origin VERSION),undefined)
 VERSION       := $(shell scripts/version.sh)
@@ -92,7 +97,9 @@ KEYCHAIN_SERVICE=$(BUNDLE_ID)
 endef
 export MACOS_INSTALL_ENV LINUX_INSTALL_ENV
 
-.PHONY: contracts help deps build build-core build-ui bundle package package-linux test lint fmt install uninstall release publish ci version clean check-identity
+TIMED = TIMINGS="$(TIMINGS)" "$(CURDIR)/scripts/timed.sh"
+
+.PHONY: contracts help deps build build-core build-ui bundle package package-linux test test-core test-tray test-windows test-ui lint fmt install uninstall release publish ci version clean check-identity
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -111,7 +118,7 @@ build-core:
 	cd "$(GO_DIR)" && MACOSX_DEPLOYMENT_TARGET=14.0 CGO_CFLAGS="-O2 -g -mmacosx-version-min=14.0" go build -trimpath -ldflags '$(LDFLAGS)' -o "$(CORE_BIN)" $(MAIN)
 
 build-ui:
-	cd automator-ui && swift build -c release
+	@$(TIMED) "· automator-ui (swift build)" 'cd automator-ui && swift build -c release'
 
 bundle: build check-identity ## Assemble and sign the .app
 	@printf '%s\n' "$$MACOS_INSTALL_ENV" > "$(BUILD)/install.env"
@@ -130,7 +137,7 @@ package-linux: ## Release artifact for Linux (build/dist), for LINUX_ARCH=amd64|
 	rm -rf "$(BUILD)/linux-$(LINUX_ARCH)/tray" "$(BUILD)/linux-$(LINUX_ARCH)/automator-windows"
 	cd "$(TRAY_DIR)" && go run ./cmd/trayicons "$(LOGO)" "$(BUILD)/linux-$(LINUX_ARCH)/tray"
 	@case "$(LINUX_WINDOWS)" in \
-	  docker) scripts/build-linux-windows.sh "$(TRAY_DIR)" $(LINUX_ARCH) "$(BUILD)/linux-$(LINUX_ARCH)/automator-windows" ;; \
+	  docker) $(TIMED) "· windows app, linux $(LINUX_ARCH) (docker)" 'scripts/build-linux-windows.sh "$(TRAY_DIR)" $(LINUX_ARCH) "$(BUILD)/linux-$(LINUX_ARCH)/automator-windows"' ;; \
 	  none) echo "package-linux: without the windows app (LINUX_WINDOWS=none): the tray opens every window in a terminal" ;; \
 	  *) echo "package-linux: LINUX_WINDOWS is docker or none, not $(LINUX_WINDOWS)"; exit 1 ;; \
 	esac
@@ -142,10 +149,18 @@ package-linux: ## Release artifact for Linux (build/dist), for LINUX_ARCH=amd64|
 contracts: ## Regenerate contracts/ (CLI reference, output schemas, settings schema) from code
 	cd core && go run ./cmd/gencontracts ../contracts
 
-test: ## Run all tests
-	cd core && go test -race ./...
-	cd automator-tray && go test -race ./...
-	cd automator-tray/windows && go test -race ./...
+test: test-core test-tray test-windows test-ui ## Run all tests (RACE= for the Go ones without the race detector)
+
+test-core:
+	cd core && go test $(RACE) ./...
+
+test-tray:
+	cd automator-tray && go test $(RACE) ./...
+
+test-windows:
+	cd automator-tray/windows && go test $(RACE) ./...
+
+test-ui:
 	cd automator-ui && swift test
 
 lint: ## Lint Go and Swift (the tray as built for Linux, too; the windows app as built here, with cgo)
@@ -171,21 +186,30 @@ release: ## Tag a release: make release PART=major|minor|patch
 publish: ## Build, sign, test and publish the release tagged at HEAD (SIGN_IDENTITY or SIGN_P12): see scripts/publish.sh
 	scripts/publish.sh
 
-ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, the Linux package (Docker, for the windows app), and the macOS artifact's install test
-	$(MAKE) test lint
-	cd core && GOOS=linux go build ./... && GOOS=windows go build ./...
-	cd automator-tray && for arch in amd64 arm64; do CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build ./... || exit 1; done
-	@if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/*.sh; \
-	  else echo "shellcheck skipped: not installed (make deps)"; fi
-	scripts/test-install-app.sh
-	rm -rf "$(BUILD)/ci"
-	$(MAKE) package-linux BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
+ci: export TIMINGS = $(BUILD)/timings.tsv
+ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, the Linux package (Docker, for the windows app), and the macOS artifact's install test; each step timed
+	@mkdir -p "$(BUILD)" && : > "$(TIMINGS)"
+	@$(TIMED) "test: core" '$(MAKE) test-core'
+	@$(TIMED) "test: tray" '$(MAKE) test-tray'
+	@$(TIMED) "test: windows app" '$(MAKE) test-windows'
+	@$(TIMED) "test: automator-ui (swift)" '$(MAKE) test-ui'
+	@$(TIMED) "lint" '$(MAKE) lint'
+	@$(TIMED) "cross-compile: core (linux, windows)" 'cd core && GOOS=linux go build ./... && GOOS=windows go build ./...'
+	@$(TIMED) "cross-compile: tray (linux amd64, arm64)" 'cd automator-tray && for arch in amd64 arm64; do CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build ./... || exit 1; done'
+	@$(TIMED) "shellcheck" 'if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/*.sh; \
+	  else echo "shellcheck skipped: not installed (make deps)"; fi'
+	@$(TIMED) "test: install-app.sh" 'scripts/test-install-app.sh'
+	@$(TIMED) "test: build-linux-windows.sh" 'scripts/test-build-linux-windows.sh'
+	@rm -rf "$(BUILD)/ci"
+	@$(TIMED) "package: linux amd64" '$(MAKE) package-linux BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"'
 	@tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/bin/automator-tray$$' && \
 	  tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/bin/automator-windows$$' && \
 	  tar -tzf "$(BUILD)"/ci/*-linux-amd64.tar.gz | grep -Eq '^[^/]+/share/[^/]+/tray/status-green-dim\.png$$' || \
 	  { echo "the Linux package lacks the tray, the windows app or the tray's icons"; exit 1; }
-	$(MAKE) package SIGN_IDENTITY=- BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"
-	scripts/test-install.sh "$(BUILD)"/ci/*-macos.zip
+	@$(TIMED) "windows app: linux arm64 (docker; for make publish)" 'scripts/build-linux-windows.sh "$(TRAY_DIR)" arm64 "$(BUILD)/ci/automator-windows-arm64"'
+	@$(TIMED) "package: macos" '$(MAKE) package SIGN_IDENTITY=- BUNDLE_PREFIX=ci.test DIST="$(BUILD)/ci"'
+	@$(TIMED) "test: install (macos artifact)" 'scripts/test-install.sh "$(BUILD)"/ci/*-macos.zip'
+	@scripts/timed.sh --summary "$(TIMINGS)"
 
 clean: ## Remove build output
 	rm -rf "$(BUILD)" automator-ui/.build

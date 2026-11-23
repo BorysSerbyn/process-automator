@@ -71,17 +71,22 @@ fi
 
 out="$PWD/build/release/$tag"
 rm -rf "$out"
+# Each step timed (scripts/timed.sh), with a summary at the end.
+export TIMINGS="$PWD/build/release/$tag.timings.tsv"
+mkdir -p "$(dirname "$TIMINGS")" && : > "$TIMINGS"
+timed() { "$scripts/timed.sh" "$@"; }
 for arch in amd64 arm64; do
-  make package-linux LINUX_ARCH="$arch" SOURCE_DIR= DIST="$out"
+  timed "package: linux $arch" "make package-linux LINUX_ARCH=$arch SOURCE_DIR= DIST='$out'"
 done
-make package SOURCE_DIR= SIGN_IDENTITY="$identity" DIST="$out"
+timed "package: macos" "make package SOURCE_DIR= SIGN_IDENTITY='$identity' DIST='$out'"
 
 zip=$(find "$out" -name "*-$version-macos.zip")
 [[ -n $zip ]] || die "no $version macOS artifact in $out (is the build's version $version?)"
-INSTALL_SH=$installer "$scripts/test-install.sh" "$zip"
+timed "test: install (macos artifact)" "INSTALL_SH='$installer' '$scripts/test-install.sh' '$zip'"
 cp "$installer" "$out/install.sh"
 (cd "$out" && shasum -a 256 -- * > SHA256SUMS && cat SHA256SUMS)
 
+"$scripts/timed.sh" --summary "$TIMINGS"
 if [[ -n ${DRY_RUN:-} ]]; then
   echo "publish: dry run: $tag built and tested in $out; nothing pushed or published"
   exit 0
