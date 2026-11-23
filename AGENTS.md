@@ -81,5 +81,5 @@ Setup is finished when `procauto setup --json` says `"done": true`. Steps they s
 ## 4. Finish
 Tell them:
 - what's installed and running (`procauto routines list`, and the hourglass in the macOS menu bar or the Linux tray; on GNOME the tray needs the AppIndicator extension, which Ubuntu enables by default);
-- `procauto doctor` explains a red light; `procauto update` installs new releases (the menu offers them too); `procauto uninstall` removes the app (`--purge` also removes their config, routines, history, logs and secrets);
+- `procauto doctor` explains a red light; new releases install by themselves at a quiet moment (`update.auto`; **Manage Updates…** in the menu turns that off, checks and installs now), and `procauto update` installs one at once; `procauto uninstall` removes the app (`--purge` also removes their config, routines, history, logs and secrets);
 - you (or any MCP client) can do basically anything with the app from now on through its MCP server (on `claude-code`, setup connected it to Claude Code; after a restart `/mcp` lists `procauto`): offer to help them write their first routine (`procauto guide routines` says how).
