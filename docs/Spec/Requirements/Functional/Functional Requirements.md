@@ -97,13 +97,14 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 
 ## Notifications
 - **From routines** (the notify plugin): a routine can send me a short desktop notification, a title and a message, shown by the plugin itself through the OS (macOS, as the app; Linux, through the desktop's notification service), not by the menu bar app. An **urgent** one breaks through Focus/Do Not Disturb where the OS allows it and stays until dismissed; normal ones are quiet and fade. Clicking one does nothing. It has no settings, app-wide or per routine
+- **To acknowledge** (the notify plugin's `acknowledge`): one a routine asks me to acknowledge (something I must act on, such as a request someone made of me) is the app's own notification, about its run, with an Acknowledge button; it waits until I acknowledge it, from the notification, from the app, or with `notifications ack` (one, or `--all`), and the indicator is red, saying how many wait, until none does. Clicking it opens the app on its run, as the app's own do, and doesn't acknowledge it. Waiting ones are kept however old
 - **The app's own**: a desktop notification when a run (a routine's or a hook's) fails, needs a sign-in, is missed or skipped, saying which routine or hook, when and why (can be turned off), and when an update installs or fails, shown by the menu bar app on macOS and the tray on Linux; clicking one opens the app: on the run it's about, in its routine's or hook's window, or (an update's) the app's Routines window. They don't depend on the notify plugin
 - **On Linux** clicking one opens its run's report, or (an update's) the Routines window
 
 ## Status indicator
 - **Icon** in the macOS menu bar, or the Linux tray, with a status dot:
   - **Green**: every enabled routine is fine. A routine with no runs yet is fine while its next run is ahead
-  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled (a permission it needs not granted among the reasons), didn't start at its time or is stuck; a hook that's on failed, was missed, was paused past its rate, or can't run (its watcher missing, untrusted, paused or failing); setup isn't finished; or the scheduler isn't responding. A watcher that's failing, untrusted, paused or missing a permission is one reason, naming the hooks that listen to it, however many there are
+  - **Red**: something needs me: a routine failed, was missed or skipped, needs a sign-in, can't be scheduled (a permission it needs not granted among the reasons), didn't start at its time or is stuck; a hook that's on failed, was missed, was paused past its rate, or can't run (its watcher missing, untrusted, paused or failing); setup isn't finished; a notification waits to be acknowledged; or the scheduler isn't responding. A watcher that's failing, untrusted, paused or missing a permission is one reason, naming the hooks that listen to it, however many there are
   - **Grey**: no routines or hooks are enabled
   - **Pulsing**: a routine is running (whatever the colour); in the Linux tray the dot dims and brightens
 - Updates within seconds of anything changing
