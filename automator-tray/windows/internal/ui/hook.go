@@ -61,7 +61,7 @@ type Hook struct {
 	signInError string
 
 	actionError string
-	working     bool
+	pending     *pendingAction
 
 	// The sample event Fire runs it with: whether its editor shows, the
 	// event, the fire waiting for its run ("dry run" or "fire"), and how
@@ -84,6 +84,7 @@ func NewHook(c cli.CLI, win fyne.Window, async Async, name string, deleted func(
 		func(msg string) { h.actionError = msg; h.refresh() })
 	h.memories = newMemoryList(c, async, name, h.refresh)
 	h.turnOn = newTurnOn(c, async, name, true, h.summary, h.refresh, h.Load)
+	h.pending = newPendingAction(async, h.refresh)
 	h.granter = newGranter(c, async, h.refresh, h.loadDetail)
 	h.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
@@ -138,6 +139,7 @@ func (h *Hook) Update(s *cli.RunStatus) {
 	if e := h.entry(); e != nil {
 		after = *e
 	}
+	h.pending.settle()
 	h.refresh()
 	if !sameRun(before.LastRun, after.LastRun) || before.Problem != after.Problem {
 		h.loadDetail()
@@ -163,6 +165,7 @@ func (h *Hook) loadDetail() {
 					h.sample = sampleEvent(d.On)
 				}
 				h.detail, h.loadError = &d, ""
+				h.pending.settle()
 				h.granter.saw(d.Permissions)
 				h.watchPermissions()
 				if !d.IsProgram() && !h.memories.loaded {
@@ -202,37 +205,41 @@ func (h *Hook) showRun(id string) {
 
 // The controls
 
-func (h *Hook) control(work func() error, then func()) {
-	h.working = true
-	h.refresh()
-	h.async(func() func() {
-		err := work()
-		return func() {
-			h.working = false
-			if err != nil {
-				h.actionError = err.Error()
-			} else {
-				h.actionError = ""
-				if then != nil {
-					then()
-				}
-			}
-			h.refresh()
+// control runs a control's command (`action`, its button saying `label`
+// meanwhile), then `then`; it stays pending until `until` shows in its
+// state (nil: until the command returns). Its failure shows as before.
+func (h *Hook) control(action, label string, until func() bool, work func() error, then func()) {
+	h.pending.run(action, label, until, work, func(err error) {
+		if err != nil {
+			h.actionError = err.Error()
+			return
+		}
+		h.actionError = ""
+		if then != nil {
+			then()
 		}
 	})
 }
 
+// stop is Stop: "Stopping…" until it no longer runs.
 func (h *Hook) stop() {
-	h.control(func() error { return h.cli.StopRun(h.name) }, nil)
+	h.control("stop", "Stopping…", func() bool { return !h.running() }, func() error { return h.cli.StopRun(h.name) }, nil)
 }
 
 func (h *Hook) setPaused(paused bool) {
-	h.control(func() error { return h.cli.SetHookPaused(h.name, paused) }, h.Load)
+	action, label := "resume", "Resuming…"
+	if paused {
+		action, label = "pause", "Pausing…"
+	}
+	h.control(action, label, func() bool { return h.detail != nil && h.detail.Enabled != paused },
+		func() error { return h.cli.SetHookPaused(h.name, paused) }, h.Load)
 }
 
 func (h *Hook) askDelete() {
 	h.confirm("Delete "+h.name+"?", "Its copy, settings, trust and secrets are deleted. Its run history is kept.", "Delete",
-		func() { h.control(func() error { return h.cli.DeleteHook(h.name) }, h.deleted) })
+		func() {
+			h.control("delete", "Deleting…", nil, func() error { return h.cli.DeleteHook(h.name) }, h.deleted)
+		})
 }
 
 func (h *Hook) toggleFire() {
@@ -452,7 +459,7 @@ func (h *Hook) header() fyne.CanvasObject {
 func (h *Hook) controls() fyne.CanvasObject {
 	var buttons []*widget.Button
 	if h.running() {
-		stop := widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), h.stop)
+		stop := widget.NewButtonWithIcon(h.pending.title("Stop", "stop"), theme.MediaStopIcon(), h.stop)
 		stop.Importance = widget.DangerImportance
 		buttons = append(buttons, stop)
 	} else {
@@ -464,13 +471,13 @@ func (h *Hook) controls() fyne.CanvasObject {
 			on.Importance = widget.HighImportance
 			buttons = append(buttons, on)
 		} else {
-			buttons = append(buttons, widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() { h.setPaused(true) }))
+			buttons = append(buttons, widget.NewButtonWithIcon(h.pending.title("Pause", "pause"), theme.MediaPauseIcon(), func() { h.setPaused(true) }))
 		}
 	}
 	buttons = append(buttons, widget.NewButtonWithIcon("Delete…", theme.DeleteIcon(), h.askDelete))
 	row := container.NewHBox()
 	for _, b := range buttons {
-		if h.working || h.detail == nil {
+		if h.pending.busy() || h.detail == nil {
 			b.Disable()
 		}
 		row.Add(b)
@@ -728,7 +735,7 @@ func (h *Hook) access() []fyne.CanvasObject {
 		signIn = h.signInRow(review.Program)
 	}
 	// Read only: Turn On… is where it's trusted.
-	objects = append(objects, trustReview(review, "", "", nil, h.working, signIn)...)
+	objects = append(objects, trustReview(review, "", "", nil, h.pending.busy(), signIn)...)
 	if h.trustError != "" {
 		objects = append(objects, padded(0, 8, rowInset, rowInset, errorRow(h.trustError)))
 	}

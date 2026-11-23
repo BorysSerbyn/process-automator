@@ -1,4 +1,5 @@
 import AutomatorUICore
+import Combine
 import SwiftUI
 
 /// One routine as its window shows it: `routines show`, its entry in run
@@ -53,7 +54,10 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
     /// Why the last control (run, stop, pause, delete) failed.
     @Published var actionError: String?
     /// A control is waiting for the core.
-    @Published var working = false
+    /// The control waiting for its command, or for its state to show.
+    let pending = PendingAction()
+    private var pendingChanges: AnyCancellable?
+    var working: Bool { pending.busy }
     /// Called once the routine is deleted (its window closes).
     var onDeleted: () -> Void = {}
     /// Opened to turn it on (from the menu, a reason, a list's Turn On…):
@@ -67,6 +71,7 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
         self.status = status
         turnOn = TurnOn(name: name, kind: .routine, cli: cli)
         granter = PermissionGranter(cli: cli, app: AppInfo.name)
+        pendingChanges = pending.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         turnOn.turnedOn = { [weak self] in self?.load() }
         turnOn.granter.openURL = { NSWorkspace.shared.open($0) }
         granter.openURL = { NSWorkspace.shared.open($0) }
@@ -94,6 +99,7 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
     /// A new run status: when this routine's last run changed, its runs and
     /// detail are re-read.
     func update(_ status: RunStatus?) {
+        defer { pending.settle() }
         let before = entry
         self.status = status
         if entry?.lastRun != before?.lastRun || entry?.problem != before?.problem {
@@ -126,6 +132,7 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
         Task {
             switch await cli.background({ [name] in $0.routine(name) }) {
             case .success(let detail):
+                defer { pending.settle() }
                 granter.saw(detail.permissions ?? [])
                 if !(detail.permissions ?? []).blocking.isEmpty { watchPermissions() }
                 self.detail = detail
@@ -215,36 +222,52 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
 
     // MARK: Controls
 
+    /// Run Now: "Starting…" until run status says it runs (or a run that
+    /// started has ended already); a dry run, which run status doesn't
+    /// follow, until it's started.
     func runNow(dryRun: Bool) {
-        control { [name] in $0.start(name, dryRun: dryRun).map { _ in () } }
+        let before = entry?.lastRun?.startedAt
+        let started: (@MainActor () -> Bool)? =
+            dryRun
+            ? nil
+            : { @MainActor [weak self] in self.map { $0.running || $0.entry?.lastRun?.startedAt != before } ?? true }
+        control(dryRun ? "dry-run" : "run", dryRun ? "Starting dry run…" : "Starting…", until: started) { [name] in
+            $0.start(name, dryRun: dryRun).map { _ in () }
+        }
     }
 
+    /// Stop: "Stopping…" until it no longer runs.
     func stop() {
-        control { [name] in $0.stop(name).map { _ in () } }
+        let stopped: @MainActor () -> Bool = { [weak self] in !(self?.running ?? false) }
+        control("stop", "Stopping…", until: stopped) { [name] in $0.stop(name).map { _ in () } }
     }
 
     func setPaused(_ paused: Bool) {
-        control({ [name] in $0.setRoutinePaused(name, paused).map { _ in () } }, then: load)
+        control(
+            paused ? "pause" : "resume", paused ? "Pausing…" : "Resuming…",
+            until: { [weak self] in self?.detail?.enabled != paused },
+            { [name] in $0.setRoutinePaused(name, paused).map { _ in () } }, then: load)
     }
 
     func delete() {
-        control({ [name] in $0.deleteRoutine(name).map { _ in () } }, then: { self.onDeleted() })
+        control("delete", "Deleting…", { [name] in $0.deleteRoutine(name).map { _ in () } }, then: { self.onDeleted() })
     }
 
+    /// Runs a control's command (`action`, its button saying `label`
+    /// meanwhile), then `then`; it stays pending until `until` shows in its
+    /// state (nil: until the command returns), at most PendingAction's
+    /// timeout. Its failure shows as `actionError`.
     private func control(
+        _ action: String, _ label: String, until: (@MainActor () -> Bool)? = nil,
         _ work: @escaping @Sendable (CLI) -> Result<Void, CLI.Failure>, then: @escaping () -> Void = {}
     ) {
-        working = true
+        let cli = cli
         Task {
-            let result = await cli.background(work)
-            working = false
-            switch result {
-            case .success:
-                actionError = nil
-                then()
-            case .failure(let failure):
-                actionError = failure.message
+            let failure = await pending.run(action, label: label, until: until) {
+                await cli.background(work).failureMessage
             }
+            actionError = failure
+            if failure == nil { then() }
         }
     }
 

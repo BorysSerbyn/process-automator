@@ -106,7 +106,7 @@ struct HookDetailView: View {
     @ViewBuilder private var controls: some View {
         if model.running {
             Button(role: .destructive, action: model.stop) {
-                Label("Stop", systemImage: "stop.fill")
+                PendingLabel(pending: model.pending, actions: ["stop"], title: "Stop", systemImage: "stop.fill")
             }
             .help("Stop the run in progress (or waiting for its turn); it's recorded as stopped")
         } else {
@@ -128,7 +128,7 @@ struct HookDetailView: View {
                 Button {
                     model.setPaused(true)
                 } label: {
-                    Label("Pause", systemImage: "pause.fill")
+                    PendingLabel(pending: model.pending, actions: ["pause"], title: "Pause", systemImage: "pause.fill")
                 }
                 .help("Turn it off: it no longer runs on its events")
             }

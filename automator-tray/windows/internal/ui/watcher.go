@@ -37,7 +37,7 @@ type Watcher struct {
 	signingIn   bool
 	signInError string
 	actionError string
-	working     bool
+	pending     *pendingAction
 	// granter is Grant… for the permissions it declares; watchingPermissions,
 	// whether it's read again while one isn't allowed.
 	granter             *granter
@@ -51,6 +51,7 @@ type Watcher struct {
 func NewWatcher(c cli.CLI, win fyne.Window, async Async, name string, deleted func(), openHook func(string)) *Watcher {
 	w := &Watcher{cli: c, async: async, name: name, now: time.Now, deleted: deleted, openHook: openHook}
 	w.granter = newGranter(c, async, w.refresh, w.Load)
+	w.pending = newPendingAction(async, w.refresh)
 	w.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -78,6 +79,7 @@ func (w *Watcher) Load() {
 				w.loadError = err.Error()
 			} else {
 				w.detail, w.loadError = &d, ""
+				w.pending.settle()
 				w.granter.saw(d.Permissions)
 				w.watchPermissions()
 				if !d.Trusted && w.review == nil {
@@ -145,22 +147,18 @@ func (w *Watcher) loadTrust() {
 	})
 }
 
+// trust is Trust: "Trusting…" until it reads as trusted; why it couldn't
+// shows by the review.
 func (w *Watcher) trust() {
-	w.working = true
-	w.refresh()
-	w.async(func() func() {
-		err := w.cli.TrustWatcher(w.name)
-		return func() {
-			w.working = false
+	w.pending.run("trust", "Trusting…", func() bool { return w.detail != nil && w.detail.Trusted },
+		func() error { return w.cli.TrustWatcher(w.name) }, func(err error) {
 			if err != nil {
 				w.trustError = err.Error()
-			} else {
-				w.trustError, w.review = "", nil
-				w.Load()
+				return
 			}
-			w.refresh()
-		}
-	})
+			w.trustError, w.review = "", nil
+			w.Load()
+		})
 }
 
 func (w *Watcher) signIn() {
@@ -182,32 +180,35 @@ func (w *Watcher) signIn() {
 	})
 }
 
-func (w *Watcher) control(work func() error, then func()) {
-	w.working = true
-	w.refresh()
-	w.async(func() func() {
-		err := work()
-		return func() {
-			w.working = false
-			if err != nil {
-				w.actionError = err.Error()
-			} else {
-				w.actionError = ""
-				then()
-			}
-			w.refresh()
+// control runs a control's command (`action`, its button saying `label`
+// meanwhile), then `then`; it stays pending until `until` shows in its
+// state (nil: until the command returns). Its failure shows as before.
+func (w *Watcher) control(action, label string, until func() bool, work func() error, then func()) {
+	w.pending.run(action, label, until, work, func(err error) {
+		if err != nil {
+			w.actionError = err.Error()
+			return
 		}
+		w.actionError = ""
+		then()
 	})
 }
 
 func (w *Watcher) setPaused(paused bool) {
-	w.control(func() error { return w.cli.SetWatcherPaused(w.name, paused) }, w.Load)
+	action, label := "resume", "Resuming…"
+	if paused {
+		action, label = "pause", "Pausing…"
+	}
+	w.control(action, label, func() bool { return w.detail != nil && w.detail.Enabled != paused },
+		func() error { return w.cli.SetWatcherPaused(w.name, paused) }, w.Load)
 }
 
 func (w *Watcher) askDelete() {
 	w.confirm("Delete "+w.name+"?",
 		"Its copy, settings, trust, secrets and state are deleted. The hooks listening to it stay, and hear nothing.", "Delete",
-		func() { w.control(func() error { return w.cli.DeleteWatcher(w.name) }, w.deleted) })
+		func() {
+			w.control("delete", "Deleting…", nil, func() error { return w.cli.DeleteWatcher(w.name) }, w.deleted)
+		})
 }
 
 // The view
@@ -266,15 +267,15 @@ func (w *Watcher) header() fyne.CanvasObject {
 	var buttons []*widget.Button
 	if d := w.detail; d != nil {
 		if d.Enabled {
-			buttons = append(buttons, widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() { w.setPaused(true) }))
+			buttons = append(buttons, widget.NewButtonWithIcon(w.pending.title("Pause", "pause"), theme.MediaPauseIcon(), func() { w.setPaused(true) }))
 		} else {
-			buttons = append(buttons, widget.NewButtonWithIcon("Resume", theme.MediaPlayIcon(), func() { w.setPaused(false) }))
+			buttons = append(buttons, widget.NewButtonWithIcon(w.pending.title("Resume", "resume"), theme.MediaPlayIcon(), func() { w.setPaused(false) }))
 		}
 	}
 	buttons = append(buttons, widget.NewButtonWithIcon("Delete…", theme.DeleteIcon(), w.askDelete))
 	row := container.NewHBox()
 	for _, b := range buttons {
-		if w.working || w.detail == nil {
+		if w.pending.busy() || w.detail == nil {
 			b.Disable()
 		}
 		row.Add(b)
@@ -402,7 +403,7 @@ func (w *Watcher) access() []fyne.CanvasObject {
 	if !d.Trusted && w.review != nil {
 		do = w.trust
 	}
-	return reviewButton(objects, "Trust", "Turning on a hook that listens to it trusts it too; this trusts it alone.", do, w.working)
+	return reviewButton(objects, "Trust", "Turning on a hook that listens to it trusts it too; this trusts it alone.", do, w.pending.busy())
 }
 
 // modeText is how a watcher runs, in words: "Polled every 30s", "Streams events".

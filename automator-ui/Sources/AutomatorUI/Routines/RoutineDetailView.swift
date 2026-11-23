@@ -99,7 +99,7 @@ struct RoutineDetailView: View {
     @ViewBuilder private var controls: some View {
         if model.running {
             Button(role: .destructive, action: model.stop) {
-                Label("Stop", systemImage: "stop.fill")
+                PendingLabel(pending: model.pending, actions: ["stop"], title: "Stop", systemImage: "stop.fill")
             }
             .help("Stop the run in progress (or waiting for its turn); it's recorded as stopped")
         } else {
@@ -115,7 +115,8 @@ struct RoutineDetailView: View {
                     Text(ProgramInfo.dryRunTrust)
                 }
             } label: {
-                Label("Run Now", systemImage: "play.fill")
+                PendingLabel(
+                    pending: model.pending, actions: ["run", "dry-run"], title: "Run Now", systemImage: "play.fill")
             } primaryAction: {
                 model.runNow(dryRun: false)
             }
@@ -133,7 +134,7 @@ struct RoutineDetailView: View {
                 Button {
                     model.setPaused(true)
                 } label: {
-                    Label("Pause", systemImage: "pause.fill")
+                    PendingLabel(pending: model.pending, actions: ["pause"], title: "Pause", systemImage: "pause.fill")
                 }
                 .help("Stop running it on its schedule")
             }

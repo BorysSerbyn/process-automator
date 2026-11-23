@@ -856,3 +856,35 @@ private let waitingNote = """
     #expect(status.reasons?.map(\.target) == [.setup])
     #expect(status.hooks?.first?.turnOn == true)
 }
+
+// MARK: Pending actions
+
+@MainActor
+@Test func aPendingActionWaitsForItsState() async throws {
+    let pending = PendingAction()
+    var running = false
+    // Run: the command returns, and it stays "Starting…" until run status
+    // says it runs.
+    let isRunning: @MainActor () -> Bool = { running }
+    let failure = await pending.run("run", label: "Starting…", until: isRunning) { nil }
+    #expect(failure == nil && pending.isPending("run") && pending.busy)
+    #expect(pending.pending?.label == "Starting…")
+    pending.settle()
+    #expect(pending.isPending("run"))
+    running = true
+    pending.settle()
+    #expect(!pending.busy)
+    // A failure ends it at once, and says why.
+    let never: @MainActor () -> Bool = { false }
+    let refused = await pending.run("stop", label: "Stopping…", until: never) { "standup isn't running" }
+    #expect(refused == "standup isn't running" && !pending.busy)
+    // With nothing to wait for, it ends when the command returns.
+    await pending.run("dry-run", label: "Starting dry run…") { nil }
+    #expect(!pending.busy)
+    // Its state never shows: after the timeout, it ends as things are.
+    pending.timeout = .milliseconds(50)
+    await pending.run("pause", label: "Pausing…", until: never) { nil }
+    #expect(pending.isPending("pause"))
+    try await Task.sleep(for: .milliseconds(300))
+    #expect(!pending.busy)
+}

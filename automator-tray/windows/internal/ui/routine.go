@@ -74,10 +74,10 @@ type Routine struct {
 	signingIn   bool
 	signInError string
 
-	// actionError is why the last control failed; working, that one waits
-	// for the core.
+	// actionError is why the last control failed; pending, the control
+	// waiting for the core, or for its state to show.
 	actionError string
-	working     bool
+	pending     *pendingAction
 
 	scroll *container.Scroll
 }
@@ -91,6 +91,7 @@ func NewRoutine(c cli.CLI, win fyne.Window, async Async, name string, deleted fu
 		func(msg string) { r.actionError = msg; r.refresh() })
 	r.memories = newMemoryList(c, async, name, r.refresh)
 	r.turnOn = newTurnOn(c, async, name, false, r.summary, r.refresh, r.Load)
+	r.pending = newPendingAction(async, r.refresh)
 	r.granter = newGranter(c, async, r.refresh, r.loadDetail)
 	r.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
@@ -149,6 +150,7 @@ func (r *Routine) Update(s *cli.RunStatus) {
 	if e := r.entry(); e != nil {
 		after = *e
 	}
+	r.pending.settle()
 	r.refresh()
 	if !sameRun(before.LastRun, after.LastRun) || before.Problem != after.Problem {
 		r.loadDetail()
@@ -178,6 +180,7 @@ func (r *Routine) loadDetail() {
 				r.loadError = err.Error()
 			} else {
 				r.detail, r.loadError = &d, ""
+				r.pending.settle()
 				r.granter.saw(d.Permissions)
 				r.watchPermissions()
 				if !d.IsProgram() && !r.memories.loaded {
@@ -220,34 +223,60 @@ func (r *Routine) showRun(id string) {
 
 // The controls
 
-func (r *Routine) control(work func() error, then func()) {
-	r.working = true
-	r.refresh()
-	r.async(func() func() {
-		err := work()
-		return func() {
-			r.working = false
-			if err != nil {
-				r.actionError = err.Error()
-			} else {
-				r.actionError = ""
-				if then != nil {
-					then()
-				}
-			}
-			r.refresh()
+// control runs a control's command (`action`, its button saying `label`
+// meanwhile), then `then`; it stays pending until `until` shows in its
+// state (nil: until the command returns). Its failure shows as before.
+func (r *Routine) control(action, label string, until func() bool, work func() error, then func()) {
+	r.pending.run(action, label, until, work, func(err error) {
+		if err != nil {
+			r.actionError = err.Error()
+			return
+		}
+		r.actionError = ""
+		if then != nil {
+			then()
 		}
 	})
 }
 
+// runNow is Run Now ("Starting…" until run status says it runs, or a run
+// that started has ended already), or Dry Run (until it's started: run
+// status doesn't follow a dry run).
 func (r *Routine) runNow(dryRun bool) {
-	r.control(func() error { return r.cli.StartRun(r.name, dryRun) }, nil)
+	var before *time.Time
+	if e := r.entry(); e != nil && e.LastRun != nil {
+		before = e.LastRun.StartedAt
+	}
+	started := func() bool {
+		e := r.entry()
+		return r.running() || (e != nil && e.LastRun != nil && !sameTime(e.LastRun.StartedAt, before))
+	}
+	if dryRun {
+		r.control("dry-run", "Starting dry run…", nil, func() error { return r.cli.StartRun(r.name, true) }, nil)
+		return
+	}
+	r.control("run", "Starting…", started, func() error { return r.cli.StartRun(r.name, false) }, nil)
 }
 
-func (r *Routine) stop() { r.control(func() error { return r.cli.StopRun(r.name) }, nil) }
+func sameTime(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
+}
+
+// stop is Stop: "Stopping…" until it no longer runs.
+func (r *Routine) stop() {
+	r.control("stop", "Stopping…", func() bool { return !r.running() }, func() error { return r.cli.StopRun(r.name) }, nil)
+}
 
 func (r *Routine) setPaused(paused bool) {
-	r.control(func() error { return r.cli.SetPaused(r.name, paused) }, r.Load)
+	action, label := "resume", "Resuming…"
+	if paused {
+		action, label = "pause", "Pausing…"
+	}
+	r.control(action, label, func() bool { return r.detail != nil && r.detail.Enabled != paused },
+		func() error { return r.cli.SetPaused(r.name, paused) }, r.Load)
 }
 
 func (r *Routine) askDelete() {
@@ -256,7 +285,7 @@ func (r *Routine) askDelete() {
 		what = "Its copy, settings, trust and secrets are deleted. Its run history and data folder are kept."
 	}
 	r.confirm("Delete "+r.name+"?", what, "Delete", func() {
-		r.control(func() error { return r.cli.DeleteRoutine(r.name) }, r.deleted)
+		r.control("delete", "Deleting…", nil, func() error { return r.cli.DeleteRoutine(r.name) }, r.deleted)
 	})
 }
 
@@ -482,12 +511,12 @@ func (r *Routine) header() fyne.CanvasObject {
 func (r *Routine) controls() fyne.CanvasObject {
 	var buttons []*widget.Button
 	if r.running() {
-		stop := widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), r.stop)
+		stop := widget.NewButtonWithIcon(r.pending.title("Stop", "stop"), theme.MediaStopIcon(), r.stop)
 		stop.Importance = widget.DangerImportance
 		buttons = append(buttons, stop)
 	} else {
-		run := widget.NewButtonWithIcon("Run Now", theme.MediaPlayIcon(), func() { r.runNow(false) })
-		buttons = append(buttons, run, widget.NewButton("Dry Run", func() { r.runNow(true) }))
+		run := widget.NewButtonWithIcon(r.pending.title("Run Now", "run"), theme.MediaPlayIcon(), func() { r.runNow(false) })
+		buttons = append(buttons, run, widget.NewButton(r.pending.title("Dry Run", "dry-run"), func() { r.runNow(true) }))
 	}
 	if d := r.detail; d != nil {
 		switch {
@@ -496,15 +525,15 @@ func (r *Routine) controls() fyne.CanvasObject {
 			on.Importance = widget.HighImportance
 			buttons = append(buttons, on)
 		case d.Enabled:
-			buttons = append(buttons, widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() { r.setPaused(true) }))
+			buttons = append(buttons, widget.NewButtonWithIcon(r.pending.title("Pause", "pause"), theme.MediaPauseIcon(), func() { r.setPaused(true) }))
 		default:
-			buttons = append(buttons, widget.NewButtonWithIcon("Resume", theme.MediaPlayIcon(), func() { r.setPaused(false) }))
+			buttons = append(buttons, widget.NewButtonWithIcon(r.pending.title("Resume", "resume"), theme.MediaPlayIcon(), func() { r.setPaused(false) }))
 		}
 	}
 	buttons = append(buttons, widget.NewButtonWithIcon("Delete…", theme.DeleteIcon(), r.askDelete))
 	row := container.NewHBox()
 	for _, b := range buttons {
-		if r.working || r.detail == nil {
+		if r.pending.busy() || r.detail == nil {
 			b.Disable()
 		}
 		row.Add(b)
@@ -603,7 +632,7 @@ func (r *Routine) access() []fyne.CanvasObject {
 		signIn = r.signInRow(review.Program)
 	}
 	// Read only: Turn On… is where it's trusted.
-	objects = append(objects, trustReview(review, "", "", nil, r.working, signIn)...)
+	objects = append(objects, trustReview(review, "", "", nil, r.pending.busy(), signIn)...)
 	if r.trustError != "" {
 		objects = append(objects, padded(0, 8, rowInset, rowInset, errorRow(r.trustError)))
 	}

@@ -1,4 +1,5 @@
 import AutomatorUICore
+import Combine
 import SwiftUI
 
 /// One watcher as its window shows it (`watchers show`): how it runs, what
@@ -16,7 +17,10 @@ final class WatcherModel: ObservableObject {
     @Published var signingIn = false
     @Published var signInError: String?
     @Published var actionError: String?
-    @Published var working = false
+    /// The control waiting for its command, or for its state to show.
+    let pending = PendingAction()
+    private var pendingChanges: AnyCancellable?
+    var working: Bool { pending.busy }
     var onDeleted: () -> Void = {}
     /// Grant… for the permissions it declares that aren't allowed.
     let granter: PermissionGranter
@@ -29,6 +33,7 @@ final class WatcherModel: ObservableObject {
         granter = PermissionGranter(cli: cli, app: AppInfo.name)
         granter.openURL = { NSWorkspace.shared.open($0) }
         granter.asked = { [weak self] in self?.load() }
+        pendingChanges = pending.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
 
     /// Reads it again every few seconds while a permission it declares isn't
@@ -54,6 +59,7 @@ final class WatcherModel: ObservableObject {
         Task {
             switch await cli.background({ [name] in $0.watcher(name) }) {
             case .success(let detail):
+                defer { pending.settle() }
                 granter.saw(detail.permissions ?? [])
                 self.detail = detail
                 if !(detail.permissions ?? []).blocking.isEmpty { watchPermissions() }
@@ -86,18 +92,21 @@ final class WatcherModel: ObservableObject {
         }
     }
 
+    /// Trust: "Trusting…" until it reads as trusted; why it couldn't shows
+    /// by the review.
     func trust() {
-        working = true
+        let cli = cli
         Task {
-            let result = await cli.background { [name] in $0.trustWatcher(name) }
-            working = false
-            switch result {
-            case .success(let review):
-                self.review = review
-                trustError = nil
+            let failure = await pending.run(
+                "trust", label: "Trusting…",
+                until: { [weak self] in
+                    self?.detail?.trusted ?? true
+                }
+            ) { [name] in await cli.background { $0.trustWatcher(name) }.failureMessage }
+            trustError = failure
+            if failure == nil {
+                review = nil
                 load()
-            case .failure(let failure):
-                trustError = failure.message
             }
         }
     }
@@ -114,27 +123,31 @@ final class WatcherModel: ObservableObject {
     }
 
     func setPaused(_ paused: Bool) {
-        control({ [name] in $0.setWatcherPaused(name, paused).map { _ in () } }, then: load)
+        control(
+            paused ? "pause" : "resume", paused ? "Pausing…" : "Resuming…",
+            until: { [weak self] in self?.detail?.enabled != paused },
+            { [name] in $0.setWatcherPaused(name, paused).map { _ in () } }, then: load)
     }
 
     func delete() {
-        control({ [name] in $0.deleteWatcher(name).map { _ in () } }, then: { self.onDeleted() })
+        control("delete", "Deleting…", { [name] in $0.deleteWatcher(name).map { _ in () } }, then: { self.onDeleted() })
     }
 
+    /// Runs a control's command (`action`, its button saying `label`
+    /// meanwhile), then `then`; it stays pending until `until` shows in its
+    /// state (nil: until the command returns), at most PendingAction's
+    /// timeout. Its failure shows as `actionError`.
     private func control(
-        _ work: @escaping @Sendable (CLI) -> Result<Void, CLI.Failure>, then: @escaping () -> Void
+        _ action: String, _ label: String, until: (@MainActor () -> Bool)? = nil,
+        _ work: @escaping @Sendable (CLI) -> Result<Void, CLI.Failure>, then: @escaping () -> Void = {}
     ) {
-        working = true
+        let cli = cli
         Task {
-            let result = await cli.background(work)
-            working = false
-            switch result {
-            case .success:
-                actionError = nil
-                then()
-            case .failure(let failure):
-                actionError = failure.message
+            let failure = await pending.run(action, label: label, until: until) {
+                await cli.background(work).failureMessage
             }
+            actionError = failure
+            if failure == nil { then() }
         }
     }
 }
@@ -216,7 +229,9 @@ struct WatcherView: View {
                     Button {
                         model.setPaused(enabled)
                     } label: {
-                        Label(enabled ? "Pause" : "Resume", systemImage: enabled ? "pause.fill" : "play.circle")
+                        PendingLabel(
+                            pending: model.pending, actions: ["pause", "resume"], title: enabled ? "Pause" : "Resume",
+                            systemImage: enabled ? "pause.fill" : "play.circle")
                     }
                     .help(enabled ? "Stop it: the hooks listening hear nothing until it's resumed" : "Run it again")
                 }
@@ -368,9 +383,11 @@ struct WatcherView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                Button("Trust", action: model.trust)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(model.working || model.review == nil)
+                Button(action: model.trust) {
+                    PendingLabel(pending: model.pending, actions: ["trust"], title: "Trust")
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.working || model.review == nil)
             }
             .padding(.horizontal, SettingsMetrics.rowInset)
             .padding(.vertical, 12)

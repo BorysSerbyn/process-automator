@@ -113,6 +113,11 @@ func TestAProgramHooksWindow(t *testing.T) {
 	mustShow(t, h.Content(), "/home/me/.config/acme/hooks/open-meet/act", "meet-token", "Not stored")
 	test.Tap(button(t, h.Content(), "Sign In…"))
 	test.Tap(button(t, h.Content(), "Pause"))
+	// "Pausing…" until it reads as paused, which these replies never say.
+	if len(buttons(h.Content(), "Pausing…")) != 1 || !button(t, h.Content(), "Delete…").Disabled() {
+		t.Error("Pause doesn't say it's pausing, or another control can be tapped meanwhile")
+	}
+	release(h.pending)
 	test.Tap(button(t, h.Content(), "Delete…"))
 	f.mustHaveRun(t, "hooks trust open-meet --check --json", "auth login open-meet --browser", "hooks pause open-meet --json",
 		"hooks delete open-meet --json")
@@ -291,7 +296,9 @@ func TestAWatchersWindow(t *testing.T) {
 	test.Tap(all[*linkRow](c)[0])
 	test.Tap(button(t, w.Content(), "Sign In…"))
 	test.Tap(button(t, w.Content(), "Trust"))
+	release(w.pending)
 	test.Tap(button(t, w.Content(), "Resume"))
+	release(w.pending)
 	test.Tap(button(t, w.Content(), "Delete…"))
 	f.mustHaveRun(t, "auth login inbox --browser", "watchers trust inbox --yes --json", "watchers resume inbox --json",
 		"watchers delete inbox --json")

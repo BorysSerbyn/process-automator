@@ -127,9 +127,13 @@ func TestARoutinesOverviewAndControls(t *testing.T) {
 	mustShow(t, c, "standup", "Next: Monday 09:20", "Status", "Last run", "Today at", "success", "schedule",
 		"Next run", "Monday", "What it can reach", "Trusted")
 	mustNotShow(t, c, "Not trusted")
+	// Each waits for its state, which these replies never show: let each
+	// go before the next, as its timeout would.
 	test.Tap(button(t, c, "Run Now"))
+	release(r.pending)
 	test.Tap(button(t, r.Content(), "Dry Run"))
 	test.Tap(button(t, r.Content(), "Pause"))
+	release(r.pending)
 	test.Tap(button(t, r.Content(), "Delete…"))
 	f.mustHaveRun(t, "start standup --json", "start standup --dry-run --json", "routines pause standup --json",
 		"routines delete standup --json")
@@ -394,5 +398,50 @@ func TestAProgramsLongOutputScrolls(t *testing.T) {
 	}
 	if !scrolls(strings.Repeat("line\n", outputLines+1)) {
 		t.Error("long output doesn't scroll")
+	}
+}
+
+// Run Now says "Starting…", disabled with every other control, from the tap
+// until run status says it runs; then it's Stop, which says "Stopping…"
+// until it no longer runs. A command that fails lets go at once.
+func TestRunNowWaitsForTheRunToShow(t *testing.T) {
+	r, f, _ := newRoutineFor(t, "standup", standupReplies)
+	test.Tap(button(t, r.Content(), "Run Now"))
+	f.mustHaveRun(t, "start standup --json")
+	c := r.Content()
+	if b := button(t, c, "Starting…"); !b.Disabled() || !button(t, c, "Dry Run").Disabled() || !button(t, c, "Pause").Disabled() {
+		t.Fatal("Run Now isn't Starting…, or a control can be tapped meanwhile")
+	}
+	// A status that doesn't show it yet (a heartbeat) changes nothing.
+	r.Update(statusFrom(t, "status-routines.json"))
+	if len(buttons(r.Content(), "Starting…")) != 1 {
+		t.Fatal("it let go before the run showed")
+	}
+	running := statusFrom(t, "status-routines.json")
+	running.Routines[0].LastRun.Outcome = "running"
+	r.Update(running)
+	c = r.Content()
+	if b := button(t, c, "Stop"); b.Disabled() || len(buttons(c, "Starting…")) != 0 {
+		t.Fatal("the run shows, but Stop isn't there to tap")
+	}
+	test.Tap(button(t, c, "Stop"))
+	if !button(t, r.Content(), "Stopping…").Disabled() {
+		t.Fatal("Stop isn't Stopping…")
+	}
+	r.Update(statusFrom(t, "status-routines.json"))
+	if b := button(t, r.Content(), "Run Now"); b.Disabled() {
+		t.Fatal("stopped, but Run Now can't be tapped")
+	}
+
+	// The command fails: its error shows, and the controls are back at once.
+	replies := map[string]string{"start standup --json": "!standup isn't trusted to run for real"}
+	for k, v := range standupReplies {
+		replies[k] = v
+	}
+	r2, _, _ := newRoutineFor(t, "standup", replies)
+	test.Tap(button(t, r2.Content(), "Run Now"))
+	mustShow(t, r2.Content(), "standup isn't trusted to run for real")
+	if button(t, r2.Content(), "Run Now").Disabled() {
+		t.Fatal("a failed Run Now left the controls disabled")
 	}
 }

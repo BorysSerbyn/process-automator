@@ -211,13 +211,19 @@ struct SetupStepView: View {
         case .usage:
             // The core wraps the user's Claude Code status line to record usage.
             if !step.done {
-                Button("Set Up") { model.setUpUsage(step) }.disabled(model.working.contains(id))
+                HStack(spacing: 8) {
+                    Button("Set Up") { model.setUpUsage(step) }.disabled(model.working.contains(id))
+                    if model.working.contains(id) { ProgressView().controlSize(.small) }
+                }
             }
         case .mcp:
             // Done without asking when the window shows it; the button is for
             // trying again after a failure.
             if !step.done {
-                Button("Connect") { model.connectClaudeCode(step) }.disabled(model.working.contains(id))
+                HStack(spacing: 8) {
+                    Button("Connect") { model.connectClaudeCode(step) }.disabled(model.working.contains(id))
+                    if model.working.contains(id) { ProgressView().controlSize(.small) }
+                }
             }
         case .routine, .sign_hyphen_in:
             EmptyView()  // rows of their own (SetupStepRow)

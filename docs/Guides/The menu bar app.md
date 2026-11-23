@@ -31,7 +31,7 @@ A routine, a program or a hook that's off or not trusted has **Turn On…**: in 
 A routine's, a program's, a hook's or a watcher's window shows what it needs too: a banner while a permission isn't allowed (it won't run until it is), with **Grant…**, and every permission's state under **Permissions** in its Overview. A red-dot reason about a missing permission opens that window.
 
 ## A routine's window
-- **Controls**: **Run Now** (its arrow offers **Dry Run**), **Stop** while it runs or waits its turn, **Turn On…** while it's off or not trusted (see [[#Turning one on]]), else **Pause**, and **Delete…** under the `…` menu (its file, settings, trust and memories go; its run history stays)
+- **Controls**: each says what it's doing once clicked ("Starting…", "Stopping…") until it shows, and the others wait meanwhile. **Run Now** (its arrow offers **Dry Run**), **Stop** while it runs or waits its turn, **Turn On…** while it's off or not trusted (see [[#Turning one on]]), else **Pause**, and **Delete…** under the `…` menu (its file, settings, trust and memories go; its run history stays)
 - **Overview**: last and next run, why it can't be scheduled, its schedule with a days-and-time picker or custom cron (applied on **Save**), and what it can reach (tinted tools write)
 - **Runs**: each run with its outcome, final text, writes and every tool call; **Open Report** opens a readable report
 - **Memories**: what this routine is told to remember; add and remove them

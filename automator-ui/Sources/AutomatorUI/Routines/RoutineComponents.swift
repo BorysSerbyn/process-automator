@@ -278,3 +278,26 @@ private struct ContentHeight: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
+
+/// A control's label: its title and icon, or, while one of `actions` is
+/// pending (PendingAction), a small spinner and what it's doing
+/// ("Starting…"); the control is disabled meanwhile by its window.
+struct PendingLabel: View {
+    @ObservedObject var pending: PendingAction
+    let actions: [String]
+    let title: String
+    var systemImage: String?
+
+    var body: some View {
+        if let current = pending.pending, actions.contains(current.action) {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(current.label)
+            }
+        } else if let systemImage {
+            Label(title, systemImage: systemImage)
+        } else {
+            Text(title)
+        }
+    }
+}
