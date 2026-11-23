@@ -58,6 +58,10 @@ func FindClaude() (string, error) {
 	return p, nil
 }
 
+// toolCallTimeout is how long an agent CLI lets one call to the app's tools
+// run: an hour, so the routine's own timeout is what ends a run.
+const toolCallTimeout = time.Hour
+
 // Command implements CLITool.
 func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 	model, err := ClaudeModel(r.Model)
@@ -68,6 +72,12 @@ func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 		r.MCP.Name: map[string]any{
 			"type": "http", "url": r.MCP.URL,
 			"headers": map[string]string{"Authorization": "Bearer " + r.MCP.Token},
+			// Claude Code's own limit on one tool call over HTTP (about a
+			// minute by default) would cut off a slow plugin call (a first
+			// git fetch of the day in a script) long before the routine's
+			// timeout: the routine's timeout bounds a run, as codex's
+			// tool_timeout_sec does there.
+			"timeout": toolCallTimeout.Milliseconds(),
 		},
 	}})
 	builtins, err := claudeBuiltins(r.BuiltinTools, r.DryRun)

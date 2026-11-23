@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/firebase/genkit/go/ai"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -141,6 +143,17 @@ func TestClaudeCodeEnvironment(t *testing.T) {
 	}
 	if sys, _ := argValue(cmd.Args, "--system-prompt"); !strings.Contains(sys, "Use the staging API.") || !strings.HasPrefix(sys, "sys") {
 		t.Errorf("CLAUDE.md not added: %q", sys)
+	}
+	// One call to the app's tools may take as long as the routine allows,
+	// not Claude Code's own minute.
+	var mcpConfig struct {
+		MCPServers map[string]struct {
+			Timeout int64 `json:"timeout"`
+		} `json:"mcpServers"`
+	}
+	if v, _ := argValue(cmd.Args, "--mcp-config"); json.Unmarshal([]byte(v), &mcpConfig) != nil ||
+		mcpConfig.MCPServers["procauto"].Timeout != time.Hour.Milliseconds() {
+		t.Errorf("--mcp-config timeout: %q", v)
 	}
 	if v, _ := argValue(cmd.Args, "--setting-sources"); v != "" || !hasArg(cmd.Args, "--restricted") {
 		t.Errorf("isolation flags: %v", cmd.Args)
