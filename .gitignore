@@ -3,6 +3,7 @@
 /core/procauto
 /automator-tray/automator-tray
 automator-ui/.build/
+automator-ui/.build-release/
 automator-ui/.swiftpm/
 *.app
 *.test

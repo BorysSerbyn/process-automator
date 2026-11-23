@@ -62,8 +62,12 @@ LINUX_SCHED_LABEL := $(CLI)-scheduler.service
 CORE_BIN  := $(BUILD)/$(CLI)
 APP_BUILD := $(BUILD)/$(APP_NAME).app
 DIST      := $(BUILD)/dist
+# automator-ui's release build has a build folder of its own: sharing .build
+# with swift test's debug build made every release build after the tests
+# compile from scratch
+UI_SCRATCH := .build-release
 # Where swift build puts automator-ui (asked when bundling: it depends on the toolchain)
-UI_BIN     = $(shell cd automator-ui && swift build -c release --show-bin-path)/AutomatorUI
+UI_BIN     = $(shell cd automator-ui && swift build -c release --scratch-path $(UI_SCRATCH) --show-bin-path)/AutomatorUI
 # The build's values, set in the automator package (the binary's names are its automator.App)
 AUTOMATOR := github.com/BorysSerbyn/process-automator/core/automator
 COMMON_LDFLAGS := -s -w -X "$(AUTOMATOR).version=$(VERSION)" -X "$(AUTOMATOR).sourceDir=$(SOURCE_DIR)" \
@@ -118,7 +122,7 @@ build-core:
 	cd "$(GO_DIR)" && MACOSX_DEPLOYMENT_TARGET=14.0 CGO_CFLAGS="-O2 -g -mmacosx-version-min=14.0" go build -trimpath -ldflags '$(LDFLAGS)' -o "$(CORE_BIN)" $(MAIN)
 
 build-ui:
-	@$(TIMED) "· automator-ui (swift build)" 'cd automator-ui && swift build -c release'
+	@$(TIMED) "· automator-ui (swift build)" 'cd automator-ui && swift build -c release --scratch-path $(UI_SCRATCH)'
 
 bundle: build check-identity ## Assemble and sign the .app
 	@printf '%s\n' "$$MACOS_INSTALL_ENV" > "$(BUILD)/install.env"
@@ -212,7 +216,7 @@ ci: ## The checks CI ran, here: tests, lint, Linux/Windows builds, shellcheck, t
 	@scripts/timed.sh --summary "$(TIMINGS)"
 
 clean: ## Remove build output
-	rm -rf "$(BUILD)" automator-ui/.build
+	rm -rf "$(BUILD)" automator-ui/.build automator-ui/$(UI_SCRATCH)
 
 check-identity:
 	@[ "$(SIGN_IDENTITY)" = "-" ] || security find-identity -p codesigning | grep -qF -e "\"$(SIGN_IDENTITY)\"" -e ") $(SIGN_IDENTITY) " || { \
