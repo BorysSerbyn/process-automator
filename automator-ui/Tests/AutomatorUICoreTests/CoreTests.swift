@@ -841,3 +841,18 @@ private let waitingNote = """
             "notifications ack --all --json", "notifications list --waiting --json",
         ])
 }
+
+@Test func setupsReasonOpensSetup() throws {
+    // What only needs turning on is setup's: its one reason opens setup.
+    let status = try RunStatus.decode(
+        Data(
+            """
+            {"schemaVersion":1,"updatedAt":"2026-11-23T09:00:00Z","health":"error","busy":false,"routines":[],
+             "hooks":[{"name":"pr-reviewed","enabled":true,"problem":"it isn't trusted","turnOn":true,"health":"error",
+                       "summary":"Needs turning on"}],
+             "setupLeft":["Turn on pr-reviewed"],
+             "reasons":[{"text":"Setup isn't finished (1 to do)","detail":"Still to do: Turn on pr-reviewed","setup":true}]}
+            """.utf8))
+    #expect(status.reasons?.map(\.target) == [.setup])
+    #expect(status.hooks?.first?.turnOn == true)
+}

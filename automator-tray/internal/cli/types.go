@@ -40,6 +40,9 @@ type Reason struct {
 	// Acknowledge is true when it's about notifications waiting for me to
 	// acknowledge them (the menu's acknowledgement line shows them).
 	Acknowledge bool `json:"acknowledge,omitempty"`
+	// Setup is true when it's about setup's steps still to do (turning on
+	// what isn't trusted among them): choosing it opens setup.
+	Setup bool `json:"setup,omitempty"`
 }
 
 // Waiting is a notification waiting for me to acknowledge it.

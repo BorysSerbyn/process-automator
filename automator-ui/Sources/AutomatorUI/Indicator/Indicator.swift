@@ -191,6 +191,8 @@ final class Indicator: NSObject, NSMenuDelegate {
                 var click: (() -> Void)?
                 switch reason.target {
                 case .acknowledgements: click = { [weak self] in self?.openAcknowledgements() }
+                // Setup's steps, turning on what isn't trusted among them.
+                case .setup: click = { [weak self] in self?.openSetup() }
                 case .watcher(let watcher): click = { [weak self] in self?.openWatcher(watcher) }
                 case .hook(let hook, let run): click = { [weak self] in self?.openHook(hook, run) }
                 case .run(let id): click = { [weak self] in self?.openRun(id) }
