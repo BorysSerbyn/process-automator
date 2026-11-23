@@ -27,7 +27,7 @@ type View interface {
 var RefreshEvery = 15 * time.Second
 
 // Tray is the tray app: it follows run status, shows it in the icon and
-// menu, delivers the app's notifications and offers updates.
+// menu, delivers the app's notifications and says where updates stand.
 type Tray struct {
 	info app.Info
 	cli  cli.CLI
@@ -60,7 +60,7 @@ func New(info app.Info, view View, notifications Notifications, openWindow func(
 		openWindow: openWindow, quit: quit, now: time.Now, openURL: OpenURL,
 	}
 	t.notifier = NewNotifier(t.cli, t.desk, t.showClick, t.Alert)
-	t.updates = NewUpdates(t.cli, t.desk, t.open, t.Alert, t.render)
+	t.updates = NewUpdates(t.cli, t.render)
 	return t
 }
 
@@ -188,12 +188,6 @@ func (t *Tray) Choose(a Action) {
 		go t.openRun(a.Run)
 	case ShowWindow:
 		t.open(a.Window)
-	case CheckUpdates:
-		go t.updates.Check(false)
-	case InstallUpdate:
-		go t.updates.Install()
-	case ShowUpdate:
-		t.updates.ShowProgress()
 	case Quit:
 		go t.quitApp()
 	}
@@ -252,8 +246,8 @@ func (t *Tray) open(w Window) {
 }
 
 // showClick shows what a click on one of the app's notifications should:
-// the link it's about (open-url), the run it's about, or the app (its
-// routines).
+// the link it's about (open-url), the run it's about, an update's the
+// Manage Updates window, or the app (its routines).
 func (t *Tray) showClick(click cli.ClickOutput) {
 	if click.Action == "open-url" && click.URL != "" {
 		if err := t.openURL(click.URL); err != nil {
@@ -263,6 +257,10 @@ func (t *Tray) showClick(click cli.ClickOutput) {
 	}
 	if click.Action == "show-run" && click.Run != "" {
 		t.openRun(click.Run)
+		return
+	}
+	if click.Action == "show-updates" {
+		t.open(Window{Kind: UpdatesWindow})
 		return
 	}
 	t.open(Window{Kind: RoutinesWindow})

@@ -56,11 +56,6 @@ func (f *fakeCLI) fail(command, message string) {
 	f.answer(command+".fail", `{"error": "`+message+`"}`)
 }
 
-// unfail makes a command that failed answer again.
-func (f *fakeCLI) unfail(command string) {
-	_ = os.Remove(filepath.Join(f.dir, "answers", strings.ReplaceAll(command, " ", "_")+".fail"))
-}
-
 // ran are the commands run so far.
 func (f *fakeCLI) ran() []string {
 	b, _ := os.ReadFile(filepath.Join(f.dir, "log"))

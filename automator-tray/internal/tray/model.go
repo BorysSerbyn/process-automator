@@ -94,11 +94,7 @@ const (
 	OpenRun ActionKind = "open-run"
 	// ShowWindow opens one of the app's windows (through the window seam).
 	ShowWindow ActionKind = "show-window"
-	// CheckUpdates, InstallUpdate and ShowUpdate are the update item's.
-	CheckUpdates  ActionKind = "check-updates"
-	InstallUpdate ActionKind = "install-update"
-	ShowUpdate    ActionKind = "show-update"
-	Quit          ActionKind = "quit"
+	Quit       ActionKind = "quit"
 )
 
 // Action is a menu item's action and what it's about.
@@ -127,17 +123,18 @@ const MenuText = 80
 
 // Menu is the tray's menu for a status, as automator-ui's: the version, the
 // status in the core's words (while setup isn't done, its reason "Finish
-// Setup (N to do)…", opening Setup), Routines › (each routine with its health and summary), Hooks › (each
-// hook, while there are any), the update item, Settings, Quit.
+// Setup (N to do)…", opening Setup), Manage Updates… (update: saying when
+// one is available or installing), Routines › (each routine with its
+// health and summary), Hooks › (each hook, while there are any), Settings,
+// Quit.
 func Menu(name, version string, s *cli.RunStatus, now time.Time, update MenuItem) []MenuItem {
 	items := []MenuItem{{Text: name + " " + version}}
 	items = append(items, statusItems(s, now)...)
-	items = append(items, separator(), routinesItem(s))
+	items = append(items, separator(), update, separator(), routinesItem(s))
 	if s != nil && len(s.Hooks) > 0 {
 		items = append(items, hooksItem(s))
 	}
 	return append(items,
-		update,
 		MenuItem{Text: "Settings", Action: Action{Kind: ShowWindow, Window: Window{Kind: SettingsWindow}}},
 		separator(),
 		MenuItem{Text: "Quit", Action: Action{Kind: Quit}},

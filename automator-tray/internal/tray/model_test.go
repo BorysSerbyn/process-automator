@@ -102,7 +102,7 @@ func TestFramesNameTheirIcons(t *testing.T) {
 	}
 }
 
-var checkItem = MenuItem{Text: "Check for Updates", Action: Action{Kind: CheckUpdates}}
+var updatesItem = MenuItem{Text: "Manage Updates…", Action: Action{Kind: ShowWindow, Window: Window{Kind: UpdatesWindow}}}
 
 func window(k WindowKind, routine string) Action {
 	return Action{Kind: ShowWindow, Window: Window{Kind: k, Routine: routine}}
@@ -114,14 +114,15 @@ func review(k WindowKind, name string) Action {
 	return Action{Kind: ShowWindow, Window: Window{Kind: k, Routine: name, Review: true}}
 }
 
-// The rest of the menu after the status: Routines ›, the update item,
-// Settings, Quit.
+// The rest of the menu after the status: Manage Updates… between
+// separators, Routines ›, Settings, Quit.
 func tail(routines ...MenuItem) []MenuItem {
 	sub := append([]MenuItem{{Text: "All Routines…", Action: window(RoutinesWindow, "")}, {Separator: true}}, routines...)
 	return []MenuItem{
 		{Separator: true},
+		updatesItem,
+		{Separator: true},
 		{Text: "Routines", Submenu: sub},
-		checkItem,
 		{Text: "Settings", Action: window(SettingsWindow, "")},
 		{Separator: true},
 		{Text: "Quit", Action: Action{Kind: Quit}},
@@ -174,7 +175,7 @@ func TestTheMenu(t *testing.T) {
 		if c.line != "" {
 			s = status(t, c.line)
 		}
-		got := Menu("Acme Automator", "2.1.0", s, c.now, checkItem)
+		got := Menu("Acme Automator", "2.1.0", s, c.now, updatesItem)
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s:\n got %+v\nwant %+v", c.name, got, c.want)
 		}
@@ -184,9 +185,9 @@ func TestTheMenu(t *testing.T) {
 // withHooks puts Hooks › after Routines › in a menu's tail.
 func withHooks(tail []MenuItem, hooks ...MenuItem) []MenuItem {
 	sub := append([]MenuItem{{Text: "All Hooks…", Action: window(HooksWindow, "")}, {Separator: true}}, hooks...)
-	out := append([]MenuItem{}, tail[:2]...)
+	out := append([]MenuItem{}, tail[:4]...)
 	out = append(out, MenuItem{Text: "Hooks", Submenu: sub})
-	return append(out, tail[2:]...)
+	return append(out, tail[4:]...)
 }
 
 // A long text ends in an ellipsis rather than widening the menu.
@@ -197,7 +198,7 @@ func TestLongTextIsShortened(t *testing.T) {
 	}
 	s := status(t, lineNone)
 	s.Summary = long
-	got := Menu("A", "1", s, fresh, checkItem)[1].Text
+	got := Menu("A", "1", s, fresh, updatesItem)[1].Text
 	if r := []rune(got); len(r) != MenuText || r[len(r)-1] != '…' {
 		t.Fatalf("%q", got)
 	}

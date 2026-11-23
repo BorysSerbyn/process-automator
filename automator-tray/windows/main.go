@@ -37,7 +37,7 @@ func main() {
 	log.SetPrefix("automator-windows: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env (default: found beside this program)")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review]|hooks|hook <name> [review]|watcher <name>|acknowledgements|update|confirm-update")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review]|hooks|hook <name> [review]|watcher <name>|acknowledgements|updates")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -55,6 +55,10 @@ func main() {
 	}
 }
 
+// PostponeEvery is how often a window holds automatic updates back while
+// it's open (`update postpone`, which holds them a few minutes).
+const PostponeEvery = time.Minute
+
 // content is a window's content: what it shows, and reading it again.
 type content interface {
 	Content() fyne.CanvasObject
@@ -68,8 +72,7 @@ func window(args []string) (tray.Window, error) {
 	}
 	w := tray.Window{Kind: tray.WindowKind(args[0])}
 	switch w.Kind {
-	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.HooksWindow, tray.AcknowledgementsWindow, tray.UpdateWindow,
-		tray.ConfirmUpdateWindow:
+	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.HooksWindow, tray.AcknowledgementsWindow, tray.UpdatesWindow:
 		if len(args) == 1 {
 			return w, nil
 		}
@@ -192,6 +195,14 @@ func run(dir string, which tray.Window) error {
 	if r, ok := view.(reviewer); ok && which.Review {
 		r.Review()
 	}
+	// While it's open, automatic updates wait: one restarts the app.
+	go func() {
+		for ; !stopped.Load(); time.Sleep(PostponeEvery) {
+			if err := c.PostponeUpdate(); err != nil {
+				log.Printf("postponing automatic updates: %v", err)
+			}
+		}
+	}()
 	// What the CLI answers waits for the app's loop, which starts here.
 	view.Load()
 	w.ShowAndRun()
@@ -203,7 +214,7 @@ func run(dir string, which tray.Window) error {
 // from a hook's).
 func newWindow(a fyne.App, c cli.CLI, appName string, which tray.Window, open func(tray.Window)) (w fyne.Window, view content, size fyne.Size) {
 	size = fyne.NewSize(640, 680)
-	switch kind := which.Kind; kind {
+	switch which.Kind {
 	case tray.SetupWindow:
 		w = a.NewWindow(appName + " Setup")
 		view = ui.NewSetup(c, w, ui.Background, func(routine string) {
@@ -252,13 +263,10 @@ func newWindow(a fyne.App, c cli.CLI, appName string, which tray.Window, open fu
 		size = fyne.NewSize(640, 680)
 		view = ui.NewWatcher(c, w, ui.Background, which.Routine, func() { w.Close() },
 			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) })
-	case tray.UpdateWindow, tray.ConfirmUpdateWindow:
-		w = a.NewWindow("Updating")
-		if kind == tray.ConfirmUpdateWindow {
-			w.SetTitle(appName + " Update")
-		}
-		size = fyne.NewSize(460, 240)
-		view = ui.NewUpdate(c, ui.Background, kind == tray.ConfirmUpdateWindow, func() { w.Close() })
+	case tray.UpdatesWindow:
+		w = a.NewWindow("Manage Updates")
+		size = fyne.NewSize(560, 640)
+		view = ui.NewUpdates(c, ui.Background)
 	}
 	return w, view, size
 }

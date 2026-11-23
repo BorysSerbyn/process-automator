@@ -74,8 +74,7 @@ func TestWindowsAreTheirCommands(t *testing.T) {
 		{Kind: HookWindow, Routine: "open-meet", Review: true}:    {"hooks", "trust", "open-meet", "--resume"},
 		{Kind: HookWindow, Routine: "open-meet"}:                  {"hooks", "show", "open-meet"},
 		{Kind: WatcherWindow, Routine: "cal"}:                     {"watchers", "show", "cal"},
-		{Kind: UpdateWindow}:                                      {"update", "progress"},
-		{Kind: ConfirmUpdateWindow}:                               {"update", "--ask"},
+		{Kind: UpdatesWindow}:                                     {"update", "--ask"},
 	} {
 		if got := w.Command(); !reflect.DeepEqual(got, want) {
 			t.Errorf("%+v: %q", w, got)
@@ -130,8 +129,7 @@ func TestWindowsOpenInTheWindowsAppWhereItHasThem(t *testing.T) {
 		{"a hook", display, cliPath, Window{Kind: HookWindow, Routine: "open-meet"}, []string{app, "hook", "open-meet"}},
 		{"a hook's review", display, cliPath, Window{Kind: HookWindow, Routine: "open-meet", Review: true}, []string{app, "hook", "open-meet", "review"}},
 		{"a watcher", display, cliPath, Window{Kind: WatcherWindow, Routine: "cal"}, []string{app, "watcher", "cal"}},
-		{"the update", display, cliPath, Window{Kind: UpdateWindow}, []string{app, "update"}},
-		{"asking before an update", display, cliPath, Window{Kind: ConfirmUpdateWindow}, []string{app, "confirm-update"}},
+		{"manage updates", display, cliPath, Window{Kind: UpdatesWindow}, []string{app, "updates"}},
 		{"no display", func(string) string { return "" }, cliPath, Window{Kind: SetupWindow}, nil},
 		{"no windows app", display, windowsApp(t, ""), Window{Kind: SetupWindow}, nil},
 	} {

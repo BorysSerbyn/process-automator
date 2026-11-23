@@ -86,7 +86,7 @@ func TestAClickShowsWhatTheCoreSays(t *testing.T) {
 	f := newFakeCLI(t)
 	f.answer("notifications list --pending --json", pending)
 	f.answer("notifications open n1 --json", `{"notification":"n1","action":"show-run","routine":"standup","run":"r-42"}`)
-	f.answer("notifications open n2 --json", `{"notification":"n2","action":"show-app"}`)
+	f.answer("notifications open n2 --json", `{"notification":"n2","action":"show-updates"}`)
 	tr, _, n, w := newTray(t, f)
 	tr.notifier.deliver()
 
@@ -96,7 +96,7 @@ func TestAClickShowsWhatTheCoreSays(t *testing.T) {
 		t.Fatalf("%q", f.ran())
 	}
 	tr.Desk().Invoked(n.find("Updated to v2.2.0"), "default")
-	eventually(t, "the routines window", func() bool { return w.has(Window{Kind: RoutinesWindow}) })
+	eventually(t, "the Manage Updates window", func() bool { return w.has(Window{Kind: UpdatesWindow}) })
 
 	before := len(f.ran())
 	tr.Desk().Invoked(n.find("standup failed"), "dismissed")

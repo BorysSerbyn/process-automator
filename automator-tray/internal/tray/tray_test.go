@@ -155,88 +155,48 @@ func TestChoosingMenuItems(t *testing.T) {
 	eventually(t, "the alert", func() bool { return n.find("Couldn't open the run") != 0 })
 }
 
-func TestTheUpdateItem(t *testing.T) {
-	f := newFakeCLI(t)
-	tr, _, _, _ := newTray(t, f)
-	u := tr.updates
-	if got := u.MenuItem(); !reflect.DeepEqual(got, MenuItem{Text: "Check for Updates", Action: Action{Kind: CheckUpdates}}) {
-		t.Fatalf("%+v", got)
-	}
-	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false,"note":"It restarts."}`)
-	u.Check(true)
-	if got := u.MenuItem(); !reflect.DeepEqual(got, MenuItem{Text: "Update to v2.2.0…", Action: Action{Kind: InstallUpdate}}) {
-		t.Fatalf("%+v", got)
-	}
-}
-
-// Installing asks first (a note with the core's note and Update/Later),
-// then starts it detached and opens the update window, which follows it
-// (`update progress`, the menu says "Updating to X…") until it's over.
-func TestInstallingAnUpdate(t *testing.T) {
+// Manage Updates… says what the core says: an update available, or one
+// installing (followed with `update progress` until it's over); it opens
+// the Manage Updates window. Opening the menu asks again and postpones
+// automatic updates.
+func TestTheUpdatesItem(t *testing.T) {
 	savedEvery := ProgressEvery
 	ProgressEvery = 5 * time.Millisecond
 	t.Cleanup(func() { ProgressEvery = savedEvery })
 	f := newFakeCLI(t)
-	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false,"note":"It restarts."}`)
-	f.answer("update --detach --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":true,"started":true}`)
+	tr, _, _, w := newTray(t, f)
+	u := tr.updates
+	item := func(text string) MenuItem {
+		return MenuItem{Text: text, Action: Action{Kind: ShowWindow, Window: Window{Kind: UpdatesWindow}}}
+	}
+	if got := u.MenuItem(); !reflect.DeepEqual(got, item("Manage Updates…")) {
+		t.Fatalf("%+v", got)
+	}
+	f.answer("update status --json", `{"current":"2.1.0","development":false,"automatic":false,"setting":"update.auto","latest":"v2.2.0","updateAvailable":true,"installing":false}`)
+	u.Refresh()
+	if got := u.MenuItem(); !reflect.DeepEqual(got, item("Manage Updates… (v2.2.0 available)")) {
+		t.Fatalf("available: %+v", got)
+	}
+	tr.Choose(u.MenuItem().Action)
+	if !w.has(Window{Kind: UpdatesWindow}) {
+		t.Fatalf("opened %+v", w.opened)
+	}
+
+	f.answer("update status --json", `{"current":"2.1.0","development":false,"automatic":true,"setting":"update.auto","latest":"v2.2.0","updateAvailable":true,"installing":true,"installingTag":"v2.2.0"}`)
 	f.answer("update progress --json", `{"state":"installing","tag":"v2.2.0","step":"Downloading","log":"/x/update.log"}`)
-	tr, _, n, w := newTray(t, f)
-
-	tr.Choose(Action{Kind: CheckUpdates}) // not quietly: available, so install
-	eventually(t, "the question", func() bool { return n.find("Update to v2.2.0?") != 0 })
-	ask := n.note(n.find("Update to v2.2.0?"))
-	if ask.Body != "It restarts." || strings.Join(ask.Actions, ",") != "update,Update,later,Later" || !ask.Persistent {
-		t.Fatalf("%+v", ask)
-	}
-	tr.Desk().Invoked(n.find("Update to v2.2.0?"), "later")
-	time.Sleep(20 * time.Millisecond)
-	if f.hasRun("update --detach --json") {
-		t.Fatal("Later installed it")
-	}
-
-	tr.Desk().Invoked(n.find("Update to v2.2.0?"), "update")
-	eventually(t, "the update window", func() bool { return w.has(Window{Kind: UpdateWindow}) })
-	eventually(t, "Updating to v2.2.0…", func() bool {
-		return reflect.DeepEqual(tr.updates.MenuItem(), MenuItem{Text: "Updating to v2.2.0…", Action: Action{Kind: ShowUpdate}})
+	tr.MenuOpened()
+	eventually(t, "updating to v2.2.0", func() bool {
+		return reflect.DeepEqual(u.MenuItem(), item("Manage Updates… (updating to v2.2.0…)")) && f.hasRun("update progress --json")
 	})
-	// It ended (here, failed: the app didn't restart): the menu asks again.
-	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false}`)
+	eventually(t, "postponed", func() bool { return f.hasRun("update postpone") })
+	// It ended (here, failed: the app didn't restart): the menu says what the core does again.
+	f.answer("update status --json", `{"current":"2.1.0","development":false,"automatic":true,"setting":"update.auto","latest":"v2.2.0","updateAvailable":true,"installing":false}`)
 	f.answer("update progress --json", `{"state":"failed","tag":"v2.2.0","error":"checksum mismatch","log":"/x/update.log"}`)
-	eventually(t, "Update to v2.2.0… again", func() bool {
-		return reflect.DeepEqual(tr.updates.MenuItem(), MenuItem{Text: "Update to v2.2.0…", Action: Action{Kind: InstallUpdate}})
-	})
-}
-
-// Where notifications can't ask, the terminal asks (`update --ask`).
-func TestInstallingWithoutActionsAsksInTheTerminal(t *testing.T) {
-	f := newFakeCLI(t)
-	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.2.0","updateAvailable":true,"updated":false,"inProgress":false}`)
-	tr, _, n, w := newTray(t, f)
-	n.canAsk = false
-	tr.updates.Check(false)
-	if !w.has(Window{Kind: ConfirmUpdateWindow}) || n.count() != 0 {
-		t.Fatalf("%+v %+v", w.opened, n.notes)
-	}
-}
-
-func TestCheckingForUpdatesSaysWhatItFound(t *testing.T) {
-	f := newFakeCLI(t)
-	tr, _, n, _ := newTray(t, f)
-	f.fail("update --check --json", "can't reach GitHub")
-	tr.updates.Check(false)
-	if id := n.find("Couldn't check for updates"); id == 0 || n.note(id).Body != "can't reach GitHub" {
-		t.Fatalf("%+v", n.notes)
-	}
-	f.unfail("update --check --json")
-	f.answer("update --check --json", `{"current":"2.1.0","latest":"v2.1.0","updateAvailable":false,"updated":false,"inProgress":false}`)
-	tr.updates.Check(false)
-	if id := n.find("You're up to date"); id == 0 || n.note(id).Body != "This is 2.1.0." {
-		t.Fatalf("%+v", n.notes)
-	}
+	eventually(t, "available again", func() bool { return reflect.DeepEqual(u.MenuItem(), item("Manage Updates… (v2.2.0 available)")) })
 }
 
 // When the core can't say how the update is going (it keeps failing), the
-// tray stops asking after a while, and checks again.
+// tray stops asking after a while, and asks where updates stand again.
 func TestFollowingAnUpdateStopsWhenTheCoreCantSay(t *testing.T) {
 	savedEvery, savedFailures := ProgressEvery, ProgressFailures
 	ProgressEvery, ProgressFailures = time.Millisecond, 3
@@ -252,7 +212,7 @@ func TestFollowingAnUpdateStopsWhenTheCoreCantSay(t *testing.T) {
 			asked++
 		}
 	}
-	if asked != 3 || tr.updates.following || !f.hasRun("update --check --json") {
+	if asked != 3 || tr.updates.following || !f.hasRun("update status --json") {
 		t.Fatalf("asked %d times, following %v: %q", asked, tr.updates.following, f.ran())
 	}
 }

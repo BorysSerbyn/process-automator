@@ -138,6 +138,29 @@ func (c CLI) UpdateCheck() (UpdateOutput, error) {
 	return out, c.call(&out, "update", "--check")
 }
 
+// UpdateStatus is where updates stand (`update status`): no network.
+func (c CLI) UpdateStatus() (UpdateStatus, error) {
+	var out UpdateStatus
+	return out, c.call(&out, "update", "status")
+}
+
+// ReleaseNotes are a release's notes, this version's for "" (`update notes`).
+func (c CLI) ReleaseNotes(tag string) (Notes, error) {
+	var out Notes
+	args := []string{"update", "notes"}
+	if tag != "" {
+		args = append(args, tag)
+	}
+	return out, c.call(&out, args...)
+}
+
+// PostponeUpdate holds automatic updates back a few minutes: the app is in
+// use (`update postpone`).
+func (c CLI) PostponeUpdate() error {
+	_, err := c.Exec("update", "postpone")
+	return err
+}
+
 // StartUpdate starts installing the newer release in the background
 // (`update --detach`); the app restarts when it's done, and the result comes
 // as a notification.

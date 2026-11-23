@@ -31,11 +31,9 @@ const (
 	AcknowledgementsWindow WindowKind = "acknowledgements"
 	HookWindow             WindowKind = "hook"
 	WatcherWindow          WindowKind = "watcher"
-	// UpdateWindow follows the update installing.
-	UpdateWindow WindowKind = "update"
-	// ConfirmUpdateWindow asks before installing an update (only where
-	// notifications can't ask), then follows it.
-	ConfirmUpdateWindow WindowKind = "confirm-update"
+	// UpdatesWindow is Manage Updates: automatic updates on or off, the
+	// installed version and its notes, checking and installing.
+	UpdatesWindow WindowKind = "updates"
 )
 
 // Window is a window to open, and what it's about.
@@ -76,9 +74,7 @@ func (w Window) Command() []string {
 		return []string{"hooks", "show", w.Routine}
 	case WatcherWindow:
 		return []string{"watchers", "show", w.Routine}
-	case UpdateWindow:
-		return []string{"update", "progress"}
-	case ConfirmUpdateWindow:
+	case UpdatesWindow:
 		return []string{"update", "--ask"}
 	}
 	return []string{"routines", "list", "--kind", "all"}

@@ -118,7 +118,8 @@ func (n Notification) Waiting() bool { return n.Acknowledge && n.AcknowledgedAt 
 // ClickOutput is `notifications open --json`: what a click shows.
 type ClickOutput struct {
 	Notification string `json:"notification"`
-	// Action is show-run (Routine's Run) or show-app.
+	// Action is open-url, show-run (Routine's Run), show-updates (the
+	// Manage Updates window) or show-app.
 	Action  string `json:"action"`
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`
@@ -136,6 +137,31 @@ type UpdateOutput struct {
 	InProgress      bool   `json:"inProgress"`
 	Started         bool   `json:"started,omitempty"`
 	Note            string `json:"note,omitempty"`
+}
+
+// UpdateStatus is `update status --json`: where updates stand.
+type UpdateStatus struct {
+	Current     string `json:"current"`
+	Development bool   `json:"development"`
+	// Automatic is whether automatic updates are on: the setting Setting.
+	Automatic        bool       `json:"automatic"`
+	Setting          string     `json:"setting"`
+	AutomaticBlocked string     `json:"automaticBlocked,omitempty"`
+	CheckedAt        *time.Time `json:"checkedAt,omitempty"`
+	CheckError       string     `json:"checkError,omitempty"`
+	Latest           string     `json:"latest,omitempty"`
+	UpdateAvailable  bool       `json:"updateAvailable"`
+	// Waiting says why the newer release isn't installing by itself yet.
+	Waiting       string `json:"waiting,omitempty"`
+	Installing    bool   `json:"installing"`
+	InstallingTag string `json:"installingTag,omitempty"`
+}
+
+// Notes is `update notes --json`: a release's notes (Markdown).
+type Notes struct {
+	Tag   string `json:"tag"`
+	Notes string `json:"notes"`
+	URL   string `json:"url,omitempty"`
 }
 
 // UpdateProgress is `update progress --json`.
