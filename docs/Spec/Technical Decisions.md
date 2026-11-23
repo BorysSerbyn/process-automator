@@ -67,6 +67,23 @@ An in-process plugin declares its secrets by name, with a prompt, and they're st
 - **Namespacing external servers' keys too**: a key referenced by two servers would be asked for twice, and specs written for other MCP clients name keys freely
 - **Global keys for in-process plugins**: a plugin could read any secret by guessing its key; declared, namespaced ones keep it to its own
 
+## Decision: a second account is the plugin again, under its own name
+I'm in two Slack workspaces, and the same will happen with Google or Linear. An account (`plugins add slack-lca --account-of slack`) is the plugin under a new name: everything that already works per plugin name (OAuth tokens, an in-process plugin's secrets, its data folder, sign-ins, setup, readiness, trust, permissions) works for it unchanged, and it carries the plugin's description, `Prepare` steps and permissions, so the app never needs to know a plugin by name. What isn't per name, the global keys an external server references and a pre-registered OAuth app's client credentials, is moved under `account/<name>/<key>` when the account is resolved, so an account never reads or overwrites its plugin's: Slack without dynamic registration needs a Slack app per workspace, each with its own client ID and secret. It's resolved from the plugin's spec at every load, not copied into `mcpServers`, so it follows the plugin when an app update or my own override changes it. An account of an account is refused rather than resolved to its plugin: the name I gave would then mean something other than what I typed.
+
+### Rejected
+- **A plugin taking several tokens itself**: every plugin would need code for it, external servers can't, and their tools would need an account argument the model has to get right on every call
+- **Two routines, one per workspace**: what I want is one answer across both (where Marco was mentioned, whatever his user ID in each), and the second copy of the routine drifts
+- **Copying the server into `mcpServers` under the new name**: works for added servers only, shares the original's global keys, and doesn't follow later changes to the preset
+- **Keys renamed by prefix (`slack-client-id` → `slack-lca-client-id`)**: guesses at a naming convention that keys don't have, and can collide with another server's
+
+## Decision: a tool two servers offer is named `server/tool`; the model sees `server__tool`
+Two accounts of one plugin offer the same tool names. The gateway already merges every server's tools into one list for every backend (Genkit's registry, and the one loopback server agent CLIs see), so the fix is there, once: a routine names a tool by itself while one server offers it, and as `server/tool` when it must say which. Tool names can't hold a slash, so the model calls it `server__tool`, its description saying the server. An unqualified name two servers offer is an error, never a pick: which workspace a post goes to mustn't be a guess. The routine's own name is what's recorded (calls, dry-run writes) and trusted, with the server beside it.
+
+### Rejected
+- **Prefixing every tool with its server**: would rename every existing routine's tools, and the prompts that mention them
+- **Prefixing only the colliding ones, automatically**: a routine's tool names would change when a server it uses adds a tool
+- **One loopback server per routine server for agent CLIs**: Claude Code would name them apart itself, but Genkit and Codex wouldn't, and the gateway would be per backend
+
 ## Decision: MCP connections use the official Go SDK directly
 MCP sessions are opened with `modelcontextprotocol/go-sdk`; Genkit gets thin tool wrappers over them, limited to each routine's allowlist. This gives full control over the unattended path (a run never opens a browser; an expired or revoked credential is a distinct `needs-reauth`), and the allowlist and dry-run interception happen in my code.
 

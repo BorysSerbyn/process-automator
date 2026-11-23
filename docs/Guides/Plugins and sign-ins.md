@@ -14,6 +14,16 @@ procauto mcp call <server> <tool> '<json args>'   # call one tool by hand (write
 
 `auth login` opens your browser for OAuth sign-ins and asks for keys and tokens in the terminal; with `--browser` it asks for them on a local page instead. `procauto setup` and the Setup window offer a sign-in for each server your routines use. Sign-ins are refreshed automatically; when one can't be, runs end with "needs a sign-in" and you run `auth login` again.
 
+## Two accounts of one service
+In two Slack workspaces (or with two Google or Linear accounts), add the second as an account of the first, then sign in to it with its own credentials:
+
+```sh
+procauto plugins add slack-work --account-of slack
+procauto auth login slack-work       # its own sign-in (its own app's client ID and secret, when the service needs one)
+```
+
+A routine can use both (`automator.servers: [slack, slack-work]`); a tool both offer is listed with its server, `slack/slack_search` and `slack-work/slack_search` (`procauto guide routines`). `plugins remove slack-work` forgets only that account's credentials.
+
 ## Model backend
 Routines run on one of four backends, set with `procauto settings set llm.backend <name>` (or chosen in `procauto setup`):
 

@@ -7,6 +7,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Routines
 - **Routines are files on my device**: the app ships with none; a routine is added or changed by adding or editing its file in the routines folder, with no app update
 - **What a routine says**: what the model should do (the prompt), the servers it uses and the tools it may call, its schedule, and optional settings (below)
+- **One routine, several accounts**: a routine can use two accounts of a plugin at once; a tool both offer is named with its server, and the model, run records and dry-run writes tell the two apart
 - **Schedule per routine**: a cron schedule in local time, changeable without editing the file; a routine without one runs only by hand
 - **Pause and resume**: any routine can be stopped from running on its schedule and started again without removing it
 - **Run now**: any routine can be run on demand, in the terminal or in the background, as a dry run or for real
@@ -65,6 +66,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Plugins
 - **A plugin is an MCP server**, written in any language: remote (OAuth, an API key in headers, or public) or a local command, or a folder of my own with a `plugin.yaml`
 - **Adding one** needs no code; it's tried first and nothing is added if it doesn't work. Removing one forgets its credentials
+- **Accounts**: a second account of any plugin that signs in (two Slack workspaces, two Google or Linear accounts) is a plugin of its own, under its own name, signed in with its own credentials; it's listed, signed in to, checked and removed like any plugin, saying which plugin it's an account of. Removing it forgets only its credentials
 - **The `notify` plugin**: desktop notifications from routines; this app compiles it in
 - **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
 

@@ -9,6 +9,7 @@ A Dotprompt file: YAML frontmatter, then a Handlebars prompt. The file name is t
 - Dotprompt keys: `description`, `model`, `tools`, `output` (result schema), `config`
 - App keys are dotted (`automator.servers:`); an unknown one is an error. Those marked settings can be overridden: `settings set routines.<routine>.<key> <value>`
 - `tools` are names its servers offer: `%{command} mcp tools <server>`. `routines create` refuses unknown servers and tools
+- A tool two of its servers offer (two accounts of one plugin: `automator.servers: [slack, slack-work]`) is named with its server, `server/tool` (`slack-work/slack_search`); an unqualified name offered by both is an error. The model sees `server/tool` as `server__tool`, described as that server's
 - `{{role "system"}}` starts the instructions, `{{role "user"}}` the request; no one answers questions during a run
 - The model ends by calling `%{outcomeTool}` (%{outcomes}); a run that never reports fails. Don't list it in `tools`
 - Parameters: `name`, `type` (%{paramTypes}), `description`, optional `default`; used as `{{name}}`

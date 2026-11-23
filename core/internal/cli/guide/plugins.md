@@ -8,6 +8,9 @@ A plugin is an MCP server. `%{command} plugins add <name>` starts it, does the h
 - `--dir <folder>`: a plugin folder, copied into the app
 - `--permission <permission>` (with `--url` or `--command`; repeatable): what the OS must allow it (below), kept as `permissions` in its config entry
 
+## A second account
+`%{command} plugins add <name> --account-of <plugin>` adds another account of a plugin (built in or added; one that signs in): the same server under `<name>`, with credentials of its own (`%{command} auth login <name>`: its own tokens, secrets and, for a pre-registered OAuth app, its own client ID and secret). It's a plugin like any other: a routine lists it in `automator.servers`, beside the first one, and names a tool both offer with its server (`guide routines`). `plugins remove <name>` forgets only its credentials. An account of an account isn't taken
+
 ## A plugin folder
 `plugin.yaml` and the server (`command: ./server` runs from the copy):
 
