@@ -29,12 +29,23 @@ type Config struct {
 	Permissions map[string][]string
 	// Plugins holds each plugin's own config section, decoded by the plugin.
 	Plugins map[string]yaml.Node
+	// Accounts are second sign-ins of plugins under names of their own
+	// (accounts.<name>.of): the account's name, by the plugin it's an account
+	// of. The engine resolves them; an external one's server is here, in
+	// MCPServers, once Load has resolved it (AccountSpec).
+	Accounts map[string]string
+}
+
+// Account is an accounts.<name> entry: the plugin it's an account of.
+type Account struct {
+	Of string `yaml:"of"`
 }
 
 // file is the config file as written, decoded strictly.
 type file struct {
 	MCPServers map[string]Server    `yaml:"mcpServers"`
 	Plugins    map[string]yaml.Node `yaml:"plugins"`
+	Accounts   map[string]Account   `yaml:"accounts"`
 	// Settings are read and written by the settings store; listed so the
 	// strict decoder accepts them.
 	Settings yaml.Node `yaml:"settings"`
@@ -59,7 +70,7 @@ func DefaultPath() (string, error) {
 // Load reads the config file at path over base (server definitions from plugins).
 // A missing file yields base. Servers named in the file replace base entries entirely.
 func Load(path string, base map[string]pluginapi.ServerSpec) (Config, error) {
-	cfg := Config{MCPServers: map[string]pluginapi.ServerSpec{}, Permissions: map[string][]string{}, Plugins: map[string]yaml.Node{}}
+	cfg := Config{MCPServers: map[string]pluginapi.ServerSpec{}, Permissions: map[string][]string{}, Plugins: map[string]yaml.Node{}, Accounts: map[string]string{}}
 	for name, s := range base {
 		cfg.MCPServers[name] = s
 	}
@@ -86,6 +97,17 @@ func Load(path string, base map[string]pluginapi.ServerSpec) (Config, error) {
 	for name, n := range f.Plugins {
 		cfg.Plugins[name] = n
 	}
+	for name, acct := range f.Accounts {
+		switch {
+		case !ValidName(name):
+			errs = append(errs, fmt.Errorf("config accounts.%s: names are lowercase letters, digits and dashes", name))
+		case acct.Of == "":
+			errs = append(errs, fmt.Errorf("config accounts.%s: of: names the plugin it's an account of", name))
+		case hasKey(f.MCPServers, name):
+			errs = append(errs, fmt.Errorf("config accounts.%s clashes with mcpServers.%s; use another name", name, name))
+		}
+		cfg.Accounts[name] = acct.Of
+	}
 	return cfg, errors.Join(append(errs, cfg.Validate())...)
 }
 
@@ -111,8 +133,40 @@ func (c Config) DecodePlugin(name string, v any) error {
 	return nil
 }
 
-// serversKey is the config file's section of external MCP servers.
-const serversKey = "mcpServers"
+func hasKey[V any](m map[string]V, k string) bool {
+	_, ok := m[k]
+	return ok
+}
+
+// serversKey is the config file's section of external MCP servers;
+// accountsKey its section of accounts.
+const (
+	serversKey  = "mcpServers"
+	accountsKey = "accounts"
+)
+
+// SetAccount writes accounts.<name>: an account of the plugin of. The rest
+// of the file is preserved.
+func SetAccount(path, name, of string) error {
+	return yamlfile.EditSection(path, accountsKey, func(section *yaml.Node) error {
+		var val yaml.Node
+		if err := val.Encode(Account{Of: of}); err != nil {
+			return err
+		}
+		yamlfile.Set(section, name, &val)
+		return nil
+	})
+}
+
+// RemoveAccount deletes accounts.<name>; it reports whether the file had it.
+func RemoveAccount(path, name string) (bool, error) {
+	removed := false
+	err := yamlfile.EditSection(path, accountsKey, func(section *yaml.Node) error {
+		removed = yamlfile.Delete(section, name)
+		return nil
+	})
+	return removed, err
+}
 
 // SetServer writes a server to the file's mcpServers section after validating
 // it, replacing an entry of the same name (and, for a built-in preset's name,

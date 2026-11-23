@@ -34,6 +34,8 @@ type SignIn struct {
 	// Optional is a backend's secret it works without: listed by `auth
 	// status` only when stored (or unreadable).
 	Optional bool
+	// AccountOf is, for an account, the plugin it's an account of.
+	AccountOf string
 }
 
 // Secret is one secret a sign-in asks for.
@@ -70,7 +72,7 @@ func (a *App) SignIns() []SignIn {
 			}
 		}
 		for _, k := range config.SecretKeys(srv) {
-			s.Secrets = append(s.Secrets, Secret{Key: k, Label: k})
+			s.Secrets = append(s.Secrets, Secret{Key: k, Label: config.AccountKeyLabel(name, k)})
 		}
 		out = append(out, s)
 	}
@@ -124,6 +126,7 @@ func (a *App) SignIns() []SignIn {
 		if p, ok := a.FindPlugin(out[i].Name); ok {
 			out[i].Prepare = p.Prepare
 		}
+		out[i].AccountOf = a.Accounts[out[i].Name]
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
@@ -227,7 +230,11 @@ func (a *App) SignedIn(name string) (in, ok bool) {
 // Logout forgets a sign-in's credentials: its OAuth tokens and its
 // secrets, except a pre-registered app's client credentials and keys
 // another sign-in references (external servers may share one).
-func (a *App) Logout(s SignIn) error {
+func (a *App) Logout(s SignIn) error { return a.forget(s, false) }
+
+// forget is Logout, and with all a pre-registered app's client credentials
+// too (an account's, which are its own).
+func (a *App) forget(s SignIn, all bool) error {
 	if s.OAuth {
 		if err := a.Connector.Logout(s.Name); err != nil {
 			return err
@@ -243,7 +250,7 @@ func (a *App) Logout(s SignIn) error {
 		}
 	}
 	for _, sec := range s.Secrets {
-		if sec.Kept || shared[sec.Key] {
+		if (sec.Kept && !all) || shared[sec.Key] {
 			continue
 		}
 		for _, k := range append([]string{sec.Key}, sec.Former...) {

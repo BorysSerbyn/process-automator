@@ -5,6 +5,9 @@ components:
       additionalProperties: false
       description: AuthStatus is one row of `auth status --json`.
       properties:
+        accountOf:
+          description: AccountOf is, for an account, the plugin it's an account of.
+          type: string
         kind:
           type: string
         problem:
@@ -1114,6 +1117,11 @@ components:
       additionalProperties: false
       description: PluginChange is the output of `plugins add/remove --json`.
       properties:
+        accountOf:
+          description: |-
+            AccountOf is, for an account added or removed, the plugin it's an
+            account of.
+          type: string
         endpoint:
           type: string
         kind:
@@ -1162,6 +1170,11 @@ components:
       additionalProperties: false
       description: PluginInfo is one row of `plugins list --json`.
       properties:
+        accountOf:
+          description: |-
+            AccountOf is, for an account (a second sign-in of a plugin under a
+            name of its own), the plugin it's an account of.
+          type: string
         description:
           type: string
         endpoint:

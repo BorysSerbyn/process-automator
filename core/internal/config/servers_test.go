@@ -101,3 +101,26 @@ func TestSecretKeysAndExpansion(t *testing.T) {
 		t.Fatal("AuthMode defaults wrong")
 	}
 }
+
+func TestAccountSpecReadsOnlyItsOwnSecrets(t *testing.T) {
+	base := pluginapi.ServerSpec{Command: "srv", Args: []string{"-v"}, Env: map[string]string{"TOKEN": "{srv-token}", "MODE": "fast", "BOTH": "{a}:{b}"}}
+	got := AccountSpec("srv-two", base)
+	if got.Env["TOKEN"] != "{account/srv-two/srv-token}" || got.Env["MODE"] != "fast" || got.Env["BOTH"] != "{account/srv-two/a}:{account/srv-two/b}" {
+		t.Fatalf("env: %v", got.Env)
+	}
+	if base.Env["TOKEN"] != "{srv-token}" {
+		t.Fatal("the plugin's own spec changed")
+	}
+	for _, k := range SecretKeys(got) {
+		if AccountKeyLabel("srv-two", k) == k {
+			t.Errorf("%s isn't the account's", k)
+		}
+	}
+	oauth := AccountSpec("x-two", pluginapi.ServerSpec{URL: "https://x", OAuthClient: &pluginapi.OAuthClient{ClientIDKey: "id", RedirectPort: 1}})
+	if oauth.OAuthClient.ClientIDKey != "account/x-two/id" || oauth.OAuthClient.ClientSecretKey != "" {
+		t.Fatalf("oauth client: %+v", oauth.OAuthClient)
+	}
+	if err := ValidateServer("x-two", oauth); err != nil {
+		t.Fatal(err)
+	}
+}

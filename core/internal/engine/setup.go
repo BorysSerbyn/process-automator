@@ -339,7 +339,11 @@ func (a *App) signInSteps(loaded []loadedRoutine) []SetupStep {
 			continue
 		}
 		in := a.State(s).SignedIn
-		st := SetupStep{Step: StepSignIn, Subject: s.Name, Title: "Sign in to " + s.Name, Done: in,
+		title := "Sign in to " + s.Name
+		if s.AccountOf != "" {
+			title += " (an account of " + s.AccountOf + ")"
+		}
+		st := SetupStep{Step: StepSignIn, Subject: s.Name, Title: title, Done: in,
 			Status:   "Signed in; used by " + strings.Join(who, ", "),
 			Ask:      "Sign in to " + s.Name + "? It opens the browser.",
 			Commands: []string{product.Command + " auth login " + s.Name + " --browser"}}

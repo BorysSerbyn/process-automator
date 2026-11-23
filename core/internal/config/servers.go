@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi"
@@ -66,6 +68,52 @@ func ExpandSecrets(v string, get func(key string) (string, error)) (string, erro
 	})
 	return out, firstErr
 }
+
+// AccountSecretKey is the secrets-store key an account's server reads in
+// place of key, the one its plugin's server references: every secret of an
+// account is its own, so it never reads or overwrites its plugin's.
+func AccountSecretKey(account, key string) string { return "account/" + account + "/" + key }
+
+// AccountKeyLabel is the key an account's secret key stands in for (key
+// itself when it isn't one of the account's).
+func AccountKeyLabel(account, key string) string {
+	return strings.TrimPrefix(key, "account/"+account+"/")
+}
+
+// AccountSpec is the server an account of s is: s, with each secret it
+// references (in Env and Headers, and a pre-registered OAuth app's client
+// credentials) under the account's own key (AccountSecretKey). Its OAuth
+// tokens are its own already: they're kept by server name.
+func AccountSpec(account string, s pluginapi.ServerSpec) pluginapi.ServerSpec {
+	own := func(m map[string]string) map[string]string {
+		if m == nil {
+			return nil
+		}
+		out := make(map[string]string, len(m))
+		for k, v := range m {
+			out[k] = secretRef.ReplaceAllStringFunc(v, func(ref string) string {
+				return "{" + AccountSecretKey(account, ref[1:len(ref)-1]) + "}"
+			})
+		}
+		return out
+	}
+	s.Env, s.Headers = own(s.Env), own(s.Headers)
+	s.Args, s.Scopes = slices.Clone(s.Args), slices.Clone(s.Scopes)
+	if oc := s.OAuthClient; oc != nil {
+		c := *oc
+		c.ClientIDKey = AccountSecretKey(account, c.ClientIDKey)
+		if c.ClientSecretKey != "" {
+			c.ClientSecretKey = AccountSecretKey(account, c.ClientSecretKey)
+		}
+		s.OAuthClient = &c
+	}
+	return s
+}
+
+// SignsIn reports whether a server has credentials of its own: an OAuth
+// sign-in or a secret it references. An account of one that hasn't would
+// be the same server again.
+func SignsIn(s pluginapi.ServerSpec) bool { return OAuth(s) || len(SecretKeys(s)) > 0 }
 
 // ValidateServer checks a server spec.
 func ValidateServer(name string, s pluginapi.ServerSpec) error {

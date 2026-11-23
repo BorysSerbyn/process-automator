@@ -16,6 +16,10 @@
       "type": "string",
       "description": "SignIn is the command that signs in to it, when it needs credentials."
     },
+    "accountOf": {
+      "type": "string",
+      "description": "AccountOf is, for an account added or removed, the plugin it's an\naccount of."
+    },
     "trial": {
       "properties": {
         "tools": {

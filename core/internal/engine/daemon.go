@@ -54,7 +54,7 @@ func (a *App) Daemon(ctx context.Context) error {
 	}
 	defer unlock()
 
-	plugins := a.Plugins
+	plugins := a.builtin
 	reload := func() (*App, error) { return Load(a.Layout.Config(), plugins, a.Connector.Secrets) }
 	logf("daemon started (config %s)", a.Layout.Config())
 	statusPath := a.Layout.RunStatus()

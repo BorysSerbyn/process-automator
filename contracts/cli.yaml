@@ -325,7 +325,11 @@ commands:
       procauto plugins add weather --dir ./weather-mcp
       procauto plugins add acme --url https://mcp.acme.dev --auth headers --header 'Authorization=Bearer {acme-key}'
       procauto plugins add files --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ~/notes
+      procauto plugins add notion-work --account-of notion
     flags:
+      - name: --account-of
+        type: string
+        usage: add <name> as another account of this plugin, signed in with its own credentials
       - name: --arg
         type: stringArray
         usage: an argument for --command (repeatable)

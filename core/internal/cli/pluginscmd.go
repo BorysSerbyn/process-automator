@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -26,6 +27,9 @@ type PluginInfo struct {
 	// Permissions are what the OS must allow it before its tools can work,
 	// as it declares them (routines that use it need them too).
 	Permissions []string `json:"permissions,omitempty"`
+	// AccountOf is, for an account (a second sign-in of a plugin under a
+	// name of its own), the plugin it's an account of.
+	AccountOf string `json:"accountOf,omitempty"`
 }
 
 func newPluginsCmd() *cobra.Command {
@@ -40,7 +44,7 @@ func newPluginsCmd() *cobra.Command {
 			seen := map[string]bool{}
 			for _, p := range a.Plugins {
 				seen[p.Name] = true
-				row := PluginInfo{Name: p.Name, Description: p.Description, Kind: "in-process", Permissions: a.ServerPermissions(p.Name)}
+				row := PluginInfo{Name: p.Name, Description: p.Description, Kind: "in-process", Permissions: a.ServerPermissions(p.Name), AccountOf: a.Accounts[p.Name]}
 				if p.External != nil {
 					row.Kind, row.Endpoint = endpoint(a.Config.MCPServers[p.Name])
 				}
@@ -53,16 +57,21 @@ func newPluginsCmd() *cobra.Command {
 					if desc == "" {
 						desc = "(from config)"
 					}
-					rows = append(rows, PluginInfo{Name: name, Kind: kind, Endpoint: ep, Description: desc, Permissions: a.ServerPermissions(name)})
+					rows = append(rows, PluginInfo{Name: name, Kind: kind, Endpoint: ep, Description: desc, Permissions: a.ServerPermissions(name), AccountOf: a.Accounts[name]})
 				}
 			}
+			sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
 			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), rows)
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "NAME\tKIND\tDESCRIPTION")
 			for _, r := range rows {
-				fmt.Fprintf(tw, "%s\t%s\t%s\n", r.Name, r.Kind, r.Description)
+				desc := r.Description
+				if r.AccountOf != "" {
+					desc = "(an account of " + r.AccountOf + ") " + desc
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\n", r.Name, r.Kind, desc)
 			}
 			return tw.Flush()
 		}),
@@ -80,6 +89,9 @@ type PluginChange struct {
 	Endpoint string `json:"endpoint,omitempty"`
 	// SignIn is the command that signs in to it, when it needs credentials.
 	SignIn string `json:"signIn,omitempty"`
+	// AccountOf is, for an account added or removed, the plugin it's an
+	// account of.
+	AccountOf string `json:"accountOf,omitempty"`
 	// Trial is what trying it found (adds only).
 	Trial *PluginTrial `json:"trial,omitempty"`
 }
@@ -87,7 +99,7 @@ type PluginChange struct {
 func newPluginsAddCmd() *cobra.Command {
 	var spec pluginapi.ServerSpec
 	var env, headers, perms []string
-	var dir string
+	var dir, accountOf string
 	var replace bool
 	cmd := &cobra.Command{
 		Use:   "add <name>",
@@ -99,15 +111,31 @@ func newPluginsAddCmd() *cobra.Command {
 			"declare annotations (readOnlyHint). A server that needs credentials is tried as far as it can be; " +
 			"sign in with `auth login <name>`, then `plugins check <name>`. Secrets are referenced as {key} in " +
 			"--header/--env values (or the manifest's env), never given here. Routines use it by listing <name> " +
-			"in automator.servers. How to add one, or write your own: `" + product.Command + " guide plugins`.",
+			"in automator.servers. With --account-of <plugin>, <name> is instead another account of that plugin (a " +
+			"built-in one or an added server): the same server under its own name, with credentials of its own " +
+			"(`auth login <name>`). How to add one, or write your own: `" + product.Command + " guide plugins`.",
 		Example: "  " + product.Command + " plugins add notion --url https://mcp.notion.com/mcp\n" +
 			"  " + product.Command + " plugins add weather --dir ./weather-mcp\n" +
 			"  " + product.Command + " plugins add acme --url https://mcp.acme.dev --auth headers --header 'Authorization=Bearer {acme-key}'\n" +
-			"  " + product.Command + " plugins add files --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ~/notes",
+			"  " + product.Command + " plugins add files --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ~/notes\n" +
+			"  " + product.Command + " plugins add notion-work --account-of notion",
 		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			var err error
 			name := args[0]
+			if accountOf != "" {
+				if countSet(cmd, "url", "command", "arg", "env", "auth", "transport", "header", "scope", "dir", "description", "permission", "replace") > 0 {
+					return errors.New("--account-of takes everything from the plugin it's an account of; don't combine it with other flags")
+				}
+				if err := a.AddAccount(name, accountOf); err != nil {
+					return err
+				}
+				out := PluginChange{Plugin: name, AccountOf: accountOf, SignIn: product.Command + " auth login " + name}
+				return emit(cmd, out, fmt.Sprintf("Added %s, an account of %s.\nSign in with its own credentials: %s\nThen: "+product.Command+" plugins check %s", name, accountOf, out.SignIn, name))
+			}
+			if of, ok := a.AccountOf(name); ok {
+				return fmt.Errorf("%q is an account of %s; choose another name", name, of)
+			}
 			if !config.ValidName(name) {
 				return fmt.Errorf("%q can't name a plugin: lowercase letters, digits and dashes", name)
 			}
@@ -203,6 +231,7 @@ func newPluginsAddCmd() *cobra.Command {
 	_ = f.SetAnnotation("env", annRedact, []string{"true"})
 	_ = f.SetAnnotation("header", annRedact, []string{"true"})
 	f.BoolVar(&replace, "replace", false, "replace a server of the same name (a built-in preset is overridden)")
+	f.StringVar(&accountOf, "account-of", "", "add <name> as another account of this plugin, signed in with its own credentials")
 	jsonFlag(f, PluginChange{})
 	return cmd
 }
@@ -228,13 +257,23 @@ func newPluginsRemoveCmd() *cobra.Command {
 		Short: "Remove an MCP server added in config, and forget its credentials",
 		Long: "Removes mcpServers.<name> from config, deletes its folder if it was installed with --dir, and " +
 			"forgets its stored credentials. For a built-in preset that " +
-			"config overrode, the preset applies again (its credentials are kept). Built-in plugins can't be removed.",
+			"config overrode, the preset applies again (its credentials are kept). Built-in plugins can't be removed. " +
+			"An account is removed with its own credentials; the plugin it's an account of, and its, stay.",
 		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
 			name := args[0]
+			if of, ok := a.AccountOf(name); ok {
+				if err := a.RemoveAccount(name); err != nil {
+					return err
+				}
+				return emit(cmd, PluginChange{Plugin: name, AccountOf: of}, fmt.Sprintf("Removed %s, an account of %s, and its credentials.", name, of))
+			}
 			p, bundled := a.FindPlugin(name)
 			if bundled && p.InProcess != nil {
 				return fmt.Errorf("%q is a built-in plugin; it can't be removed", name)
+			}
+			if accts := a.AccountsOf(name); len(accts) > 0 && !bundled {
+				return fmt.Errorf("%s has accounts (%s): remove them first", name, strings.Join(accts, ", "))
 			}
 			spec := a.Config.MCPServers[name]
 			removed, err := config.RemoveServer(a.Layout.Config(), name)
@@ -278,4 +317,15 @@ func endpoint(s pluginapi.ServerSpec) (kind, where string) {
 		return "remote", s.URL
 	}
 	return "local", s.Command
+}
+
+// countSet is how many of the named flags are set.
+func countSet(cmd *cobra.Command, names ...string) int {
+	n := 0
+	for _, name := range names {
+		if cmd.Flags().Changed(name) {
+			n++
+		}
+	}
+	return n
 }

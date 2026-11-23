@@ -185,6 +185,8 @@ type AuthStatus struct {
 	// Problem says why it can't be told: a secret that can't be read (a
 	// locked Keychain or keyring), which isn't the same as not signed in.
 	Problem string `json:"problem,omitempty"`
+	// AccountOf is, for an account, the plugin it's an account of.
+	AccountOf string `json:"accountOf,omitempty"`
 }
 
 func newAuthStatusCmd() *cobra.Command {
@@ -202,6 +204,9 @@ func newAuthStatusCmd() *cobra.Command {
 				if !r.SignedIn {
 					state = "NOT signed in (" + product.Command + " auth login " + r.Server + ")"
 				}
+				if r.AccountOf != "" {
+					state += " (an account of " + r.AccountOf + ")"
+				}
 				fmt.Fprintf(cmd.OutOrStdout(), "%-10s %-7s %s\n", r.Server, r.Kind, state)
 			}
 			return nil
@@ -218,7 +223,7 @@ func authStatuses(a *engine.App) []AuthStatus {
 	for _, s := range a.SignIns() {
 		if a.Listed(s) {
 			st := a.State(s)
-			rows = append(rows, AuthStatus{Server: s.Name, Kind: s.Kind, SignedIn: st.SignedIn, Problem: st.Problem})
+			rows = append(rows, AuthStatus{Server: s.Name, Kind: s.Kind, SignedIn: st.SignedIn, Problem: st.Problem, AccountOf: s.AccountOf})
 		}
 	}
 	return rows

@@ -33,7 +33,14 @@ type App struct {
 	Config    config.Config
 	Layout    Layout
 	Connector *mcp.Connector
-	Plugins   []pluginapi.Plugin
+	// Plugins are the app's plugins and the accounts of them (each a plugin
+	// of its own, under the account's name).
+	Plugins []pluginapi.Plugin
+	// Accounts are the accounts of plugins and of added servers: the
+	// account's name, by the one it's an account of.
+	Accounts map[string]string
+	// builtin are the plugins the app was loaded with, without accounts.
+	builtin []pluginapi.Plugin
 }
 
 // AnthropicKey is the secret-store key of the Anthropic API key.
@@ -63,6 +70,10 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 			return nil, fmt.Errorf("config mcpServers.%s clashes with the in-process %s plugin; use another name", p.Name, p.Name)
 		}
 	}
+	builtin := plugins
+	if plugins, err = resolveAccounts(&cfg, plugins); err != nil {
+		return nil, err
+	}
 	conn := &mcp.Connector{
 		Servers:  cfg.MCPServers,
 		Secrets:  secrets,
@@ -80,7 +91,85 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 			return p.InProcess.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, config: path, run: run})
 		}
 	}
-	return &App{Config: cfg, Layout: files, Connector: conn, Plugins: plugins}, nil
+	return &App{Config: cfg, Layout: files, Connector: conn, Plugins: plugins, Accounts: cfg.Accounts, builtin: builtin}, nil
+}
+
+// resolveAccounts makes each account in cfg a plugin or server of its own:
+// an account of a plugin is that plugin under the account's name (its
+// description, Prepare and permissions; an external one's server reads the
+// account's own secrets: config.AccountSpec), and one of an added server is
+// that server, likewise. An in-process account reads its own config
+// section, or its plugin's while it has none. It returns the plugins with
+// the accounts of them added.
+func resolveAccounts(cfg *config.Config, plugins []pluginapi.Plugin) ([]pluginapi.Plugin, error) {
+	out := slices.Clone(plugins)
+	names := make([]string, 0, len(cfg.Accounts))
+	for name := range cfg.Accounts {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	var errs []error
+	for _, name := range names {
+		of := cfg.Accounts[name]
+		bad := func(format string, args ...any) {
+			errs = append(errs, fmt.Errorf("config accounts.%s: "+format, append([]any{name}, args...)...))
+		}
+		if slices.ContainsFunc(plugins, func(p pluginapi.Plugin) bool { return p.Name == name }) {
+			bad("%s is a plugin's name; use another", name)
+			continue
+		}
+		if base, ok := cfg.Accounts[of]; ok {
+			bad("%s is an account itself (of %s); make it an account of %s", of, base, base)
+			continue
+		}
+		i := slices.IndexFunc(plugins, func(p pluginapi.Plugin) bool { return p.Name == of })
+		spec, server := cfg.MCPServers[of]
+		switch {
+		case i < 0 && !server:
+			bad("no plugin %q", of)
+			continue
+		case i >= 0 && plugins[i].InProcess != nil:
+			p := plugins[i]
+			p.Name = name
+			out = append(out, p)
+			if _, own := cfg.Plugins[name]; !own {
+				if section, ok := cfg.Plugins[of]; ok {
+					cfg.Plugins[name] = section
+				}
+			}
+			continue
+		}
+		acct := config.AccountSpec(name, spec)
+		cfg.MCPServers[name] = acct
+		if perms, ok := cfg.Permissions[of]; ok {
+			cfg.Permissions[name] = slices.Clone(perms)
+		}
+		if i >= 0 {
+			p := plugins[i]
+			p.Name, p.External = name, &acct
+			out = append(out, p)
+		}
+	}
+	return out, errors.Join(errs...)
+}
+
+// AccountOf is the plugin (or added server) an account is an account of;
+// ok is false for a name that isn't an account.
+func (a *App) AccountOf(name string) (of string, ok bool) {
+	of, ok = a.Accounts[name]
+	return of, ok
+}
+
+// AccountsOf are the accounts of a plugin or added server, sorted.
+func (a *App) AccountsOf(name string) []string {
+	var out []string
+	for acct, of := range a.Accounts {
+		if of == name {
+			out = append(out, acct)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // LoadForEdit takes the edit lock, then loads the app (so its config is read
