@@ -117,16 +117,26 @@ func (a *Acknowledgements) openReport(run string) {
 }
 
 func (a *Acknowledgements) refresh() {
-	setContent(a.scroll, padded(16, 16, 16, 16, a.render()))
+	content := padded(16, 16, 16, 16, a.render())
+	setContent(a.scroll, content)
+	// A wrapping label's height is first guessed before it has its width:
+	// laid out again once it has, a long text's card fits it exactly.
+	content.Refresh()
+	a.scroll.Refresh()
 }
 
 func (a *Acknowledgements) render() fyne.CanvasObject {
-	title := container.NewVBox(heading("Acknowledgements", true),
-		secondary("Notifications that wait for you to acknowledge them; the dot stays red until you do."))
+	subtitle := "Notifications a routine or hook asks you to acknowledge wait here."
+	switch n := len(a.waiting); {
+	case n == 1:
+		subtitle = "1 waiting. The dot stays red until you acknowledge it."
+	case n > 1:
+		subtitle = itoa(n) + " waiting. The dot stays red until you acknowledge them."
+	}
+	title := container.NewVBox(heading("Acknowledgements", true), padded(-8, 0, 0, 0, secondary(subtitle)))
 	var all fyne.CanvasObject = container.NewHBox()
 	if len(a.waiting) > 1 {
 		b := widget.NewButton("Acknowledge All", func() { a.acknowledge("") })
-		b.Importance = widget.HighImportance
 		if a.acknowledging["*"] {
 			b.Disable()
 		}
@@ -134,86 +144,114 @@ func (a *Acknowledgements) render() fyne.CanvasObject {
 	}
 	box := container.NewVBox(container.NewBorder(nil, nil, nil, all, title))
 	if a.err != "" {
-		box.Add(errorRow(a.err))
+		box.Add(banner("Couldn't acknowledge", a.err))
 	}
 	switch {
 	case a.loadError != "":
 		box.Add(banner("Couldn't read what's waiting", a.loadError))
 	case a.loaded && len(a.waiting) == 0:
-		box.Add(card(false, padded(24, 24, 0, 0, container.NewCenter(quiet("Nothing waits for you.")))))
+		check := widget.NewIcon(theme.NewSuccessThemedResource(theme.ConfirmIcon()))
+		caught := widget.NewLabelWithStyle("All caught up", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+		hint := secondary("When a routine or hook asks you to acknowledge something, it shows here.")
+		hint.Segments[0].(*widget.TextSegment).Style.Alignment = fyne.TextAlignCenter
+		box.Add(card(false, padded(28, 28, 16, 16, container.NewVBox(container.NewCenter(sized(36, check)), caught, hint))))
 	case len(a.waiting) > 0:
-		var rows []fyne.CanvasObject
-		for i, n := range a.waiting {
-			if i > 0 {
-				rows = append(rows, divider())
-			}
-			rows = append(rows, a.row(n))
+		for _, n := range a.waiting {
+			box.Add(padded(4, 4, 0, 0, a.card(n)))
 		}
-		box.Add(card(false, rows...))
 	default:
 		box.Add(spinner())
 	}
 	return box
 }
 
-// row is one notification waiting: its title, its text (the routine's
-// words, plain text) folded to two lines and opening to all of it (a
-// scout's whole report: it scrolls, and can be selected and copied), what
-// sent it and when, its run's report, and Acknowledge.
-func (a *Acknowledgements) row(n cli.Notification) fyne.CanvasObject {
-	lines := container.NewVBox(widget.NewLabelWithStyle(n.Title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-	if n.Body != "" {
-		id := n.ID
-		switch {
-		case !folds(n.Body):
-			body := text(n.Body)
-			body.Selectable = true
-			lines.Add(body)
-		case a.open[id]:
-			body := text(n.Body)
-			body.Selectable = true
-			var shown fyne.CanvasObject = body
-			if strings.Count(n.Body, "\n") >= outputLines || len(n.Body) > 2000 {
-				scroll := container.NewVScroll(body)
-				scroll.SetMinSize(fyne.NewSize(0, 320))
-				shown = scroll
-			}
-			less := widget.NewButton("Show Less", func() { a.toggle(id) })
-			less.Importance = widget.LowImportance
-			lines.Add(card(true, padded(2, 2, 4, 4, shown)))
-			lines.Add(container.NewHBox(less))
-		default:
-			more := widget.NewButton("Show All", func() { a.toggle(id) })
-			more.Importance = widget.LowImportance
-			lines.Add(quiet(firstLines(n.Body)))
-			lines.Add(container.NewHBox(more))
-		}
+// foldedLines is how many lines a long text shows while folded.
+const foldedLines = 5
+
+// card is one notification waiting, as a card of its own: an icon (red
+// when urgent), its title, what sent it and when; its text under them,
+// lines and paragraphs as written (plain text, selectable), a long one
+// folded to its first lines and opening in place, bulleted lines hanging
+// after their bullet; and a footer under a divider: Show More at the left,
+// Open Report and Acknowledge at the right, apart from the text.
+func (a *Acknowledgements) card(n cli.Notification) fyne.CanvasObject {
+	icon := widget.NewIcon(theme.NewWarningThemedResource(theme.InfoIcon()))
+	if n.Urgent {
+		icon = widget.NewIcon(theme.NewErrorThemedResource(theme.WarningIcon()))
 	}
 	var about []string
 	if n.Routine != "" {
 		about = append(about, n.Routine)
 	}
 	about = append(about, when(n.At, a.now()))
-	meta := container.NewHBox(quiet(strings.Join(about, " · ")))
+	meta := secondary(strings.Join(about, " · "))
+	title := widget.NewLabelWithStyle(n.Title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	title.Wrapping = fyne.TextWrapWord
+	var urgent fyne.CanvasObject = container.NewHBox()
+	if n.Urgent {
+		urgent = container.NewVBox(padded(8, 0, 0, 0, tag("Urgent", theme.ColorNameError)))
+	}
+	head := container.NewBorder(nil, nil, container.NewVBox(padded(4, 0, 0, 0, sized(24, icon))), urgent,
+		container.NewVBox(title, padded(-12, 0, 0, 0, meta)))
+	content := container.NewVBox(head)
+	id := n.ID
+	body := strings.TrimSpace(n.Body)
+	if body != "" {
+		content.Add(padded(-4, 0, 32, 0, a.text(id, body)))
+	}
+	var more fyne.CanvasObject = container.NewHBox()
+	if folds(body) {
+		label, icon := "Show More", theme.MenuExpandIcon()
+		if a.open[id] {
+			label, icon = "Show Less", theme.MenuDropDownIcon()
+		}
+		b := widget.NewButtonWithIcon(label, icon, func() { a.toggle(id) })
+		b.Importance = widget.LowImportance
+		more = b
+	}
+	actions := container.NewHBox()
 	if n.Run != "" {
 		run := n.Run
-		b := widget.NewButton("Open Report", func() { a.openReport(run) })
-		b.Importance = widget.LowImportance
-		meta.Add(b)
+		actions.Add(widget.NewButton("Open Report", func() { a.openReport(run) }))
 	}
-	lines.Add(meta)
-	var action fyne.CanvasObject
-	if a.acknowledging[n.ID] {
-		action = spinner()
+	if a.acknowledging[id] {
+		actions.Add(spinner())
 	} else {
-		id := n.ID
-		action = container.NewCenter(widget.NewButton("Acknowledge", func() { a.acknowledge(id) }))
+		ack := widget.NewButton("Acknowledge", func() { a.acknowledge(id) })
+		ack.Importance = widget.HighImportance
+		actions.Add(ack)
 	}
-	icon := widget.NewIcon(theme.NewWarningThemedResource(theme.WarningIcon()))
-	if n.Urgent {
-		icon = widget.NewIcon(theme.NewErrorThemedResource(theme.ErrorIcon()))
+	footer := container.NewBorder(nil, nil, more, actions)
+	return card(false, padded(10, 8, 12, 12, content), widget.NewSeparator(), padded(4, 4, 8, 8, footer))
+}
+
+// text is a notification's text, as one selectable block (copied whole):
+// folded to its first lines while it's long and closed; else all of it,
+// its lines and paragraphs as written, bulleted lines (•, -, *) with a
+// bullet of their own.
+func (a *Acknowledgements) text(id, body string) fyne.CanvasObject {
+	if folds(body) && !a.open[id] {
+		return selectable(firstLines(body))
 	}
-	return padded(4, 4, rowInset-8, rowInset-8, container.NewBorder(nil, nil, container.NewVBox(icon), action, lines))
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		for _, b := range []string{"•", "-", "*", "–"} {
+			if strings.HasPrefix(line, b+" ") {
+				line = "•  " + strings.TrimSpace(line[len(b)+1:])
+				break
+			}
+		}
+		lines[i] = line
+	}
+	return selectable(strings.Join(lines, "\n"))
+}
+
+// selectable is wrapping text that can be selected and copied.
+func selectable(s string) *widget.Label {
+	l := text(s)
+	l.Selectable = true
+	return l
 }
 
 func (a *Acknowledgements) toggle(id string) {
@@ -222,18 +260,20 @@ func (a *Acknowledgements) toggle(id string) {
 }
 
 // folds is whether a text is long enough to fold to its first lines.
-func folds(s string) bool { return len(s) > 140 || strings.Contains(s, "\n") }
+func folds(s string) bool {
+	return len(s) > 280 || strings.Count(s, "\n") >= foldedLines
+}
 
-// firstLines is a text folded: its first two lines, at most 140
-// characters, ending in an ellipsis.
+// firstLines is a text folded: its first lines, at most 280 characters,
+// ending in an ellipsis.
 func firstLines(s string) string {
-	lines := strings.SplitN(s, "\n", 3)
-	if len(lines) > 2 {
-		lines = lines[:2]
+	lines := strings.SplitN(s, "\n", foldedLines+1)
+	if len(lines) > foldedLines {
+		lines = lines[:foldedLines]
 	}
 	out := strings.Join(lines, "\n")
-	if r := []rune(out); len(r) > 140 {
-		out = string(r[:139])
+	if r := []rune(out); len(r) > 280 {
+		out = string(r[:279])
 	}
 	return strings.TrimRight(out, " \n") + "…"
 }
