@@ -29,6 +29,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
@@ -412,6 +413,9 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 	}
 	if len(servers) == 0 && len(doc.Tools) > 0 {
 		return Routine{}, fmt.Errorf("lists tools but no %s.servers", Namespace)
+	}
+	if err := agent.CheckToolNames(servers, doc.Tools); err != nil {
+		return Routine{}, fmt.Errorf("tools: %w", err)
 	}
 	r := Routine{
 		Name: name, Path: path, Servers: servers, Tools: doc.Tools, Model: doc.Model, Description: doc.Description,

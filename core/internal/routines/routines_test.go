@@ -259,3 +259,20 @@ func TestParamsComputedFields(t *testing.T) {
 		t.Error("a routine file set required")
 	}
 }
+
+// A tool named with its server (server/tool) names one of the routine's servers.
+func TestToolsNamedWithTheirServer(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "both.prompt"), []byte("---\nautomator.servers: [chat, chat-work]\ntools: [chat/search, chat-work/search, react]\n---\nhi"), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "other.prompt"), []byte("---\nautomator.servers: [chat]\ntools: [chat-work/search]\n---\nhi"), 0o600)
+	set, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Routines) != 1 || len(set.Routines[0].Tools) != 3 {
+		t.Fatalf("routines: %+v", set.Routines)
+	}
+	if len(set.Errors) != 1 || !strings.Contains(set.Errors[0].Error(), "chat-work isn't one of its servers") {
+		t.Fatalf("errors: %v", set.Errors)
+	}
+}

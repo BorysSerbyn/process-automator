@@ -71,7 +71,12 @@
           "items": {
             "properties": {
               "tool": {
-                "type": "string"
+                "type": "string",
+                "description": "Tool is the routine's name for it (server/tool when it names the server)."
+              },
+              "server": {
+                "type": "string",
+                "description": "Server is the server offering it (absent in records from before\nthey said)."
               },
               "args": {
                 "type": "object"
@@ -95,7 +100,12 @@
           "items": {
             "properties": {
               "tool": {
-                "type": "string"
+                "type": "string",
+                "description": "Tool is the routine's name for it (server/tool when it names the server)."
+              },
+              "server": {
+                "type": "string",
+                "description": "Server is the server offering it (absent in records from before\nthey said)."
               },
               "args": {
                 "type": "object"

@@ -33,7 +33,13 @@ components:
         error:
           description: Error is the tool's error, when the call failed.
           type: string
+        server:
+          description: |-
+            Server is the server offering it (absent in records from before
+            they said).
+          type: string
         tool:
+          description: Tool is the routine's name for it (server/tool when it names the server).
           type: string
         write:
           description: |-
@@ -49,7 +55,13 @@ components:
       additionalProperties: false
       description: CheckedTool is an allowlisted tool as a routine would get it.
       properties:
+        modelName:
+          description: |-
+            ModelName is the name the model calls it by, when it isn't Name
+            (server__tool for server/tool).
+          type: string
         name:
+          description: 'Name is the allowlist''s: the tool''s, or server/tool.'
           type: string
         readOnly:
           type: boolean
@@ -2899,7 +2911,13 @@ components:
         error:
           description: Error is the tool's error, when the call failed.
           type: string
+        server:
+          description: |-
+            Server is the server offering it (absent in records from before
+            they said).
+          type: string
         tool:
+          description: Tool is the routine's name for it (server/tool when it names the server).
           type: string
       required:
         - tool

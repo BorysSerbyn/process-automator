@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -68,16 +69,24 @@ type Request struct {
 
 // Write is a side-effecting tool call (intercepted in dry-run).
 type Write struct {
-	Tool string         `json:"tool"`
-	Args map[string]any `json:"args"`
+	// Tool is the routine's name for it (server/tool when it names the server).
+	Tool string `json:"tool"`
+	// Server is the server offering it (absent in records from before
+	// they said).
+	Server string         `json:"server,omitempty"`
+	Args   map[string]any `json:"args"`
 	// Error is the tool's error, when the call failed.
 	Error string `json:"error,omitempty"`
 }
 
 // Call is one tool call a run made.
 type Call struct {
-	Tool string         `json:"tool"`
-	Args map[string]any `json:"args"`
+	// Tool is the routine's name for it (server/tool when it names the server).
+	Tool string `json:"tool"`
+	// Server is the server offering it (absent in records from before
+	// they said).
+	Server string         `json:"server,omitempty"`
+	Args   map[string]any `json:"args"`
 	// Write is whether the tool can change things (not read-only): such
 	// calls are intercepted in dry runs, and are also listed in Writes.
 	Write bool `json:"write"`
@@ -123,14 +132,14 @@ type Result struct {
 
 // startCall records a tool call as it starts, and returns where it's
 // recorded (write is -1 for a read-only tool) for endCall.
-func (r *Result) startCall(tool string, args map[string]any, isWrite bool) (call, write int) {
+func (r *Result) startCall(tool, server string, args map[string]any, isWrite bool) (call, write int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ToolCalls++
-	r.Calls = append(r.Calls, Call{Tool: tool, Args: args, Write: isWrite})
+	r.Calls = append(r.Calls, Call{Tool: tool, Server: server, Args: args, Write: isWrite})
 	call, write = len(r.Calls)-1, -1
 	if isWrite {
-		r.Writes = append(r.Writes, Write{Tool: tool, Args: args})
+		r.Writes = append(r.Writes, Write{Tool: tool, Server: server, Args: args})
 		write = len(r.Writes) - 1
 	}
 	return call, write
@@ -260,6 +269,8 @@ type discovered struct {
 	server  string
 	session *sdk.ClientSession
 	tool    *sdk.Tool
+	// entry is the allowlist's name for it: the tool's, or server/tool.
+	entry string
 }
 
 // ToolsError is a routine's tools not matching what its servers offer (one
@@ -269,15 +280,69 @@ type ToolsError struct{ msg string }
 
 func (e *ToolsError) Error() string { return e.msg }
 
-// discover connects to the servers and finds each allowed tool. Every allowed
-// name must be offered by exactly one server. Sessions are returned even on
-// error, for the caller to close.
+// SplitTool splits an allowlist entry: a tool's name, offered by exactly one
+// of the routine's servers, or server/tool, naming the server too (for a
+// tool two of them offer, such as two accounts of one plugin).
+func SplitTool(entry string) (server, tool string) {
+	if s, t, ok := strings.Cut(entry, "/"); ok {
+		return s, t
+	}
+	return "", entry
+}
+
+// ModelName is the name the model calls an allowlisted tool by: the tool's
+// own, or for server/tool, server__tool, which says the server (tool names
+// can't hold a slash).
+func ModelName(entry string) string {
+	if server, tool := SplitTool(entry); server != "" {
+		return server + "__" + tool
+	}
+	return entry
+}
+
+// CheckToolNames checks a routine's allowlist against its servers without
+// connecting to them: each server/tool names one of the servers, and no
+// tool is listed twice.
+func CheckToolNames(servers, allowed []string) error {
+	seen := map[string]bool{}
+	for _, e := range allowed {
+		server, tool := SplitTool(e)
+		switch {
+		case tool == "" || strings.Contains(tool, "/") || (server == "" && strings.HasPrefix(e, "/")):
+			return fmt.Errorf("tool %q: name a tool, or server/tool", e)
+		case server != "" && !slices.Contains(servers, server):
+			return fmt.Errorf("tool %q: %s isn't one of its servers", e, server)
+		case seen[ModelName(e)]:
+			return fmt.Errorf("tool %q is listed twice", e)
+		}
+		seen[ModelName(e)] = true
+	}
+	return nil
+}
+
+// discover connects to the servers and finds each allowed tool, by its
+// model name (ModelName). An unqualified name must be offered by exactly one
+// server; server/tool by that server. Sessions are returned even on error,
+// for the caller to close.
 func discover(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, allowed []string) (map[string]discovered, []*sdk.ClientSession, error) {
-	want := map[string]bool{}
-	for _, n := range allowed {
-		want[n] = true
+	if err := CheckToolNames(servers, allowed); err != nil {
+		return nil, nil, &ToolsError{err.Error()}
+	}
+	bare := map[string]bool{}                 // unqualified entries
+	qualified := map[string]map[string]bool{} // server -> tools named server/tool
+	for _, e := range allowed {
+		server, tool := SplitTool(e)
+		if server == "" {
+			bare[tool] = true
+			continue
+		}
+		if qualified[server] == nil {
+			qualified[server] = map[string]bool{}
+		}
+		qualified[server][tool] = true
 	}
 	byName := map[string]discovered{}
+	offeredBy := map[string][]string{} // unqualified tool -> servers offering it
 	var sessions []*sdk.ClientSession
 	for _, name := range servers {
 		s, err := conn.ConnectFor(ctx, name, run)
@@ -290,18 +355,30 @@ func discover(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, al
 			return nil, sessions, fmt.Errorf("%s: list tools: %w", name, err)
 		}
 		for _, t := range list.Tools {
-			if want[t.Name] {
-				if prev, dup := byName[t.Name]; dup {
-					return nil, sessions, &ToolsError{fmt.Sprintf("tool %q is offered by more than one server (%s and %s)", t.Name, prev.server, name)}
-				}
-				byName[t.Name] = discovered{name, s, t}
+			if bare[t.Name] {
+				offeredBy[t.Name] = append(offeredBy[t.Name], name)
+				byName[t.Name] = discovered{name, s, t, t.Name}
+			}
+			if qualified[name][t.Name] {
+				e := name + "/" + t.Name
+				byName[ModelName(e)] = discovered{name, s, t, e}
 			}
 		}
 	}
+	for tool, by := range offeredBy {
+		if len(by) > 1 {
+			var q []string
+			for _, s := range by {
+				q = append(q, s+"/"+tool)
+			}
+			return nil, sessions, &ToolsError{fmt.Sprintf("tool %q is offered by more than one server (%s): name it with its server: %s",
+				tool, strings.Join(by, " and "), strings.Join(q, " or "))}
+		}
+	}
 	var missing []string
-	for n := range want {
-		if _, ok := byName[n]; !ok {
-			missing = append(missing, n)
+	for _, e := range allowed {
+		if _, ok := byName[ModelName(e)]; !ok {
+			missing = append(missing, e)
 		}
 	}
 	if len(missing) > 0 {
@@ -313,13 +390,18 @@ func discover(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, al
 
 // CheckedTool is an allowlisted tool as a routine would get it.
 type CheckedTool struct {
-	Name     string `json:"name"`
-	Server   string `json:"server"`
-	ReadOnly bool   `json:"readOnly"`
+	// Name is the allowlist's: the tool's, or server/tool.
+	Name   string `json:"name"`
+	Server string `json:"server"`
+	// ModelName is the name the model calls it by, when it isn't Name
+	// (server__tool for server/tool).
+	ModelName string `json:"modelName,omitempty"`
+	ReadOnly  bool   `json:"readOnly"`
 }
 
 // CheckTools connects to the servers and confirms each allowed tool is offered
-// by exactly one of them, as a run would, without calling the model or any tool.
+// by exactly one of them (or, named server/tool, by that server), as a run
+// would, without calling the model or any tool.
 func CheckTools(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, allowed []string) ([]CheckedTool, error) {
 	found, sessions, err := discover(ctx, conn, run, servers, allowed)
 	for _, s := range sessions {
@@ -330,7 +412,11 @@ func CheckTools(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, 
 	}
 	out := make([]CheckedTool, 0, len(found))
 	for name, f := range found {
-		out = append(out, CheckedTool{Name: name, Server: f.server, ReadOnly: f.tool.Annotations != nil && f.tool.Annotations.ReadOnlyHint})
+		c := CheckedTool{Name: f.entry, Server: f.server, ReadOnly: f.tool.Annotations != nil && f.tool.Annotations.ReadOnlyHint}
+		if name != f.entry {
+			c.ModelName = name
+		}
+		out = append(out, c)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
@@ -356,12 +442,16 @@ func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []str
 			return nil, sessions, err
 		}
 		readOnly := f.tool.Annotations != nil && f.tool.Annotations.ReadOnlyHint
-		session, toolName := f.session, name
+		session, toolName, entry, server := f.session, f.tool.Name, f.entry, f.server
+		desc := f.tool.Description
+		if entry != toolName { // named with its server: say which it is
+			desc = strings.TrimSpace(fmt.Sprintf("[%s] %s", server, desc))
+		}
 		tools = append(tools, Tool{
-			Name: toolName, Description: f.tool.Description, InputSchema: schema, Annotations: f.tool.Annotations,
+			Name: name, Description: desc, InputSchema: schema, Annotations: f.tool.Annotations,
 			Call: func(ctx context.Context, args map[string]any) (*sdk.CallToolResult, error) {
-				a.logf("→ %s %s", toolName, compact(args))
-				call, write := res.startCall(toolName, args, !readOnly)
+				a.logf("→ %s %s", entry, compact(args))
+				call, write := res.startCall(entry, server, args, !readOnly)
 				if write >= 0 && a.DryRun {
 					return textResult("DRY RUN: this call was not executed. Treat it as successful and finish.", false), nil
 				}
@@ -373,7 +463,7 @@ func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []str
 						reauth = err
 					}
 					res.endCall(call, write, err.Error(), reauth)
-					return nil, fmt.Errorf("%s: %w", toolName, err)
+					return nil, fmt.Errorf("%s: %w", entry, err)
 				case out.IsError:
 					res.endCall(call, write, pluginapi.ResultText(out), nil)
 				}

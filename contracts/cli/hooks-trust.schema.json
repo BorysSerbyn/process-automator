@@ -107,10 +107,15 @@
       "items": {
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Name is the allowlist's: the tool's, or server/tool."
           },
           "server": {
             "type": "string"
+          },
+          "modelName": {
+            "type": "string",
+            "description": "ModelName is the name the model calls it by, when it isn't Name\n(server__tool for server/tool)."
           },
           "readOnly": {
             "type": "boolean"
