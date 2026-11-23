@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 	"github.com/BorysSerbyn/process-automator/core/pluginapi/plugintest"
 )
 
@@ -36,6 +37,17 @@ func TestNotifyMe(t *testing.T) {
 	}
 	if res := call(map[string]any{"title": " "}); !res.IsError || len(shown) != 1 {
 		t.Error("an empty title was shown")
+	}
+	// One to acknowledge is the app's to show: handed to it, not shown here.
+	h := &plugintest.Host{}
+	acs := plugintest.Serve(t, Plugin(), h)
+	res, err := acs.CallTool(ctx, &sdk.CallToolParams{Name: "notify_me",
+		Arguments: map[string]any{"title": "Ana asked for the report", "body": "in #team", "acknowledge": true}})
+	if err != nil || res.IsError {
+		t.Fatal(res, err)
+	}
+	if len(shown) != 1 || len(h.Asked) != 1 || h.Asked[0] != (pluginapi.Notice{Title: "Ana asked for the report", Body: "in #team"}) {
+		t.Fatalf("shown %+v, asked %+v", shown, h.Asked)
 	}
 	Deliver = func(Note) error { return errors.New("notifications are turned off") }
 	if res := call(map[string]any{"title": "x"}); !res.IsError {

@@ -13,7 +13,7 @@ A Dotprompt file: YAML frontmatter, then a Handlebars prompt. The file name is t
 - `{{role "system"}}` starts the instructions, `{{role "user"}}` the request; no one answers questions during a run
 - The model ends by calling `%{outcomeTool}` (%{outcomes}); a run that never reports fails. Don't list it in `tools`
 - Parameters: `name`, `type` (%{paramTypes}), `description`, optional `default`; used as `{{name}}`
-- `{{> memories}}` adds my memories; `notify_me` (server `notify`) notifies me
+- `{{> memories}}` adds my memories; `notify_me` (server `notify`) notifies me, and with `acknowledge: true` waits for me to acknowledge it (the app stays red until I do): use it for each thing I must act on
 
 ## Keys
 %{table:fields}

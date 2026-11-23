@@ -3,7 +3,9 @@
 // built only on pluginapi, for apps that list it in their plugins. It shows
 // its notifications itself, through the OS (macOS: UserNotifications, as the
 // app; Linux: the freedesktop notification service). Clicking one does
-// nothing.
+// nothing. One that needs acknowledging (acknowledge) is handed to the app
+// instead (pluginapi.Host.AskToAcknowledge), which shows it with an
+// Acknowledge button and stays red until I acknowledge it.
 package notify
 
 import (
@@ -49,18 +51,30 @@ func Plugin() pluginapi.Plugin {
 func serve(h pluginapi.Host) (*sdk.Server, error) {
 	s := sdk.NewServer(&sdk.Implementation{Name: Name, Version: "1"}, nil)
 	type in struct {
-		Title  string `json:"title" jsonschema:"short, like a headline"`
-		Body   string `json:"body,omitempty" jsonschema:"a sentence or two"`
-		Urgent bool   `json:"urgent,omitempty" jsonschema:"only for something I must see now: it breaks through focus modes"`
+		Title       string `json:"title" jsonschema:"short, like a headline"`
+		Body        string `json:"body,omitempty" jsonschema:"a sentence or two"`
+		Urgent      bool   `json:"urgent,omitempty" jsonschema:"only for something I must see now: it breaks through focus modes"`
+		Acknowledge bool   `json:"acknowledge,omitempty" jsonschema:"true when I must act on it, e.g. someone asked me for something: it waits, with an Acknowledge button, and the app's status stays red until I acknowledge it"`
 	}
 	sdk.AddTool(s, &sdk.Tool{
 		Name: "notify_me",
 		Description: "Notify me with a desktop notification. Keep it brief; use it for what needs my attention, " +
-			"not for routine progress. Clicking it does nothing, so say what to look at.",
+			"not for routine progress. Clicking it does nothing, so say what to look at. " +
+			"Set acknowledge for what I must act on and mustn't miss (one notification per thing, e.g. each request " +
+			"someone made of me): it waits for me to acknowledge it, and the app shows red until I do; " +
+			"plain notifications are for what's only worth knowing.",
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: new(false), OpenWorldHint: new(false)},
 	}, func(_ context.Context, _ *sdk.CallToolRequest, args in) (*sdk.CallToolResult, any, error) {
 		if strings.TrimSpace(args.Title) == "" {
 			return nil, nil, errors.New("title is required")
+		}
+		if args.Acknowledge {
+			id, err := h.AskToAcknowledge(pluginapi.Notice{Title: args.Title, Body: args.Body, Urgent: args.Urgent})
+			if err != nil {
+				return nil, nil, err
+			}
+			return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{
+				Text: "Shown; it waits for me to acknowledge it (notification " + id + ")."}}}, nil, nil
 		}
 		if err := Deliver(Note{App: h.AppName(), Title: args.Title, Body: args.Body, Urgent: args.Urgent}); err != nil {
 			return nil, nil, err
