@@ -88,7 +88,13 @@ expect() { # expect <what> <text> <command>...: the command's output contains te
 # The templates the artifact ships list (or, when it ships none, it says so).
 tmpl=$(path templates)
 [ -d "$tmpl" ] || fail "no templates folder at $tmpl"
-shipped=$(find "$tmpl" -name '*.prompt' ! -name '_*' | wc -l | tr -d ' ')
+# A routine template is a .prompt file outside a template folder; a folder
+# with a template.yaml (a program, hook or watcher) is one template.
+shipped=0
+while IFS= read -r f; do
+  [ -f "$(dirname "$f")/template.yaml" ] || shipped=$((shipped + 1))
+done < <(find "$tmpl" -name '*.prompt' ! -name '_*')
+shipped=$((shipped + $(find "$tmpl" -name template.yaml | wc -l | tr -d ' ')))
 if [ "$shipped" -eq 0 ]; then
   expect "templates list doesn't say none ship" "No templates" "$cli" templates list --all
 else
