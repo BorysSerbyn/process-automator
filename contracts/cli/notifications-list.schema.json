@@ -36,6 +36,10 @@
         "type": "boolean",
         "description": "Hook is true when Routine names a hook, not a routine."
       },
+      "update": {
+        "type": "boolean",
+        "description": "Update is true when it's about an update (one installed, or failed):\na click shows the app's updates."
+      },
       "url": {
         "type": "string",
         "description": "URL is a link (http or https) a click on it opens (`notifications\nopen`: open-url); only kind run has one."

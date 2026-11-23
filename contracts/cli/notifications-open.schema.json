@@ -10,9 +10,10 @@
       "enum": [
         "open-url",
         "show-run",
+        "show-updates",
         "show-app"
       ],
-      "description": "Action is what to show: open-url (the notification has a link: open\nURL with the system's default handler), show-run (it's about a run: its\nroutine's window, on that run) or show-app (about the app itself, e.g.\nan update: the app)."
+      "description": "Action is what to show: open-url (the notification has a link: open\nURL with the system's default handler), show-run (it's about a run: its\nroutine's window, on that run), show-updates (about an update: the\napp's updates, its Manage Updates window) or show-app (about the app\nitself: the app)."
     },
     "url": {
       "type": "string",

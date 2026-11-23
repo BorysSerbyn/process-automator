@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,33 +12,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/internal/update"
 )
-
-// installedApp is the app this binary is part of (the .app, or the Linux
-// tree) and its installer, which sits next to the templates two folders
-// below the app's root in both layouts. A development build has none.
-func installedApp() (root, installer string, err error) {
-	templates, err := engine.TemplatesDir()
-	if err != nil {
-		return "", "", err
-	}
-	resources := filepath.Dir(templates)
-	installer = filepath.Join(resources, update.InstallerName)
-	if _, err := os.Stat(installer); err != nil {
-		return "", "", errors.New("this build isn't an installed app (it has no " + update.InstallerName +
-			"): install a release with install.sh, or build and install one with `make install`")
-	}
-	exe, err := os.Executable()
-	if err == nil {
-		exe, err = filepath.EvalSymlinks(exe)
-	}
-	if err == nil && strings.Contains(exe, string(filepath.Separator)+"Cellar"+string(filepath.Separator)) {
-		return "", "", errors.New("this app was installed by Homebrew: update or remove it with brew " +
-			"(`brew upgrade " + product.Folder + "`, `brew uninstall " + product.Folder + "`)")
-	}
-	return filepath.Dir(filepath.Dir(resources)), installer, nil
-}
 
 func newUninstallCmd() *cobra.Command {
 	var purge, yes bool
@@ -53,7 +25,7 @@ func newUninstallCmd() *cobra.Command {
 		Annotations: map[string]string{annNotReadOnly: "removing the app is mine"},
 		Args:        cobra.NoArgs,
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
-			root, installer, err := installedApp()
+			root, installer, err := engine.InstalledApp()
 			if err != nil {
 				return err
 			}

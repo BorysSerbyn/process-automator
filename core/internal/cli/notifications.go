@@ -20,9 +20,10 @@ type ClickOutput struct {
 	Notification string `json:"notification"`
 	// Action is what to show: open-url (the notification has a link: open
 	// URL with the system's default handler), show-run (it's about a run: its
-	// routine's window, on that run) or show-app (about the app itself, e.g.
-	// an update: the app).
-	Action string `json:"action" jsonschema:"enum=open-url,enum=show-run,enum=show-app"`
+	// routine's window, on that run), show-updates (about an update: the
+	// app's updates, its Manage Updates window) or show-app (about the app
+	// itself: the app).
+	Action string `json:"action" jsonschema:"enum=open-url,enum=show-run,enum=show-updates,enum=show-app"`
 	// URL, for open-url: an http or https link.
 	URL string `json:"url,omitempty"`
 	// Routine and Run, for show-run.
@@ -114,7 +115,8 @@ func newNotificationsOpenCmd() *cobra.Command {
 		Short: "Say what clicking a notification shows (frontends call this on a click)",
 		Long: "Clicking one of the app's notifications opens what it's about: its link, when it has one, with the " +
 			"system's default handler (open-url); else one about a run shows the run in its routine's window " +
-			"(show-run), one about the app itself (an update) shows the app (show-app). " +
+			"(show-run), one about an update shows the app's updates (show-updates: the Manage Updates window), any other " +
+			"about the app itself shows the app (show-app). " +
 			"The frontend shows it; this opens nothing.",
 		Annotations: readOnly(),
 		Args:        cobra.ExactArgs(1),
@@ -129,6 +131,8 @@ func newNotificationsOpenCmd() *cobra.Command {
 				out.Action, out.URL = "open-url", n.URL
 			case n.Run != "":
 				out.Action, out.Routine, out.Run, out.Hook = "show-run", n.Routine, n.Run, n.Hook
+			case n.Update:
+				out.Action = "show-updates"
 			}
 			return emit(cmd, out, strings.TrimSpace(out.Action+" "+out.Run+out.URL))
 		}),

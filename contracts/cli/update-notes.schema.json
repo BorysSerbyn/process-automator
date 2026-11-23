@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "update-notes.schema.json",
+  "properties": {
+    "tag": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notes are the release's notes as written on GitHub, in Markdown;\nempty when it has none."
+    },
+    "url": {
+      "type": "string",
+      "description": "URL is the release's page on GitHub."
+    },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "tag",
+    "notes"
+  ],
+  "title": "procauto update notes --json",
+  "description": "NotesOutput is `update notes --json`: a release's notes."
+}

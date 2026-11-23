@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
 	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.
-	findReleaseToken = func(context.Context, string, string) (string, []string) { return os.Getenv("GH_TOKEN"), nil }
+	engine.FindReleaseToken = func(context.Context, string, string) (string, []string) { return os.Getenv("GH_TOKEN"), nil }
 	// Nor reach GitHub: tests that read releases serve their own.
 	product.ReleaseWeb, product.ReleaseAPI = "http://127.0.0.1:1", "http://127.0.0.1:1"
 	if mode := os.Getenv(pluginEnv); mode != "" {

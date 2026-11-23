@@ -132,11 +132,13 @@ components:
           description: |-
             Action is what to show: open-url (the notification has a link: open
             URL with the system's default handler), show-run (it's about a run: its
-            routine's window, on that run) or show-app (about the app itself, e.g.
-            an update: the app).
+            routine's window, on that run), show-updates (about an update: the
+            app's updates, its Manage Updates window) or show-app (about the app
+            itself: the app).
           enum:
             - open-url
             - show-run
+            - show-updates
             - show-app
           type: string
         hook:
@@ -850,6 +852,27 @@ components:
         - usedPercent
         - resetsAt
       type: object
+    NotesOutput:
+      additionalProperties: false
+      description: 'NotesOutput is `update notes --json`: a release''s notes.'
+      properties:
+        notes:
+          description: |-
+            Notes are the release's notes as written on GitHub, in Markdown;
+            empty when it has none.
+          type: string
+        publishedAt:
+          format: date-time
+          type: string
+        tag:
+          type: string
+        url:
+          description: URL is the release's page on GitHub.
+          type: string
+      required:
+        - tag
+        - notes
+      type: object
     Notification:
       additionalProperties: false
       description: Notification is one thing to tell me.
@@ -896,6 +919,11 @@ components:
           type: string
         title:
           type: string
+        update:
+          description: |-
+            Update is true when it's about an update (one installed, or failed):
+            a click shows the app's updates.
+          type: boolean
         urgent:
           description: |-
             Urgent breaks through focus modes where the OS allows (macOS
@@ -1357,6 +1385,17 @@ components:
           items:
             type: string
           type: array
+      type: object
+    PostponeOutput:
+      additionalProperties: false
+      description: PostponeOutput is `update postpone --json`.
+      properties:
+        until:
+          description: Until is when automatic updates may install again.
+          format: date-time
+          type: string
+      required:
+        - until
       type: object
     ProgramInfo:
       additionalProperties: false
@@ -2744,6 +2783,65 @@ components:
       required:
         - state
         - log
+      type: object
+    UpdateStatus:
+      additionalProperties: false
+      description: 'UpdateStatus is where updates stand (`update status --json`), from what the app already knows: nothing is asked of GitHub.'
+      properties:
+        automatic:
+          description: |-
+            Automatic is whether automatic updates are on (the update.auto
+            setting, named by Setting).
+          type: boolean
+        automaticBlocked:
+          description: |-
+            AutomaticBlocked says why this install isn't updated automatically,
+            even with them on; empty when it is.
+          type: string
+        checkError:
+          type: string
+        checkedAt:
+          description: |-
+            CheckedAt is when the latest release was last asked for, CheckError
+            why that failed.
+          format: date-time
+          type: string
+        current:
+          description: |-
+            Current is this build's version, Development whether it's a
+            development build rather than a release.
+          type: string
+        development:
+          type: boolean
+        installing:
+          description: |-
+            Installing is true while an update installs, and InstallingTag the
+            release, once known (`update progress` says what it's doing).
+          type: boolean
+        installingTag:
+          type: string
+        latest:
+          description: |-
+            Latest is the newest release the last check found ("" when there are
+            none, or none was found yet); UpdateAvailable whether it's newer than
+            this build.
+          type: string
+        setting:
+          type: string
+        updateAvailable:
+          type: boolean
+        waiting:
+          description: |-
+            Waiting says why the newer release isn't installing by itself yet (or
+            won't), in words, while automatic updates are on.
+          type: string
+      required:
+        - current
+        - development
+        - automatic
+        - setting
+        - updateAvailable
+        - installing
       type: object
     VersionOutput:
       additionalProperties: false

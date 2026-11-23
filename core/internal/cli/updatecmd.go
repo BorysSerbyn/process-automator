@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -14,7 +12,6 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
-	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/update"
 )
@@ -35,15 +32,6 @@ type UpdateOutput struct {
 	// start one (set when an update is available).
 	Note string `json:"note,omitempty"`
 }
-
-// The notes UpdateOutput.Note gives: a release's download, or a build from
-// the source checkout.
-const (
-	installNote = "It downloads the release, checks it's genuine and installs it, in under a minute; " +
-		"the app restarts when it's done."
-	buildNote = "It builds the release from the source checkout and installs it, which takes a few minutes; " +
-		"the app restarts when it's done."
-)
 
 // UpdateProgress is `update progress --json`: the latest update, as it goes.
 type UpdateProgress struct {
@@ -114,10 +102,6 @@ func describeProgress(p UpdateProgress) string {
 	return text
 }
 
-// detachedEnv marks an update running detached: it reports its result as a
-// notification, since whoever started it may be gone (automator-ui restarts).
-const detachedEnv = "PROCAUTO_DETACHED_UPDATE"
-
 // askable is whether `update --ask` has a terminal to ask in (tests fake one).
 var askable = func() bool { return isTerminal(os.Stdin) }
 
@@ -128,17 +112,17 @@ func askFirst(cmd *cobra.Command, a *engine.App) (install bool, err error) {
 	if !askable() {
 		return false, errors.New("--ask needs a terminal to ask in")
 	}
-	plan, err := planUpdate(cmd.Context(), a)
+	plan, err := a.PlanUpdate(cmd.Context())
 	if err != nil {
 		return false, err
 	}
-	res := UpdateOutput{Current: product.Version, Latest: plan.tag, UpdateAvailable: update.Newer(product.Version, plan.tag)}
+	res := UpdateOutput{Current: product.Version, Latest: plan.Tag, UpdateAvailable: update.Newer(product.Version, plan.Tag)}
 	out := cmd.OutOrStdout()
 	if !res.UpdateAvailable {
 		fmt.Fprintln(out, describeUpdate(res))
 		return false, nil
 	}
-	if !newPrompt(cmd).Confirm(fmt.Sprintf("%s is available (this is %s). %s\nInstall it now?", plan.tag, product.Version, plan.note()), false) {
+	if !newPrompt(cmd).Confirm(fmt.Sprintf("%s is available (this is %s). %s\nInstall it now?", plan.Tag, product.Version, plan.Note()), false) {
 		fmt.Fprintln(out, "Not updated.")
 		return false, nil
 	}
@@ -168,7 +152,8 @@ func newUpdateCmd() *cobra.Command {
 					return err
 				}
 			}
-			detached := os.Getenv(detachedEnv) == "1"
+			detached := os.Getenv(engine.DetachedUpdateEnv) == "1"
+			automatic := detached && os.Getenv(engine.AutoUpdateEnv) == "1"
 			// progress records what an update installing does, for `update
 			// progress`; checking records nothing.
 			progress := update.NewReporter("", "")
@@ -189,38 +174,52 @@ func newUpdateCmd() *cobra.Command {
 					progress = update.NewReporter(a.Layout.UpdateProgress(), "Checking for the latest release")
 				}
 			}
+			latest := ""
 			// failed records an update's failure: in its progress, and as a
-			// notification when it runs detached.
-			failed := func(what string, err error) error {
+			// notification when it runs detached (an automatic one says the
+			// version I have keeps working).
+			failed := func(err error) error {
 				progress.Finish("", err)
 				if detached {
-					recordApp(a, what, err.Error())
+					title, body := "Couldn't update", err.Error()
+					if latest != "" {
+						title = "Couldn't update to " + latest
+					}
+					if automatic {
+						title += " automatically"
+						body += "\n" + product.Name + " " + product.Version + " keeps working."
+					}
+					a.RecordUpdate(title, body)
 				}
 				return err
 			}
-			plan, err := planUpdate(cmd.Context(), a)
+			plan, err := a.PlanUpdate(cmd.Context())
 			if err != nil {
-				return failed("Couldn't update", err)
+				return failed(err)
 			}
-			latest := plan.tag
+			latest = plan.Tag
 			progress.Tag(latest)
 			res := UpdateOutput{Current: product.Version, Latest: latest, UpdateAvailable: update.Newer(product.Version, latest)}
 			if res.UpdateAvailable {
-				res.Note = plan.note()
+				res.Note = plan.Note()
 			}
 			if check {
 				res.InProgress = update.Installing(a.Layout.UpdateLock())
 			}
+			if res.UpdateAvailable && automatic && !plan.Downloads() {
+				return failed(errors.New(latest + " has no download for this computer, and automatic updates install only downloads (`" +
+					product.Command + " update` builds it from the source checkout)"))
+			}
 			var appRoot string
-			if res.UpdateAvailable && !check && plan.release != nil {
-				if appRoot, _, err = installedApp(); err != nil {
-					return failed("Update to "+latest+" failed", err)
+			if res.UpdateAvailable && !check && plan.Downloads() {
+				if appRoot, _, err = engine.InstalledApp(); err != nil {
+					return failed(err)
 				}
 			}
 			if res.UpdateAvailable && !check && background {
 				started := update.NewReporter(a.Layout.UpdateProgress(), "Starting the update")
 				started.Tag(latest)
-				if err := startDetachedUpdate(a); err != nil {
+				if err := a.StartDetachedUpdate(false); err != nil {
 					started.Finish("", err)
 					return err
 				}
@@ -229,12 +228,17 @@ func newUpdateCmd() *cobra.Command {
 					latest, product.Command, a.Layout.UpdateLog()))
 			}
 			if res.UpdateAvailable && !check {
-				if err := plan.install(cmd.Context(), appRoot, progress, io.MultiWriter(cmd.ErrOrStderr(), progress)); err != nil {
-					return failed("Update to "+latest+" failed", err)
+				if err := plan.Install(cmd.Context(), appRoot, progress.Step, io.MultiWriter(cmd.ErrOrStderr(), progress)); err != nil {
+					return failed(err)
 				}
 				res.Updated = true
 				if detached {
-					recordApp(a, product.Name+" updated to "+strings.TrimPrefix(latest, "v"), "")
+					title := product.Name + " updated to " + strings.TrimPrefix(latest, "v")
+					body := "Click to see what's new."
+					if automatic {
+						body = "Installed automatically. " + body
+					}
+					a.RecordUpdate(title, body)
 				}
 			}
 			if !check {
@@ -247,7 +251,7 @@ func newUpdateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&background, "detach", false, "install in the background and return at once; the result comes as a notification (frontends)")
 	cmd.Flags().BoolVar(&ask, "ask", false, "say what's available and ask in the terminal before installing it (frontends that can't ask themselves)")
 	jsonFlag(cmd.Flags(), UpdateOutput{})
-	cmd.AddCommand(newUpdateProgressCmd())
+	cmd.AddCommand(newUpdateProgressCmd(), newUpdateStatusCmd(), newUpdateNotesCmd(), newUpdatePostponeCmd())
 	return cmd
 }
 
@@ -264,93 +268,6 @@ func describeUpdate(r UpdateOutput) string {
 	}
 }
 
-// updatePlan is where the latest release comes from: a published release
-// with a download for this machine, or else the source checkout's tags
-// (built with `make install`).
-type updatePlan struct {
-	tag     string
-	release *update.Release // nil: build from source
-	src     update.Source
-	dir     string
-}
-
-// planUpdate finds the latest release. The source checkout is the fallback
-// only when the releases were read and none has a download for this
-// machine (or there are none); when they can't be read (no access, no
-// network), that's the answer.
-func planUpdate(ctx context.Context, a *engine.App) (updatePlan, error) {
-	src := releaseSource(ctx)
-	rel, err := src.Latest(ctx)
-	if err != nil {
-		return updatePlan{}, fmt.Errorf("can't read the releases: %w", err)
-	}
-	if rel.Tag != "" {
-		if name, err := update.AssetName(rel.Version()); err == nil {
-			if _, ok := rel.Asset(name); ok {
-				return updatePlan{tag: rel.Tag, release: &rel, src: src}, nil
-			}
-		}
-	}
-	dir, err := sourceDir(a)
-	if err != nil {
-		return updatePlan{}, fmt.Errorf("no published release has a download for this machine, and %w", err)
-	}
-	tag, err := update.SourceLatest(ctx, dir)
-	if err != nil {
-		return updatePlan{}, err
-	}
-	return updatePlan{tag: tag, dir: dir}, nil
-}
-
-// note is UpdateOutput.Note: what installing involves.
-func (p updatePlan) note() string {
-	if p.release != nil {
-		return installNote
-	}
-	return buildNote
-}
-
-// install installs the plan's release, telling progress each step.
-func (p updatePlan) install(ctx context.Context, appRoot string, progress *update.Reporter, out io.Writer) error {
-	if p.release != nil {
-		fmt.Fprintf(out, "Installing %s into %s…\n", p.tag, appRoot)
-		return p.src.Install(ctx, *p.release, appRoot, product.TeamID, progress.Step, out)
-	}
-	progress.Step("Building " + p.tag + " from the source checkout")
-	fmt.Fprintf(out, "Building %s from %s…\n", p.tag, p.dir)
-	return update.BuildInstall(ctx, p.dir, p.tag, out)
-}
-
-// sourceDir is the checkout to build releases from: the setting, else the
-// checkout this build came from.
-func sourceDir(a *engine.App) (string, error) {
-	if vals, err := a.Settings(); err == nil {
-		if dir := vals.String("update.source-dir"); dir != "" {
-			return dir, nil
-		}
-	}
-	if product.SourceDir == "" {
-		return "", errors.New("no source checkout is known to build from: set one with `" + product.Command + " settings set update.source-dir <path>`")
-	}
-	return product.SourceDir, nil
-}
-
-// findReleaseToken finds a GitHub token that can read private releases
-// (tests replace it: they never run the real gh).
-var findReleaseToken = update.Token
-
-// releaseSource is where this build's releases are. Public ones are read
-// from GitHub's web pages with no token: no sign-in is looked for. Private
-// ones are read signed in to GitHub with an account that can read them,
-// when there's one.
-func releaseSource(ctx context.Context) update.Source {
-	if product.PublicReleases {
-		return update.Source{Web: product.ReleaseWeb, Repo: product.ReleaseRepo}
-	}
-	token, accounts := findReleaseToken(ctx, product.ReleaseAPI, product.ReleaseRepo)
-	return update.Source{API: product.ReleaseAPI, Repo: product.ReleaseRepo, Token: token, Accounts: accounts}
-}
-
 // releasesHelp says how update reads the releases, for its help.
 func releasesHelp() string {
 	if product.PublicReleases {
@@ -360,31 +277,124 @@ func releasesHelp() string {
 		"signed in to that can read them (the active one first, then the others)."
 }
 
-// startDetachedUpdate runs this update again in the background, detached, so
-// it survives the app restarting, logging to update.log.
-func startDetachedUpdate(a *engine.App) error {
-	exe, err := os.Executable()
-	if err != nil {
-		return err
+func newUpdateStatusCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show where updates stand: this version, the latest release, and automatic updates",
+		Long: "This version, whether automatic updates are on (the " + engine.AutoUpdateSetting + " setting) and apply " +
+			"to this install, when the scheduler last checked for a newer release and what it found, why that release " +
+			"isn't installing by itself yet, and whether an update is installing. It asks GitHub nothing: `update " +
+			"--check` does, and the scheduler does every hour.",
+		Annotations: readOnly(),
+		Args:        cobra.NoArgs,
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
+			st, err := a.UpdateStatus(time.Now())
+			if err != nil {
+				return err
+			}
+			return emit(cmd, st, describeStatus(st))
+		}),
 	}
-	logf, err := os.OpenFile(a.Layout.UpdateLog(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = logf.Close() }()
-	cmd := exec.Command(exe, "--config", a.Layout.Config(), "update")
-	cmd.Env = append(os.Environ(), detachedEnv+"=1")
-	cmd.Stdout, cmd.Stderr = logf, logf
-	detach(cmd)
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	return cmd.Process.Release()
+	jsonFlag(cmd.Flags(), engine.UpdateStatus{})
+	return cmd
 }
 
-// recordApp records a notification about the app itself.
-func recordApp(a *engine.App, title, body string) {
-	if _, err := notifications.Add(a.Layout.Notifications(), notifications.Notification{Kind: notifications.KindApp, Title: title, Body: body}, time.Now()); err != nil {
-		fmt.Fprintln(os.Stderr, "warning: could not record a notification:", err)
+func describeStatus(st engine.UpdateStatus) string {
+	lines := []string{"This is " + st.Current + "."}
+	switch {
+	case st.Installing && st.InstallingTag != "":
+		lines = append(lines, "Updating to "+st.InstallingTag+" (`"+product.Command+" update progress` follows it).")
+	case st.Installing:
+		lines = append(lines, "An update is installing (`"+product.Command+" update progress` follows it).")
+	case st.UpdateAvailable:
+		lines = append(lines, st.Latest+" is available.")
+	case st.Latest != "":
+		lines = append(lines, "Up to date (latest release "+st.Latest+").")
 	}
+	auto := "Automatic updates are off (" + st.Setting + ")."
+	if st.Automatic {
+		auto = "Automatic updates are on."
+	}
+	lines = append(lines, auto)
+	if st.Automatic && st.AutomaticBlocked != "" {
+		lines = append(lines, "They don't apply here: "+st.AutomaticBlocked+".")
+	}
+	if st.Waiting != "" {
+		lines = append(lines, st.Waiting+".")
+	}
+	if st.CheckedAt != nil {
+		checked := "Last checked " + st.CheckedAt.Local().Format("Jan 2 15:04")
+		if st.CheckError != "" {
+			checked += ", which failed: " + st.CheckError
+		}
+		lines = append(lines, checked+".")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// NotesOutput is `update notes --json`: a release's notes.
+type NotesOutput struct {
+	Tag string `json:"tag"`
+	// Notes are the release's notes as written on GitHub, in Markdown;
+	// empty when it has none.
+	Notes string `json:"notes"`
+	// URL is the release's page on GitHub.
+	URL         string     `json:"url,omitempty"`
+	PublishedAt *time.Time `json:"publishedAt,omitempty"`
+}
+
+func newUpdateNotesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "notes [<release>]",
+		Short: "Show a release's notes (this version's by default)",
+		Long: "The release's notes, as its GitHub release has them (Markdown), read from GitHub at most once a day: " +
+			"this version's, or the release named (v1.2.0). A development build has none.",
+		Annotations: readOnly(),
+		Args:        cobra.MaximumNArgs(1),
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			tag := ""
+			if len(args) == 1 {
+				tag = args[0]
+			}
+			n, err := a.ReleaseNotes(cmd.Context(), tag)
+			if err != nil {
+				return err
+			}
+			out := NotesOutput{Tag: n.Tag, Notes: n.Body, URL: n.URL, PublishedAt: n.PublishedAt}
+			text := n.Body
+			if text == "" {
+				text = n.Tag + " has no notes."
+			}
+			return emit(cmd, out, text)
+		}),
+	}
+	jsonFlag(cmd.Flags(), NotesOutput{})
+	return cmd
+}
+
+// PostponeOutput is `update postpone --json`.
+type PostponeOutput struct {
+	// Until is when automatic updates may install again.
+	Until time.Time `json:"until"`
+}
+
+func newUpdatePostponeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "postpone",
+		Short: "Hold automatic updates back for a few minutes: the app is in use (frontends run it while a window is open)",
+		Long: "An automatic update restarts the app, so it waits while I'm using it: frontends run this every minute " +
+			"while one of their windows is open (and when their menu opens), and an update installs by itself only " +
+			"a few minutes after the last time.",
+		Annotations: map[string]string{annNotReadOnly: "the app's frontends say they're in use"},
+		Args:        cobra.NoArgs,
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
+			until, err := a.PostponeUpdate(time.Now())
+			if err != nil {
+				return err
+			}
+			return emit(cmd, PostponeOutput{Until: until}, "Automatic updates wait until "+until.Local().Format("15:04")+".")
+		}),
+	}
+	jsonFlag(cmd.Flags(), PostponeOutput{})
+	return cmd
 }

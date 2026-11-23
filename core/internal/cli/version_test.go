@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/filelock"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
@@ -200,12 +201,12 @@ func TestUpdatePublicReleases(t *testing.T) {
 	releasesAt(t, true, pages.URL, "pt/public")
 	t.Setenv("GH_TOKEN", "pt-token")
 	t.Setenv("GITHUB_TOKEN", "pt-token")
-	orig := findReleaseToken
-	findReleaseToken = func(context.Context, string, string) (string, []string) {
+	orig := engine.FindReleaseToken
+	engine.FindReleaseToken = func(context.Context, string, string) (string, []string) {
 		t.Error("looked for a GitHub sign-in")
 		return "", nil
 	}
-	t.Cleanup(func() { findReleaseToken = orig })
+	t.Cleanup(func() { engine.FindReleaseToken = orig })
 	ghRan := filepath.Join(t.TempDir(), "gh-ran")
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte("#!/bin/sh\necho \"$@\" >> '"+ghRan+"'\nexit 1\n"), 0o755); err != nil {
@@ -219,7 +220,7 @@ func TestUpdatePublicReleases(t *testing.T) {
 	setSums(strings.Repeat("0", 64) + "  " + name + "\n")
 	out, err := cli(t, cfg, "update", "--check", "--json")
 	var res UpdateOutput
-	if err != nil || json.Unmarshal([]byte(out), &res) != nil || res.Latest != "v99.0.0" || !res.UpdateAvailable || res.Note != installNote {
+	if err != nil || json.Unmarshal([]byte(out), &res) != nil || res.Latest != "v99.0.0" || !res.UpdateAvailable || res.Note != engine.InstallNote {
 		t.Errorf("update --check: %s (%v)", out, err)
 	}
 
@@ -330,7 +331,7 @@ func TestUpdateAsksFirst(t *testing.T) {
 		t.Errorf("no terminal: %s (%v)", out, err)
 	}
 	out, err := run(true, "n\n")
-	if err != nil || !strings.Contains(out, "v99.0.0 is available") || !strings.Contains(out, installNote) || !strings.Contains(out, "Not updated.") {
+	if err != nil || !strings.Contains(out, "v99.0.0 is available") || !strings.Contains(out, engine.InstallNote) || !strings.Contains(out, "Not updated.") {
 		t.Errorf("answered no: %s (%v)", out, err)
 	}
 	a, err := loadTest(cfg, nil)
@@ -344,5 +345,60 @@ func TestUpdateAsksFirst(t *testing.T) {
 	// finding it).
 	if out, err := run(true, "y\n"); err == nil || !strings.Contains(out, "Update to v99.0.0 failed") && !strings.Contains(out, "templates") {
 		t.Errorf("answered yes: %s (%v)", out, err)
+	}
+}
+
+// update status says where updates stand from what the app knows (asking
+// GitHub nothing), notes reads a release's notes, and postpone holds
+// automatic updates back.
+func TestUpdateStatusNotesPostpone(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/pt/public/releases/tags/v2.0.0" {
+			_, _ = w.Write([]byte(`{"tag_name":"v2.0.0","body":"- new things","html_url":"https://example.com/v2.0.0"}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer api.Close()
+	releasesAt(t, true, "http://127.0.0.1:1", "pt/public")
+	product.ReleaseAPI = api.URL
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	a, err := loadTest(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := update.RecordCheck(a.Layout.UpdateAuto(), "v2.0.0", true, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	out, err := cli(t, cfg, "update", "status", "--json")
+	var st engine.UpdateStatus
+	if err != nil || json.Unmarshal([]byte(out), &st) != nil || st.Current != product.Version || st.Latest != "v2.0.0" ||
+		!st.Automatic || st.Setting != "update.auto" || !st.Development || st.AutomaticBlocked == "" || st.CheckedAt == nil || st.Installing {
+		t.Fatalf("update status: %s (%v)", out, err)
+	}
+	if _, err := cli(t, cfg, "settings", "set", "update.auto", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := cli(t, cfg, "update", "status"); err != nil || !strings.Contains(out, "Automatic updates are off") {
+		t.Fatalf("update status, off: %s (%v)", out, err)
+	}
+
+	out, err = cli(t, cfg, "update", "notes", "v2.0.0", "--json")
+	var n NotesOutput
+	if err != nil || json.Unmarshal([]byte(out), &n) != nil || n.Tag != "v2.0.0" || n.Notes != "- new things" || n.URL == "" {
+		t.Fatalf("update notes: %s (%v)", out, err)
+	}
+	// A development build has none.
+	if out, err := cli(t, cfg, "update", "notes"); err == nil || !strings.Contains(out, "development build") {
+		t.Fatalf("update notes, dev: %s (%v)", out, err)
+	}
+
+	out, err = cli(t, cfg, "update", "postpone", "--json")
+	var p PostponeOutput
+	if err != nil || json.Unmarshal([]byte(out), &p) != nil || p.Until.Before(time.Now()) {
+		t.Fatalf("update postpone: %s (%v)", out, err)
+	}
+	if auto, err := update.LoadAuto(a.Layout.UpdateAuto()); err != nil || auto.PostponedUntil == nil || !auto.PostponedUntil.Equal(p.Until) {
+		t.Fatalf("postponed: %+v, %v", auto, err)
 	}
 }

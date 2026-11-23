@@ -127,6 +127,12 @@ var Registry = []Setting{
 		Description: "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one opens the app on the run).",
 	},
 	{
+		Key: "update.auto", Type: TypeBool, Default: true,
+		Description: "Install new releases by themselves, at a quiet moment: once a release has been out an hour, when " +
+			"nothing is running or about to, none of the app's windows is open and the computer has been awake a while. " +
+			"A notification says when one is installed, or failed.",
+	},
+	{
 		Key: "update.source-dir", Type: TypeString, Default: "",
 		Description: "Source checkout `update` builds from when no published release has a download for this machine. " +
 			"Empty: the checkout this build came from.",

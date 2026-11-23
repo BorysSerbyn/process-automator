@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "update-status.schema.json",
+  "properties": {
+    "current": {
+      "type": "string",
+      "description": "Current is this build's version, Development whether it's a\ndevelopment build rather than a release."
+    },
+    "development": {
+      "type": "boolean"
+    },
+    "automatic": {
+      "type": "boolean",
+      "description": "Automatic is whether automatic updates are on (the update.auto\nsetting, named by Setting)."
+    },
+    "setting": {
+      "type": "string"
+    },
+    "automaticBlocked": {
+      "type": "string",
+      "description": "AutomaticBlocked says why this install isn't updated automatically,\neven with them on; empty when it is."
+    },
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "CheckedAt is when the latest release was last asked for, CheckError\nwhy that failed."
+    },
+    "checkError": {
+      "type": "string"
+    },
+    "latest": {
+      "type": "string",
+      "description": "Latest is the newest release the last check found (\"\" when there are\nnone, or none was found yet); UpdateAvailable whether it's newer than\nthis build."
+    },
+    "updateAvailable": {
+      "type": "boolean"
+    },
+    "waiting": {
+      "type": "string",
+      "description": "Waiting says why the newer release isn't installing by itself yet (or\nwon't), in words, while automatic updates are on."
+    },
+    "installing": {
+      "type": "boolean",
+      "description": "Installing is true while an update installs, and InstallingTag the\nrelease, once known (`update progress` says what it's doing)."
+    },
+    "installingTag": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "current",
+    "development",
+    "automatic",
+    "setting",
+    "updateAvailable",
+    "installing"
+  ],
+  "title": "procauto update status --json",
+  "description": "UpdateStatus is where updates stand (`update status --json`), from what the app already knows: nothing is asked of GitHub."
+}

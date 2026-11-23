@@ -124,6 +124,12 @@ func (l Layout) RoutineLock(routine string) string {
 	return filepath.Join(l.Locks(), "routine-"+routine+".lock")
 }
 
+// UpdateAuto is what automatic updates keep between the scheduler's passes.
+func (l Layout) UpdateAuto() string { return l.in("update-auto.json") }
+
+// ReleaseNotes keeps releases' notes read from GitHub, one file each.
+func (l Layout) ReleaseNotes() string { return l.in("release-notes") }
+
 // UpdateLock is held while an update installs.
 func (l Layout) UpdateLock() string { return filepath.Join(l.Locks(), "update.lock") }
 

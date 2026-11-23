@@ -166,6 +166,12 @@
       "type": "boolean",
       "x-type": "bool"
     },
+    "update.auto": {
+      "default": true,
+      "description": "Install new releases by themselves, at a quiet moment: once a release has been out an hour, when nothing is running or about to, none of the app's windows is open and the computer has been awake a while. A notification says when one is installed, or failed.",
+      "type": "boolean",
+      "x-type": "bool"
+    },
     "update.source-dir": {
       "default": "",
       "description": "Source checkout `update` builds from when no published release has a download for this machine. Empty: the checkout this build came from.",
@@ -186,6 +192,7 @@
     "llm.budget.weekly-usd",
     "history.retention-days",
     "runs.failure-notifications",
+    "update.auto",
     "update.source-dir",
     "memories.max-chars"
   ]

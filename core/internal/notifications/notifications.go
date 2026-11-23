@@ -73,6 +73,9 @@ type Notification struct {
 	Run     string `json:"run,omitempty"`
 	// Hook is true when Routine names a hook, not a routine.
 	Hook bool `json:"hook,omitempty"`
+	// Update is true when it's about an update (one installed, or failed):
+	// a click shows the app's updates.
+	Update bool `json:"update,omitempty"`
 	// URL is a link (http or https) a click on it opens (`notifications
 	// open`: open-url); only kind run has one.
 	URL string `json:"url,omitempty"`

@@ -321,6 +321,13 @@ func hookState(h Routine, now time.Time) (Health, string) {
 	return health, summary
 }
 
+// When is a time soon, as people say it (when).
+func When(t, now time.Time) string { return when(t, now) }
+
+// Stuck reports whether a run that's running is past its deadline plus
+// StuckGrace (stuck).
+func Stuck(run Run, now time.Time) bool { return run.Outcome == OutcomeRunning && stuck(run, now) }
+
 // when is a time soon, as people say it: "today 09:20", "tomorrow 09:20",
 // "Mon 09:20", or "Nov 30 09:20" further off.
 func when(t, now time.Time) string {

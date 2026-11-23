@@ -723,6 +723,22 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/update.schema.json
+  - command: update notes
+    usage: procauto update notes [<release>] [flags]
+    summary: Show a release's notes (this version's by default)
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/update-notes.schema.json
+  - command: update postpone
+    usage: procauto update postpone [flags]
+    summary: 'Hold automatic updates back for a few minutes: the app is in use (frontends run it while a window is open)'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/update-postpone.schema.json
   - command: update progress
     usage: procauto update progress [flags]
     summary: Show what the update installing is doing, or how the latest one ended
@@ -731,6 +747,14 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/update-progress.schema.json
+  - command: update status
+    usage: procauto update status [flags]
+    summary: 'Show where updates stand: this version, the latest release, and automatic updates'
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/update-status.schema.json
   - command: usage
     usage: procauto usage [flags]
     summary: 'LLM usage against its limit: the Claude plan''s usage (claude-code) or API spend (claude-api); none on codex'

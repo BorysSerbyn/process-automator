@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
@@ -29,6 +31,9 @@ func TestMain(m *testing.M) {
 	// plan's usage (Claude Code's sign-in).
 	saveLoginPath = func(string) error { return nil }
 	refreshUsage = func(context.Context, *App) error { return nil }
+	// Nor checks for updates or installs one.
+	autoUpdates = false
+	updateCommand = func(*App, []string) (*exec.Cmd, error) { return nil, errors.New("tests never install updates") }
 	checkPermission = func(string) permissions.Status { return permissions.Unsupported }
 	canRequestPermission = func(string) (bool, string) { return false, "tests don't ask the OS" }
 	requestPermission = func(string) {}
