@@ -252,12 +252,12 @@ func TestGuideHooksCoversTheCode(t *testing.T) {
 		t.Fatalf("the examples: %d yaml, %d prompts", len(yamls), len(prompts))
 	}
 	w, err := watchers.Parse("calendar", yamls[0])
-	if err != nil || len(w.Program.Permissions) == 0 {
-		t.Fatalf("the example watcher.yaml doesn't parse, or declares no permission: %+v %v", w.Program.Permissions, err)
+	if err != nil || len(w.Program.Permissions) == 0 || !w.Declared() {
+		t.Fatalf("the example watcher.yaml doesn't parse, or declares no permission or events: %+v %v", w, err)
 	}
 	h, err := hooks.Parse("open-meet", hooks.DescriptionFile, yamls[1])
-	if err != nil || h.On.Watcher != w.Name {
-		t.Fatalf("the example hook.yaml doesn't parse, or listens to another watcher: %+v %v", h.On, err)
+	if _, declared := w.Label(h.On.Type); err != nil || h.On.Watcher != w.Name || !declared {
+		t.Fatalf("the example hook.yaml doesn't parse, or listens to another watcher or an undeclared type: %+v %v", h.On, err)
 	}
 	p, err := hooks.Parse("triage", "triage.prompt", prompts[0])
 	if err != nil || !p.Batch || p.On.Watcher != "inbox" {

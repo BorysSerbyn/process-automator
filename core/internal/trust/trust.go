@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"reflect"
 	"slices"
@@ -110,6 +111,9 @@ type Program struct {
 	Writes      bool   `json:"writes"`
 	// Secrets are the secrets it's given.
 	Secrets []string `json:"secrets,omitempty"`
+	// Events are a watcher's declared events, each type's label by type
+	// (absent: it declares none).
+	Events map[string]string `json:"events,omitempty"`
 }
 
 // Trigger is what a hook was trusted to act on: a watcher's events, of one
@@ -287,8 +291,28 @@ func (p Program) changes(old Program) []string {
 			out = append(out, "drops secret "+s)
 		}
 	}
+	out = append(out, eventChanges(p.Events, old.Events)...)
 	if len(out) == 0 && p.Description != old.Description {
 		out = append(out, describedAnew)
+	}
+	return out
+}
+
+// eventChanges says how a watcher's declared events changed.
+func eventChanges(now, was map[string]string) []string {
+	var out []string
+	for _, t := range slices.Sorted(maps.Keys(now)) {
+		switch label, ok := was[t]; {
+		case !ok:
+			out = append(out, fmt.Sprintf("declares %s events now (%s)", t, now[t]))
+		case label != now[t]:
+			out = append(out, fmt.Sprintf("calls %s %q, not %q", t, now[t], label))
+		}
+	}
+	for _, t := range slices.Sorted(maps.Keys(was)) {
+		if _, ok := now[t]; !ok {
+			out = append(out, fmt.Sprintf("no longer declares %s events (%s)", t, was[t]))
+		}
 	}
 	return out
 }

@@ -245,7 +245,7 @@ func (w *Watcher) render() fyne.CanvasObject {
 	if c := w.granter.card(d.Permissions); c != nil {
 		objects = append(objects, c)
 	}
-	objects = append(objects, card(false, w.hooks()...), card(false, w.access()...),
+	objects = append(objects, card(false, w.events()...), card(false, w.hooks()...), card(false, w.access()...),
 		descriptionFile(sourceFile{title: "Watcher file", description: d.Description, path: d.Path, source: d.Source,
 			update: w.cli.Command + " watchers update " + d.Name + " --from <folder>/watcher.yaml"}))
 	for _, o := range objects {
@@ -310,6 +310,39 @@ func (w *Watcher) state() []fyne.CanvasObject {
 		rows = append(rows, infoRow("Failing", failing...))
 	}
 	return append(rows, padded(0, 6, 0, 0, container.NewHBox()))
+}
+
+// events are the events it declares, each with its label, its type and
+// the hooks acting on it; or, when it declares none, the core's hint
+// (never a problem).
+func (w *Watcher) events() []fyne.CanvasObject {
+	d := w.detail
+	rows := []fyne.CanvasObject{cardTitle("Events it prints")}
+	if d.Hint != "" {
+		rows = append(rows, divider(), padded(8, 8, 12, 12, secondary(hintText(d.Hint))))
+	}
+	for _, e := range d.Events {
+		heard := "No hook acts on it"
+		if len(e.Hooks) > 0 {
+			heard = "Heard by " + strings.Join(e.Hooks, ", ")
+		}
+		rows = append(rows, divider(), padded(6, 6, 12, 12, container.NewVBox(
+			container.NewHBox(widget.NewLabelWithStyle(e.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), mono(e.Type)),
+			secondary(heard))))
+	}
+	return rows
+}
+
+// hintText is the core's hint as a sentence.
+func hintText(hint string) string {
+	if hint == "" {
+		return ""
+	}
+	s := strings.ToUpper(hint[:1]) + hint[1:]
+	if !strings.HasSuffix(s, ".") {
+		s += "."
+	}
+	return s
 }
 
 // hooks are the hooks listening, each with its health and summary,

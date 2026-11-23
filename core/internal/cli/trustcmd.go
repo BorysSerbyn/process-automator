@@ -50,6 +50,9 @@ type TrustOutput struct {
 	// acts on, which trusting it covers too.
 	Hook    bool           `json:"hook,omitempty"`
 	Trigger *trust.Trigger `json:"trigger,omitempty"`
+	// On is a hook's trigger as `hooks list` gives it: with its type's
+	// label, as its watcher declares it.
+	On *hooks.On `json:"on,omitempty"`
 	// Watcher is the hook's watcher: trusting the hook (--yes) trusts it
 	// too when it isn't trusted, so its review is part of the hook's.
 	Watcher *WatcherTrust `json:"watcher,omitempty"`
@@ -82,6 +85,9 @@ type WatcherTrust struct {
 	Description string       `json:"description,omitempty"`
 	Mode        string       `json:"mode,omitempty" jsonschema:"enum=poll,enum=stream"`
 	Program     *ProgramInfo `json:"program,omitempty"`
+	// Events are the events it declares it prints, which trusting it
+	// covers (absent: it declares none, and may print any type).
+	Events []engine.WatcherEvent `json:"events,omitempty"`
 	// Changes since it was last trusted (empty for a first trust).
 	Changes []string `json:"changes,omitempty"`
 
@@ -144,6 +150,8 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 	out := TrustOutput{Routine: name, Kind: x.Kind().Written(), Surface: trust.Surface{}.Normalized(), Changes: []string{}, Hook: isHook, Trigger: approval.Trigger}
 	if isHook {
 		out.Watcher = hookWatcher(a, h.On.Watcher)
+		on := a.LabeledOn(h.On)
+		out.On = &on
 	}
 	// A hook's watcher that isn't trusted is trusted with it: one review,
 	// one yes.
@@ -162,7 +170,7 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 	resuming := resume && !c.Enabled && (c.Schedule != "" || isHook)
 	turnOn := "run it on its schedule (" + schedule.Text(c.Schedule) + ")"
 	if isHook {
-		turnOn = "turn it on (it runs on " + h.On.String() + ")"
+		turnOn = "turn it on (it runs when " + out.On.String() + ")"
 	}
 	question := "Trust " + name + " to run for real with this"
 	if trustWatcher {
@@ -249,7 +257,7 @@ func trustRunnable(cmd *cobra.Command, a *engine.App, x engine.Runnable, yes, ch
 		}
 		out.Resumed = true
 		if isHook {
-			done = append(done, "Turned "+name+" on: it runs on "+h.On.String())
+			done = append(done, "Turned "+name+" on: it runs when "+out.On.String())
 		} else {
 			done = append(done, "Resumed "+name+": it runs on its schedule")
 		}
@@ -434,6 +442,7 @@ func hookWatcher(a *engine.App, name string) *WatcherTrust {
 		info := watcherInfo(a, *r.Watcher, []engine.Runnable{})
 		wt.Description, wt.Mode = info.Description, info.Mode
 		wt.Program = &ProgramInfo{Executable: info.Executable, Checksum: info.Checksum, Args: info.Args, Secrets: info.Secrets}
+		wt.Events = info.Events
 	}
 	return wt
 }
@@ -452,7 +461,10 @@ func signInCommands(names []string) string {
 func describeHook(w io.Writer, out TrustOutput) {
 	t := out.Trigger
 	on := hooks.On{Watcher: t.Watcher, Type: t.Type}
-	fmt.Fprintf(w, "%s is a hook; it acts on %s", out.Routine, on.String())
+	if out.On != nil {
+		on = *out.On
+	}
+	fmt.Fprintf(w, "%s is a hook; it runs when %s", out.Routine, on.String())
 	if t.Batch {
 		fmt.Fprint(w, ", in batches")
 	}
@@ -473,6 +485,9 @@ func describeHook(w io.Writer, out TrustOutput) {
 			}
 			for _, s := range wt.Program.Secrets {
 				fmt.Fprintf(tw, "  secret\t%s (as $%s)\n", s.Name, s.Env)
+			}
+			for _, e := range wt.Events {
+				fmt.Fprintf(tw, "  event\t%s: %s\n", e.Type, e.Label)
 			}
 			_ = tw.Flush()
 			if len(wt.Changes) > 0 {

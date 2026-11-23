@@ -21,6 +21,10 @@
  "hooks": [
   "triage"
  ],
+ "events": [
+  {"type": "email.received", "label": "An email arrives", "hooks": ["triage"]},
+  {"type": "email.read", "label": "An email is read", "hooks": []}
+ ],
  "startedAt": "2026-11-21T07:00:00Z",
  "error": "exit 1: no token",
  "errorAt": "2026-11-21T08:00:00Z",

@@ -173,6 +173,81 @@ func (h *hook) runConfig(a *App) (RunConfig, error) {
 	return c, err
 }
 
+// LabeledOn is on with its type's label, as its watcher declares it (none
+// when it has no type, its watcher declares none, or there's no such
+// watcher).
+func (a *App) LabeledOn(on hooks.On) hooks.On {
+	on.Label = ""
+	if on.Type == "" {
+		return on
+	}
+	if w, err := a.FindWatcher(on.Watcher); err == nil {
+		on.Label, _ = w.Label(on.Type)
+	}
+	return on
+}
+
+// CheckOn says why a hook can't listen for on (nil when it can): its type
+// isn't one of the events its watcher declares. Adding or updating a hook
+// refuses it; a watcher changed later makes it the hook's problem. A
+// watcher that's missing or doesn't load, or declares no events, takes any
+// type (what's wrong with it is the hook's problem, when it's on).
+func (a *App) CheckOn(on hooks.On) error {
+	w, err := a.FindWatcher(on.Watcher)
+	if err != nil || on.Type == "" || w.Declares(on.Type) {
+		return nil
+	}
+	return fmt.Errorf("on.type %s isn't one of the events the watcher %s prints: it declares %s", on.Type, on.Watcher, declaredText(w))
+}
+
+// declaredText is the events a watcher declares, in words: "key.home (Home
+// key pressed), key.end (End key pressed)".
+func declaredText(w watchers.Watcher) string {
+	parts := make([]string, len(w.Events))
+	for i, e := range w.Events {
+		parts[i] = e.Type + " (" + e.Label + ")"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// WatcherEvent is an event a watcher declares, with the hooks that act on
+// it.
+type WatcherEvent struct {
+	Type string `json:"type"`
+	// Label is what it means, in words ("End key pressed").
+	Label string `json:"label"`
+	// Hooks are the hooks that act on it: those listening for its type, and
+	// those listening for every type.
+	Hooks []string `json:"hooks"`
+}
+
+// WatcherEvents are the events w declares, in its order, each with the
+// hooks among all that act on it.
+func WatcherEvents(w watchers.Watcher, all []Runnable) []WatcherEvent {
+	out := make([]WatcherEvent, 0, len(w.Events))
+	for _, e := range w.Events {
+		ev := WatcherEvent{Type: e.Type, Label: e.Label, Hooks: []string{}}
+		for _, x := range all {
+			if h, ok := AsHook(x); ok && h.On.Watcher == w.Name && h.On.Matches(e.Type) {
+				ev.Hooks = append(ev.Hooks, h.Name)
+			}
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
+// WatcherHint is a nudge about how a watcher is written that doesn't keep
+// it from running ("" when there's none): one written before watchers
+// declared their events works as it did, printing any type.
+func WatcherHint(w watchers.Watcher) string {
+	if w.Declared() {
+		return ""
+	}
+	return "it doesn't declare the events it prints: list them under events in its " + watchers.DescriptionFile +
+		" (like key.end: End key pressed), so hooks pick from them and say what each means"
+}
+
 // problems: its action's, and what keeps it from hearing its events (see
 // listening).
 func (h *hook) problems(a *App) []Problem {
@@ -180,8 +255,8 @@ func (h *hook) problems(a *App) []Problem {
 }
 
 // listening is what keeps a hook from hearing its watcher's events: no such
-// watcher, one that doesn't load, isn't trusted or is paused, and (failing) one whose
-// polls fail or whose stream keeps ending.
+// watcher, one that doesn't load or doesn't print its type, isn't trusted or
+// is paused, and (failing) one whose polls fail or whose stream keeps ending.
 func (a *App) listening(h hooks.Hook, failing bool) []Problem {
 	w := h.On.Watcher
 	set, err := watchers.Load(a.Layout.Watchers())
@@ -197,6 +272,10 @@ func (a *App) listening(h hooks.Hook, failing bool) []Problem {
 		}
 		return []Problem{{Text: "it listens to " + w + ", which isn't a watcher",
 			Fix: product.Command + " watchers add " + w + " --from <folder>/" + watchers.DescriptionFile}}
+	}
+	if err := a.CheckOn(h.On); err != nil {
+		return []Problem{{Text: fmt.Sprintf("it listens for %s, which its watcher %s doesn't print (it declares %s)", h.On.Type, w, declaredText(found)),
+			Fix: "edit on.type in its file to one of them and `" + product.Command + " hooks update " + h.Name + " --from <file>`"}}
 	}
 	why, err := a.WatcherUntrusted(found)
 	switch {
@@ -308,6 +387,10 @@ func (a *App) Fire(ctx context.Context, x Runnable, ev watchers.Event, o RunOpti
 	if ev.Watcher == "" {
 		h, _ := AsHook(x)
 		ev.Watcher = h.On.Watcher
+	}
+	// As the watcher's would be: one of a type it doesn't print is dropped.
+	if w, err := a.FindWatcher(ev.Watcher); err == nil && !w.Declares(ev.Type) {
+		return nil, fmt.Errorf("the watcher %s doesn't print %s events: it declares %s", w.Name, ev.Type, declaredText(w))
 	}
 	o.Occurrence = EventOccurrence(trigger.Manual, ev)
 	return a.Run(ctx, x, o)

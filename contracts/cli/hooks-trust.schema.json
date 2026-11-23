@@ -168,6 +168,26 @@
         "watcher"
       ]
     },
+    "on": {
+      "properties": {
+        "watcher": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "description": "Label is what its type means, as its watcher declares it (\"End key\npressed\"): set by the app from the watcher, never written in a hook's\nfile. Absent when it has no type, or its watcher declares none."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "watcher"
+      ],
+      "description": "On is a hook's trigger as `hooks list` gives it: with its type's\nlabel, as its watcher declares it."
+    },
     "watcher": {
       "properties": {
         "name": {
@@ -245,6 +265,36 @@
             "writes",
             "secrets"
           ]
+        },
+        "events": {
+          "items": {
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string",
+                "description": "Label is what it means, in words (\"End key pressed\")."
+              },
+              "hooks": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "description": "Hooks are the hooks that act on it: those listening for its type, and\nthose listening for every type."
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "type",
+              "label",
+              "hooks"
+            ],
+            "description": "WatcherEvent is an event a watcher declares, with the hooks that act on it."
+          },
+          "type": "array",
+          "description": "Events are the events it declares it prints, which trusting it\ncovers (absent: it declares none, and may print any type)."
         },
         "changes": {
           "items": {

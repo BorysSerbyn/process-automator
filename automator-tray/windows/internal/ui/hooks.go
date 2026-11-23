@@ -172,7 +172,7 @@ func (h *Hooks) hookRow(hk cli.HookInfo) fyne.CanvasObject {
 		kind = "Program"
 	}
 	name := container.NewHBox(widget.NewLabelWithStyle(hk.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), tag(kind, ""))
-	lines := container.NewVBox(name, secondary("On "+onText(hk.On)))
+	lines := container.NewVBox(name, secondary(onText(hk.On)))
 	if last != nil {
 		lines.Add(lastRunLine(last, h.now()))
 	}

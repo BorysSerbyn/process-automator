@@ -277,3 +277,64 @@ func TestChangesWakeTheScheduler(t *testing.T) {
 		}
 	}
 }
+
+// A watcher declares the events it prints; a hook picks its type from them
+// and every command says the label: "When End key pressed (from nav-keys)".
+// A watcher declaring none gets a hint, never a problem.
+func TestHooksSayTheirWatchersLabels(t *testing.T) {
+	a, _ := enginetest.Fixture(t, nil, nil)
+	cfg := a.Layout.Config()
+	watcher := hookFiles(t, watchers.DescriptionFile, "description: Navigation keys\nexecutable: ./watch\nmode: stream\n"+
+		"events:\n  key.home: Home key pressed\n  key.end: End key pressed\n", "watch", "true\n")
+	if out, err := cli(t, cfg, "watchers", "add", "nav-keys", "--from", watcher); err != nil || strings.Contains(out, "Hint") {
+		t.Fatalf("watchers add: %v %s", err, out)
+	}
+	pgup := hookFiles(t, hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: nav-keys, type: key.pgup}\n", "act", "true\n")
+	if out, err := cli(t, cfg, "hooks", "add", "on-pgup", "--from", pgup); err == nil ||
+		!strings.Contains(out, "on.type key.pgup isn't one of the events the watcher nav-keys prints") {
+		t.Fatalf("a hook on an undeclared type was added: %v %s", err, out)
+	}
+	end := hookFiles(t, hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: nav-keys, type: key.end}\n", "act", "true\n")
+	if out, err := cli(t, cfg, "hooks", "add", "on-end", "--from", end); err != nil ||
+		!strings.Contains(out, "It runs when End key pressed (from nav-keys).") {
+		t.Fatalf("hooks add: %v %s", err, out)
+	}
+	if out, err := cli(t, cfg, "hooks", "list"); err != nil || !strings.Contains(out, "When End key pressed (from nav-keys)") {
+		t.Fatalf("hooks list: %v %s", err, out)
+	}
+	rows := cliJSON[[]HookInfo](t, cfg, "hooks", "list")
+	if len(rows) != 1 || rows[0].On.Label != "End key pressed" {
+		t.Fatalf("%+v", rows)
+	}
+	review := cliJSON[TrustOutput](t, cfg, "hooks", "trust", "on-end", "--check")
+	if review.On == nil || review.On.Label != "End key pressed" || review.Watcher == nil || len(review.Watcher.Events) != 2 {
+		t.Fatalf("its review: %+v", review)
+	}
+	if out, _ := cli(t, cfg, "hooks", "trust", "on-end", "--check"); !strings.Contains(out, "it runs when End key pressed (from nav-keys)") ||
+		!strings.Contains(out, "key.end: End key pressed") {
+		t.Fatalf("its review: %s", out)
+	}
+	w := cliJSON[WatcherDetail](t, cfg, "watchers", "show", "nav-keys")
+	if len(w.Events) != 2 || w.Events[1].Label != "End key pressed" || strings.Join(w.Events[1].Hooks, ",") != "on-end" ||
+		len(w.Events[0].Hooks) != 0 || w.Hint != "" {
+		t.Fatalf("its events: %+v", w)
+	}
+	if out, _ := cli(t, cfg, "watchers", "show", "nav-keys"); !strings.Contains(out, "key.end: End key pressed (on-end)") {
+		t.Fatalf("watchers show: %s", out)
+	}
+
+	// It drops key.end: updating it says the hook hears nothing.
+	fewer := hookFiles(t, watchers.DescriptionFile, "executable: ./watch\nmode: stream\nevents: {key.home: Home key pressed}\n", "watch", "true\n")
+	if out, err := cli(t, cfg, "watchers", "update", "nav-keys", "--from", fewer); err != nil || !strings.Contains(out, "The hook on-end hears nothing") {
+		t.Fatalf("watchers update: %v %s", err, out)
+	}
+
+	// One written before watchers declared their events: a hint.
+	old := hookFiles(t, watchers.DescriptionFile, "executable: ./watch\nmode: poll\n", "watch", "true\n")
+	if out, err := cli(t, cfg, "watchers", "add", "cal", "--from", old); err != nil || !strings.Contains(out, "Hint: it doesn't declare the events it prints") {
+		t.Fatalf("watchers add: %v %s", err, out)
+	}
+	if d := cliJSON[WatcherDetail](t, cfg, "watchers", "show", "cal"); d.Hint == "" || d.Events != nil {
+		t.Fatalf("%+v", d)
+	}
+}

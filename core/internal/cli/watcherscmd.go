@@ -61,6 +61,13 @@ type WatcherInfo struct {
 	// what the scheduler last found: it isn't started while one isn't
 	// granted. Absent when none.
 	Permissions []engine.PermissionNeed `json:"permissions,omitempty"`
+	// Events are the events it declares it prints, in its file's order,
+	// each with its label and the hooks that act on it. Absent when it
+	// declares none: it may print any type (Hint says so).
+	Events []engine.WatcherEvent `json:"events,omitempty"`
+	// Hint is a nudge about how it's written that doesn't keep it from
+	// running (it doesn't declare its events): never a problem.
+	Hint string `json:"hint,omitempty"`
 }
 
 // WatcherDetail is `watchers show --json`: a watcher with its description
@@ -86,6 +93,9 @@ type WatcherTrustOutput struct {
 	// checksum, with its description file), its arguments and secrets.
 	Program ProgramInfo `json:"program"`
 	Mode    string      `json:"mode" jsonschema:"enum=poll,enum=stream"`
+	// Events are the events it declares it prints, which trusting it
+	// covers (absent: it declares none).
+	Events []engine.WatcherEvent `json:"events,omitempty"`
 	// Changes since it was last trusted (empty for a first trust).
 	Changes []string `json:"changes"`
 	Trusted bool     `json:"trusted"`
@@ -137,6 +147,10 @@ func watcherInfo(a *engine.App, w watchers.Watcher, all []engine.Runnable) Watch
 			info.Hooks = append(info.Hooks, h.Name)
 		}
 	}
+	if w.Declared() {
+		info.Events = engine.WatcherEvents(w, all)
+	}
+	info.Hint = engine.WatcherHint(w)
 	if st, err := watchers.LoadState(a.Layout.WatcherState()); err == nil {
 		if ws := st.Watchers[w.Name]; ws != nil {
 			info.LastPollAt, info.StartedAt, info.LastEventAt = ws.LastPollAt, ws.StartedAt, ws.LastEventAt
@@ -206,8 +220,22 @@ func newWatchersShowCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "%s (%s)\n  mode      %s\n  enabled   %v\n  trusted   %v\n  hooks     %s\n", d.Name, d.Path, d.Mode,
 				d.Enabled, d.Trusted, strings.Join(d.Hooks, ", "))
+			for i, e := range d.Events {
+				label := "  events    "
+				if i > 0 {
+					label = "            "
+				}
+				heard := "no hook"
+				if len(e.Hooks) > 0 {
+					heard = strings.Join(e.Hooks, ", ")
+				}
+				fmt.Fprintf(out, "%s%s: %s (%s)\n", label, e.Type, e.Label, heard)
+			}
 			if d.Error != "" {
 				fmt.Fprintf(out, "  error     %s\n", d.Error)
+			}
+			if d.Hint != "" {
+				fmt.Fprintf(out, "  hint      %s\n", d.Hint)
 			}
 			fmt.Fprintf(out, "\n%s", d.Source)
 			return nil
@@ -260,16 +288,30 @@ func newWatchersAddCmd(update bool) *cobra.Command {
 			}
 			enabled, _ := a.WatcherEnabled(w)
 			out := WatcherChange{Watcher: name, Path: w.Path, Enabled: &enabled}
+			hint := ""
+			if h := engine.WatcherHint(w); h != "" {
+				hint = "\nHint: " + h + "."
+			}
 			if !update {
 				return emit(cmd, out, fmt.Sprintf("Added the watcher %s (%s), not trusted: it runs only once you trust it.\n"+
-					"Trusting a hook that listens to it trusts it too (%s hooks trust <hook> --resume), or: %s watchers trust %s",
-					name, w.Path, product.Command, product.Command, name))
+					"Trusting a hook that listens to it trusts it too (%s hooks trust <hook> --resume), or: %s watchers trust %s%s",
+					name, w.Path, product.Command, product.Command, name, hint))
 			}
 			text := fmt.Sprintf("Updated the watcher %s (%s).", name, w.Path)
 			if why, err := a.WatcherUntrusted(w); err == nil && why != "" {
 				text += " It isn't trusted: " + why
 			}
-			return emit(cmd, out, text)
+			// A hook listening for a type it no longer declares hears nothing.
+			if all, _, err := a.Hooks(); err == nil {
+				for _, x := range all {
+					if h, ok := engine.AsHook(x); ok && h.On.Watcher == name {
+						if err := a.CheckOn(h.On); err != nil {
+							text += fmt.Sprintf("\nThe hook %s hears nothing: %v.", h.Name, err)
+						}
+					}
+				}
+			}
+			return emit(cmd, out, text+hint)
 		}),
 	}
 	cmd.Flags().StringVar(&from, "from", "", "the watcher's description file, with its executable beside it")
@@ -332,7 +374,7 @@ func newWatchersTrustCmd() *cobra.Command {
 				return err
 			}
 			info := watcherInfo(a, w, nil)
-			out := WatcherTrustOutput{Watcher: w.Name, Mode: w.Mode, Changes: []string{},
+			out := WatcherTrustOutput{Watcher: w.Name, Mode: w.Mode, Changes: []string{}, Events: info.Events,
 				Program:     ProgramInfo{Executable: info.Executable, Checksum: info.Checksum, Args: info.Args, Secrets: info.Secrets},
 				Permissions: info.Permissions}
 			f, _, err := a.TrustStore().Load()
@@ -390,6 +432,9 @@ func describeWatcher(cmd *cobra.Command, out WatcherTrustOutput) {
 	}
 	for _, s := range p.Secrets {
 		fmt.Fprintf(tw, "  secret\t%s (as $%s)\n", s.Name, s.Env)
+	}
+	for _, e := range out.Events {
+		fmt.Fprintf(tw, "  event\t%s: %s\n", e.Type, e.Label)
 	}
 	_ = tw.Flush()
 	if len(out.Changes) > 0 {

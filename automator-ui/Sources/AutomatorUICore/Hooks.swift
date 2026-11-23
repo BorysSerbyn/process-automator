@@ -5,11 +5,24 @@ import OpenAPIRuntime
 /// says, nothing worked out.
 
 extension Components.Schemas.On {
-    /// What a hook acts on, in words: "calendar's meeting.started events",
-    /// or "every event from calendar" (no type).
-    public var text: String {
-        guard let type = _type, !type.isEmpty else { return "every event from \(watcher)" }
-        return "\(watcher)'s \(type) events"
+    /// What a hook acts on, in words, with the label its watcher declares
+    /// for the type: "End key pressed (from nav-keys)"; "a key.end event
+    /// (from nav-keys)" when it declares none; "any event (from nav-keys)"
+    /// with no type.
+    public var phrase: String {
+        guard let type = _type, !type.isEmpty else { return "any event (from \(watcher))" }
+        guard let label, !label.isEmpty else { return "a \(type) event (from \(watcher))" }
+        return "\(label) (from \(watcher))"
+    }
+
+    /// When the hook runs: "When End key pressed (from nav-keys)".
+    public var text: String { "When \(phrase)" }
+}
+
+extension Components.Schemas.WatcherEvent {
+    /// Which hooks act on it: "Heard by on-end, on-any", or "No hook acts on it".
+    public var hooksText: String {
+        hooks.isEmpty ? "No hook acts on it" : "Heard by \(hooks.joined(separator: ", "))"
     }
 }
 
@@ -83,6 +96,13 @@ extension Components.Schemas.WatcherDetail {
     /// What trusting it approves, as a program's rows show it.
     public var program: Components.Schemas.ProgramInfo {
         .init(args: args, checksum: checksum, executable: executable, secrets: secrets, writes: false)
+    }
+
+    /// The core's hint, as a sentence: a nudge that never makes it red
+    /// (nil: none).
+    public var hintText: String? {
+        guard let hint, let first = hint.first else { return nil }
+        return first.uppercased() + hint.dropFirst() + (hint.hasSuffix(".") ? "" : ".")
     }
 
     /// Whether a secret it declares isn't stored: it needs a sign-in

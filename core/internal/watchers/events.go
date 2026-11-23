@@ -165,7 +165,8 @@ func FromMap(m map[string]any) (Event, error) {
 // its events and its new cursor (the old one when it printed none). A poll
 // that fails (exits non-zero, prints a line that's neither, or prints too
 // much) returns nothing: its cursor stays where it was, so the next poll
-// gets the same events again.
+// gets the same events again. An event of a type it doesn't declare is
+// dropped and logged; the poll still works.
 func Poll(ctx context.Context, w Watcher, inv programs.Invocation, cursor string) ([]Event, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, w.Timeout)
 	defer cancel()
@@ -185,6 +186,7 @@ func Poll(ctx context.Context, w Watcher, inv programs.Invocation, cursor string
 	now := time.Now()
 	var events []Event
 	next := cursor
+	undeclared := undeclared{w: w, log: inv.Log}
 	for i, raw := range bytes.Split(out.buf.Bytes(), []byte("\n")) {
 		ev, c, err := ParseLine(raw, now)
 		if err != nil {
@@ -193,7 +195,7 @@ func Poll(ctx context.Context, w Watcher, inv programs.Invocation, cursor string
 		if c != nil {
 			next = *c
 		}
-		if ev != nil {
+		if ev != nil && undeclared.keep(*ev) {
 			ev.Watcher = w.Name
 			events = append(events, *ev)
 		}
@@ -203,9 +205,10 @@ func Poll(ctx context.Context, w Watcher, inv programs.Invocation, cursor string
 
 // Stream runs a stream watcher until it ends or ctx does: each event it
 // prints goes to event, each cursor to setCursor, as they come. A line that's
-// neither is logged and skipped. It returns why it ended (nil: it exited 0,
+// neither is logged and skipped, as is an event of a type it doesn't declare. It returns why it ended (nil: it exited 0,
 // or ctx ended).
 func Stream(ctx context.Context, w Watcher, inv programs.Invocation, cursor string, event func(Event), setCursor func(string)) error {
+	undeclared := undeclared{w: w, log: inv.Log}
 	lw := &lineWriter{fn: func(raw []byte) {
 		ev, c, err := ParseLine(raw, time.Now())
 		switch {
@@ -215,7 +218,7 @@ func Stream(ctx context.Context, w Watcher, inv programs.Invocation, cursor stri
 			}
 		case c != nil:
 			setCursor(*c)
-		case ev != nil:
+		case ev != nil && undeclared.keep(*ev):
 			ev.Watcher = w.Name
 			event(*ev)
 		}
@@ -228,6 +231,31 @@ func Stream(ctx context.Context, w Watcher, inv programs.Invocation, cursor stri
 		return nil
 	}
 	return err
+}
+
+// undeclared drops the events of a type the watcher doesn't declare,
+// logging each type once (per poll, or per start of a stream): a watcher
+// printing a type over and over would otherwise fill the log.
+type undeclared struct {
+	w      Watcher
+	log    io.Writer
+	logged map[string]bool
+}
+
+// keep reports whether ev is of a type its watcher declares.
+func (u *undeclared) keep(ev Event) bool {
+	if u.w.Declares(ev.Type) {
+		return true
+	}
+	if u.log != nil && !u.logged[ev.Type] {
+		if u.logged == nil {
+			u.logged = map[string]bool{}
+		}
+		u.logged[ev.Type] = true
+		fmt.Fprintf(u.log, "dropped its %s events: %s doesn't declare that type (it declares %s)\n",
+			ev.Type, DescriptionFile, strings.Join(u.w.Types(), ", "))
+	}
+	return false
 }
 
 // limited keeps up to max bytes, and whether more came.

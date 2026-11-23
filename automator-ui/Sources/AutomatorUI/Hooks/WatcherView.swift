@@ -171,6 +171,7 @@ struct WatcherView: View {
                     PermissionsBanner(name: model.name, permissions: detail.permissions ?? [], granter: model.granter)
                     SettingsCard { state(detail) }
                     PermissionsCard(permissions: detail.permissions ?? [], granter: model.granter)
+                    SettingsCard { events(detail) }
                     SettingsCard { hooks(detail) }
                     SettingsCard { access(detail) }
                     SettingsCard {
@@ -264,6 +265,34 @@ struct WatcherView: View {
             Text(Formats.when(date))
         } else {
             Text("Never").foregroundStyle(.secondary)
+        }
+    }
+
+    /// The events it declares, each with its label and the hooks acting on
+    /// it; or, when it declares none, the hint to (never a problem).
+    @ViewBuilder private func events(_ detail: WatcherDetail) -> some View {
+        CardTitle("Events it prints", systemImage: "bolt.horizontal")
+        Divider().padding(.leading, SettingsMetrics.rowInset)
+        if let hint = detail.hintText {
+            Label(hint, systemImage: "lightbulb")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+        }
+        ForEach(Array((detail.events ?? []).enumerated()), id: \.element._type) { index, event in
+            if index > 0 { Divider().padding(.leading, SettingsMetrics.rowInset) }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(event.label).font(.body.weight(.medium))
+                    Text(event._type).font(.subheadline.monospaced()).foregroundStyle(.secondary)
+                }
+                Text(event.hooksText).font(.subheadline).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 

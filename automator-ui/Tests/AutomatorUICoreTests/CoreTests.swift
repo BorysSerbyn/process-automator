@@ -357,8 +357,8 @@ private func ran(_ log: URL) -> [String] {
     let hooks = try CoreJSON.decoder().decode([Components.Schemas.HookInfo].self, from: Data(list.utf8))
     #expect(!hooks[0].isProgram && hooks[0].batch == true && hooks[0].builtinTools == ["Bash"])
     #expect(hooks[1].isProgram && hooks[1].program?.writes == true)
-    #expect(hooks[0].on.text == "cal's meeting.started events")
-    #expect(hooks[1].on.text == "every event from cal")
+    #expect(hooks[0].on.text == "When a meeting.started event (from cal)")
+    #expect(hooks[1].on.text == "When any event (from cal)")
     // `hooks show`: its file and its watcher.
     let show = """
         {"name":"open-meet","kind":"program","path":"/h/open-meet/hook.yaml","on":{"watcher":"cal","type":"meeting.started"},
@@ -384,6 +384,34 @@ private func ran(_ log: URL) -> [String] {
     #expect(trust.warnings?.count == 1)
 }
 
+/// What a hook acts on says the label its watcher declares ("When End key
+/// pressed (from nav-keys)"); a watcher's window lists its events with the
+/// hooks acting on each, or the core's hint when it declares none.
+@Test func saysWhatHooksActOnWithTheirWatchersLabels() throws {
+    let on = try CoreJSON.decoder().decode(
+        Components.Schemas.On.self,
+        from: Data(#"{"watcher":"nav-keys","type":"key.end","label":"End key pressed"}"#.utf8))
+    #expect(on.text == "When End key pressed (from nav-keys)")
+    #expect(on.phrase == "End key pressed (from nav-keys)")
+    let show = """
+        {"name":"nav-keys","path":"/w/nav-keys/watcher.yaml","mode":"stream","executable":"/w/nav-keys/watch",
+         "args":[],"secrets":[],"enabled":true,"trusted":true,"hooks":["on-end"],
+         "events":[{"type":"key.home","label":"Home key pressed","hooks":[]},
+                   {"type":"key.end","label":"End key pressed","hooks":["on-end","on-any"]}],
+         "source":"mode: stream\\n"}
+        """
+    let w = try CoreJSON.decoder().decode(Components.Schemas.WatcherDetail.self, from: Data(show.utf8))
+    #expect(w.events?.map(\.label) == ["Home key pressed", "End key pressed"])
+    #expect(w.events?.map(\.hooksText) == ["No hook acts on it", "Heard by on-end, on-any"])
+    #expect(w.hintText == nil)
+    let old = """
+        {"name":"cal","path":"/w/cal/watcher.yaml","mode":"poll","executable":"/w/cal/watch","args":[],"secrets":[],
+         "enabled":true,"trusted":true,"hooks":[],"hint":"it doesn't declare the events it prints","source":""}
+        """
+    let hinted = try CoreJSON.decoder().decode(Components.Schemas.WatcherDetail.self, from: Data(old.utf8))
+    #expect(hinted.hintText == "It doesn't declare the events it prints.")
+}
+
 @Test func decodesWatchers() throws {
     let show = """
         {"name":"inbox","path":"/w/inbox/watcher.yaml","description":"New mail","mode":"stream","executable":"/w/inbox/watch",
@@ -395,6 +423,8 @@ private func ran(_ log: URL) -> [String] {
     #expect(w.modeText == "Streams events")
     #expect(w.needsSignIn)
     #expect(w.program.executable == "/w/inbox/watch" && w.program.args == ["--all"] && !w.program.writes)
+    // It declares no events: the core's hint, as a sentence; no events.
+    #expect(w.hintText == nil && w.events == nil)
     let review = """
         {"watcher":"inbox","program":{"executable":"/w/inbox/watch","checksum":"9ab8","args":[],"writes":false,"secrets":[]},
          "mode":"stream","changes":["its executable changed"],"trusted":false}
@@ -694,8 +724,9 @@ private let inputMonitoring = """
         PermissionNeed.self, from: Data(inputMonitoring.replacingOccurrences(of: "missing", with: "granted").utf8))
     let camera = try JSONDecoder().decode(
         PermissionNeed.self,
-        from: Data(inputMonitoring.replacingOccurrences(of: "input-monitoring", with: "camera")
-            .replacingOccurrences(of: "missing", with: "granted").utf8))
+        from: Data(
+            inputMonitoring.replacingOccurrences(of: "input-monitoring", with: "camera")
+                .replacingOccurrences(of: "missing", with: "granted").utf8))
 
     granter.saw([allowed])  // not asked for: nothing
     await granter.grant("input-monitoring")

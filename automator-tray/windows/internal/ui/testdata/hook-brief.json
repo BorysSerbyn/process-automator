@@ -1,5 +1,5 @@
 {"name": "brief", "path": "/home/me/.config/acme/hooks/brief/hook.prompt", "description": "Briefs me",
- "on": {"watcher": "cal", "type": "meeting.started"}, "batch": true, "enabled": false, "staleness": "10m", "timeout": "20m", "rate": 60,
+ "on": {"watcher": "cal", "type": "meeting.started", "label": "A meeting starts"}, "batch": true, "enabled": false, "staleness": "10m", "timeout": "20m", "rate": 60,
  "trusted": false, "turnOn": true, "untrusted": "not trusted yet: review what it can reach with `acme-auto hooks trust brief`", "builtinTools": ["Bash"],
  "source": "---\nautomator.on: {watcher: cal, type: meeting.started}\n---\nBrief me on {{event.data.title}}.\n",
  "watcher": {"name": "cal", "path": "/home/me/.config/acme/watchers/cal/watcher.yaml", "mode": "poll", "interval": "30s",

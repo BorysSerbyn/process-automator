@@ -14,6 +14,16 @@ import (
 type On struct {
 	Watcher string `json:"watcher"`
 	Type    string `json:"type,omitempty"`
+	// Label is what its type means, as its watcher declares it (empty:
+	// no type, or the watcher declares none).
+	Label string `json:"label,omitempty"`
+}
+
+// WatcherEvent is an event a watcher declares, with the hooks acting on it.
+type WatcherEvent struct {
+	Type  string   `json:"type"`
+	Label string   `json:"label"`
+	Hooks []string `json:"hooks"`
 }
 
 // HookInfo is a hook with its effective settings (`hooks list --json`).
@@ -88,6 +98,11 @@ type WatcherInfo struct {
 	ErrorAt *time.Time `json:"errorAt,omitempty"`
 	// Permissions are what the OS must allow it, with their state.
 	Permissions []PermissionNeed `json:"permissions,omitempty"`
+	// Events are the events it declares, in its order (none: it declares
+	// none, and Hint nudges it to).
+	Events []WatcherEvent `json:"events,omitempty"`
+	// Hint is a nudge that never makes it red.
+	Hint string `json:"hint,omitempty"`
 }
 
 // WatcherDetail is a watcher in full (`watchers show --json`).
@@ -103,11 +118,12 @@ func (w WatcherInfo) Program() ProgramInfo {
 
 // WatcherTrustOutput is `watchers trust --json`: what trusting it approves.
 type WatcherTrustOutput struct {
-	Watcher string      `json:"watcher"`
-	Mode    string      `json:"mode"`
-	Program ProgramInfo `json:"program"`
-	Changes []string    `json:"changes"`
-	Trusted bool        `json:"trusted"`
+	Watcher string         `json:"watcher"`
+	Mode    string         `json:"mode"`
+	Program ProgramInfo    `json:"program"`
+	Events  []WatcherEvent `json:"events,omitempty"`
+	Changes []string       `json:"changes"`
+	Trusted bool           `json:"trusted"`
 	// Permissions are what the OS must allow it, which trusting it covers.
 	Permissions []PermissionNeed `json:"permissions,omitempty"`
 }

@@ -42,18 +42,30 @@ const (
 type On struct {
 	Watcher string `yaml:"watcher" json:"watcher"`
 	Type    string `yaml:"type,omitempty" json:"type,omitempty"`
+	// Label is what its type means, as its watcher declares it ("End key
+	// pressed"): set by the app from the watcher, never written in a hook's
+	// file. Absent when it has no type, or its watcher declares none.
+	Label string `yaml:"-" json:"label,omitempty"`
 }
 
 // Matches reports whether an event of type t is one the hook listens for.
 func (o On) Matches(t string) bool { return o.Type == "" || o.Type == t }
 
-// String is it in words: "calendar's meeting.started events".
+// String is it in words: "End key pressed (from nav-keys)", or without a
+// label "a key.end event (from nav-keys)", or without a type "any event
+// (from nav-keys)".
 func (o On) String() string {
-	if o.Type == "" {
-		return o.Watcher + "'s events"
+	switch {
+	case o.Type == "":
+		return "any event (from " + o.Watcher + ")"
+	case o.Label == "":
+		return "a " + o.Type + " event (from " + o.Watcher + ")"
 	}
-	return o.Watcher + "'s " + o.Type + " events"
+	return o.Label + " (from " + o.Watcher + ")"
 }
+
+// When is when the hook runs: "When End key pressed (from nav-keys)".
+func (o On) When() string { return "When " + o.String() }
 
 func (o On) check(file string) error {
 	switch {
@@ -100,7 +112,7 @@ func (h Hook) Key(field string) string { return "hooks." + h.Name + "." + field 
 var Fields = []programs.Field{
 	{Name: "executable", Type: "path", Description: "Required. The executable, relative to this file's folder (or absolute). It's copied when the hook is added."},
 	{Name: "writes", Type: "bool", Description: "Required. Whether it can change anything. A dry run passes --dry-run to one that writes, and runs one that doesn't as it is."},
-	{Name: "on", Type: "watcher, type", Description: "Required. What it listens for: on.watcher, a watcher's name, and on.type, an event type (left out, every type)."},
+	{Name: "on", Type: "watcher, type", Description: "Required. What it listens for: on.watcher, a watcher's name, and on.type, one of the event types that watcher declares (left out, every type)."},
 	{Name: "description", Type: "string", Description: "What it does, in a line."},
 	{Name: "name", Type: "string", Description: "Its name; when given, it must be the name it's added as."},
 	{Name: "args", Type: "list", Description: "Arguments passed on every run."},
@@ -114,7 +126,7 @@ var Fields = []programs.Field{
 // PromptKeys are an LLM hook's own automator.* keys, besides a routine's, for
 // the guide and the docs.
 var PromptKeys = []programs.Field{
-	{Name: "automator.on", Type: "watcher, type", Description: "Required. What it listens for: watcher, a watcher's name, and type, an event type (left out, every type)."},
+	{Name: "automator.on", Type: "watcher, type", Description: "Required. What it listens for: watcher, a watcher's name, and type, one of the event types that watcher declares (left out, every type)."},
 	{Name: "automator.batch", Type: "bool", Description: "true: one run gets every event that came while it waited for its turn ({{events}}), instead of one run per event."},
 }
 

@@ -94,6 +94,11 @@ struct TurnOnReview: View {
                         InfoRow(label: "Watches") { Text(description) }
                     }
                     ProgramRows(program: program, showsWrites: false)
+                    if let events = watcher.events, !events.isEmpty {
+                        InfoRow(label: "Prints") {
+                            ForEach(events, id: \._type) { Text($0.label).font(.subheadline) }
+                        }
+                    }
                     if let changes = watcher.changes, !changes.isEmpty {
                         InfoRow(label: "Changed") {
                             ForEach(changes, id: \.self) { Text($0).font(.subheadline) }

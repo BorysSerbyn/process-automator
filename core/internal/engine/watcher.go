@@ -73,7 +73,7 @@ func watcherSecret(w watchers.Watcher, s programs.Secret) Secret {
 }
 
 // WatcherApproval is what trusting a watcher approves: its executable and
-// description file by checksum, and its secrets.
+// description file by checksum, its secrets, and the events it declares.
 func (a *App) WatcherApproval(w watchers.Watcher) (trust.Approval, error) {
 	sum, err := programs.Checksum(w.Program.Executable)
 	if err != nil {
@@ -82,6 +82,12 @@ func (a *App) WatcherApproval(w watchers.Watcher) (trust.Approval, error) {
 	tp := &trust.Program{Executable: sum, Description: programs.ChecksumText(w.Source)}
 	for _, s := range w.Program.Secrets {
 		tp.Secrets = append(tp.Secrets, s.Name)
+	}
+	for _, e := range w.Events {
+		if tp.Events == nil {
+			tp.Events = map[string]string{}
+		}
+		tp.Events[e.Type] = e.Label
 	}
 	return trust.Approval{Watcher: tp, Permissions: w.Program.Permissions}, nil
 }

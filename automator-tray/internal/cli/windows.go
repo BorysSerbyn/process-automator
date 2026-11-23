@@ -254,13 +254,14 @@ type Trigger struct {
 // WatcherTrust is a hook's watcher in the hook's review: whether it's
 // trusted, and what trusting it approves (absent without a watcher).
 type WatcherTrust struct {
-	Name        string       `json:"name"`
-	Trusted     bool         `json:"trusted"`
-	Untrusted   string       `json:"untrusted,omitempty"`
-	Description string       `json:"description,omitempty"`
-	Mode        string       `json:"mode,omitempty"`
-	Program     *ProgramInfo `json:"program,omitempty"`
-	Changes     []string     `json:"changes,omitempty"`
+	Name        string         `json:"name"`
+	Trusted     bool           `json:"trusted"`
+	Untrusted   string         `json:"untrusted,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Mode        string         `json:"mode,omitempty"`
+	Program     *ProgramInfo   `json:"program,omitempty"`
+	Events      []WatcherEvent `json:"events,omitempty"`
+	Changes     []string       `json:"changes,omitempty"`
 }
 
 // Surface is what a routine can reach.

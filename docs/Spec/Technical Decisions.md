@@ -733,3 +733,17 @@ Turning a hook on started its watcher only on the scheduler's next pass, up to 3
 - **A socket or a signal to the daemon**: something to listen on, find and clean up, and a signal means knowing its process, which `login-items` owns
 - **Each command waking it itself**: a command added later would forget, and the rule would live in many places
 - **Checking every permission every few seconds**: a child process that often for a change that happens rarely; following one only after it's asked for covers Grant…
+
+## Decision: a watcher declares the events it prints, each with a label; a hook picks one
+A watcher is what knows what can happen, so it says so: `events` in its `watcher.yaml` maps each type it prints to a label in words ("key.end: End key pressed"). A hook's `on.type` must be one of them, checked when it's added or updated, and a readiness problem when the watcher later drops it; leaving the type out still means every event. Everything that says what a hook acts on uses the label, "When End key pressed (from nav-keys)", instead of a type only its author reads. The events are part of the watcher's approval, so a review says which one was added, dropped or relabelled. A map, not a list of objects: one line per event, its order kept, and a type can't appear twice.
+
+A printed event whose type isn't declared is dropped and logged once per type, and the watcher isn't failing: its other events still reach their hooks, a poll's cursor still moves on, and no hook could listen for that type anyway. Failing the watcher would make health red and, for a poll, refuse the cursor, so one stray type would stop every hook on it until the watcher is fixed.
+
+A watcher written before `events` existed keeps working as it did, printing any type, with a hint in its window and `watchers show` (`hint`) to declare them. A hint is never a problem or a reason: it works exactly as before, and red for a working watcher would be a false alarm I'd learn to ignore.
+
+### Rejected
+- **One watcher per trigger** (a key watcher for Home, another for End): the same process runs twice, asks the OS for the same permissions twice and is trusted twice, for what one process sees anyway
+- **Hooks naming types freely**: a typo listens forever for an event that never comes, and every window shows a code instead of what it means
+- **Labels in the hook**: each hook would name the same event its own way; the watcher is the one place that knows what it prints
+- **Refusing to load a watcher without `events`**: hooks I rely on would stop until I edit a file that works
+- **Failing the watcher on an undeclared type**: one stray event would turn it red and, for a poll, hold back every other event behind its cursor

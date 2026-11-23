@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/yamlfile"
 )
@@ -58,7 +60,86 @@ type Watcher struct {
 	// Program is what it runs: its copy of the executable, its arguments
 	// and its secrets (it never writes).
 	Program programs.Program
-	Source  string
+	// Events are the events it prints, as its file declares them, in its
+	// order: a hook picks its type from them, and an event of another type
+	// is dropped. None: it was written before watchers declared them, and
+	// prints any type.
+	Events []EventType
+	Source string
+}
+
+// EventType is an event a watcher declares it prints: its type, and what
+// it means in words ("End key pressed").
+type EventType struct {
+	Type  string `json:"type"`
+	Label string `json:"label"`
+}
+
+// MaxLabel is the longest an event's label may be.
+const MaxLabel = 80
+
+// Declared reports whether it declares its events (one written before they
+// were declared doesn't).
+func (w Watcher) Declared() bool { return len(w.Events) > 0 }
+
+// Declares reports whether it prints events of type t: one it declares, or
+// any, when it declares none.
+func (w Watcher) Declares(t string) bool {
+	if !w.Declared() {
+		return true
+	}
+	_, ok := w.Label(t)
+	return ok
+}
+
+// Label is what an event of type t means, as it declares it.
+func (w Watcher) Label(t string) (string, bool) {
+	for _, e := range w.Events {
+		if e.Type == t {
+			return e.Label, true
+		}
+	}
+	return "", false
+}
+
+// Types are the types it declares, in its order.
+func (w Watcher) Types() []string {
+	out := make([]string, len(w.Events))
+	for i, e := range w.Events {
+		out[i] = e.Type
+	}
+	return out
+}
+
+// eventList is the events key as written: event types, each with its label,
+// kept in the file's order.
+type eventList struct {
+	set    bool
+	events []EventType
+}
+
+func (l *eventList) UnmarshalYAML(n *yaml.Node) error {
+	l.set = true
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: events: each event type with its label, like `key.end: End key pressed`", n.Line)
+	}
+	seen := map[string]bool{}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		k, v := n.Content[i], n.Content[i+1]
+		switch {
+		case k.Kind != yaml.ScalarNode || !ValidType(k.Value):
+			return fmt.Errorf("line %d: events: %q isn't an event type: letters, digits and . _ : / - (up to 100), like meeting.started", k.Line, k.Value)
+		case seen[k.Value]:
+			return fmt.Errorf("line %d: events: %s twice", k.Line, k.Value)
+		case v.Kind != yaml.ScalarNode || v.Tag == "!!null" || strings.TrimSpace(v.Value) == "":
+			return fmt.Errorf("line %d: events.%s: its label, what it means in words (like End key pressed)", v.Line, k.Value)
+		case strings.ContainsAny(v.Value, "\r\n") || len([]rune(v.Value)) > MaxLabel:
+			return fmt.Errorf("line %d: events.%s: a label is one line of at most %d characters", v.Line, k.Value, MaxLabel)
+		}
+		seen[k.Value] = true
+		l.events = append(l.events, EventType{Type: k.Value, Label: strings.TrimSpace(v.Value)})
+	}
+	return nil
 }
 
 // file is the description file as written.
@@ -72,12 +153,14 @@ type file struct {
 	Timeout     string            `yaml:"timeout"`
 	Secrets     []programs.Secret `yaml:"secrets"`
 	Permissions []string          `yaml:"permissions"`
+	Events      eventList         `yaml:"events"`
 }
 
 // Fields are the description file's fields, for the guide and the docs.
 var Fields = []programs.Field{
 	{Name: "executable", Type: "path", Description: "Required. The executable, relative to this file's folder (or absolute). It's copied when the watcher is added."},
 	{Name: "mode", Type: "poll or stream", Description: "Required. poll: run every interval, printing what's new since its cursor, then exit. stream: run once and keep printing events as they happen; started again when it ends."},
+	{Name: "events", Type: "map", Description: "The events it prints: each type with its label, what it means in words (key.end: End key pressed). A hook picks its on.type from them, and its windows say the label; an event of another type is dropped. Left out, it may print any type."},
 	{Name: "description", Type: "string", Description: "What it watches, in a line."},
 	{Name: "name", Type: "string", Description: "Its name; when given, it must be the name it's added as."},
 	{Name: "args", Type: "list", Description: "Arguments passed every time it starts."},
@@ -103,7 +186,11 @@ func Parse(name, source string) (Watcher, error) {
 	if f.Name != "" && f.Name != name {
 		return Watcher{}, fmt.Errorf("%s names it %q, not %q", DescriptionFile, f.Name, name)
 	}
-	w := Watcher{Name: name, Description: f.Description, Mode: f.Mode, Interval: DefaultInterval, Timeout: DefaultTimeout, Source: source}
+	if f.Events.set && len(f.Events.events) == 0 {
+		return Watcher{}, fmt.Errorf("%s: events: list each event type it prints with its label, or leave events out", DescriptionFile)
+	}
+	w := Watcher{Name: name, Description: f.Description, Mode: f.Mode, Interval: DefaultInterval, Timeout: DefaultTimeout,
+		Events: f.Events.events, Source: source}
 	switch f.Mode {
 	case ModePoll:
 	case ModeStream:

@@ -149,7 +149,7 @@ struct HookListRow: View {
                     Text(hook.name).font(.title3.weight(.semibold))
                     Tag(text: HookWords.kind(program: hook.isProgram))
                 }
-                Text("On \(hook.on.text)").font(.subheadline).foregroundStyle(.secondary)
+                Text(hook.on.text).font(.subheadline).foregroundStyle(.secondary)
                 if let last = status?.lastRun ?? hook.lastRun {
                     HStack(spacing: 6) {
                         Text("Last run \(Formats.when(last.startedAt))")

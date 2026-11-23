@@ -433,7 +433,9 @@ components:
           type: string
         "on":
           $ref: '#/components/schemas/On'
-          description: 'On is what it acts on: a watcher''s events, of one type (or every type).'
+          description: |-
+            On is what it acts on: a watcher's events, of one type (or every
+            type), with the type's label as its watcher declares it.
         path:
           description: |-
             Path is its file: its prompt, or its program's description file (in
@@ -539,7 +541,9 @@ components:
           type: string
         "on":
           $ref: '#/components/schemas/On'
-          description: 'On is what it acts on: a watcher''s events, of one type (or every type).'
+          description: |-
+            On is what it acts on: a watcher's events, of one type (or every
+            type), with the type's label as its watcher declares it.
         path:
           description: |-
             Path is its file: its prompt, or its program's description file (in
@@ -796,6 +800,12 @@ components:
       additionalProperties: false
       description: 'On is what a hook listens for: a watcher''s events, of one type or (no type) every type.'
       properties:
+        label:
+          description: |-
+            Label is what its type means, as its watcher declares it ("End key
+            pressed"): set by the app from the watcher, never written in a hook's
+            file. Absent when it has no type, or its watcher declares none.
+          type: string
         type:
           type: string
         watcher:
@@ -2351,6 +2361,11 @@ components:
             - llm
             - program
           type: string
+        "on":
+          $ref: '#/components/schemas/On'
+          description: |-
+            On is a hook's trigger as `hooks list` gives it: with its type's
+            label, as its watcher declares it.
         permissions:
           description: |-
             Permissions are what the OS must allow it before it works: an LLM
@@ -2536,10 +2551,23 @@ components:
         errorAt:
           format: date-time
           type: string
+        events:
+          description: |-
+            Events are the events it declares it prints, in its file's order,
+            each with its label and the hooks that act on it. Absent when it
+            declares none: it may print any type (Hint says so).
+          items:
+            $ref: '#/components/schemas/WatcherEvent'
+          type: array
         executable:
           description: |-
             Executable is the app's copy, the one that runs; Checksum its SHA-256
             (trust is keyed to it).
+          type: string
+        hint:
+          description: |-
+            Hint is a nudge about how it's written that doesn't keep it from
+            running (it doesn't declare its events): never a problem.
           type: string
         hooks:
           description: |-
@@ -2607,6 +2635,27 @@ components:
         - hooks
         - source
       type: object
+    WatcherEvent:
+      additionalProperties: false
+      description: WatcherEvent is an event a watcher declares, with the hooks that act on it.
+      properties:
+        hooks:
+          description: |-
+            Hooks are the hooks that act on it: those listening for its type, and
+            those listening for every type.
+          items:
+            type: string
+          type: array
+        label:
+          description: Label is what it means, in words ("End key pressed").
+          type: string
+        type:
+          type: string
+      required:
+        - type
+        - label
+        - hooks
+      type: object
     WatcherInfo:
       additionalProperties: false
       description: WatcherInfo is one row of `watchers list --json`.
@@ -2631,10 +2680,23 @@ components:
         errorAt:
           format: date-time
           type: string
+        events:
+          description: |-
+            Events are the events it declares it prints, in its file's order,
+            each with its label and the hooks that act on it. Absent when it
+            declares none: it may print any type (Hint says so).
+          items:
+            $ref: '#/components/schemas/WatcherEvent'
+          type: array
         executable:
           description: |-
             Executable is the app's copy, the one that runs; Checksum its SHA-256
             (trust is keyed to it).
+          type: string
+        hint:
+          description: |-
+            Hint is a nudge about how it's written that doesn't keep it from
+            running (it doesn't declare its events): never a problem.
           type: string
         hooks:
           description: |-
@@ -2714,6 +2776,13 @@ components:
             there's no such watcher): its executable by checksum, its arguments
             and secrets, each stored or not.
           type: string
+        events:
+          description: |-
+            Events are the events it declares it prints, which trusting it
+            covers (absent: it declares none, and may print any type).
+          items:
+            $ref: '#/components/schemas/WatcherEvent'
+          type: array
         mode:
           enum:
             - poll
@@ -2740,6 +2809,13 @@ components:
           description: Changes since it was last trusted (empty for a first trust).
           items:
             type: string
+          type: array
+        events:
+          description: |-
+            Events are the events it declares it prints, which trusting it
+            covers (absent: it declares none).
+          items:
+            $ref: '#/components/schemas/WatcherEvent'
           type: array
         mode:
           enum:

@@ -63,6 +63,67 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// A watcher declares the events it prints, each type with its label, in
+// its file's order; one written before declares none and prints any type.
+func TestParseEvents(t *testing.T) {
+	for _, bad := range []string{
+		"events: {}\n",                                // declared, but none
+		"events: [key.end]\n",                         // no labels
+		"events: {key.end: }\n",                       // an empty label
+		"events: {\"key end\": End}\n",                // not a type
+		"events: {key.end: {label: End}}\n",           // a label is text
+		"events:\n  key.end: End\n  key.end: Again\n", // twice
+		"events: {key.end: \"" + strings.Repeat("x", MaxLabel+1) + "\"}\n",
+	} {
+		if _, err := Parse("keys", "executable: ./w\nmode: stream\n"+bad); err == nil {
+			t.Errorf("parsed %q", bad)
+		}
+	}
+	w, err := Parse("keys", "executable: ./w\nmode: stream\nevents:\n  key.home: Home key pressed\n  key.end: End key pressed\n")
+	if err != nil || !w.Declared() || strings.Join(w.Types(), ",") != "key.home,key.end" {
+		t.Fatalf("%+v %v", w.Events, err)
+	}
+	if l, ok := w.Label("key.end"); !ok || l != "End key pressed" || w.Declares("key.pgup") || !w.Declares("key.home") {
+		t.Fatalf("label %q %v", l, ok)
+	}
+	old, err := Parse("keys", "executable: ./w\nmode: stream\n")
+	if err != nil || old.Declared() || !old.Declares("anything") {
+		t.Fatalf("a watcher declaring nothing: %+v %v", old.Events, err)
+	}
+}
+
+// What a watcher prints of a type it doesn't declare is dropped and logged
+// once per type; the poll works, its other events and cursor kept.
+func TestUndeclaredEventsAreDropped(t *testing.T) {
+	w := script(t, "executable: ./watch\nmode: poll\nevents: {key.end: End key pressed}\n", `
+echo '{"id":"1","type":"key.end"}'
+echo '{"id":"2","type":"key.pgup"}'
+echo '{"id":"3","type":"key.pgup"}'
+echo '{"cursor":"c"}'
+`)
+	var log strings.Builder
+	inv := invocation(t, w)
+	inv.Log = &log
+	evs, cursor, err := Poll(context.Background(), w, inv, "")
+	if err != nil || len(evs) != 1 || evs[0].ID != "1" || cursor != "c" {
+		t.Fatalf("%+v %q %v", evs, cursor, err)
+	}
+	if strings.Count(log.String(), "dropped its key.pgup events") != 1 {
+		t.Fatalf("its log: %q", log.String())
+	}
+
+	s := script(t, "executable: ./watch\nmode: stream\nevents: {key.end: End key pressed}\n",
+		"echo '{\"id\":\"1\",\"type\":\"key.pgup\"}'\necho '{\"id\":\"2\",\"type\":\"key.end\"}'\n")
+	var got []string
+	log.Reset()
+	inv = invocation(t, s)
+	inv.Log = &log
+	_ = Stream(context.Background(), s, inv, "", func(e Event) { got = append(got, e.ID) }, func(string) {})
+	if strings.Join(got, ",") != "2" || !strings.Contains(log.String(), "dropped its key.pgup events") {
+		t.Fatalf("a stream's: %v %q", got, log.String())
+	}
+}
+
 func TestParseLine(t *testing.T) {
 	now := time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
 	ev, c, err := ParseLine([]byte(`{"id":"1","type":"meeting.started","at":"2026-11-20T09:30:00+01:00","data":{"link":"x"}}`), now)

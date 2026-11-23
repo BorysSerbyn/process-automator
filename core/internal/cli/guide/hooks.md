@@ -1,6 +1,6 @@
 # Writing a hook
 
-A hook is a prompt or a program run when something happens, instead of on a schedule: a meeting starting, an email arriving. What happens comes from a watcher: a program the app runs, which prints events. A hook says whose events it acts on (`on`) and what it does: a Dotprompt file (an LLM hook) or an executable beside a `hook.yaml` (a program hook). Several hooks can listen to one watcher. Hooks aren't routines: they have no schedule, and their own commands.
+A hook is a prompt or a program run when something happens, instead of on a schedule: a meeting starting, an email arriving. What happens comes from a watcher: a program the app runs, which prints events. The watcher declares the events it prints, each with a label in words; a hook picks one (`on`) and says what it does: a Dotprompt file (an LLM hook) or an executable beside a `hook.yaml` (a program hook). Several hooks can listen to one watcher. Hooks aren't routines: they have no schedule, and their own commands.
 
 ## Example
 A watcher, `calendar/watcher.yaml`:
@@ -9,6 +9,9 @@ description: Meetings in my calendar, as they start
 executable: ./calendar-watch   # relative to this file
 mode: poll                     # or stream
 interval: 30s
+events:                        # each type it prints, with what it means
+  meeting.started: A meeting starts
+  meeting.ended: A meeting ends
 secrets:
   - name: calendar-token       # passed as $CALENDAR_TOKEN
 permissions: [calendars]       # what the OS must allow it
@@ -43,7 +46,7 @@ Look at the new emails below. If any needs me today, notify me with its subject 
 A watcher prints JSON lines on stdout. An event:
 `{"id": "evt-42", "type": "meeting.started", "at": "2026-11-20T09:30:00+01:00", "data": {"title": "Standup", "link": "https://meet.google.com/abc"}}`
 - `id` (required): identifies it among its watcher's events: one printed again is ignored, across restarts
-- `type` (required): what happened, in letters, digits and `.` `_` `:` `/` `-`; hooks listen for a type
+- `type` (required): what happened, in letters, digits and `.` `_` `:` `/` `-`: one of the types its `events` declares (an event of another type is dropped and logged). A hook listens for one of them, and the app shows its label ("When A meeting starts (from calendar)")
 - `at`: when it happened (RFC 3339; left out, when it was printed). A hook drops an event older than its staleness, e.g. one that happened while the computer slept
 - `data`: an object, anything the action needs
 - `{"cursor": "..."}`, a line of its own: where to carry on from. The last one printed is saved and given back in `$%{cursorEnv}` the next time it starts
@@ -54,6 +57,7 @@ A watcher prints JSON lines on stdout. An event:
 - **poll**: run every `interval` with `$%{cursorEnv}`; it prints what's new since then, a cursor line, and exits 0. A poll that fails (exits non-zero, prints a line that's neither) changes nothing: the next one gets the same cursor. It isn't polled during a Mac's maintenance wake; one missed while the computer slept runs as it wakes
 - **stream**: started once, printing events as they happen. When it ends it's started again: at once after running a minute, else after a pause that doubles, up to %{maxBackoff}
 - **Environment**: a program's (a fixed PATH, `HOME`, `TMPDIR`, its secrets, and the desktop session's display variables when the app has them), `$%{cursorEnv}` and `$%{watcherEnv}`, in a folder of its own. What it prints on stderr goes to the daemon's log
+- **events**: a hook's `on.type` must be one of them (a hook on another type isn't added; one left listening after the watcher drops its type has a problem). They're part of what's trusted. A watcher without `events` may print any type, and is nudged to declare them
 - It runs only once trusted (trusting a hook that listens to it trusts it too), while it isn't paused, every permission it declares is granted, and a hook that's on listens to it
 
 ## Hooks

@@ -34,7 +34,8 @@ type HookInfo struct {
 	// the app's copy).
 	Path        string `json:"path"`
 	Description string `json:"description,omitempty"`
-	// On is what it acts on: a watcher's events, of one type (or every type).
+	// On is what it acts on: a watcher's events, of one type (or every
+	// type), with the type's label as its watcher declares it.
 	On hooks.On `json:"on"`
 	// Batch (an LLM hook's) gives one run every event that waited for it.
 	Batch     bool   `json:"batch,omitempty"`
@@ -134,7 +135,7 @@ func newHooksListCmd() *cobra.Command {
 				return nil
 			}
 			tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "NAME\tKIND\tENABLED\tACTS ON\tLAST RUN")
+			fmt.Fprintln(tw, "NAME\tKIND\tENABLED\tRUNS\tLAST RUN")
 			for _, h := range rows {
 				last := "-"
 				if l := h.LastRun; l != nil {
@@ -144,7 +145,7 @@ func newHooksListCmd() *cobra.Command {
 				if k == "" {
 					k = string(engine.KindLLM)
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%v\t%s\t%s\n", h.Name, k, h.Enabled, h.On.String(), last)
+				fmt.Fprintf(tw, "%s\t%s\t%v\t%s\t%s\n", h.Name, k, h.Enabled, h.On.When(), last)
 			}
 			return tw.Flush()
 		}),
@@ -157,7 +158,7 @@ func newHooksListCmd() *cobra.Command {
 // with its settings are warned about.
 func hookInfo(cmd *cobra.Command, a *engine.App, status *runstatus.Status, x engine.Runnable) HookInfo {
 	h, _ := engine.AsHook(x)
-	row := HookInfo{Name: x.Name(), Kind: x.Kind().Written(), Path: x.Path(), Description: x.Description(), On: h.On, Batch: h.Batch,
+	row := HookInfo{Name: x.Name(), Kind: x.Kind().Written(), Path: x.Path(), Description: x.Description(), On: a.LabeledOn(h.On), Batch: h.Batch,
 		Permissions: a.Permissions(x)}
 	c, err := a.HookConfig(x)
 	if err != nil {
@@ -211,7 +212,7 @@ func newHooksShowCmd() *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), d)
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "%s (%s)\n  acts on   %s\n  enabled   %v\n  trusted   %v\n", d.Name, d.Path, d.On.String(), d.Enabled, d.Trusted)
+			fmt.Fprintf(out, "%s (%s)\n  runs      %s\n  enabled   %v\n  trusted   %v\n", d.Name, d.Path, d.On.When(), d.Enabled, d.Trusted)
 			if d.Untrusted != "" {
 				fmt.Fprintf(out, "            %s\n", d.Untrusted)
 			}
@@ -259,6 +260,10 @@ func newHooksAddCmd(update bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Its type is one its watcher declares it prints.
+			if err := a.CheckOn(parsed.On); err != nil {
+				return err
+			}
 			if parsed.Prompt != nil {
 				// As routines create does: no servers or tools that don't exist.
 				if err := checkRoutineTools(cmd, a, *parsed.Prompt); err != nil {
@@ -295,8 +300,8 @@ func newHooksAddCmd(update bool) *cobra.Command {
 				out.Kind = engine.KindProgram.Written()
 			}
 			if !update {
-				return emit(cmd, out, fmt.Sprintf("Added the hook %s (%s), off and not trusted. It acts on %s.\n"+
-					"Turn it on (trust it, and listen): %s hooks trust %s --resume", name, h.Path, h.On.String(), product.Command, name))
+				return emit(cmd, out, fmt.Sprintf("Added the hook %s (%s), off and not trusted. It runs when %s.\n"+
+					"Turn it on (trust it, and listen): %s hooks trust %s --resume", name, h.Path, a.LabeledOn(h.On).String(), product.Command, name))
 			}
 			text := fmt.Sprintf("Updated the hook %s (%s).", name, h.Path)
 			if x, err := a.FindHook(name); err == nil {

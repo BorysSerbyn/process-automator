@@ -25,8 +25,8 @@ func TestHooksListsHooksAndWatchers(t *testing.T) {
 	h.Load()
 	h.Update(statusFrom(t, "status-hooks.json"))
 	c := h.Content()
-	mustShow(t, c, "Hooks", "brief", "Prompt", "On cal's meeting.started events", "Paused",
-		"open-meet", "Program", "On every event from cal", "Waiting for events", "Last run Today at",
+	mustShow(t, c, "Hooks", "brief", "Prompt", "When A meeting starts (from cal)", "Paused",
+		"open-meet", "Program", "When any event (from cal)", "Waiting for events", "Last run Today at",
 		"Watchers", "cal", "Polled every 30s", "Heard by brief, open-meet",
 		"inbox", "Streams events", "Failing", "exit 1: no token (since Today at", "No hook listens", "acme-auto guide hooks")
 	mustNotShow(t, c, "standup")
@@ -100,7 +100,7 @@ func TestAProgramHooksWindow(t *testing.T) {
 	h, f, events := newHookFor(t, "open-meet", openMeetReplies)
 	c := h.Content()
 	mustShow(t, c, "open-meet", "Waiting for events", "Status", "Last run", "success", "event", "When it runs",
-		"On cal's meeting.started events", "cal paused", "cal failing", "exit 1: calendar unreachable", "What it runs", "Trusted")
+		"When a meeting.started event (from cal)", "cal paused", "cal failing", "exit 1: calendar unreachable", "What it runs", "Trusted")
 	for _, gone := range []string{"Run Now", "Next run", "Memories", "Batches", "Not trusted", "Turn On…", "Staleness"} {
 		mustNotShow(t, c, gone)
 	}
@@ -190,7 +190,7 @@ func TestTurningOnAHookAndItsWatcher(t *testing.T) {
 	}
 	test.Tap(button(t, c, "Turn On…"))
 	c = h.Content()
-	mustShow(t, c, "Turn on brief", "Briefs me. It runs on cal's meeting.started events.", "Before you turn it on",
+	mustShow(t, c, "Turn on brief", "Briefs me. It runs when A meeting starts (from cal).", "Before you turn it on",
 		"it can write (Bash) and acts on outside event data", "cal needs signing in",
 		"It can be turned on now; it works once signed in.", "Its watcher, cal, is trusted with it")
 	test.Tap(button(t, c, "Sign In…"))
@@ -285,6 +285,7 @@ func TestAWatchersWindow(t *testing.T) {
 		"Started", "Today at", "Last event", "Never", "exit 1: no token", "Since Today at", "Hooks listening", "1 hook", "triage",
 		"What it runs", "/home/me/.config/acme/watchers/inbox/watch", "SHA-256 1234567890ab…", "--all", "mail-token", "as $MAIL_TOKEN",
 		"Not stored", "Changed", "its executable changed", "Watcher file", "mode: stream",
+		"Events it prints", "An email arrives", "email.received", "Heard by triage", "An email is read", "No hook acts on it",
 		"acme-auto watchers update inbox --from <folder>/watcher.yaml")
 	mustNotShow(t, c, "Writes")
 	test.Tap(all[*linkRow](c)[0])
@@ -298,4 +299,16 @@ func TestAWatchersWindow(t *testing.T) {
 	if got := strings.Join(events, ","); got != want {
 		t.Fatalf("got %q", got)
 	}
+}
+
+// A watcher written before watchers declared their events: the core's hint
+// as a sentence, never a problem.
+func TestAWatchersHint(t *testing.T) {
+	f := newFakeCLI(t, map[string]string{"watchers show cal --json": `{"name":"cal","path":"/w/cal/watcher.yaml","mode":"poll",` +
+		`"interval":"30s","executable":"/w/cal/watch","args":[],"secrets":[],"enabled":true,"trusted":true,"hooks":[],` +
+		`"hint":"it doesn't declare the events it prints","source":""}`})
+	w := NewWatcher(f.CLI, window(t), now, "cal", func() {}, func(string) {})
+	w.Load()
+	mustShow(t, w.Content(), "Events it prints", "It doesn't declare the events it prints.")
+	mustNotShow(t, w.Content(), "Heard by")
 }

@@ -371,7 +371,7 @@ func (h *Hook) summary() string {
 	if d == nil {
 		return ""
 	}
-	s := "It runs on " + onText(d.On) + "."
+	s := "It runs when " + onPhrase(d.On) + "."
 	if d.Description != "" {
 		s = d.Description + ". " + s
 	}
@@ -612,12 +612,12 @@ func (h *Hook) statusRows() []fyne.CanvasObject {
 	return append(rows, padded(0, 6, 0, 0, container.NewHBox()))
 }
 
-// trigger is when it runs, in a line ("On cal's meeting.started events"),
+// trigger is when it runs, in a line ("When End key pressed (from nav-keys)"),
 // with its watcher's state when it needs me (paused, failing); the rest
 // (its watcher, the event type, batches, staleness, rate) opens under it.
 func (h *Hook) trigger() []fyne.CanvasObject {
 	d := h.detail
-	line := container.NewVBox(heading("When it runs", false), secondary("On "+onText(d.On)))
+	line := container.NewVBox(heading("When it runs", false), secondary(onText(d.On)))
 	tags := container.NewHBox()
 	if w := d.Watcher; w != nil {
 		if !w.Enabled {
@@ -658,10 +658,13 @@ func (h *Hook) trigger() []fyne.CanvasObject {
 		missing.Importance = widget.DangerImportance
 		rows = append(rows, infoRow("Watcher", mono(d.On.Watcher), missing))
 	}
-	if d.On.Type != "" {
-		rows = append(rows, infoRow("Events", mono(d.On.Type)))
-	} else {
+	switch {
+	case d.On.Type == "":
 		rows = append(rows, infoRow("Events", text("Every type")))
+	case d.On.Label != "":
+		rows = append(rows, infoRow("Events", container.NewVBox(text(d.On.Label), secondary(d.On.Type))))
+	default:
+		rows = append(rows, infoRow("Events", mono(d.On.Type)))
 	}
 	if !d.IsProgram() {
 		batch := "One run per event."
@@ -677,14 +680,22 @@ func (h *Hook) trigger() []fyne.CanvasObject {
 		padded(0, 6, 0, 0, container.NewHBox()))
 }
 
-// onText is what a hook acts on, in words: "cal's meeting.started events",
-// or "every event from cal".
-func onText(on cli.On) string {
-	if on.Type == "" {
-		return "every event from " + on.Watcher
+// onPhrase is what a hook acts on, in words, with the label its watcher
+// declares for the type: "End key pressed (from nav-keys)"; "a key.end
+// event (from nav-keys)" when it declares none; "any event (from
+// nav-keys)" with no type.
+func onPhrase(on cli.On) string {
+	switch {
+	case on.Type == "":
+		return "any event (from " + on.Watcher + ")"
+	case on.Label == "":
+		return "a " + on.Type + " event (from " + on.Watcher + ")"
 	}
-	return on.Watcher + "'s " + on.Type + " events"
+	return on.Label + " (from " + on.Watcher + ")"
 }
+
+// onText is when a hook runs: "When End key pressed (from nav-keys)".
+func onText(on cli.On) string { return "When " + onPhrase(on) }
 
 // access is what the hook can reach (an LLM hook's) or runs (a program
 // hook's), read only, opening to its review.

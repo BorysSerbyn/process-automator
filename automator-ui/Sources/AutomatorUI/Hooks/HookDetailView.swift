@@ -100,7 +100,7 @@ struct HookDetailView: View {
     /// What it does, in a line, for its Turn On review.
     private var turnOnSummary: String? {
         guard let detail = model.detail else { return nil }
-        return [detail.description, "It runs on \(detail.on.text)."].compactMap { $0 }.joined(separator: " ")
+        return [detail.description, "It runs when \(detail.on.phrase)."].compactMap { $0 }.joined(separator: " ")
     }
 
     @ViewBuilder private var controls: some View {
@@ -267,7 +267,7 @@ struct HookOverview: View {
     }
 }
 
-/// When a hook runs, in a line ("On cal's meeting.started events"), with
+/// When a hook runs, in a line ("When End key pressed (from nav-keys)"), with
 /// its watcher's state when it needs me (paused, failing) and a link to it;
 /// the rest (event type, batches, staleness, rate) folded underneath.
 struct HookTrigger: View {
@@ -282,7 +282,7 @@ struct HookTrigger: View {
             Image(systemName: "bolt").foregroundStyle(.secondary).frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
                 Text("When it runs").font(.headline)
-                Text("On \(detail.on.text)").font(.subheadline).foregroundStyle(.secondary)
+                Text(detail.on.text).font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             if let watcher = detail.watcher {

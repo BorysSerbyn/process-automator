@@ -170,6 +170,40 @@
         },
         "type": "array",
         "description": "Permissions are what the OS must allow it, as its file declares, with\nwhat the scheduler last found: it isn't started while one isn't\ngranted. Absent when none."
+      },
+      "events": {
+        "items": {
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "description": "Label is what it means, in words (\"End key pressed\")."
+            },
+            "hooks": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "description": "Hooks are the hooks that act on it: those listening for its type, and\nthose listening for every type."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "type",
+            "label",
+            "hooks"
+          ],
+          "description": "WatcherEvent is an event a watcher declares, with the hooks that act on it."
+        },
+        "type": "array",
+        "description": "Events are the events it declares it prints, in its file's order,\neach with its label and the hooks that act on it. Absent when it\ndeclares none: it may print any type (Hint says so)."
+      },
+      "hint": {
+        "type": "string",
+        "description": "Hint is a nudge about how it's written that doesn't keep it from\nrunning (it doesn't declare its events): never a problem."
       }
     },
     "additionalProperties": false,

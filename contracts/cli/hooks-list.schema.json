@@ -28,6 +28,10 @@
           },
           "type": {
             "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "description": "Label is what its type means, as its watcher declares it (\"End key\npressed\"): set by the app from the watcher, never written in a hook's\nfile. Absent when it has no type, or its watcher declares none."
           }
         },
         "additionalProperties": false,
@@ -35,7 +39,7 @@
         "required": [
           "watcher"
         ],
-        "description": "On is what it acts on: a watcher's events, of one type (or every type)."
+        "description": "On is what it acts on: a watcher's events, of one type (or every\ntype), with the type's label as its watcher declares it."
       },
       "batch": {
         "type": "boolean",
