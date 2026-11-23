@@ -243,7 +243,9 @@ final class SetupViewModel: ObservableObject {
         reviewErrors[routine] = nil
         Task {
             switch await cli.background({ $0.trustCheck(routine) }) {
-            case .success(let review): reviews[routine] = review
+            case .success(let review):
+                reviews[routine] = review
+                granter.saw(review.permissions ?? [])
             case .failure(let failure): reviewErrors[routine] = failure.message
             }
         }

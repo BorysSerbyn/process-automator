@@ -59,6 +59,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
                 self?.list?.model.load()
             }
             let window = makeWindow(RoutineDetailView(model: model), title: name, size: NSSize(width: 680, height: 760))
+            frontOnGrant(window, model.granter, model.turnOn.granter)
             details[name] = (window, model)
             cascade(window)
         }
@@ -93,6 +94,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
             }
             let view = HookDetailView(model: model, openWatcher: { [weak self] in self?.showWatcher($0) })
             let window = makeWindow(view, title: name, size: NSSize(width: 680, height: 760))
+            frontOnGrant(window, model.granter, model.turnOn.granter)
             hooks[name] = (window, model)
             cascade(window)
         }
@@ -112,6 +114,7 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
             }
             let view = WatcherView(model: model, openHook: { [weak self] in self?.showHook($0) })
             let window = makeWindow(view, title: name, size: NSSize(width: 640, height: 680))
+            frontOnGrant(window, model.granter)
             watchers[name] = (window, model)
             cascade(window)
         }
@@ -153,6 +156,17 @@ final class RoutineWindows: NSObject, NSWindowDelegate {
                 self.watchers[name] = nil
             }
         }
+    }
+}
+
+/// Brings window back to the front once a permission its Grant… asked for
+/// is allowed: macOS gives the focus back to the app that was in front
+/// before its prompt (a terminal, say), or System Settings keeps it, and an
+/// app with no Dock icon doesn't get it back by itself.
+@MainActor
+func frontOnGrant(_ window: NSWindow, _ granters: PermissionGranter...) {
+    for granter in granters {
+        granter.granted = { [weak window] _ in bringToFront(window) }
     }
 }
 

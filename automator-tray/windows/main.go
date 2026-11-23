@@ -159,6 +159,7 @@ func run(dir string, which tray.Window) error {
 		}()
 	}
 	w.SetMaster() // closing it ends the process
+	ui.Focus = func() { w.Show(); w.RequestFocus() }
 	w.SetContent(view.Content())
 	w.Resize(size)
 	w.CenterOnScreen()

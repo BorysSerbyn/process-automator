@@ -126,6 +126,7 @@ final class RoutineModel: ObservableObject, RunHistoryModel, MemoriesModel {
         Task {
             switch await cli.background({ [name] in $0.routine(name) }) {
             case .success(let detail):
+                granter.saw(detail.permissions ?? [])
                 if !(detail.permissions ?? []).blocking.isEmpty { watchPermissions() }
                 self.detail = detail
                 loadError = nil

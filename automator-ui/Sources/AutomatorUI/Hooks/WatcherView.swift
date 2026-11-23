@@ -54,6 +54,7 @@ final class WatcherModel: ObservableObject {
         Task {
             switch await cli.background({ [name] in $0.watcher(name) }) {
             case .success(let detail):
+                granter.saw(detail.permissions ?? [])
                 self.detail = detail
                 if !(detail.permissions ?? []).blocking.isEmpty { watchPermissions() }
                 loadError = nil

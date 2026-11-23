@@ -28,6 +28,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             window.setContentSize(NSSize(width: 640, height: 680))
             window.center()
             window.delegate = self
+            frontOnGrant(window, model.granter)
             self.window = window
             self.model = model
         }

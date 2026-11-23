@@ -340,6 +340,7 @@ func (s *Setup) review(step cli.SetupStep) {
 				s.errors[stepID(step)] = err.Error()
 			} else {
 				s.reviews[step.Subject] = r
+				s.granter.saw(r.Permissions)
 			}
 			s.refresh()
 		}

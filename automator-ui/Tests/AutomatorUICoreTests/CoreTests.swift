@@ -674,6 +674,43 @@ private let inputMonitoring = """
     #expect(ran(log).allSatisfy { $0.hasPrefix("permissions request ") })
 }
 
+/// Once a permission Grant… asked for is allowed (at once, or later when
+/// what needs it reads its permissions again), `granted` says so, once: the
+/// app brings its window back in front of the prompt's app or System
+/// Settings. One it didn't ask for, or still missing, says nothing.
+@MainActor
+@Test func grantSaysWhenItsAllowed() async throws {
+    let prompted = inputMonitoring.replacingOccurrences(of: #""by""#, with: #""asked":true,"by""#)
+    let (cli, _) = try scriptedCLI([
+        "permissions request input-monitoring --json": prompted,
+        "permissions request notifications --json":
+            #"{"permission":"notifications","label":"Notifications","state":"granted","asked":true,"by":[]}"#,
+    ])
+    let granter = PermissionGranter(cli: cli, app: "Acme")
+    var granted: [String] = []
+    granter.granted = { granted.append($0) }
+    let missing = try JSONDecoder().decode(PermissionNeed.self, from: Data(inputMonitoring.utf8))
+    let allowed = try JSONDecoder().decode(
+        PermissionNeed.self, from: Data(inputMonitoring.replacingOccurrences(of: "missing", with: "granted").utf8))
+    let camera = try JSONDecoder().decode(
+        PermissionNeed.self,
+        from: Data(inputMonitoring.replacingOccurrences(of: "input-monitoring", with: "camera")
+            .replacingOccurrences(of: "missing", with: "granted").utf8))
+
+    granter.saw([allowed])  // not asked for: nothing
+    await granter.grant("input-monitoring")
+    #expect(granted.isEmpty && granter.notes["input-monitoring"] != nil)
+    granter.saw([missing, camera])
+    #expect(granted.isEmpty)
+    granter.saw([allowed])
+    #expect(granted == ["input-monitoring"] && granter.notes["input-monitoring"] == nil)
+    granter.saw([allowed])
+    #expect(granted == ["input-monitoring"])
+    // Allowed before asking returned (answered in the prompt at once).
+    await granter.grant("notifications")
+    #expect(granted == ["input-monitoring", "notifications"])
+}
+
 /// A stand-in CLI whose `trust --check` says the permission is missing the
 /// first time and granted after (the scheduler recorded it meanwhile).
 private func permissionFlippingCLI() throws -> CLI {

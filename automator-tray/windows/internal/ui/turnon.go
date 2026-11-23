@@ -103,6 +103,7 @@ func (t *turnOn) load() {
 				t.loadError = err.Error()
 			} else {
 				t.review = &review
+				t.granter.saw(review.Permissions)
 				if t.showing && t.waitingForPermission() {
 					t.poll()
 				}

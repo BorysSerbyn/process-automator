@@ -129,6 +129,7 @@ final class HookModel: ObservableObject, RunHistoryModel, MemoriesModel {
         Task {
             switch await cli.background({ [name] in $0.hook(name) }) {
             case .success(let detail):
+                granter.saw(detail.permissions ?? [])
                 if !(detail.permissions ?? []).blocking.isEmpty { watchPermissions() }
                 if self.detail == nil, sampleEvent.isEmpty { sampleEvent = HookWords.sampleEvent(detail.on) }
                 self.detail = detail

@@ -118,3 +118,37 @@ func TestNoRowsForUnknownOrUnsupported(t *testing.T) {
 		t.Fatal("rows for unknown or unsupported permissions")
 	}
 }
+
+// Once a permission Grant… asked for is allowed (at once, or when what
+// needs it reads its permissions again), the window comes to the front,
+// once: the OS's prompt or settings page may have left it behind another
+// app. One it didn't ask for, or still missing, doesn't.
+func TestAnAllowedPermissionBringsTheWindowBack(t *testing.T) {
+	focused := 0
+	focus := Focus
+	Focus = func() { focused++ }
+	t.Cleanup(func() { Focus = focus })
+	replies := tellReplies("@hook-tell-off.json")
+	replies["permissions request camera --json"] = `{"permission":"camera","label":"Camera","state":"granted","asked":true,"by":[]}`
+	f := newFakeCLI(t, replies)
+	g := newGranter(f.CLI, now, func() {}, func() {})
+	g.openURL = func(string) error { return nil }
+	missing := []cli.PermissionNeed{{Permission: "input-monitoring", Label: "Input Monitoring", State: "missing"}}
+	allowed := []cli.PermissionNeed{{Permission: "input-monitoring", Label: "Input Monitoring", State: "granted"}}
+
+	g.saw(allowed) // not asked for
+	g.grant("input-monitoring")
+	g.saw(missing)
+	if focused != 0 {
+		t.Fatalf("focused %d times before it was allowed", focused)
+	}
+	g.saw(allowed)
+	g.saw(allowed)
+	if focused != 1 || g.notes["input-monitoring"] != "" {
+		t.Fatalf("focused %d times; note %q", focused, g.notes["input-monitoring"])
+	}
+	g.grant("camera") // allowed in the prompt before asking returned
+	if focused != 2 {
+		t.Fatalf("focused %d times", focused)
+	}
+}

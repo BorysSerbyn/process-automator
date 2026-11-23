@@ -178,6 +178,7 @@ func (r *Routine) loadDetail() {
 				r.loadError = err.Error()
 			} else {
 				r.detail, r.loadError = &d, ""
+				r.granter.saw(d.Permissions)
 				r.watchPermissions()
 				if !d.IsProgram() && !r.memories.loaded {
 					r.memories.load()

@@ -78,7 +78,9 @@ public final class TurnOn: ObservableObject {
             kind == .hook ? cli.hookTrustCheck(name) : cli.trustCheck(name)
         }
         switch result {
-        case .success(let review): self.review = review
+        case .success(let review):
+            self.review = review
+            granter.saw(review.permissions ?? [])
         case .failure(let failure): loadError = failure.message
         }
     }

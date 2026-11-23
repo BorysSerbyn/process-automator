@@ -97,6 +97,13 @@ public final class PermissionGranter: ObservableObject {
     public var openURL: (URL) -> Void = { _ in }
     /// Called after asking (what needs it reads its permissions again).
     public var asked: () -> Void = {}
+    /// Called once a permission Grant… asked for is allowed: the app brings
+    /// the window it was asked from back to the front. macOS hands the focus
+    /// to whatever was in front before its prompt, and System Settings keeps
+    /// it, so an app with no Dock icon would stay behind them.
+    public var granted: (String) -> Void = { _ in }
+    /// The permissions asked for that weren't allowed yet when asking ended.
+    private var waiting: Set<String> = []
 
     public init(cli: CLI, app: String) {
         self.cli = cli
@@ -111,6 +118,12 @@ public final class PermissionGranter: ObservableObject {
         switch result {
         case .success(let request):
             notes[permission] = request.instructions(app: app)
+            if request.granted {
+                waiting.remove(permission)
+                granted(permission)
+            } else {
+                waiting.insert(permission)
+            }
             // Only when macOS didn't ask (refused before, or it can't be
             // asked): over its prompt, the settings page would hide the
             // prompt and this window behind it. While the prompt is up the
@@ -122,5 +135,16 @@ public final class PermissionGranter: ObservableObject {
             errors[permission] = failure.message
         }
         asked()
+    }
+
+    /// What needs them reads its permissions again (`permissions` in its
+    /// review or `show`): one Grant… asked for that's allowed now is
+    /// `granted`, once, and its note goes.
+    public func saw(_ permissions: [PermissionNeed]) {
+        for need in permissions where need.state == .granted && waiting.contains(need.permission) {
+            waiting.remove(need.permission)
+            notes[need.permission] = nil
+            granted(need.permission)
+        }
     }
 }

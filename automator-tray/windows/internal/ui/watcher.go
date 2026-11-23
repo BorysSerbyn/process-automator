@@ -78,6 +78,7 @@ func (w *Watcher) Load() {
 				w.loadError = err.Error()
 			} else {
 				w.detail, w.loadError = &d, ""
+				w.granter.saw(d.Permissions)
 				w.watchPermissions()
 				if !d.Trusted && w.review == nil {
 					w.loadTrust()

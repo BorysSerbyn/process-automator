@@ -163,6 +163,7 @@ func (h *Hook) loadDetail() {
 					h.sample = sampleEvent(d.On)
 				}
 				h.detail, h.loadError = &d, ""
+				h.granter.saw(d.Permissions)
 				h.watchPermissions()
 				if !d.IsProgram() && !h.memories.loaded {
 					h.memories.load()

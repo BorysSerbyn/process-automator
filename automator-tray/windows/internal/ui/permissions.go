@@ -37,11 +37,19 @@ type granter struct {
 	granting string
 	notes    map[string]string
 	errors   map[string]string
+	// waiting are the permissions asked for that weren't allowed yet when
+	// asking ended.
+	waiting map[string]bool
 }
+
+// Focus brings this process's window to the front (main sets it): once a
+// permission its Grant… asked for is allowed, the OS's prompt or settings
+// page may have left it behind another app.
+var Focus = func() {}
 
 func newGranter(c cli.CLI, async Async, redraw, asked func()) *granter {
 	return &granter{cli: c, async: async, redraw: redraw, asked: asked, openURL: openURL,
-		notes: map[string]string{}, errors: map[string]string{}}
+		notes: map[string]string{}, errors: map[string]string{}, waiting: map[string]bool{}}
 }
 
 // openURL opens an address with the desktop, through Fyne.
@@ -68,6 +76,12 @@ func (g *granter) grant(permission string) {
 				g.errors[permission] = err.Error()
 			} else {
 				g.notes[permission] = r.Instructions(AppName)
+				if r.State == "granted" {
+					delete(g.waiting, permission)
+					Focus()
+				} else {
+					g.waiting[permission] = true
+				}
 				// Only when the OS didn't ask (refused before, or it can't be
 				// asked, as on Linux): over its prompt, the settings page
 				// would hide it. While the prompt is up the note says to
@@ -82,6 +96,19 @@ func (g *granter) grant(permission string) {
 			g.asked()
 		}
 	})
+}
+
+// saw is what needs them read its permissions again: one Grant… asked for
+// that's allowed now brings the window to the front, once, and its note
+// goes.
+func (g *granter) saw(list []cli.PermissionNeed) {
+	for _, p := range list {
+		if p.State == "granted" && g.waiting[p.Permission] {
+			delete(g.waiting, p.Permission)
+			delete(g.notes, p.Permission)
+			Focus()
+		}
+	}
 }
 
 // rows are the permissions given, one row each: its plain name, why it's
