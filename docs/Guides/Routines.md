@@ -13,7 +13,7 @@ procauto routines update digest --from ./digest.prompt   # replace it later; its
 Both validate the file first. A routine that runs an executable instead of a model is a program: see [[Guides/Writing a program|Writing a program]]. You can also edit files in the routines folder directly (`procauto paths` shows where), or ask Claude to write one ([[Guides/Using it from Claude|Using it from Claude]]). `procauto routines delete <name>` removes a routine with its settings, trust and memories; its run history stays.
 
 ## Add one from a template
-Templates are routines shared as files, grouped by tags (general to specific). The app ships none: they come from the repository's `templates/` folder when you or your team add some there, and a release carries whatever that folder holds.
+Templates are routines (and programs, hooks and watchers) shared as files, grouped by tags (general to specific). The app ships none: they come from the repository's `templates/` folder when you or your team add some there, and a release carries whatever that folder holds.
 
 ```sh
 procauto templates list
@@ -24,6 +24,7 @@ procauto templates install projects/acme/standup --set channel=C0123456789
 - Templates under `projects/<project>/` are for that project's members; setup asks which projects you work on before offering them
 - The template is copied into your routines folder, where it's yours to edit. Parameter values become settings (`routines.<name>.params.<param>`), so you can change them later (see [[Guides/Settings|Settings]])
 - `templates list` shows only the ones for your OS; `--all` shows every one
+- Programs, hooks and watchers can be templates too: `templates list` shows each one's kind. Installing one adds it off and untrusted, as adding it from its files would; one that ships as source is built first, so its toolchain (e.g. `go`, or Xcode's `swiftc`) must be installed. Installing a hook installs the watcher it listens to with it when you don't have it. Turn them on with `routines trust <name> --resume` or `hooks trust <name> --resume`
 - In the menu bar app: Setup window › **Templates**
 
 Check which servers an installed routine uses (`procauto routines show <name>`), add any that are missing ([[Guides/Adding a plugin|Adding a plugin]]) and sign in to them ([[Guides/Plugins and sign-ins|Plugins and sign-ins]]).

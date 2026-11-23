@@ -59,9 +59,9 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Changes take effect at once**: trusting, turning on or off, pausing, resuming, adding, updating or deleting a routine, program, hook or watcher, a setting, and a permission allowed (asked for from the app, or turned on in the OS's settings after asking) reach the scheduler within about a second: a hook turned on hears its watcher's events from then, one paused stops its watcher, and the status shows it straight away
 
 ## Templates
-- **Templates are shareable routines**: files in the repository's `templates/` folder, shipped with the app as files; the app ships none of its own and works with none
+- **Templates are shareable routines, programs, hooks and watchers**: files and folders in the repository's `templates/` folder, shipped with the app as files; the app ships none of its own and works with none. A routine's is its `.prompt` file; a program's, a hook's or a watcher's is a folder with its description file, its executable or the source to build it from, and `template.yaml`
 - **Tags**: templates are grouped in tag folders, general to specific; those under `projects/<project>/` are for that project's members
-- **Installing**: a template is copied into the routines folder, where it's mine to edit; its parameters are asked for and become per-routine settings
+- **Installing**: a routine template is copied into the routines folder, where it's mine to edit; its parameters are asked for and become per-routine settings. A program, hook or watcher template is added as I'd add one from its files, off and untrusted, its parameters asked for and filled into its description file; one shipped as source is built first, which needs its toolchain installed (the error names it). A hook's watcher is installed with it from its template when I don't have it
 - **Per OS**: only templates for this OS are offered unless I ask for all
 
 ## Plugins
