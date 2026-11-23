@@ -207,7 +207,7 @@ automator-windows is Go on Fyne, so it uses the tray's CLI runner, app discovery
 - **The windows in the tray's module**: Fyne's requirements would move the tray's own dependencies, and its CGO-free builds of `./...` would fail on Fyne's cgo
 
 ## Decision: the Linux windows app is built in Docker
-Fyne needs cgo against Linux's OpenGL, X11 and Wayland headers and libraries, which a Mac doesn't have, and releases are built on my Mac. `make package-linux` builds automator-windows in a Debian 12 container (the Go image of `go.mod`'s version) holding both architectures' libraries (Debian multiarch) and a C cross compiler for the architecture the machine isn't: both build at native speed from one image, with no emulation. Debian 12's glibc makes a binary that runs on glibc 2.34 or later (Ubuntu 22.04, Debian 12, Fedora 35 and newer). Any Docker works (OrbStack, Docker Desktop, Colima, Docker on Linux); Go's caches are kept in Docker volumes. `LINUX_WINDOWS=none` packages without it, for a machine with no Docker: the tray then opens every window in a terminal.
+Fyne needs cgo against Linux's OpenGL, X11 and Wayland headers and libraries, which a Mac doesn't have, and releases are built on my Mac. `make package-linux` builds automator-windows in a Debian 12 container (the Go image of `go.mod`'s version) holding both architectures' libraries (Debian multiarch) and a C cross compiler for the architecture the machine isn't: both build at native speed from one image, with no emulation. Debian 12's glibc makes a binary that runs on glibc 2.34 or later (Ubuntu 22.04, Debian 12, Fedora 35 and newer). Any Docker works (OrbStack, Docker Desktop, Colima, Docker on Linux); Go's caches are kept in Docker volumes (see below for the binary's). `LINUX_WINDOWS=none` packages without it, for a machine with no Docker: the tray then opens every window in a terminal.
 
 ### Rejected
 - **fyne-cross**: the same containers behind another tool, with its own images and versions to track, for what one Dockerfile does
@@ -370,6 +370,15 @@ An artifact is checked against its release's `SHA256SUMS` on every platform; on 
 ### Rejected
 - **Keeping CI on GitHub for the Linux install test alone**: the minutes, for one check
 - **Deleting the workflows**: bringing them back means rewriting them, secrets and deploy key included
+
+## Decision: builds are timed, and the windows app is reused by what it's built from
+`make ci` and `make publish` time each step and sum them up, so where the time goes is measured rather than guessed. The costly piece outside the tests is the Linux windows app, compiled with cgo in Docker for each architecture: `make ci` built it for amd64, `make publish` rebuilt it for both minutes later, and Chrono's release built the same sources again from its checkout. It doesn't carry the version or the app's names (the tray and windows app get them from the package's `install.env`), so a binary depends only on the tray folder's files, the architecture, Go's version and the build image's Dockerfile: built once for those, it's copied from a cache in my user cache folder, which every app built on the engine shares. `make ci` builds it for arm64 too, so a release after it finds both. Go's caches in Docker are volumes named for Go's version, and another version's volumes and image are removed when it builds: a toolchain change starts clean, and nothing grows without bound.
+
+### Rejected
+- **`make publish` reusing `make ci`'s artifacts whole**: `make ci` runs before `make release` tags the commit, so its artifacts carry a development version (in the core binary, `install.env` and the file names) and the test bundle prefix; a release's must carry its own, so the core is built again (seconds, from Go's cache) and only what doesn't depend on them is reused
+- **Running `make ci` after tagging, so publish can take everything**: a failing check would leave a tag to remove, and the order is the one releases have always followed
+- **BuildKit cache mounts**: they'd need the build in a Dockerfile `RUN` with the sources copied in, rather than a `docker run` on the mounted folder; named volumes do the same for Go's caches
+- **Keying the cache on the commit**: a commit that doesn't touch the tray would build it again, and an app's checkout of the engine is a different repository at the same sources
 
 ## Decision: templates name the backends they work with
 A template can list the backends it works with (`automator.backends`), and installing it on another backend is refused, saying how to switch. Some routines only make sense on an agent CLI (built-in tools, a folder, a saved session, effort): on `claude-api` or `local` they'd install and set up fine, then fail every run. Setup only offers templates that can be installed; `templates list` still shows the others, marked, since the backend can change.

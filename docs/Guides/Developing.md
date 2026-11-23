@@ -7,7 +7,7 @@ Back to [[Home]]. See also: [[Spec/Requirements/Technical/Distribution|Technical
 make deps      # dev tools (Go, golangci-lint, shellcheck) via Homebrew
 make test      # Go + Swift tests
 make lint
-make ci        # before pushing: tests, lint, Linux/Windows builds, the tray's Linux builds, shellcheck, the Linux package (Docker), the macOS artifact's install test
+make ci        # before pushing: tests, lint, Linux/Windows builds, the tray's Linux builds, shellcheck, the Linux package (Docker), the macOS artifact's install test; each step timed (build/timings.tsv)
 make install   # build, sign, install to ~/Applications, (re)start; CLI linked to ~/.local/bin
 make help      # everything else
 ```
@@ -15,7 +15,7 @@ make help      # everything else
 Development builds are signed with a self-signed certificate so macOS keeps permission grants across rebuilds: create it once as in [[Guides/Getting started#Building it from the checkout|Building it from the checkout]], or use another identity with `make install SIGN_IDENTITY="..."`. Build identifiers derive from `BUNDLE_PREFIX` (default `dev`); set your own reverse-DNS prefix with `make install BUNDLE_PREFIX=com.example`.
 
 ## The Linux windows app needs Docker
-The Linux package's windows app (`automator-tray/windows`, Fyne) needs cgo against Linux's OpenGL, X11 and Wayland libraries, so `make package-linux` (and so `make ci` and `make publish`) builds it in a Docker container, for amd64 and arm64 alike: any Docker engine that runs Linux containers (OrbStack, Docker Desktop, Colima; on Linux, Docker itself), running. The first build makes the image (`scripts/linux-windows.Dockerfile`) and fills Go's caches (Docker volumes `automator-windows-gomod` and `automator-windows-gocache`), a few minutes; later ones take seconds. Without Docker, `make package-linux LINUX_WINDOWS=none` packages without the windows app (the tray then opens every window in a terminal). The tray and the core stay CGO-free.
+The Linux package's windows app (`automator-tray/windows`, Fyne) needs cgo against Linux's OpenGL, X11 and Wayland libraries, so `make package-linux` (and so `make ci` and `make publish`) builds it in a Docker container, for amd64 and arm64 alike: any Docker engine that runs Linux containers (OrbStack, Docker Desktop, Colima; on Linux, Docker itself), running. The first build makes the image (`scripts/linux-windows.Dockerfile`) and fills Go's caches (Docker volumes `automator-windows-gomod-go<version>` and `automator-windows-gocache-go<version>`), a few minutes; later ones take seconds, and a binary built before from the same sources is copied from `~/Library/Caches/process-automator-build` without starting Docker (`NO_BUILD_CACHE=1` builds anyway). Without Docker, `make package-linux LINUX_WINDOWS=none` packages without the windows app (the tray then opens every window in a terminal). The tray and the core stay CGO-free.
 
 Its tests run on the Mac with Fyne's headless test driver (`make test`), and lint builds it there with cgo. To look at its windows without a Linux desktop, run a package's `bin/automator-windows setup` under Xvfb in a Linux VM.
 
