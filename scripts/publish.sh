@@ -17,6 +17,10 @@
 #                   scripts)
 #   GH_TOKEN        else the first account gh is signed in to that can push to
 #                   the repository
+#   RELEASE_NOTES   a file with the release's notes; else the version's line in
+#                   docs/Progress.md ("- X.Y.Z, …: a; b"), as bullets; else
+#                   the commit subjects since the previous release. GitHub's
+#                   generated changelog link follows them.
 #   DRY_RUN=1       builds and tests everything, then stops before pushing
 set -euo pipefail
 scripts="$(cd "$(dirname "$0")" && pwd)"
@@ -87,10 +91,13 @@ cp "$installer" "$out/install.sh"
 (cd "$out" && shasum -a 256 -- * > SHA256SUMS && cat SHA256SUMS)
 
 "$scripts/timed.sh" --summary "$TIMINGS"
+notes="$out/../$tag.notes.md"
+"$scripts/release-notes.sh" "$version" > "$notes"
+echo "publish: release notes:"; cat "$notes"
 if [[ -n ${DRY_RUN:-} ]]; then
   echo "publish: dry run: $tag built and tested in $out; nothing pushed or published"
   exit 0
 fi
 git push origin "$tag"
-gh release create "$tag" "$out"/* -R "$repo" --verify-tag --title "$tag" --generate-notes
+gh release create "$tag" "$out"/* -R "$repo" --verify-tag --title "$tag" --notes-file "$notes" --generate-notes
 echo "publish: $tag released on $repo"
