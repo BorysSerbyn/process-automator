@@ -98,7 +98,9 @@ shipped=$((shipped + $(find "$tmpl" -name template.yaml | wc -l | tr -d ' ')))
 if [ "$shipped" -eq 0 ]; then
   expect "templates list doesn't say none ship" "No templates" "$cli" templates list --all
 else
-  [ "$("$cli" templates list --all --json | grep -c '"id":')" -eq "$shipped" ] || fail "templates list doesn't list the $shipped templates shipped"
+  # Each template once, by ID: a hook's watcher is listed under the hook.
+  listed=$("$cli" templates list --all --json | grep -o '"id": *"[^"]*"' | sort -u | wc -l | tr -d ' ')
+  [ "$listed" -eq "$shipped" ] || fail "templates list lists $listed of the $shipped templates shipped"
 fi
 expect "setup --json lists no backend step" '"step": "backend"' "$cli" setup --json
 expect "login-items doesn't see the installed login items" '"installed": true' "$cli" login-items status --json
