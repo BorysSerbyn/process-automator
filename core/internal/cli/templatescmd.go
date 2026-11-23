@@ -21,14 +21,21 @@ import (
 // InstallOutput is `templates install --json`.
 type InstallOutput struct {
 	Template string `json:"template"`
-	Routine  string `json:"routine"`
-	Path     string `json:"path"`
+	// Kind is what it installed: a routine, a program, a hook or a watcher.
+	Kind string `json:"kind" jsonschema:"enum=routine,enum=program,enum=hook,enum=watcher"`
+	// Routine is the name it's installed as (a routine's, program's, hook's
+	// or watcher's), and Path its file.
+	Routine string `json:"routine"`
+	Path    string `json:"path"`
+	// Also is what was installed with it: a hook's watcher, from its
+	// template, when it wasn't there.
+	Also []engine.Added `json:"also,omitempty"`
 }
 
 func newTemplatesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "templates",
-		Short: "Routine templates shipped with the app, to install as your own routines (as is, or to adapt)",
+		Short: "Templates shipped with the app (routines, programs, hooks, watchers), to install as your own (as is, or to adapt)",
 	}
 	cmd.AddCommand(newTemplatesListCmd(), newTemplatesInstallCmd())
 	return cmd
@@ -55,7 +62,7 @@ func newTemplatesListCmd() *cobra.Command {
 				return nil
 			}
 			tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "TEMPLATE\tPARAMETERS\tPLATFORMS\tBACKENDS\tINSTALLED\tDESCRIPTION")
+			fmt.Fprintln(tw, "TEMPLATE\tKIND\tPARAMETERS\tPLATFORMS\tBACKENDS\tINSTALLED\tDESCRIPTION")
 			for _, r := range rows {
 				var params []string
 				for _, p := range r.Params {
@@ -73,7 +80,10 @@ func newTemplatesListCmd() *cobra.Command {
 				if backends == "" {
 					backends = "all"
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%v\t%s\n", r.ID, orDash(strings.Join(params, ", ")), platforms, backends, r.Installed, oneLine(r.Description, 60))
+				if r.Kind != templates.KindRoutine {
+					backends = "-"
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%v\t%s\n", r.ID, r.Kind, orDash(strings.Join(params, ", ")), platforms, backends, r.Installed, oneLine(r.Description, 60))
 			}
 			_ = tw.Flush()
 			fmt.Fprintln(out, "\n* required. Install with: "+product.Command+" templates install <template> [--as <name>] [--set param=value]")
@@ -90,42 +100,37 @@ func newTemplatesInstallCmd() *cobra.Command {
 	var sets []string
 	cmd := &cobra.Command{
 		Use:   "install <template>",
-		Short: "Install a template as a routine; its parameter values become the routine's settings",
-		Long: "Copies the template into the routines folder (never over an existing routine) and stores its " +
-			"parameter values as routines.<name>.params.<param> settings. The routine starts paused and untrusted (turn " +
-			"it on with `routines trust <name> --resume`). Values come from --set, then the " +
-			"template's defaults; required ones without a value are asked for (or an error, without a terminal).",
+		Short: "Install a template: a routine, a program, a hook or a watcher; it starts off and untrusted",
+		Long: "A routine template is copied into the routines folder (never over an existing routine), its " +
+			"parameter values stored as routines.<name>.params.<param> settings. A program, hook or watcher template is " +
+			"added as `routines create --kind program`, `hooks add` or `watchers add` would add it, its parameter values " +
+			"filled into its description file, and its executable built first when it ships as source (the build's " +
+			"toolchain must be installed). A hook's watcher is installed with it from its template when it isn't there. " +
+			"Each starts off and untrusted (turn it on with `routines trust <name> --resume`, `hooks trust <name> --resume`). " +
+			"Values come from --set, then the template's defaults; required ones without a value are asked for (or an " +
+			"error, without a terminal).",
 		Example: "  " + product.Command + " templates install projects/acme/standup\n" +
 			"  " + product.Command + " templates install personal/digest --set lookback=72h",
 		Args: cobra.ExactArgs(1),
 		RunE: withAppForEdit(func(cmd *cobra.Command, a *engine.App, args []string) error {
-			dir, err := engine.TemplatesDir()
+			plan, err := a.PlanTemplate(args[0])
 			if err != nil {
 				return err
 			}
-			t, err := templates.Find(dir, args[0])
-			if err != nil {
-				return err
-			}
-			if !t.RunsHere() {
-				return fmt.Errorf("%s runs on %s, not %s", t.ID, strings.Join(t.Platforms, ", "), routines.Platform())
-			}
-			if backend, err := a.BackendDef(); err != nil {
-				return err
-			} else if !t.Routine.Supports(backend.Name) {
-				return fmt.Errorf("%s works only with the %s backend, and llm.backend is %s: switch with `%s settings set llm.backend %s` first",
-					t.ID, strings.Join(t.Backends, " or "), backend.Name, product.Command, t.Backends[0])
-			}
+			t := plan.Template
 			name := t.Name
 			if as != "" {
 				name = as
 			}
 			if !routines.ValidName(name) {
-				return fmt.Errorf("%q can't name a routine: lowercase letters, digits and dashes", name)
+				return fmt.Errorf("%q can't name a %s: lowercase letters, digits and dashes", name, t.Kind)
 			}
-			values, err := paramValues(t, name, sets, cmd.InOrStdin(), cmd.ErrOrStderr())
+			values, err := paramValues(plan.Params, name, sets, cmd.InOrStdin(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
+			}
+			if t.Kind != templates.KindRoutine {
+				return installFolderTemplate(cmd, a, plan, name, values)
 			}
 			// Settings first (disabled, parameter values), the file last: the
 			// scheduler never sees a half-installed or enabled routine.
@@ -153,7 +158,7 @@ func newTemplatesInstallCmd() *cobra.Command {
 				return err
 			}
 			if wantsJSON(cmd) {
-				return writeJSON(cmd.OutOrStdout(), InstallOutput{Template: t.ID, Routine: name, Path: path})
+				return writeJSON(cmd.OutOrStdout(), InstallOutput{Template: t.ID, Kind: t.Kind, Routine: name, Path: path})
 			}
 			if t.Description != "" {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", t.ID, t.Description)
@@ -172,9 +177,9 @@ func newTemplatesInstallCmd() *cobra.Command {
 
 // paramValues validates --set values and asks for required parameters that
 // have none, before anything is written.
-func paramValues(t templates.Template, routine string, sets []string, in io.Reader, prompt io.Writer) (map[string]string, error) {
+func paramValues(params []routines.Param, routine string, sets []string, in io.Reader, prompt io.Writer) (map[string]string, error) {
 	byName := map[string]routines.Param{}
-	for _, p := range t.Params {
+	for _, p := range params {
 		byName[p.Name] = p
 	}
 	values := map[string]string{}
@@ -190,7 +195,7 @@ func paramValues(t templates.Template, routine string, sets []string, in io.Read
 		values[k] = v
 	}
 	var missing []routines.Param
-	for _, p := range t.Params {
+	for _, p := range params {
 		if _, set := values[p.Name]; !set && p.Required {
 			missing = append(missing, p)
 		}
@@ -238,4 +243,42 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// installFolderTemplate installs a program, hook or watcher template (and a
+// hook's watcher with it), saying what it added and how to turn it on. A
+// build's output goes to stderr.
+func installFolderTemplate(cmd *cobra.Command, a *engine.App, plan engine.TemplatePlan, name string, values map[string]string) error {
+	t := plan.Template
+	if t.Build != nil && !wantsJSON(cmd) {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Building %s (%s)…\n", t.ID, strings.Join(t.Build.Command, " "))
+	}
+	added, err := a.InstallFolderTemplate(cmd.Context(), plan, name, values, cmd.ErrOrStderr())
+	if err != nil {
+		return err
+	}
+	last := added[len(added)-1]
+	out := InstallOutput{Template: t.ID, Kind: t.Kind, Routine: last.Name, Path: last.Path, Also: added[:len(added)-1]}
+	if wantsJSON(cmd) {
+		return writeJSON(cmd.OutOrStdout(), out)
+	}
+	w := cmd.OutOrStdout()
+	if t.Description != "" {
+		fmt.Fprintf(w, "%s: %s\n", t.ID, t.Description)
+	}
+	for _, x := range out.Also {
+		fmt.Fprintf(w, "Installed the %s %s (%s), which it listens to, not trusted.\n", x.Kind, x.Name, x.Path)
+	}
+	switch t.Kind {
+	case templates.KindProgram:
+		fmt.Fprintf(w, "Installed %s as the program %q (%s), paused and not trusted.\nTurn it on (trust it and run it on its schedule): "+
+			product.Command+" routines trust %s --resume\n", t.ID, name, last.Path, name)
+	case templates.KindHook:
+		fmt.Fprintf(w, "Installed %s as the hook %q (%s), off and not trusted.\nTurn it on (trust it and its watcher, and listen): "+
+			product.Command+" hooks trust %s --resume\n", t.ID, name, last.Path, name)
+	case templates.KindWatcher:
+		fmt.Fprintf(w, "Installed %s as the watcher %q (%s), not trusted: it runs once trusted, while a hook that's on listens to it.\n"+
+			"Trusting a hook that listens to it trusts it too ("+product.Command+" hooks trust <hook> --resume)\n", t.ID, name, last.Path)
+	}
+	return nil
 }

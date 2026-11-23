@@ -12,6 +12,27 @@ components:
       required:
         - acknowledged
       type: object
+    Added:
+      additionalProperties: false
+      description: Added is one thing installing a template added.
+      properties:
+        kind:
+          description: Kind is program, hook or watcher.
+          enum:
+            - program
+            - hook
+            - watcher
+          type: string
+        name:
+          type: string
+        path:
+          description: Path is its file in the app's folders.
+          type: string
+      required:
+        - kind
+        - name
+        - path
+      type: object
     AuthStatus:
       additionalProperties: false
       description: AuthStatus is one row of `auth status --json`.
@@ -34,6 +55,26 @@ components:
         - server
         - kind
         - signedIn
+      type: object
+    Build:
+      additionalProperties: false
+      description: Build is how a template's executable is built from its source when it's installed.
+      properties:
+        command:
+          description: |-
+            Command is run with its first word looked up on my PATH; one argument
+            holds OutputPlaceholder, where the executable must be written.
+          items:
+            type: string
+          type: array
+        dir:
+          description: |-
+            Dir is the folder it runs in, relative to the template's (its source,
+            within the templates folder, e.g. one several templates share): it's
+            copied to a temporary folder first. Default: the template's own.
+          type: string
+      required:
+        - command
       type: object
     Call:
       additionalProperties: false
@@ -683,14 +724,33 @@ components:
       additionalProperties: false
       description: InstallOutput is `templates install --json`.
       properties:
+        also:
+          description: |-
+            Also is what was installed with it: a hook's watcher, from its
+            template, when it wasn't there.
+          items:
+            $ref: '#/components/schemas/Added'
+          type: array
+        kind:
+          description: 'Kind is what it installed: a routine, a program, a hook or a watcher.'
+          enum:
+            - routine
+            - program
+            - hook
+            - watcher
+          type: string
         path:
           type: string
         routine:
+          description: |-
+            Routine is the name it's installed as (a routine's, program's, hook's
+            or watcher's), and Path its file.
           type: string
         template:
           type: string
       required:
         - template
+        - kind
         - routine
         - path
       type: object
@@ -2396,14 +2456,31 @@ components:
           items:
             type: string
           type: array
+        build:
+          $ref: '#/components/schemas/Build'
+          description: |-
+            Build is how its executable is built when it's installed (a program's,
+            a hook's or a watcher's that ships as source).
         description:
           type: string
         id:
           description: ID is its tag path and name, e.g. "projects/acme/standup".
           type: string
         installed:
-          description: Installed is true when a routine with the template's name exists.
+          description: |-
+            Installed is true when one of its kind with the template's name exists
+            (a routine of either kind, a hook, a watcher).
           type: boolean
+        kind:
+          description: |-
+            Kind is what installing it adds: a routine (an LLM routine), a
+            program, a hook or a watcher.
+          enum:
+            - routine
+            - program
+            - hook
+            - watcher
+          type: string
         name:
           type: string
         params:
@@ -2431,9 +2508,15 @@ components:
           items:
             type: string
           type: array
+        watcher:
+          description: |-
+            Watcher is a hook's: the watcher it listens to, installed with it (from
+            its template) when it isn't there.
+          type: string
       required:
         - id
         - name
+        - kind
         - tags
         - runsHere
         - supportsBackend

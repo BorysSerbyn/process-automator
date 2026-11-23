@@ -1,9 +1,12 @@
 // Package templates reads the templates shipped with the app: routine files
-// tracked in the repo so anyone can install them as is or adapt them
-// (project-specific ones included), grouped in tag folders, general to
-// specific (e.g. projects/acme/standup.prompt). Installing one copies it
-// into the routines folder; its parameters' values become per-routine
-// settings. The app may ship none: an empty or missing folder lists none.
+// and folders tracked in the repo so anyone can install them as is or adapt
+// them (project-specific ones included), grouped in tag folders, general to
+// specific (e.g. projects/acme/standup.prompt). A routine template is a
+// .prompt file: installing one copies it into the routines folder, and its
+// parameters' values become per-routine settings. A program, a hook or a
+// watcher is a folder (see ManifestFile): installing one stages it, its
+// parameters' values filled into its description file, and adds it. The
+// app may ship none: an empty or missing folder lists none.
 package templates
 
 import (
@@ -24,11 +27,14 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 )
 
-// Template is one template file.
+// Template is one template: a routine file, or a folder.
 type Template struct {
 	// ID is its tag path and name, e.g. "projects/acme/standup".
-	ID   string   `json:"id"`
-	Name string   `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Kind is what installing it adds: a routine (an LLM routine), a
+	// program, a hook or a watcher.
+	Kind string   `json:"kind" jsonschema:"enum=routine,enum=program,enum=hook,enum=watcher"`
 	Tags []string `json:"tags"`
 	// Project is the project it's for (its folder under projects/, e.g.
 	// "acme"); empty for every project or none.
@@ -38,8 +44,20 @@ type Template struct {
 	// Backends it works with (llm.backend values); none: any.
 	Backends []string         `json:"backends,omitempty"`
 	Params   []routines.Param `json:"params,omitempty"`
-	Path     string           `json:"-"`
-	Routine  routines.Routine `json:"-"`
+	// Build is how its executable is built when it's installed (a program's,
+	// a hook's or a watcher's that ships as source).
+	Build *Build `json:"build,omitempty"`
+	// Watcher is a hook's: the watcher it listens to, installed with it (from
+	// its template) when it isn't there.
+	Watcher string           `json:"watcher,omitempty"`
+	Path    string           `json:"-"`
+	Routine routines.Routine `json:"-"`
+	// A folder template's folder, the templates folder it's in, its
+	// description file's name and text (parameters unfilled), a hook's event
+	// type and a watcher's.
+	Dir, Root, DescFile, Source string   `json:"-"`
+	On                          string   `json:"-"`
+	Events                      []string `json:"-"`
 }
 
 // ProjectsTag is the folder whose subfolders are projects.
@@ -66,18 +84,33 @@ func Projects(list []Template) []string {
 }
 
 // RunsHere reports whether the template supports this OS.
-func (t Template) RunsHere() bool { return t.Routine.RunsHere() }
+func (t Template) RunsHere() bool {
+	return len(t.Platforms) == 0 || slices.Contains(t.Platforms, routines.Platform())
+}
+
+// Supports reports whether the template works with backend (an llm.backend
+// value): only routines depend on one.
+func (t Template) Supports(backend string) bool {
+	return t.Kind != KindRoutine || t.Routine.Supports(backend)
+}
 
 // List returns every template under dir, by ID; none when dir is empty or
 // missing. Each tag folder is read as a routines folder, so templates follow
 // exactly the rules routines do; a template that doesn't load is an error
 // (templates ship with the app and are tested, so that's a packaging bug).
 func List(dir string) ([]Template, error) {
-	folders, err := folders(dir)
+	folders, tfolders, err := scan(dir)
 	if err != nil {
 		return nil, err
 	}
 	var out []Template
+	for _, folder := range tfolders {
+		t, err := loadFolder(dir, folder)
+		if err != nil {
+			return nil, fmt.Errorf("template %s: %w", folder, err)
+		}
+		out = append(out, t)
+	}
 	for _, folder := range folders {
 		set, err := routines.Load(folder)
 		if err != nil {
@@ -93,7 +126,7 @@ func List(dir string) ([]Template, error) {
 		}
 		for _, r := range set.Routines {
 			out = append(out, Template{
-				ID: strings.Join(append(slices.Clone(tags), r.Name), "/"), Name: r.Name, Tags: tags, Project: projectOf(tags),
+				ID: strings.Join(append(slices.Clone(tags), r.Name), "/"), Name: r.Name, Kind: KindRoutine, Tags: tags, Project: projectOf(tags),
 				Description: r.Description, Platforms: r.Platforms, Backends: r.Backends, Params: r.Params, Path: r.Path, Routine: r,
 			})
 		}
@@ -102,37 +135,61 @@ func List(dir string) ([]Template, error) {
 	return out, nil
 }
 
-// folders are the folders under dir holding templates, sorted; none when dir
-// is missing.
-func folders(dir string) ([]string, error) {
-	var out []string
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+// scan finds the folders under dir holding routine templates and the
+// template folders (holding ManifestFile, whose files aren't routine
+// templates), each sorted; none when dir is missing.
+func scan(dir string) (routineFolders, templateFolders []string, err error) {
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(path, routines.Ext) && !slices.Contains(out, filepath.Dir(path)) {
-			out = append(out, filepath.Dir(path))
+		if d.IsDir() && path != dir && isTemplateFolder(path) {
+			templateFolders = append(templateFolders, path)
+			return filepath.SkipDir
+		}
+		if !d.IsDir() && strings.HasSuffix(path, routines.Ext) && !slices.Contains(routineFolders, filepath.Dir(path)) {
+			routineFolders = append(routineFolders, filepath.Dir(path))
 		}
 		return nil
 	})
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		return nil, nil, nil
 	}
-	sort.Strings(out)
-	return out, err
+	sort.Strings(routineFolders)
+	sort.Strings(templateFolders)
+	return routineFolders, templateFolders, err
 }
 
-// Check is what every template shipped must pass, beyond loading as a
-// routine: it includes the memories partial, and it renders through Genkit
-// with the inputs every run gets, anchored in the run's time (today or since)
-// and with no template syntax left. The builds' tests run it on their
+// Check is what every template shipped must pass. A routine's, beyond
+// loading as a routine: it includes the memories partial, and it renders
+// through Genkit with the inputs every run gets, anchored in the run's time
+// (today or since) and with no template syntax left. A folder's: its
+// ManifestFile and description file load (parameters filled with samples),
+// its placeholders are its parameters, its executable is there or its build
+// is well-formed (a command writing to OutputPlaceholder, in a folder within
+// the templates folder), and a hook's watcher is one template's, declaring
+// its event type. Builds aren't run. The builds' tests run it on their
 // templates folder.
 func Check(dir string) error {
-	folders, err := folders(dir)
+	folders, tfolders, err := scan(dir)
 	if err != nil {
 		return err
 	}
 	var errs []error
+	var loaded []Template
+	for _, folder := range tfolders {
+		t, err := loadFolder(dir, folder)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", folder, err))
+			continue
+		}
+		loaded = append(loaded, t)
+	}
+	for _, t := range loaded {
+		if err := checkFolder(t, loaded); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t.Dir, err))
+		}
+	}
 	now := time.Date(2026, 11, 17, 9, 15, 0, 0, time.Local) // a Tuesday: since is Monday
 	for _, folder := range folders {
 		set, err := routines.Load(folder)

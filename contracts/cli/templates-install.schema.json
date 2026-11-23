@@ -5,17 +5,61 @@
     "template": {
       "type": "string"
     },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "routine",
+        "program",
+        "hook",
+        "watcher"
+      ],
+      "description": "Kind is what it installed: a routine, a program, a hook or a watcher."
+    },
     "routine": {
-      "type": "string"
+      "type": "string",
+      "description": "Routine is the name it's installed as (a routine's, program's, hook's\nor watcher's), and Path its file."
     },
     "path": {
       "type": "string"
+    },
+    "also": {
+      "items": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "program",
+              "hook",
+              "watcher"
+            ],
+            "description": "Kind is program, hook or watcher."
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path is its file in the app's folders."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "name",
+          "path"
+        ],
+        "description": "Added is one thing installing a template added."
+      },
+      "type": "array",
+      "description": "Also is what was installed with it: a hook's watcher, from its\ntemplate, when it wasn't there."
     }
   },
   "additionalProperties": false,
   "type": "object",
   "required": [
     "template",
+    "kind",
     "routine",
     "path"
   ],

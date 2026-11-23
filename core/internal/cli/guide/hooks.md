@@ -81,3 +81,6 @@ Their settings (`hooks.<hook>.<key>`, set in the file as `<key>` or `automator.<
 3. `%{command} hooks fire <name> --event sample.json --dry-run`: tries it with a sample event, one line as the watcher would print it
 4. `%{command} hooks trust <name> --resume`: the person reviews it (its watcher too, while that isn't trusted), trusts both and turns the hook on
 5. `%{command} hooks list`, `%{command} runs <name>`; `%{command} hooks pause <name>`, `%{command} stop <name>`
+
+## Sharing them as templates
+A hook or a watcher is a template folder, as a program is (`%{command} guide programs`): its `hook.yaml` (or `hook.prompt`) or `watcher.yaml`, its executable or source with a `build`, and `template.yaml`; `{{param}}` fills a watcher's `args`, say. Installing a hook's template installs its watcher's template too (the one named as its `on.watcher`) when the person doesn't have that watcher

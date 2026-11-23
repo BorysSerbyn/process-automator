@@ -10,6 +10,16 @@
       "name": {
         "type": "string"
       },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "routine",
+          "program",
+          "hook",
+          "watcher"
+        ],
+        "description": "Kind is what installing it adds: a routine (an LLM routine), a\nprogram, a hook or a watcher."
+      },
       "tags": {
         "items": {
           "type": "string"
@@ -74,6 +84,31 @@
         },
         "type": "array"
       },
+      "build": {
+        "properties": {
+          "command": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Command is run with its first word looked up on my PATH; one argument\nholds OutputPlaceholder, where the executable must be written."
+          },
+          "dir": {
+            "type": "string",
+            "description": "Dir is the folder it runs in, relative to the template's (its source,\nwithin the templates folder, e.g. one several templates share): it's\ncopied to a temporary folder first. Default: the template's own."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "description": "Build is how its executable is built when it's installed (a program's,\na hook's or a watcher's that ships as source)."
+      },
+      "watcher": {
+        "type": "string",
+        "description": "Watcher is a hook's: the watcher it listens to, installed with it (from\nits template) when it isn't there."
+      },
       "runsHere": {
         "type": "boolean",
         "description": "RunsHere is false for templates for another OS (listed with --all)."
@@ -84,7 +119,7 @@
       },
       "installed": {
         "type": "boolean",
-        "description": "Installed is true when a routine with the template's name exists."
+        "description": "Installed is true when one of its kind with the template's name exists\n(a routine of either kind, a hook, a watcher)."
       }
     },
     "additionalProperties": false,
@@ -92,6 +127,7 @@
     "required": [
       "id",
       "name",
+      "kind",
       "tags",
       "runsHere",
       "supportsBackend",

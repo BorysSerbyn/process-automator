@@ -427,14 +427,8 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 	if len(plugins) > 0 {
 		r.Plugins = plugins
 	}
-	if err := checkParams(params); err != nil {
+	if _, err := CheckParams(params); err != nil { // fills params in place
 		return Routine{}, err
-	}
-	for i, p := range params {
-		params[i].Required = p.Default == nil
-		if p.Default != nil {
-			params[i].DefaultText = p.Setting(name).Text(p.Default)
-		}
 	}
 	for name := range plugins {
 		if !slices.Contains(servers, name) {
@@ -472,6 +466,21 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 
 // inputNames are the inputs every routine gets; parameters can't reuse them.
 var inputNames = map[string]bool{"today": true, "since": true, "now": true, "trigger": true}
+
+// CheckParams checks parameters as a routine file declares them (a
+// template's too) and works out their Required and DefaultText.
+func CheckParams(params []Param) ([]Param, error) {
+	if err := checkParams(params); err != nil {
+		return nil, err
+	}
+	for i, p := range params {
+		params[i].Required = p.Default == nil
+		if p.Default != nil {
+			params[i].DefaultText = p.Setting("x").Text(p.Default)
+		}
+	}
+	return params, nil
+}
 
 func checkParams(params []Param) error {
 	seen := map[string]bool{}

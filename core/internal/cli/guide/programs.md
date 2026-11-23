@@ -32,3 +32,6 @@ secrets:
 3. `%{command} routines trust <name> --resume`: the person reviews, trusts and turns it on
 4. `%{command} run <name> --dry-run`, once trusted
 5. After rebuilding: `%{command} routines update <name> --from <folder>/program.yaml`, then trust it again
+
+## Sharing it as a template
+A folder in the app's templates, `templates/<tags>/<name>/`: `program.yaml`, its executable (a script) or its source, and `template.yaml` with `description`, `platforms` (`macos`, `linux`), `params` (`name`, `type`, `default`, `description`; each `{{name}}` in `program.yaml` is filled in at install) and, for source, `build: {command: [go, build, -o, "{{output}}", .], dir: <its source, relative>}`, run at install with the person's toolchain. `%{command} templates install <tags>/<name>` adds it as `routines create` would

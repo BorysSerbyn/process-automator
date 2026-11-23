@@ -129,8 +129,11 @@ func (a App) Validate() error {
 }
 
 // CheckTemplates checks the templates under dir as the app's own are
-// checked: each loads as a routine, includes the memories partial
+// checked: a routine's loads, includes the memories partial
 // ({{> memories}}), and renders with the inputs every run gets, using today
-// or since. An app's tests run it on the templates it ships; a missing or
+// or since; a program's, hook's or watcher's folder loads (template.yaml and
+// its description file, parameters filled in), has its executable or a
+// well-formed build, and a hook's watcher is one of the templates. Builds
+// aren't run. An app's tests run it on the templates it ships; a missing or
 // empty folder passes.
 func CheckTemplates(dir string) error { return templates.Check(dir) }

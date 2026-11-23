@@ -670,7 +670,7 @@ commands:
     jsonOutput: cli/stop.schema.json
   - command: templates install
     usage: procauto templates install <template> [flags]
-    summary: Install a template as a routine; its parameter values become the routine's settings
+    summary: 'Install a template: a routine, a program, a hook or a watcher; it starts off and untrusted'
     example: |-
       procauto templates install projects/acme/standup
       procauto templates install personal/digest --set lookback=72h
