@@ -134,6 +134,23 @@ public struct CLI: Sendable {
         call(Components.Schemas.State.self, ["settings", "reset", key])
     }
 
+    /// Where updates stand, from what the core already knows (`update status`):
+    /// this version, automatic updates, the latest release the scheduler found.
+    public func updateStatus() -> Result<Components.Schemas.UpdateStatus, Failure> {
+        call(Components.Schemas.UpdateStatus.self, ["update", "status"])
+    }
+
+    /// A release's notes, this version's when `tag` is nil (`update notes`).
+    public func releaseNotes(_ tag: String? = nil) -> Result<Components.Schemas.NotesOutput, Failure> {
+        call(Components.Schemas.NotesOutput.self, ["update", "notes"] + (tag.map { [$0] } ?? []))
+    }
+
+    /// Holds automatic updates back for a few minutes: the app is in use
+    /// (`update postpone`).
+    public func postponeUpdate() -> Failure? {
+        perform(["update", "postpone"])
+    }
+
     /// Whether a newer release exists, and whether one is installing (`update --check`).
     public func updateCheck() -> Result<Components.Schemas.UpdateOutput, Failure> {
         call(Components.Schemas.UpdateOutput.self, ["update", "--check"])

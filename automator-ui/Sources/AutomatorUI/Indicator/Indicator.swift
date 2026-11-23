@@ -5,9 +5,9 @@ import QuartzCore
 /// The indicator: the app's glyph in the menu bar with a status dot (pulsing
 /// while a routine runs), and its menu: the version, the status in the core's
 /// words (while setup isn't done, its reason "Finish Setup (N to do)…",
-/// opening Setup); Routines › (each routine with
-/// its status), Hooks › (each hook with its status, while there are any),
-/// updates, Settings; Quit.
+/// opening Setup); Manage Updates… (saying when an update is available or
+/// installing); Routines › (each routine with its status), Hooks › (each
+/// hook with its status, while there are any), Settings; Quit.
 @MainActor
 final class Indicator: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -75,9 +75,10 @@ final class Indicator: NSObject, NSMenuDelegate {
         menu.addItem(textItem(MenuTextView(text: "\(AppInfo.name) \(AppInfo.version)", lines: 1, dimmed: true)))
         for item in statusItems() { menu.addItem(item) }
         menu.addItem(.separator())
+        menu.addItem(updates.makeMenuItem())
+        menu.addItem(.separator())
         menu.addItem(routinesItem())
         if let hooks = hooksItem() { menu.addItem(hooks) }
-        menu.addItem(updates.makeMenuItem())
         let settings = NSMenuItem(title: "Settings", action: #selector(settingsChosen), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
