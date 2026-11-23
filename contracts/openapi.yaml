@@ -89,10 +89,12 @@ components:
       properties:
         action:
           description: |-
-            Action is what to show: show-run (the notification is about a run: its
+            Action is what to show: open-url (the notification has a link: open
+            URL with the system's default handler), show-run (it's about a run: its
             routine's window, on that run) or show-app (about the app itself, e.g.
             an update: the app).
           enum:
+            - open-url
             - show-run
             - show-app
           type: string
@@ -105,6 +107,9 @@ components:
           description: Routine and Run, for show-run.
           type: string
         run:
+          type: string
+        url:
+          description: 'URL, for open-url: an http or https link.'
           type: string
       required:
         - notification
@@ -286,6 +291,21 @@ components:
         exitCode:
           description: ExitCode is the code it exited with (-1 when it was killed).
           type: integer
+        notified:
+          description: |-
+            Notified are the titles of the notifications it asked for and the app
+            recorded ("would notify: <title>" on a dry run, which records none).
+          items:
+            type: string
+          type: array
+        notifyProblems:
+          description: |-
+            NotifyProblems are what was wrong with what it wrote to $PA_NOTIFY
+            (a line that isn't a valid notification, those past the limit): none
+            of them fails the run.
+          items:
+            type: string
+          type: array
         output:
           description: |-
             Output is what it printed (stdout and stderr): all of it, or its first
@@ -776,8 +796,8 @@ components:
       properties:
         acknowledge:
           description: |-
-            Acknowledge is true when it waits for me to acknowledge it (kind
-            acknowledge): frontends show it with an Acknowledge action that runs
+            Acknowledge is true when it waits for me to acknowledge it (only kind
+            run may): frontends show it with an Acknowledge action that runs
             `notifications ack <id>`, and health is error until then.
           type: boolean
         acknowledgedAt:
@@ -801,12 +821,13 @@ components:
         kind:
           description: |-
             Kind is "failure" (a run that failed, needs a sign-in, or was skipped
-            or missed), "app" (about the app, e.g. an update) or "acknowledge" (a
-            routine's or hook's, through a plugin, waiting to be acknowledged).
+            or missed), "app" (about the app, e.g. an update) or "run" (a
+            routine's or hook's own, asked for in its run: a plugin's, such as
+            notify_me's, or a program's through $PA_NOTIFY).
           enum:
             - failure
             - app
-            - acknowledge
+            - run
           type: string
         routine:
           description: Routine and Run (a run ID, as in `runs show`) are what it's about, if any.
@@ -820,6 +841,11 @@ components:
             Urgent breaks through focus modes where the OS allows (macOS
             time-sensitive, Linux critical urgency).
           type: boolean
+        url:
+          description: |-
+            URL is a link (http or https) a click on it opens (`notifications
+            open`: open-url); only kind run has one.
+          type: string
       required:
         - id
         - at

@@ -136,7 +136,7 @@ func TestGuidePluginsCoversTheCode(t *testing.T) {
 
 func TestGuideProgramsCoversTheCode(t *testing.T) {
 	out := guideOut(t, "programs")
-	want := []string{"$" + programs.ResultEnv, "$" + programs.TriggerEnv, "$" + programs.ForEnv, "$" + programs.RunIDEnv,
+	want := []string{"$" + programs.ResultEnv, "$" + programs.NotifyEnv, "$" + programs.TriggerEnv, "$" + programs.ForEnv, "$" + programs.RunIDEnv,
 		programs.DryRunFlag, programs.DefaultPath, "routines create <name> --kind program", "auth login <name>", "permissions request <permission>",
 		"routines trust <name> --resume", "run <name> --dry-run", "routines update <name>"}
 	for _, f := range programs.Fields {

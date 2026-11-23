@@ -17,6 +17,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 )
@@ -338,5 +339,50 @@ func TestLLMRecordsHaveNoKind(t *testing.T) {
 	}
 	if k, _ := engine.ParseKind(e.Kind); k != engine.KindLLM {
 		t.Fatalf("read as %s", k)
+	}
+}
+
+// What a program writes to $PA_NOTIFY becomes the app's notifications about
+// its run: up to 20, a bad line reported (not failing the run); a dry run
+// records none.
+func TestProgramNotifies(t *testing.T) {
+	a, _ := enginetest.Fixture(t, nil, nil)
+	script := `echo '{"title":"Review requested","body":"acme/app#7","url":"https://github.com/acme/app/pull/7"}' >> "$PA_NOTIFY"
+echo '{"title":"Fix the build","body":"main is red","acknowledge":true}' >> "$PA_NOTIFY"
+echo '{"title":"bad link","url":"file:///etc/passwd"}' >> "$PA_NOTIFY"
+echo 'not json' >> "$PA_NOTIFY"
+echo '{"title":"to ack, no body","acknowledge":true}' >> "$PA_NOTIFY"
+i=0; while [ $i -lt 20 ]; do echo '{"title":"more"}' >> "$PA_NOTIFY"; i=$((i+1)); done
+`
+	enginetest.AddProgram(t, a, "gh", "executable: ./prog\nwrites: false\n", script, true)
+	res, err := run(t, a, "gh", engine.RunOptions{DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := res.Program; len(p.Notified) != 20 || p.Notified[0] != "would notify: Review requested" {
+		t.Fatalf("dry run: %+v", p.Notified)
+	}
+	if f, _ := notifications.Load(a.Layout.Notifications()); len(f.Notifications) != 0 {
+		t.Fatal("a dry run notified")
+	}
+	if res, err = run(t, a, "gh", engine.RunOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	p := res.Program
+	if len(p.Notified) != 20 || len(p.NotifyProblems) != 4 || !strings.Contains(p.NotifyProblems[3], "2 more notifications dropped") ||
+		!strings.Contains(p.NotifyProblems[0], "line 3") || !strings.Contains(p.NotifyProblems[2], "body is required") {
+		t.Fatalf("notified %v, problems %v", p.Notified, p.NotifyProblems)
+	}
+	f, _ := notifications.Load(a.Layout.Notifications())
+	first, ack := f.Notifications[0], f.Notifications[1]
+	if len(f.Notifications) != 20 || first.Kind != notifications.KindRun || first.URL != "https://github.com/acme/app/pull/7" ||
+		first.Routine != "gh" || first.Run == "" || first.Hook || !ack.Waiting() {
+		t.Fatalf("%+v", f.Notifications[:2])
+	}
+	if e := latest(t, a, "gh"); len(e.Program.Notified) != 20 || len(e.Program.NotifyProblems) != 4 {
+		t.Fatalf("history: %+v", e.Program)
+	}
+	if s, _ := runstatus.Load(a.Layout.RunStatus()); s.PendingAcknowledgements != 1 {
+		t.Fatalf("waiting: %+v", s.Waiting)
 	}
 }

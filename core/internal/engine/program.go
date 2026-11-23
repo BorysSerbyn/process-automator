@@ -6,14 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
+	"github.com/BorysSerbyn/process-automator/core/internal/notifications"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/programs"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/trigger"
 	"github.com/BorysSerbyn/process-automator/core/internal/trust"
+	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // A program: a routine that runs an executable instead of a model. This file
@@ -207,6 +210,7 @@ func (p *program) run(ctx context.Context, a *App, rc runContext) (*RunResult, e
 	}
 	if out != nil {
 		out.DryRun, out.Checksum = rc.dryRun, sum
+		out.Notified, out.NotifyProblems = p.notify(a, rc, out.NotifyLines)
 		res.Program, res.Note = out, out.Summary
 		res.Line = fmt.Sprintf("exit %d", out.ExitCode)
 		if out.Summary != "" {
@@ -214,6 +218,58 @@ func (p *program) run(ctx context.Context, a *App, rc runContext) (*RunResult, e
 		}
 	}
 	return res, err
+}
+
+// NotifyLimit is how many notifications one run of a program may ask for.
+const NotifyLimit = 20
+
+// programNotice is a line of $PA_NOTIFY.
+type programNotice struct {
+	Title       string `json:"title"`
+	Body        string `json:"body"`
+	URL         string `json:"url"`
+	Urgent      bool   `json:"urgent"`
+	Acknowledge bool   `json:"acknowledge"`
+}
+
+// notify makes the app's notifications of the lines the run wrote to
+// $PA_NOTIFY, about the run, up to NotifyLimit (none on a dry run). It
+// returns the titles notified and what was wrong; nothing here fails the
+// run, and what was wrong is in its log too.
+func (p *program) notify(a *App, rc runContext, lines []string) (notified, problems []string) {
+	dropped := 0
+	for i, line := range lines {
+		var n programNotice
+		dec := json.NewDecoder(strings.NewReader(line))
+		dec.DisallowUnknownFields()
+		err := dec.Decode(&n)
+		if err == nil {
+			err = notifications.Valid(n.Title, n.Body, n.URL, n.Acknowledge)
+		}
+		switch {
+		case err != nil:
+			problems = append(problems, fmt.Sprintf("$%s line %d: %v", programs.NotifyEnv, i+1, err))
+		case len(notified) >= NotifyLimit:
+			dropped++
+		case rc.dryRun:
+			notified = append(notified, "would notify: "+n.Title)
+		default:
+			_, err := addRunNotification(a.Layout, p.p.Name, p.p.Hook, rc.id,
+				pluginapi.Notice{Title: n.Title, Body: n.Body, URL: n.URL, Urgent: n.Urgent, Acknowledge: n.Acknowledge}, time.Now())
+			if err != nil {
+				problems = append(problems, fmt.Sprintf("$%s line %d: %v", programs.NotifyEnv, i+1, err))
+				continue
+			}
+			notified = append(notified, n.Title)
+		}
+	}
+	if dropped > 0 {
+		problems = append(problems, fmt.Sprintf("%d more notifications dropped: a run may ask for %d", dropped, NotifyLimit))
+	}
+	for _, line := range problems {
+		logTo(rc.log, "%s", line)
+	}
+	return notified, problems
 }
 
 // eventFile writes the event a hook's program runs for (one: a program hook

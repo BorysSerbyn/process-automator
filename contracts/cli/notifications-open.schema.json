@@ -8,10 +8,15 @@
     "action": {
       "type": "string",
       "enum": [
+        "open-url",
         "show-run",
         "show-app"
       ],
-      "description": "Action is what to show: show-run (the notification is about a run: its\nroutine's window, on that run) or show-app (about the app itself, e.g.\nan update: the app)."
+      "description": "Action is what to show: open-url (the notification has a link: open\nURL with the system's default handler), show-run (it's about a run: its\nroutine's window, on that run) or show-app (about the app itself, e.g.\nan update: the app)."
+    },
+    "url": {
+      "type": "string",
+      "description": "URL, for open-url: an http or https link."
     },
     "routine": {
       "type": "string",

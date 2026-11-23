@@ -3,9 +3,10 @@
 // built only on pluginapi, for apps that list it in their plugins. It shows
 // its notifications itself, through the OS (macOS: UserNotifications, as the
 // app; Linux: the freedesktop notification service). Clicking one does
-// nothing. One that needs acknowledging (acknowledge) is handed to the app
-// instead (pluginapi.Host.AskToAcknowledge), which shows it with an
-// Acknowledge button and stays red until I acknowledge it.
+// nothing. One with a link (url) or that needs acknowledging (acknowledge)
+// is handed to the app instead (pluginapi.Host.Notify), which shows it: a
+// click opens its link, and one to acknowledge has an Acknowledge button
+// and keeps the app red until I acknowledge it.
 package notify
 
 import (
@@ -53,13 +54,15 @@ func serve(h pluginapi.Host) (*sdk.Server, error) {
 	type in struct {
 		Title       string `json:"title" jsonschema:"short, like a headline"`
 		Body        string `json:"body,omitempty" jsonschema:"a sentence or two; required with acknowledge, where it may be long (a whole report): the banner shows its start, the app's Acknowledgements window all of it"`
+		URL         string `json:"url,omitempty" jsonschema:"a link (http or https) it's about, such as a pull request: clicking the notification opens it"`
 		Urgent      bool   `json:"urgent,omitempty" jsonschema:"only for something I must see now: it breaks through focus modes"`
 		Acknowledge bool   `json:"acknowledge,omitempty" jsonschema:"true when I must act on it, e.g. someone asked me for something: it waits, with an Acknowledge button, and the app's status stays red until I acknowledge it"`
 	}
 	sdk.AddTool(s, &sdk.Tool{
 		Name: "notify_me",
 		Description: "Notify me with a desktop notification. Keep it brief; use it for what needs my attention, " +
-			"not for routine progress. Clicking it does nothing, so say what to look at. " +
+			"not for routine progress. Give url when it's about something with a link (a pull request, a thread): " +
+			"clicking the notification opens it; without one, clicking does nothing, so say what to look at. " +
 			"Set acknowledge for what I must act on and mustn't miss (one notification per thing, e.g. each request " +
 			"someone made of me): it waits for me to acknowledge it, and the app shows red until I do; " +
 			"plain notifications are for what's only worth knowing.",
@@ -68,16 +71,19 @@ func serve(h pluginapi.Host) (*sdk.Server, error) {
 		if strings.TrimSpace(args.Title) == "" {
 			return nil, nil, errors.New("title is required")
 		}
-		if args.Acknowledge {
-			if strings.TrimSpace(args.Body) == "" {
-				return nil, nil, errors.New("body is required with acknowledge: say what it's about, in full if need be")
-			}
-			id, err := h.AskToAcknowledge(pluginapi.Notice{Title: args.Title, Body: args.Body, Urgent: args.Urgent})
+		if args.Acknowledge && strings.TrimSpace(args.Body) == "" {
+			return nil, nil, errors.New("body is required with acknowledge: say what it's about, in full if need be")
+		}
+		if args.Acknowledge || args.URL != "" {
+			id, err := h.Notify(pluginapi.Notice{Title: args.Title, Body: args.Body, URL: args.URL, Urgent: args.Urgent, Acknowledge: args.Acknowledge})
 			if err != nil {
 				return nil, nil, err
 			}
-			return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{
-				Text: "Shown; it waits for me to acknowledge it (notification " + id + ")."}}}, nil, nil
+			text := "Shown; clicking it opens the link (notification " + id + ")."
+			if args.Acknowledge {
+				text = "Shown; it waits for me to acknowledge it (notification " + id + ")."
+			}
+			return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: text}}}, nil, nil
 		}
 		if err := Deliver(Note{App: h.AppName(), Title: args.Title, Body: args.Body, Urgent: args.Urgent}); err != nil {
 			return nil, nil, err

@@ -137,6 +137,20 @@
         "checksum": {
           "type": "string",
           "description": "Checksum is the SHA-256 of the executable that ran."
+        },
+        "notified": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Notified are the titles of the notifications it asked for and the app\nrecorded (\"would notify: \u003ctitle\u003e\" on a dry run, which records none)."
+        },
+        "notifyProblems": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "NotifyProblems are what was wrong with what it wrote to $PA_NOTIFY\n(a line that isn't a valid notification, those past the limit): none\nof them fails the run."
         }
       },
       "additionalProperties": false,

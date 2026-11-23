@@ -49,6 +49,10 @@ func TestNotificationClick(t *testing.T) {
 	if got := click(id); got != (ClickOutput{Notification: id, Action: "show-run", Routine: "r", Run: runID}) {
 		t.Fatalf("run click: %+v", got)
 	}
+	link := add(notifications.Notification{Kind: notifications.KindRun, Title: "PR reviewed", URL: "https://github.com/o/r/pull/1", Routine: "r", Run: runID})
+	if got := click(link); got != (ClickOutput{Notification: link, Action: "open-url", URL: "https://github.com/o/r/pull/1"}) {
+		t.Fatalf("link click: %+v", got)
+	}
 	upd := add(notifications.Notification{Kind: notifications.KindApp, Title: "Updated"})
 	if got := click(upd); got != (ClickOutput{Notification: upd, Action: "show-app"}) {
 		t.Fatalf("app click: %+v", got)
@@ -81,7 +85,7 @@ func TestNotificationsAck(t *testing.T) {
 	cfg := a.Layout.Config()
 	var ids []string
 	for _, title := range []string{"Ana asked for the report", "Ben asked for a review"} {
-		n, err := notifications.Add(a.Layout.Notifications(), notifications.Notification{Kind: notifications.KindAcknowledge, Title: title, Routine: "r"}, time.Now())
+		n, err := notifications.Add(a.Layout.Notifications(), notifications.Notification{Kind: notifications.KindRun, Title: title, Body: "b", Acknowledge: true, Routine: "r"}, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}

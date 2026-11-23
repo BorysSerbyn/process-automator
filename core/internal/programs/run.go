@@ -27,7 +27,13 @@ const (
 	ForEnv = "PA_FOR"
 	// RunIDEnv is the run's ID in the run history.
 	RunIDEnv = "PA_RUN_ID"
+	// NotifyEnv is the file a program may write notifications to, a JSON
+	// object a line, for the app to show (see Execution.Notified).
+	NotifyEnv = "PA_NOTIFY"
 )
+
+// notifyCap is how much of $PA_NOTIFY is read.
+const notifyCap = 256 << 10
 
 // DryRunFlag is passed to a program that writes, on a dry run.
 const DryRunFlag = "--dry-run"
@@ -46,7 +52,8 @@ type Invocation struct {
 	Args       []string
 	// Dir is the folder it runs in.
 	Dir string
-	// Env is its whole environment (Environment's), but ResultEnv.
+	// Env is its whole environment (Environment's), but ResultEnv and
+	// NotifyEnv.
 	Env []string
 	// Log gets its output's first half as it comes, and its last half when it
 	// ends (OutputCap).
@@ -74,6 +81,16 @@ type Execution struct {
 	DryRun          bool `json:"dryRun"`
 	// Checksum is the SHA-256 of the executable that ran.
 	Checksum string `json:"checksum,omitempty"`
+	// NotifyLines are the lines it wrote to $PA_NOTIFY, for the engine to
+	// make notifications of.
+	NotifyLines []string `json:"-"`
+	// Notified are the titles of the notifications it asked for and the app
+	// recorded ("would notify: <title>" on a dry run, which records none).
+	Notified []string `json:"notified,omitempty"`
+	// NotifyProblems are what was wrong with what it wrote to $PA_NOTIFY
+	// (a line that isn't a valid notification, those past the limit): none
+	// of them fails the run.
+	NotifyProblems []string `json:"notifyProblems,omitempty"`
 }
 
 // DisplayEnv are the desktop session's variables a program is given when the
@@ -107,7 +124,7 @@ func Exec(ctx context.Context, inv Invocation) (*Execution, error) {
 		return nil, err
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
-	resultPath := filepath.Join(tmp, "result")
+	resultPath, notifyPath := filepath.Join(tmp, "result"), filepath.Join(tmp, "notify")
 
 	// The output goes through a pipe of our own, so the run ends when the
 	// program exits, not when the last process holding its output does.
@@ -123,7 +140,7 @@ func Exec(ctx context.Context, inv Invocation) (*Execution, error) {
 	}()
 	cmd := exec.Command(inv.Executable, inv.Args...)
 	cmd.Dir = inv.Dir
-	cmd.Env = append(slices.Clone(inv.Env), ResultEnv+"="+resultPath)
+	cmd.Env = append(slices.Clone(inv.Env), ResultEnv+"="+resultPath, NotifyEnv+"="+notifyPath)
 	cmd.Stdout, cmd.Stderr = w, w
 	// Its stdout, when it's read apart: through a pipe of our own too.
 	var outR, outW *os.File
@@ -201,7 +218,7 @@ func Exec(ctx context.Context, inv Invocation) (*Execution, error) {
 	}
 	out.finish()
 
-	res := &Execution{ExitCode: cmd.ProcessState.ExitCode(), Summary: summary(resultPath)}
+	res := &Execution{ExitCode: cmd.ProcessState.ExitCode(), Summary: summary(resultPath), NotifyLines: lines(notifyPath)}
 	res.Output, res.OutputTruncated = out.text()
 	if stopped {
 		return res, fmt.Errorf("it was stopped: %w", context.Cause(ctx))
@@ -244,6 +261,24 @@ func summary(path string) string {
 		}
 	}
 	return ""
+}
+
+// lines are the lines written to a file (its first notifyCap bytes), but
+// blank ones.
+func lines(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = f.Close() }()
+	b, _ := io.ReadAll(io.LimitReader(f, notifyCap))
+	var out []string
+	for _, line := range strings.Split(string(b), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 func lastLine(s string) string {

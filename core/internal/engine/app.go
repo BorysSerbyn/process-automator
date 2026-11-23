@@ -236,7 +236,7 @@ type host struct {
 	conn    *mcp.Connector
 	dataDir string
 	config  string // the config file, for ConnectApp
-	files   Layout // the app's files, for AskToAcknowledge
+	files   Layout // the app's files, for Notify
 	run     mcp.Run
 }
 

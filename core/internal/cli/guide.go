@@ -241,6 +241,8 @@ func guideValues() map[string]string {
 		"triggerEnv":     programs.TriggerEnv,
 		"forEnv":         programs.ForEnv,
 		"runIDEnv":       programs.RunIDEnv,
+		"notifyEnv":      programs.NotifyEnv,
+		"notifyLimit":    fmt.Sprint(engine.NotifyLimit),
 		"dryRunFlag":     programs.DryRunFlag,
 		"programPath":    programs.DefaultPath,
 		"outputHalf":     fmt.Sprint(programs.OutputCap / 2 >> 10),

@@ -146,6 +146,12 @@ func printRun(w io.Writer, e *history.Entry) {
 		if p.OutputTruncated {
 			fmt.Fprintln(w, "[output past this isn't kept]")
 		}
+		for _, n := range p.Notified {
+			fmt.Fprintf(w, "  notified  %s\n", n)
+		}
+		for _, n := range p.NotifyProblems {
+			fmt.Fprintf(w, "  notify    %s\n", n)
+		}
 	}
 	r := e.Result
 	if r == nil {

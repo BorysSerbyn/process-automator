@@ -54,7 +54,7 @@ func TestRetiredKindsDropped(t *testing.T) {
 func TestAcknowledge(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "notifications.json")
 	now := time.Date(2026, 11, 19, 9, 0, 0, 0, time.UTC)
-	w, _ := Add(path, Notification{Kind: KindAcknowledge, Title: "Ana asked for the report"}, now.Add(-40*24*time.Hour))
+	w, _ := Add(path, Notification{Kind: KindRun, Title: "Ana asked for the report", Body: "b", Acknowledge: true}, now.Add(-40*24*time.Hour))
 	plain, _ := Add(path, Notification{Kind: KindFailure, Title: "r failed", Acknowledge: true}, now)
 	if plain.Waiting() || !w.Waiting() {
 		t.Fatalf("waiting: %+v %+v", w, plain)
@@ -79,8 +79,8 @@ func TestAcknowledge(t *testing.T) {
 	if done, err := Acknowledge(path, []string{w.ID}, false, now); err != nil || len(done) != 0 {
 		t.Fatal("acknowledged twice", done, err)
 	}
-	b, _ := Add(path, Notification{Kind: KindAcknowledge, Title: "b"}, now)
-	c, _ := Add(path, Notification{Kind: KindAcknowledge, Title: "c"}, now)
+	b, _ := Add(path, Notification{Kind: KindRun, Title: "b", Body: "b", Acknowledge: true}, now)
+	c, _ := Add(path, Notification{Kind: KindRun, Title: "c", Body: "c", Acknowledge: true}, now)
 	if done, _ := Acknowledge(path, nil, true, now); len(done) != 2 || done[0].ID != b.ID || done[1].ID != c.ID {
 		t.Fatalf("all: %+v", done)
 	}
