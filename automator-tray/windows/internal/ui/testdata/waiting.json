@@ -2,7 +2,7 @@
  {
   "id": "n7",
   "at": "2026-11-21T09:00:00Z",
-  "kind": "acknowledge",
+  "kind": "run",
   "title": "Scout found a match",
   "body": "**3** new listings <b>now</b>",
   "routine": "marco-scout",
@@ -12,7 +12,7 @@
  {
   "id": "n8",
   "at": "2026-11-21T10:00:00Z",
-  "kind": "acknowledge",
+  "kind": "run",
   "title": "Door open",
   "routine": "front-door",
   "hook": true,

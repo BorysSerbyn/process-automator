@@ -146,10 +146,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// A click on one of the app's notifications: the run it's about, in
-    /// its routine's (or hook's) window, or the app (the Routines window).
+    /// A click on one of the app's notifications: its link, opened by the
+    /// system's default handler; the run it's about, in its routine's (or
+    /// hook's) window; or the app (the Routines window).
     private func show(_ click: Components.Schemas.ClickOutput) {
-        if click.action == .show_hyphen_run, let routine = click.routine {
+        if click.action == .open_hyphen_url, let link = click.url, let url = URL(string: link) {
+            NSWorkspace.shared.open(url)
+        } else if click.action == .show_hyphen_run, let routine = click.routine {
             if click.hook == true {
                 routineWindows?.showHook(routine, run: click.run)
             } else {

@@ -3,6 +3,7 @@ package tray
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 const pending = `[
@@ -126,7 +127,7 @@ func TestAClickThatFailsSaysWhy(t *testing.T) {
 // while a click on it still opens it, acknowledging nothing.
 func TestAcknowledgeOnANotification(t *testing.T) {
 	f := newFakeCLI(t)
-	f.answer("notifications list --pending --json", `[{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"acknowledge",`+
+	f.answer("notifications list --pending --json", `[{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"run",`+
 		`"title":"Door open","routine":"front-door","run":"r-7","urgent":true,"acknowledge":true}]`)
 	f.answer("notifications open n7 --json", `{"notification":"n7","action":"show-run","routine":"front-door","run":"r-7"}`)
 	tr, _, n, _ := newTray(t, f)
@@ -142,4 +143,28 @@ func TestAcknowledgeOnANotification(t *testing.T) {
 	}
 	tr.Desk().Invoked(n.find("Door open"), "acknowledge")
 	eventually(t, "it to be acknowledged", func() bool { return f.hasRun("notifications ack n7 --json") })
+}
+
+// A click on one about a link opens the link (open-url), and nothing else.
+func TestAClickOpensItsLink(t *testing.T) {
+	f := newFakeCLI(t)
+	f.answer("notifications list --pending --json", `[{"id":"n9","at":"2026-11-23T09:00:00Z","kind":"run",`+
+		`"title":"Review requested","url":"https://github.com/acme/app/pull/7"}]`)
+	f.answer("notifications open n9 --json", `{"notification":"n9","action":"open-url","url":"https://github.com/acme/app/pull/7"}`)
+	tr, _, n, w := newTray(t, f)
+	opened := make(chan string, 1)
+	tr.openURL = func(u string) error { opened <- u; return nil }
+	tr.notifier.deliver()
+	tr.Desk().Invoked(n.find("Review requested"), "default")
+	select {
+	case u := <-opened:
+		if u != "https://github.com/acme/app/pull/7" {
+			t.Fatalf("opened %q", u)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the link didn't open")
+	}
+	if f.hasRun("notifications ack n9 --json") || w.has(Window{Kind: RoutinesWindow}) {
+		t.Fatal("a click acknowledged it, or opened a window")
+	}
 }

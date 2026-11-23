@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os/exec"
 	"reflect"
 	"strings"
 	"sync"
@@ -34,8 +35,10 @@ type Tray struct {
 	desk *Desk
 	// openWindow is the window seam (OpenWindow).
 	openWindow func(cliPath string, w Window) error
-	quit       func()
-	now        func() time.Time
+	// openURL opens a link in the default browser (xdg-open).
+	openURL func(string) error
+	quit    func()
+	now     func() time.Time
 
 	notifier *Notifier
 	updates  *Updates
@@ -54,7 +57,7 @@ type Tray struct {
 func New(info app.Info, view View, notifications Notifications, openWindow func(string, Window) error, quit func()) *Tray {
 	t := &Tray{
 		info: info, cli: cli.CLI{Path: info.CLI, Command: info.Command}, view: view, desk: NewDesk(notifications),
-		openWindow: openWindow, quit: quit, now: time.Now,
+		openWindow: openWindow, quit: quit, now: time.Now, openURL: OpenURL,
 	}
 	t.notifier = NewNotifier(t.cli, t.desk, t.showClick, t.Alert)
 	t.updates = NewUpdates(t.cli, t.desk, t.open, t.Alert, t.render)
@@ -249,8 +252,15 @@ func (t *Tray) open(w Window) {
 }
 
 // showClick shows what a click on one of the app's notifications should:
-// the run it's about, or the app (its routines).
+// the link it's about (open-url), the run it's about, or the app (its
+// routines).
 func (t *Tray) showClick(click cli.ClickOutput) {
+	if click.Action == "open-url" && click.URL != "" {
+		if err := t.openURL(click.URL); err != nil {
+			t.Alert("Couldn't open the link", err.Error())
+		}
+		return
+	}
 	if click.Action == "show-run" && click.Run != "" {
 		t.openRun(click.Run)
 		return
@@ -262,4 +272,15 @@ func (t *Tray) showClick(click cli.ClickOutput) {
 // core's notifications are the Notifier's).
 func (t *Tray) Alert(title, text string) {
 	_ = t.desk.Post(Note{Summary: title, Body: text}, nil)
+}
+
+// OpenURL opens a link in the desktop's default browser (xdg-open), not
+// waiting for it.
+func OpenURL(url string) error {
+	cmd := exec.Command("xdg-open", url)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
 }

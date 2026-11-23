@@ -783,7 +783,7 @@ private func permissionFlippingCLI() throws -> CLI {
 // MARK: Acknowledgements
 
 private let waitingNote = """
-    [{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"acknowledge","title":"Scout found a match","body":"3 new listings",
+    [{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"run","title":"Scout found a match","body":"3 new listings",
       "routine":"marco-scout","run":"marco-scout/2026-11-23T090000","acknowledge":true}]
     """
 

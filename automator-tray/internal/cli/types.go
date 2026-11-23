@@ -105,6 +105,8 @@ type Notification struct {
 	Acknowledge    bool       `json:"acknowledge,omitempty"`
 	AcknowledgedAt *time.Time `json:"acknowledgedAt,omitempty"`
 	Urgent         bool       `json:"urgent,omitempty"`
+	// URL is a link it's about (http or https): clicking it opens it.
+	URL string `json:"url,omitempty"`
 }
 
 // Waiting is whether it waits for me to acknowledge it.
@@ -119,6 +121,8 @@ type ClickOutput struct {
 	Run     string `json:"run,omitempty"`
 	// Hook is true when Routine names a hook.
 	Hook bool `json:"hook,omitempty"`
+	// URL is what open-url opens (a link the notification is about).
+	URL string `json:"url,omitempty"`
 }
 
 // UpdateOutput is `update --check --json` and `update --detach --json`.
