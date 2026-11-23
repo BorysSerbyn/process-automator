@@ -13,7 +13,7 @@ The menu bar app (automator-ui, macOS) starts at login. On Linux the tray takes 
 | Red | Something needs you: a routine failed, was missed or skipped, needs a sign-in or can't be scheduled; setup isn't finished; or the scheduler isn't responding |
 
 ## The menu
-- The version, then the status: "All good", or **why it's red**, one line per reason. Hover a reason for the detail; click it to open the run it's about, or, when nothing ran (it isn't trusted, say), its window on [[#Turning one on|its review]] (one about a hook always opens the hook's window). [[Guides/Troubleshooting|Troubleshooting]] lists the reasons and their fixes
+- The version, then the status: "All good", or **why it's red**, one line per reason. While routines' notifications wait for you to acknowledge them, the first line is "(2) Acknowledgements pending": click it for the [[#Acknowledgements window]]. Hover a reason for the detail; click it to open the run it's about, or, when nothing ran (it isn't trusted, say), its window on [[#Turning one on|its review]] (one about a hook always opens the hook's window). [[Guides/Troubleshooting|Troubleshooting]] lists the reasons and their fixes
 - **Finish Setup…** while setup has steps left: opens the Setup window
 - **Routines ›**: **All Routines…**, then each routine with its status ("Next: tomorrow 09:20", "Paused", "Running since 09:20", "digest failed"). Click one to open its window, on its review when it needs turning on
 - **Hooks ›**, while there are hooks: **All Hooks…**, then each hook with its status ("Waiting for events", "Running since 09:30", "open-meet can't run"). Click one to open its window, on its review when it needs turning on. Hooks never show under Routines ›
@@ -61,6 +61,9 @@ A routine's window (or a program's, for a program hook), but:
 ## A watcher's window
 How it runs (its interval and timeout, when polled), when it last polled or started and last printed an event, and why it's failing; **Events it prints**: each event its file declares, by its label, with the hooks acting on it (one that declares none says to list them, without turning anything red); the hooks listening (click one to open it); what it runs (its executable and SHA-256, arguments, secrets with **Sign In…**), with **Trust** while it isn't trusted (turning on a hook that listens to it trusts it too, so this is rarely needed); and its description file, read-only. **Pause** stops it (the hooks listening show that as their problem); **Delete…** keeps the hooks listening, which then hear nothing.
 
+## Acknowledgements window
+Each notification a routine or hook asked you to acknowledge: its title and text, what sent it and when, **Show Run**, and **Acknowledge**; **Acknowledge All** when there are several. The notification itself has **Acknowledge** too (on Linux, where the desktop shows notification buttons); clicking the notification opens its run, without acknowledging it. The dot stays red until none waits.
+
 ## Setup window
 Setup's steps, grouped: **Templates** (tick templates, fill in their parameters, **Install Selected**), **Model backend** (pick one; **Enter API Key…** for `claude-api`; on `local`, its server and model appear under the choice: Enter keeps Ollama on this machine, then type the model, e.g. `qwen3:8b`), **Plan usage** (**Set Up**), **Claude Code** (connected as soon as the window shows it; **Connect** tries again), **Routines to fix** (**Open <routine>…**), **Sign-ins** (**Sign In…** opens your browser), **Turn on routines** (each one's review, as [[#Turning one on]] shows it, then **Trust and Turn On**: it's trusted and runs on its schedule). **Check Again** re-reads where setup stands. See [[Guides/Getting started#Set it up|Set it up]].
 
@@ -77,7 +80,7 @@ macOS asks once whether the app may show notifications (for both); until you all
 ## The Linux tray
 In a Linux desktop session the tray (automator-tray) shows the same icon and dot in the system tray: the dot dims and brightens while a routine runs. Its menu is the menu bar app's, and so are its notifications; a click on one about a run opens the run's report, and one about an update the Routines window. It starts at login. **Quit** stops it and the scheduler, as on macOS, until you open the app again or log in again. The app is in your desktop's app menu (search for **Process Automator**): opening it starts the scheduler and brings the tray back, or, while the tray runs, opens Setup or Settings as on macOS. The tray's log is `frontend.log` in the data folder (see [[Guides/Troubleshooting#Logs|Logs]]).
 
-Its windows are the menu bar app's: [[#Routines window]], [[#A routine's window]], [[#Hooks window]], [[#A hook's window]], [[#A watcher's window]], [[#Setup window]], [[#Settings window]] and Updating; opening one again brings it to the front. A routine's window has the same controls and tabs (**Overview**, **Runs**, **Memories**, **Settings**), but no days-and-time picker: its schedule is its `schedule` setting, in cron, under **Settings**. A program's is the menu bar app's too; what **Dry Run** does with it is written under the controls. **Turn On…** opens its review above the tabs, and so does a hook's **Fire…** with its sample event; the permissions rows are the menu bar app's, and on Linux, where most permissions aren't checked, there are usually none, and a reason about a hook with no run opens its window.
+Its windows are the menu bar app's: [[#Routines window]], [[#A routine's window]], [[#Hooks window]], [[#A hook's window]], [[#A watcher's window]], [[#Acknowledgements window]], [[#Setup window]], [[#Settings window]] and Updating; opening one again brings it to the front. A routine's window has the same controls and tabs (**Overview**, **Runs**, **Memories**, **Settings**), but no days-and-time picker: its schedule is its `schedule` setting, in cron, under **Settings**. A program's is the menu bar app's too; what **Dry Run** does with it is written under the controls. **Turn On…** opens its review above the tabs, and so does a hook's **Fire…** with its sample event; the permissions rows are the menu bar app's, and on Linux, where most permissions aren't checked, there are usually none, and a reason about a hook with no run opens its window.
 
 A window opens in your terminal instead (`$TERMINAL`, else the first of `xdg-terminal-exec`, `x-terminal-emulator`, `ptyxis`, `kgx`, `gnome-terminal`, `konsole`, `xfce4-terminal` and `xterm`, kept open until you press Enter) when it can't open: no display, no OpenGL, or a package built without the windows app. The tray's log says why:
 
@@ -88,6 +91,7 @@ A window opens in your terminal instead (`$TERMINAL`, else the first of `xdg-ter
 | Routines | `procauto routines list` |
 | A routine | `procauto routines show <routine>` (on its review: `procauto routines trust <routine> --resume`) |
 | Hooks | `procauto hooks list` |
+| Acknowledgements | `procauto notifications list --waiting` |
 | A hook | `procauto hooks show <hook>` (on its review: `procauto hooks trust <hook> --resume`) |
 | A watcher | `procauto watchers show <watcher>` |
 | Updating | `procauto update progress` |
