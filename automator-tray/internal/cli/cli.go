@@ -95,6 +95,24 @@ func (c CLI) PendingNotifications() ([]Notification, error) {
 	return out, c.call(&out, "notifications", "list", "--pending")
 }
 
+// WaitingNotifications are the notifications waiting for me to acknowledge
+// them, oldest first (`notifications list --waiting`).
+func (c CLI) WaitingNotifications() ([]Notification, error) {
+	var out []Notification
+	return out, c.call(&out, "notifications", "list", "--waiting")
+}
+
+// Acknowledge acknowledges notifications (`notifications ack <id>...`), or
+// every one waiting with none named (`--all`).
+func (c CLI) Acknowledge(ids ...string) error {
+	args := append([]string{"notifications", "ack"}, ids...)
+	if len(ids) == 0 {
+		args = append(args, "--all")
+	}
+	var out map[string]any
+	return c.call(&out, args...)
+}
+
 // MarkDelivered records that notifications were shown.
 func (c CLI) MarkDelivered(ids []string) error {
 	_, err := c.Exec(append([]string{"notifications", "delivered"}, ids...)...)

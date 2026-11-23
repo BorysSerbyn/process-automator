@@ -25,9 +25,12 @@ const (
 	RoutineWindow WindowKind = "routine"
 	// HooksWindow is every hook and watcher; HookWindow one hook's and
 	// WatcherWindow one watcher's (Window.Routine names it).
-	HooksWindow   WindowKind = "hooks"
-	HookWindow    WindowKind = "hook"
-	WatcherWindow WindowKind = "watcher"
+	HooksWindow WindowKind = "hooks"
+	// AcknowledgementsWindow lists the notifications waiting for me to
+	// acknowledge them.
+	AcknowledgementsWindow WindowKind = "acknowledgements"
+	HookWindow             WindowKind = "hook"
+	WatcherWindow          WindowKind = "watcher"
 	// UpdateWindow follows the update installing.
 	UpdateWindow WindowKind = "update"
 	// ConfirmUpdateWindow asks before installing an update (only where
@@ -64,6 +67,8 @@ func (w Window) Command() []string {
 		return []string{"routines", "show", w.Routine}
 	case HooksWindow:
 		return []string{"hooks", "list"}
+	case AcknowledgementsWindow:
+		return []string{"notifications", "list", "--waiting"}
 	case HookWindow:
 		if w.Review {
 			return []string{"hooks", "trust", w.Routine, "--resume"}

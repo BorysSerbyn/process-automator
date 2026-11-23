@@ -70,7 +70,8 @@ esac`)
 		t.Fatalf("%+v %v", u, err)
 	}
 	n, err := c.PendingNotifications()
-	if err != nil || !reflect.DeepEqual(n, []Notification{{ID: "n1", Title: "standup failed", Body: "why"}}) {
+	at := time.Date(2026, 11, 17, 8, 0, 0, 0, time.UTC)
+	if err != nil || !reflect.DeepEqual(n, []Notification{{ID: "n1", At: at, Title: "standup failed", Body: "why", Routine: "standup", Run: "r1"}}) {
 		t.Fatalf("%+v %v", n, err)
 	}
 	_ = c.MarkDelivered([]string{"n1", "n2"})

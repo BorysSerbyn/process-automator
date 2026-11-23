@@ -16,6 +16,10 @@ type RunStatus struct {
 	Reasons   []Reason        `json:"reasons,omitempty"`
 	SetupLeft []string        `json:"setupLeft,omitempty"`
 	Routines  []RoutineStatus `json:"routines"`
+	// PendingAcknowledgements is how many notifications wait for me to
+	// acknowledge them; Waiting are they (oldest first).
+	PendingAcknowledgements int       `json:"pendingAcknowledgements,omitempty"`
+	Waiting                 []Waiting `json:"waiting,omitempty"`
 	// Hooks are the hooks, as routines are (absent when there are none): a
 	// hook is never among Routines.
 	Hooks []RoutineStatus `json:"hooks,omitempty"`
@@ -33,6 +37,15 @@ type Reason struct {
 	// Watcher is the watcher it's about (its hooks hear nothing while it's
 	// wrong), when it's one's.
 	Watcher string `json:"watcher,omitempty"`
+	// Acknowledge is true when it's about notifications waiting for me to
+	// acknowledge them (the menu's acknowledgement line shows them).
+	Acknowledge bool `json:"acknowledge,omitempty"`
+}
+
+// Waiting is a notification waiting for me to acknowledge it.
+type Waiting struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // RoutineStatus is one routine's entry in the status.
@@ -79,10 +92,23 @@ const SupportedSchemaVersion = 1
 // Notification is one of the app's own notifications (`notifications list
 // --pending --json`).
 type Notification struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Body  string `json:"body,omitempty"`
+	ID    string    `json:"id"`
+	At    time.Time `json:"at"`
+	Title string    `json:"title"`
+	Body  string    `json:"body,omitempty"`
+	// Routine and Run are what it's about (Hook: Routine names a hook).
+	Routine string `json:"routine,omitempty"`
+	Run     string `json:"run,omitempty"`
+	Hook    bool   `json:"hook,omitempty"`
+	// Acknowledge is true when it waits for me to acknowledge it, until
+	// AcknowledgedAt; Urgent breaks through do-not-disturb.
+	Acknowledge    bool       `json:"acknowledge,omitempty"`
+	AcknowledgedAt *time.Time `json:"acknowledgedAt,omitempty"`
+	Urgent         bool       `json:"urgent,omitempty"`
 }
+
+// Waiting is whether it waits for me to acknowledge it.
+func (n Notification) Waiting() bool { return n.Acknowledge && n.AcknowledgedAt == nil }
 
 // ClickOutput is `notifications open --json`: what a click shows.
 type ClickOutput struct {

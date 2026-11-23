@@ -26,6 +26,7 @@ func TestTheArgumentsNameAWindow(t *testing.T) {
 		{[]string{"routines"}, tray.Window{Kind: tray.RoutinesWindow}, true},
 		{[]string{"routine", "standup"}, tray.Window{Kind: tray.RoutineWindow, Routine: "standup"}, true},
 		{[]string{"hooks"}, tray.Window{Kind: tray.HooksWindow}, true},
+		{[]string{"acknowledgements"}, tray.Window{Kind: tray.AcknowledgementsWindow}, true},
 		{[]string{"hook", "open-meet"}, tray.Window{Kind: tray.HookWindow, Routine: "open-meet"}, true},
 		{[]string{"watcher", "cal"}, tray.Window{Kind: tray.WatcherWindow, Routine: "cal"}, true},
 		{[]string{"hook"}, tray.Window{}, false},

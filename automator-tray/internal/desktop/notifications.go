@@ -62,7 +62,11 @@ func (n *Notifications) Notify(note tray.Note) (uint32, error) {
 	if actions == nil {
 		actions = []string{}
 	}
-	hints := map[string]dbus.Variant{"urgency": dbus.MakeVariant(byte(1))}
+	urgency := byte(1)
+	if note.Urgent {
+		urgency = 2 // critical
+	}
+	hints := map[string]dbus.Variant{"urgency": dbus.MakeVariant(urgency)}
 	var id uint32
 	err := n.call("Notify", n.appName, uint32(0), n.appIcon, note.Summary, note.Body, actions, hints, timeout).Store(&id)
 	return id, err

@@ -162,6 +162,9 @@ func statusItems(s *cli.RunStatus, now time.Time) []MenuItem {
 	for _, r := range s.Reasons {
 		item := MenuItem{Text: shorten(r.Text)}
 		switch {
+		case r.Acknowledge:
+			// "(2) Acknowledgements pending": the window to acknowledge them.
+			item.Action = Action{Kind: ShowWindow, Window: Window{Kind: AcknowledgementsWindow}}
 		case r.Watcher != "":
 			item.Action = Action{Kind: ShowWindow, Window: Window{Kind: WatcherWindow, Routine: r.Watcher}}
 		case r.Run != "":

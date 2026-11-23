@@ -30,7 +30,8 @@ const (
 		`"reasons":[{"routine":"open-meet","hook":true,"text":"open-meet can't run","detail":"it isn't trusted"},` +
 		`{"routine":"brief","hook":true,"text":"brief failed","run":"brief/r1"},` +
 		`{"watcher":"cal","text":"cal is failing: no network (open-meet and brief listen to it)"},` +
-		`{"routine":"standup","text":"standup can't be scheduled","detail":"it isn't trusted"}]}`
+		`{"routine":"standup","text":"standup can't be scheduled","detail":"it isn't trusted"},` +
+		`{"text":"(2) Acknowledgements pending","detail":"a\nb","acknowledge":true}]}`
 	// lineNoHeartbeat has no validUntil: the scheduler never said it's up.
 	lineNoHeartbeat = `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","health":"ok","busy":true,"routines":[]}`
 )
@@ -160,6 +161,7 @@ func TestTheMenu(t *testing.T) {
 			{Text: "brief failed", Action: Action{Kind: OpenRun, Run: "brief/r1"}},
 			{Text: "cal is failing: no network (open-meet and brief listen to it)", Action: window(WatcherWindow, "cal")},
 			{Text: "standup can't be scheduled", Action: review(RoutineWindow, "standup")},
+			{Text: "(2) Acknowledgements pending", Action: window(AcknowledgementsWindow, "")},
 		}, withHooks(tail(
 			MenuItem{Text: "standup — Next: tomorrow 09:20", Health: "ok", Action: review(RoutineWindow, "standup")},
 		),

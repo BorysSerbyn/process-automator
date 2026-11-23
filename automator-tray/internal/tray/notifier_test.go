@@ -120,3 +120,26 @@ func TestAClickThatFailsSaysWhy(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// One a routine asked me to acknowledge is posted with Acknowledge, stays,
+// and breaks through when urgent; Acknowledge runs `notifications ack`,
+// while a click on it still opens it, acknowledging nothing.
+func TestAcknowledgeOnANotification(t *testing.T) {
+	f := newFakeCLI(t)
+	f.answer("notifications list --pending --json", `[{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"acknowledge",`+
+		`"title":"Door open","routine":"front-door","run":"r-7","urgent":true,"acknowledge":true}]`)
+	f.answer("notifications open n7 --json", `{"notification":"n7","action":"show-run","routine":"front-door","run":"r-7"}`)
+	tr, _, n, _ := newTray(t, f)
+	tr.notifier.deliver()
+	want := Note{Summary: "Door open", Actions: []string{"default", "Open", "acknowledge", "Acknowledge"}, Persistent: true, Urgent: true}
+	if got := n.notes[n.find("Door open")]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("posted %+v", got)
+	}
+	tr.Desk().Invoked(n.find("Door open"), "default")
+	eventually(t, "the run to open", func() bool { return f.hasRun("runs show r-7 --open") })
+	if f.hasRun("notifications ack n7 --json") {
+		t.Fatal("a click acknowledged it")
+	}
+	tr.Desk().Invoked(n.find("Door open"), "acknowledge")
+	eventually(t, "it to be acknowledged", func() bool { return f.hasRun("notifications ack n7 --json") })
+}

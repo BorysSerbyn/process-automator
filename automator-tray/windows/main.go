@@ -37,7 +37,7 @@ func main() {
 	log.SetPrefix("automator-windows: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env (default: found beside this program)")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review]|hooks|hook <name> [review]|watcher <name>|update|confirm-update")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review]|hooks|hook <name> [review]|watcher <name>|acknowledgements|update|confirm-update")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -68,7 +68,8 @@ func window(args []string) (tray.Window, error) {
 	}
 	w := tray.Window{Kind: tray.WindowKind(args[0])}
 	switch w.Kind {
-	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.HooksWindow, tray.UpdateWindow, tray.ConfirmUpdateWindow:
+	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.HooksWindow, tray.AcknowledgementsWindow, tray.UpdateWindow,
+		tray.ConfirmUpdateWindow:
 		if len(args) == 1 {
 			return w, nil
 		}
@@ -230,6 +231,10 @@ func newWindow(a fyne.App, c cli.CLI, appName string, which tray.Window, open fu
 		w = a.NewWindow(which.Routine)
 		size = fyne.NewSize(680, 760)
 		view = ui.NewRoutine(c, w, ui.Background, which.Routine, func() { w.Close() })
+	case tray.AcknowledgementsWindow:
+		w = a.NewWindow("Acknowledgements")
+		size = fyne.NewSize(560, 440)
+		view = ui.NewAcknowledgements(c, ui.Background)
 	case tray.HooksWindow:
 		w = a.NewWindow("Hooks")
 		size = fyne.NewSize(620, 520)

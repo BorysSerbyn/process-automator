@@ -74,9 +74,21 @@ func (n *Notifier) deliver() {
 	var delivered []string
 	for _, note := range fresh {
 		id := note.ID
-		err := n.desk.Post(Note{Summary: note.Title, Body: note.Body, Actions: []string{"default", "Open"}}, func(action string) {
-			if action == "default" {
+		posted := Note{Summary: note.Title, Body: note.Body, Actions: []string{"default", "Open"}, Urgent: note.Urgent}
+		if note.Waiting() {
+			// One waiting for me has Acknowledge (where the desktop shows
+			// buttons; elsewhere the menu's acknowledgement line), and stays.
+			posted.Actions = append(posted.Actions, "acknowledge", "Acknowledge")
+			posted.Persistent = true
+		}
+		err := n.desk.Post(posted, func(action string) {
+			switch action {
+			case "default":
 				n.open(id)
+			case "acknowledge":
+				if err := n.cli.Acknowledge(id); err != nil {
+					n.alert("Couldn't acknowledge it", err.Error())
+				}
 			}
 		})
 		if err != nil {

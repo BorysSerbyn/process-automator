@@ -10,8 +10,10 @@ type Note struct {
 	// Actions are pairs of an action's key and its label; "default" is a
 	// click on the notification itself.
 	Actions []string
-	// Persistent notes stay until dismissed or acted on.
+	// Persistent notes stay until dismissed or acted on; Urgent ones break
+	// through do-not-disturb (critical urgency).
 	Persistent bool
+	Urgent     bool
 }
 
 // Notifications is the desktop's notifications service
