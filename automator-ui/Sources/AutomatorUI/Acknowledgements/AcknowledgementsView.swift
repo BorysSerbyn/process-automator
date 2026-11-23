@@ -2,9 +2,10 @@ import AutomatorUICore
 import SwiftUI
 
 /// The Acknowledgements window: each notification a routine or hook asked
-/// me to acknowledge, newest at the bottom (what sent it, its title and
-/// text, when, and its run), with Acknowledge on each and Acknowledge All.
-/// It's read again when run status says what waits changed.
+/// me to acknowledge, oldest first, as a card of its own: its title, what
+/// sent it and when, its text (a long one folded, opening in place to all
+/// of it), and a footer with Show Run and Acknowledge; Acknowledge All in
+/// the header. It's read again when run status says what waits changed.
 struct AcknowledgementsView: View {
     @ObservedObject var model: Acknowledgements
     /// Opens what sent one on its run: a routine's or hook's window.
@@ -12,121 +13,243 @@ struct AcknowledgementsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 header
-                if let error = model.error { RowError(message: error) }
+                if let error = model.error {
+                    Banner(title: "Couldn't acknowledge", message: error, systemImage: "xmark.octagon.fill", tint: .red)
+                }
                 if let error = model.loadError {
                     Banner(
                         title: "Couldn't read what's waiting", message: error, systemImage: "xmark.octagon.fill",
                         tint: .red)
                 } else if model.loaded && model.waiting.isEmpty {
-                    SettingsCard {
-                        VStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle").font(.title).foregroundStyle(.green)
-                            Text("Nothing waits for you.").foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(24)
-                    }
+                    AcknowledgementsEmpty()
                 } else if !model.waiting.isEmpty {
-                    SettingsCard {
-                        ForEach(Array(model.waiting.enumerated()), id: \.element.id) { index, note in
-                            if index > 0 { Divider().padding(.leading, SettingsMetrics.rowInset) }
-                            AcknowledgementRow(
-                                note: note, working: model.acknowledging.contains(note.id),
-                                acknowledge: { Task { await model.acknowledge(note.id) } },
-                                openRun: note.routine.map { name in { openRun(name, note.run, note.hook == true) } })
-                        }
+                    ForEach(model.waiting, id: \.id) { note in
+                        AcknowledgementCard(
+                            note: note, working: model.acknowledging.contains(note.id),
+                            acknowledge: { Task { await model.acknowledge(note.id) } },
+                            openRun: note.routine.map { name in { openRun(name, note.run, note.hook == true) } })
                     }
                 } else {
-                    ProgressView().controlSize(.small).frame(maxWidth: .infinity)
+                    ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(24)
                 }
             }
-            .padding(20)
-            .frame(maxWidth: 680)
+            .padding(24)
+            .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .frame(minWidth: 460, idealWidth: 560, minHeight: 280, idealHeight: 440)
+        .frame(minWidth: 480, idealWidth: 600, minHeight: 320, idealHeight: 560)
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Acknowledgements").font(.title2.weight(.semibold))
-                Text("Notifications that wait for you to acknowledge them; the dot stays red until you do.")
+                Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
+            Spacer(minLength: 12)
             if model.waiting.count > 1 {
-                Button("Acknowledge All") { Task { await model.acknowledgeAll() } }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.acknowledging.contains("*"))
+                Button {
+                    Task { await model.acknowledgeAll() }
+                } label: {
+                    if model.acknowledging.contains("*") {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("Acknowledge All")
+                    }
+                }
+                .disabled(model.acknowledging.contains("*"))
+                .help("Acknowledge every notification waiting")
             }
+        }
+    }
+
+    private var subtitle: String {
+        switch model.waiting.count {
+        case 0: "Notifications a routine or hook asks you to acknowledge wait here."
+        case 1: "1 waiting. The dot stays red until you acknowledge it."
+        default: "\(model.waiting.count) waiting. The dot stays red until you acknowledge them."
         }
     }
 }
 
-/// One notification waiting: what sent it and when, its title, and its
-/// text (the routine's words, plain text), folded to two lines and opening
-/// to all of it (a scout's whole report: it scrolls, and can be selected
-/// and copied); Show Run, and Acknowledge.
-struct AcknowledgementRow: View {
+/// Nothing waits: said plainly, in a card like the others.
+struct AcknowledgementsEmpty: View {
+    var body: some View {
+        SettingsCard {
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(.green)
+                Text("All caught up").font(.headline)
+                Text("When a routine or hook asks you to acknowledge something, it shows here.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 36)
+            .padding(.horizontal, 24)
+        }
+    }
+}
+
+/// One notification waiting, as a card: an icon, its title and what sent it
+/// and when; its text, full width under them, at a readable line length,
+/// paragraphs and bullets as written (plain text, selectable), a long one
+/// folded to its first lines; and a footer: Show more (a long text), then
+/// Show Run and Acknowledge at the right, apart from the text.
+struct AcknowledgementCard: View {
     let note: CoreNotification
     let working: Bool
     let acknowledge: () -> Void
     let openRun: (() -> Void)?
-    @State private var open = false
+    @State private var expanded: Bool
+
+    /// Lines a long text shows while folded.
+    static let foldedLines = 5
+
+    init(
+        note: CoreNotification, working: Bool, acknowledge: @escaping () -> Void, openRun: (() -> Void)?,
+        expanded: Bool = false
+    ) {
+        self.note = note
+        self.working = working
+        self.acknowledge = acknowledge
+        self.openRun = openRun
+        _expanded = State(initialValue: expanded)
+    }
+
+    private var bodyText: String { note.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+
+    /// Whether the text is long enough to fold: more lines, or more words,
+    /// than the folded card shows.
+    private var folds: Bool {
+        bodyText.count > 280
+            || bodyText.split(separator: "\n", omittingEmptySubsequences: false).count > Self.foldedLines
+    }
 
     var body: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                heading
+                if !bodyText.isEmpty { text }
+            }
+            .padding(16)
+            Divider()
+            footer
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+        }
+    }
+
+    private var heading: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: note.urgent == true ? "exclamationmark.circle.fill" : "bell.fill")
+            Image(systemName: note.urgent == true ? "exclamationmark.bubble.fill" : "bell.badge.fill")
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(note.urgent == true ? Color.red : Color.orange)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: note.title).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                if let body = note.body, !body.isEmpty {
-                    if open || !(body.count > 140 || body.contains("\n")) {
-                        FittingScrollView(maxHeight: 320) {
-                            Text(verbatim: body)
-                                .textSelection(.enabled)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(10)
-                        }
-                        .background(
-                            Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    } else {
-                        Text(verbatim: body).lineLimit(2).truncationMode(.tail).foregroundStyle(.secondary)
-                    }
-                    if body.count > 140 || body.contains("\n") {
-                        Button(open ? "Show Less" : "Show All") {
-                            withAnimation(.easeInOut(duration: 0.18)) { open.toggle() }
-                        }
-                        .buttonStyle(.link)
-                        .font(.subheadline)
-                    }
-                }
+                .frame(width: 30, height: 30)
+                .background(
+                    (note.urgent == true ? Color.red : Color.orange).opacity(0.12), in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: note.title)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
-                    if let routine = note.routine { Text(verbatim: routine).font(.subheadline.monospaced()) }
-                    Text(Formats.when(note.at))
-                    if let openRun {
-                        Button("Show Run", action: openRun).buttonStyle(.link)
+                    if let routine = note.routine {
+                        Text(verbatim: routine).font(.subheadline.monospaced())
+                        Text("·")
                     }
+                    Text(Formats.when(note.at))
+                    if note.urgent == true { Tag(text: "Urgent", tint: .red) }
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if working {
-                ProgressView().controlSize(.small)
+        }
+    }
+
+    /// The text under the heading, lined up with the title.
+    /// Folded, it's one block cut after its first lines; open, it's its
+    /// paragraphs as written, a bulleted one (•, -, *) hanging after its
+    /// bullet so wrapped lines line up.
+    @ViewBuilder private var text: some View {
+        Group {
+            if folds && !expanded {
+                Text(verbatim: bodyText)
+                    .lineLimit(Self.foldedLines)
+                    .truncationMode(.tail)
             } else {
-                Button("Acknowledge", action: acknowledge)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(Self.paragraphs(bodyText).enumerated()), id: \.offset) { _, paragraph in
+                        if let bullet = paragraph.bullet {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(verbatim: bullet).foregroundStyle(.secondary)
+                                Text(verbatim: paragraph.text).fixedSize(horizontal: false, vertical: true)
+                            }
+                        } else if paragraph.text.isEmpty {
+                            Spacer().frame(height: 2)
+                        } else {
+                            Text(verbatim: paragraph.text).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
             }
         }
-        .padding(.horizontal, SettingsMetrics.rowInset)
-        .padding(.vertical, 12)
+        .font(.body)
+        .lineSpacing(3)
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: 620, alignment: .leading)
+        .padding(.leading, 42)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// A text's lines, each with its bullet when it starts with one.
+    static func paragraphs(_ text: String) -> [(bullet: String?, text: String)] {
+        text.split(separator: "\n", omittingEmptySubsequences: false).map { raw in
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            for bullet in ["•", "-", "*", "–"] where line.hasPrefix(bullet + " ") {
+                return ("•", String(line.dropFirst(bullet.count + 1)))
+            }
+            return (nil, line)
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            if folds {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+                } label: {
+                    Label(expanded ? "Show Less" : "Show More", systemImage: expanded ? "chevron.up" : "chevron.down")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderless)
+                .help(expanded ? "Fold the text to its first lines" : "Show all of the text")
+            }
+            Spacer(minLength: 12)
+            if let openRun {
+                Button("Show Run", action: openRun)
+                    .help("Open what sent it, on this run")
+            }
+            Button(action: acknowledge) {
+                if working {
+                    ProgressView().controlSize(.small).frame(minWidth: 84)
+                } else {
+                    Text("Acknowledge").frame(minWidth: 84)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(working)
+            .help("It stops waiting; once none waits, the dot is no longer red for it")
+        }
+        .controlSize(.regular)
     }
 }
