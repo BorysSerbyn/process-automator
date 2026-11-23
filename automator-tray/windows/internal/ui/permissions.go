@@ -22,8 +22,8 @@ var AppName = ""
 var PermissionPollEvery = 3 * time.Second
 
 // granter is Grant… for a permission, wherever it shows: asks through the
-// scheduler (`permissions request`), then, while it's still not allowed,
-// opens the OS's page for it and says what to switch on. Why it failed
+// scheduler (`permissions request`) and says what to do; while it's still
+// not allowed and the OS didn't ask, it opens the OS's page for it. Why it failed
 // shows where the button is. It mirrors automator-ui's PermissionGranter.
 type granter struct {
 	cli   cli.CLI
@@ -68,7 +68,11 @@ func (g *granter) grant(permission string) {
 				g.errors[permission] = err.Error()
 			} else {
 				g.notes[permission] = r.Instructions(AppName)
-				if r.State != "granted" && r.SettingsURL != "" {
+				// Only when the OS didn't ask (refused before, or it can't be
+				// asked, as on Linux): over its prompt, the settings page
+				// would hide it. While the prompt is up the note says to
+				// answer it, and the row turns allowed by itself.
+				if r.State != "granted" && !r.Asked && r.SettingsURL != "" {
 					if err := g.openURL(r.SettingsURL); err != nil {
 						g.errors[permission] = err.Error()
 					}

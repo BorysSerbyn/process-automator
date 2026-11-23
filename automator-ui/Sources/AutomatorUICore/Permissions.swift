@@ -80,8 +80,8 @@ extension CLI {
 }
 
 /// Grant… for a permission, wherever it shows (a review, a window): asks
-/// through the scheduler, then, while it's still not allowed, opens the
-/// OS's page for it and says what to switch on. Why it failed shows where
+/// through the scheduler, then, while it's still not allowed and macOS
+/// didn't ask, opens the OS's page for it; either way it says what to do. Why it failed shows where
 /// the button is.
 @MainActor
 public final class PermissionGranter: ObservableObject {
@@ -111,7 +111,11 @@ public final class PermissionGranter: ObservableObject {
         switch result {
         case .success(let request):
             notes[permission] = request.instructions(app: app)
-            if !request.granted, let address = request.settingsUrl, let url = URL(string: address) {
+            // Only when macOS didn't ask (refused before, or it can't be
+            // asked): over its prompt, the settings page would hide the
+            // prompt and this window behind it. While the prompt is up the
+            // note says to answer it, and the row turns allowed by itself.
+            if !request.granted, !request.asked, let address = request.settingsUrl, let url = URL(string: address) {
                 openURL(url)
             }
         case .failure(let failure):

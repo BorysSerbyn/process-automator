@@ -18,13 +18,16 @@ func tellReplies(show string) map[string]string {
 		"memory list --routine tell --json":   "[]",
 		"permissions request input-monitoring --json": `{"permission":"input-monitoring","label":"Input Monitoring","state":"missing","asked":true,"by":[],` +
 			`"where":"in System Settings > Privacy & Security > Input Monitoring","settingsUrl":"x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"}`,
+		"permissions request notifications --json": `{"permission":"notifications","label":"Notifications","state":"not-checked","asked":false,"why":"it can't be asked","by":[],` +
+			`"where":"in Settings > Notifications","settingsUrl":"x-test:notifications"}`,
 	}
 }
 
 // The turn-on review lists each permission that's missing or not checked
 // yet, with why and Grant…; unknown and unsupported ones aren't shown.
-// Grant… asks through the scheduler, then opens the settings page and says
-// what to switch on for the app. Turning on stays possible, saying it won't
+// Grant… asks through the scheduler and says what to do: answer the OS's
+// prompt (nothing opens over it), or, when the OS didn't ask, switch it on
+// in the settings page it opens. Turning on stays possible, saying it won't
 // run until they're allowed.
 func TestTheReviewAsksForPermissions(t *testing.T) {
 	AppName = "Acme"
@@ -49,10 +52,15 @@ func TestTheReviewAsksForPermissions(t *testing.T) {
 	mustNotShow(t, c, "tell needs permissions")
 	test.Tap(buttons(c, "Grant…")[0])
 	f.mustHaveRun(t, "permissions request input-monitoring --json")
-	if strings.Join(opened, ",") != "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent" {
-		t.Fatalf("opened %q", opened)
+	if len(opened) != 0 {
+		t.Fatalf("opened %q over the OS's prompt", opened)
 	}
 	mustShow(t, h.Content(), "Answer the prompt, or switch on Acme in System Settings > Privacy & Security > Input Monitoring.")
+	test.Tap(buttons(h.Content(), "Grant…")[1])
+	f.mustHaveRun(t, "permissions request notifications --json")
+	if strings.Join(opened, ",") != "x-test:notifications" {
+		t.Fatalf("opened %q", opened)
+	}
 	if f.count("hooks trust tell --check --json") < 2 {
 		t.Error("the review wasn't read again after asking")
 	}

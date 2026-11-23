@@ -638,9 +638,12 @@ private let inputMonitoring = """
 
 @MainActor
 @Test func grantAsksThenOpensTheSettingsPage() async throws {
-    let still = inputMonitoring.replacingOccurrences(of: #""by""#, with: #""asked":true,"by""#)
+    let prompted = inputMonitoring.replacingOccurrences(of: #""by""#, with: #""asked":true,"by""#)
+    let refused = inputMonitoring.replacingOccurrences(of: "input-monitoring", with: "camera")
+        .replacingOccurrences(of: #""by""#, with: #""asked":false,"why":"asked before","by""#)
     let (cli, log) = try scriptedCLI([
-        "permissions request input-monitoring --json": still,
+        "permissions request input-monitoring --json": prompted,
+        "permissions request camera --json": refused,
         "permissions request notifications --json":
             #"{"permission":"notifications","label":"Notifications","state":"granted","asked":true,"by":[]}"#,
         "permissions request accessibility --json": "!the scheduler isn't running",
@@ -651,19 +654,23 @@ private let inputMonitoring = """
     granter.openURL = { opened.append($0) }
     granter.asked = { asked += 1 }
     await granter.grant("input-monitoring")
-    // Still not allowed: its page opens, and it says what to switch on, for which app.
-    #expect(
-        opened.map(\.absoluteString) == ["x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"])
+    // macOS asked, and its prompt may still be up: nothing opens over it (it
+    // and this window would go behind), and it says what to do.
+    #expect(opened.isEmpty)
     #expect(
         granter.notes["input-monitoring"]
             == "Answer the prompt, or switch on Acme in System Settings > Privacy & Security > Input Monitoring.")
+    // macOS didn't ask and it's still not allowed: its page opens.
+    await granter.grant("camera")
+    #expect(
+        opened.map(\.absoluteString) == ["x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"])
     // Allowed at once: nothing to open.
     await granter.grant("notifications")
     #expect(opened.count == 1 && granter.notes["notifications"] == nil)
     // Asking failed: why, by its button.
     await granter.grant("accessibility")
     #expect(granter.errors["accessibility"] == "the scheduler isn't running" && granter.granting == nil)
-    #expect(asked == 3)
+    #expect(asked == 4)
     #expect(ran(log).allSatisfy { $0.hasPrefix("permissions request ") })
 }
 

@@ -679,7 +679,7 @@ macOS answers a permission check for the process responsible for the one checkin
 - **The scheduler checking in its own process**: macOS answers it once and caches that, so a permission taken away after it started still read granted
 
 ## Decision: asking for a permission goes through the scheduler
-macOS shows its prompt, naming the app, only to a process attributed to the app, and only once; after that a permission is changed in System Settings. `permissions request` leaves a request file the scheduler takes within half a second; it asks macOS, records whether it could and what macOS says once answered, and the command prints that with the page's address, so a frontend's Grant… is that command, then opening the address when it's still missing.
+macOS shows its prompt, naming the app, only to a process attributed to the app, and only once; after that a permission is changed in System Settings. `permissions request` leaves a request file the scheduler takes within half a second; it asks macOS, records whether it could and what macOS says once answered, and the command prints that with the page's address, so a frontend's Grant… is that command, then opening the address when it's still missing and macOS didn't ask: the command returns within seconds, before I've answered the prompt, and the settings page opened over the prompt hid it and the app's window behind both.
 
 ### Rejected
 - **The command asking itself**: right when the menu bar app runs it (it shares the app's identity), wrong from a terminal or an MCP client, where the prompt would name the terminal and the grant go to it
