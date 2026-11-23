@@ -411,10 +411,12 @@ func (a *App) turnOnSteps(loaded []loadedRoutine) ([]SetupStep, error) {
 	return steps, nil
 }
 
-// hookTurnOnSteps is a step per hook that's on but can't run only because
-// it, or its watcher, isn't trusted (never, or not since it changed):
-// turning it on trusts both, in one yes (`hooks trust --resume`). A hook
-// that's off is off on purpose: no step.
+// hookTurnOnSteps is a step per hook that isn't trusted, or whose watcher
+// isn't (never, or not since it changed), whether it's on or off, as for a
+// routine: one added off was never turned on, so it isn't paused on
+// purpose. Turning it on trusts both and turns it on, in one yes (`hooks
+// trust --resume`). A trusted hook that's off was paused on purpose: no
+// step.
 func (a *App) hookTurnOnSteps() []SetupStep {
 	all, _, err := a.Hooks()
 	if err != nil {
@@ -423,14 +425,21 @@ func (a *App) hookTurnOnSteps() []SetupStep {
 	var steps []SetupStep
 	for _, x := range all {
 		rd := a.Assess(x)
-		if rd.ConfigErr != nil || !rd.Config.Enabled || !OnlyTrust(rd.All()) {
+		if rd.ConfigErr != nil {
+			continue
+		}
+		h, _ := AsHook(x)
+		var why []string
+		if rd.Untrusted != "" {
+			why = append(why, rd.Untrusted)
+		}
+		if w := a.HookWatcherReview(h.On.Watcher); w.Watcher != nil && !w.Trusted {
+			why = append(why, "its watcher "+h.On.Watcher+" isn't trusted ("+w.Untrusted+")")
+		}
+		if len(why) == 0 {
 			continue
 		}
 		name := x.Name()
-		var why []string
-		for _, p := range rd.All() {
-			why = append(why, p.Text)
-		}
 		steps = append(steps, SetupStep{Step: StepTurnOn, Subject: name, Hook: true, Title: "Turn on " + name,
 			Status: Capitalize(strings.Join(why, "; ")),
 			Ask:    "Trust " + name + " (and its watcher, if it isn't trusted) to run when its events come?",

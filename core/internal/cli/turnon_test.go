@@ -132,3 +132,56 @@ func TestTurningRoutinesOn(t *testing.T) {
 		t.Fatal("a trusted program on its schedule still needs turning on")
 	}
 }
+
+// What isn't trusted is a setup step, on or off: one added off was never
+// turned on. What's trusted and paused was paused on purpose: no step that
+// setup waits for. The same for hooks (and their watchers) and routines.
+func TestSetupListsWhatIsntTrustedOnOrOff(t *testing.T) {
+	a, _ := enginetest.Fixture(t, map[string]string{"standup": "queue"}, nil)
+	cfg := a.Layout.Config()
+	step := func(name string) *engine.SetupStep {
+		for _, st := range cliJSON[engine.SetupOutput](t, cfg, "setup").Steps {
+			if st.Step == engine.StepTurnOn && st.Subject == name {
+				return &st
+			}
+		}
+		return nil
+	}
+	waits := func(name string) bool { st := step(name); return st != nil && !st.Done && !st.Optional }
+
+	watcher := hookFiles(t, watchers.DescriptionFile, "executable: ./watch\nmode: poll\n", "watch", "true\n")
+	cliJSON[WatcherChange](t, cfg, "watchers", "add", "setup-replies", "--from", watcher)
+	hook := hookFiles(t, hooks.DescriptionFile, "executable: ./act\nwrites: false\non: {watcher: setup-replies}\n", "act", "cat\n")
+	cliJSON[HookChange](t, cfg, "hooks", "add", "setup-notify", "--from", hook)
+	// Added: off and untrusted, as is its watcher.
+	if st := step("setup-notify"); !waits("setup-notify") || !st.Hook || !strings.Contains(st.Status, "its watcher setup-replies isn't trusted") {
+		t.Fatalf("a hook added off and untrusted: %+v", st)
+	}
+	// Turned on, then paused: trusted, so off on purpose.
+	cliJSON[TrustOutput](t, cfg, "hooks", "trust", "setup-notify", "--yes", "--resume")
+	cliJSON[HookChange](t, cfg, "hooks", "pause", "setup-notify")
+	if st := step("setup-notify"); st != nil {
+		t.Fatalf("a trusted, paused hook is a setup step: %+v", st)
+	}
+	// Its watcher changed while it's off: the watcher alone isn't trusted.
+	if _, err := cli(t, cfg, "watchers", "update", "setup-replies", "--from", hookFiles(t, watchers.DescriptionFile,
+		"executable: ./watch\nmode: poll\n", "watch", "echo changed\n")); err != nil {
+		t.Fatal(err)
+	}
+	if st := step("setup-notify"); !waits("setup-notify") || strings.Contains(st.Status, "it isn't trusted") {
+		t.Fatalf("a paused hook whose watcher changed: %+v", st)
+	}
+
+	// A routine: added off and untrusted, a step; trusted, then paused, none
+	// that setup waits for.
+	desc := programSource(t, "executable: ./prog\nwrites: false\nschedule: \"0 9 * * *\"\n", "true\n")
+	cliJSON[RoutineChange](t, cfg, "routines", "create", "setup-backup", "--kind", "program", "--from", desc)
+	if !waits("setup-backup") {
+		t.Fatalf("a routine added off and untrusted: %+v", step("setup-backup"))
+	}
+	cliJSON[TrustOutput](t, cfg, "routines", "trust", "setup-backup", "--yes", "--resume")
+	cliJSON[RoutineChange](t, cfg, "routines", "pause", "setup-backup")
+	if waits("setup-backup") {
+		t.Fatalf("a trusted, paused routine keeps setup unfinished: %+v", step("setup-backup"))
+	}
+}

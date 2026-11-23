@@ -841,7 +841,7 @@ A watcher written before `events` existed keeps working as it did, printing any 
 - **Failing the watcher on an undeclared type**: one stray event would turn it red and, for a poll, hold back every other event behind its cursor
 
 ## Decision: what only needs turning on is setup's, one reason
-A routine, program or hook that's on but can't run only because it (or a hook's watcher) isn't trusted, never or not since it changed, is a turn-on step in setup, and run status gives it no reason of its own (`turnOn`): the menu says setup isn't finished, once, and setup turns each on in a row, review and confirm, without closing anything. Anything else wrong (a failed run, a failing watcher, a missing permission) stays its own reason.
+A routine, program or hook that isn't trusted (or whose watcher isn't), never or not since it changed, is a turn-on step in setup whether it's on or off: one added off was never turned on, so it isn't paused on purpose, while one trusted and then paused is, and is no step. While it's on, run status gives it no reason of its own (`turnOn`): the menu says setup isn't finished, once, and setup turns each on in a row, review and confirm, without closing anything. Anything else wrong (a failed run, a failing watcher, a missing permission) stays its own reason.
 
 ### Rejected
 - **A reason per item, each opening its window**: three changed hooks were three lines, and turning each on meant opening the menu, the window, acting, closing, and again
