@@ -82,6 +82,12 @@ func TestScheduledJobsReportsProblems(t *testing.T) {
 		!strings.Contains(problems["fresh"], "routines trust fresh") || len(problems) != 4 {
 		t.Fatalf("problems = %v", problems)
 	}
+	// The one that only isn't trusted is setup's to turn on, no reason of
+	// its own; the one missing its folder stays one.
+	setups := allSetups(a, jobs, problems, time.Now())
+	if !setups["fresh"].TurnOn || setups["nofolder"].TurnOn || setups["typo"].TurnOn {
+		t.Fatalf("turn on: fresh %v, nofolder %v, typo %v", setups["fresh"].TurnOn, setups["nofolder"].TurnOn, setups["typo"].TurnOn)
+	}
 }
 
 func TestRunOutcomeMapsEveryError(t *testing.T) {

@@ -22,6 +22,10 @@
             "type": "string",
             "description": "Subject is the server or routine it's about (routine, sign-in, turn-on)."
           },
+          "hook": {
+            "type": "boolean",
+            "description": "Hook is true when Subject is a hook (a turn-on step): turning it on\ntrusts it, and its watcher when that isn't trusted (`hooks trust`)."
+          },
           "title": {
             "type": "string",
             "description": "Title names the step (\"Model backend\", \"Sign in to tracker\")."

@@ -72,6 +72,10 @@ type Setup struct {
 	// and WatcherProblem what's wrong with that watcher, said about it.
 	Hook                    bool
 	Watcher, WatcherProblem string
+	// TurnOn is true when every problem is one turning it on fixes (it,
+	// or its watcher, isn't trusted): setup lists it, so it's no reason of
+	// its own.
+	TurnOn bool
 }
 
 // Sync makes the file list exactly the routines and hooks set up on the
@@ -86,7 +90,7 @@ func Sync(path string, setups map[string]Setup, now time.Time) error {
 		s.Routines, s.Hooks = s.Routines[:0], nil
 		for name, setup := range setups {
 			entry := Routine{
-				Name: name, Enabled: setup.Enabled, Problem: setup.Problem,
+				Name: name, Enabled: setup.Enabled, Problem: setup.Problem, TurnOn: setup.TurnOn,
 				NextRunAt: setup.NextRunAt, LastRun: prev[name].LastRun, HealthResetAt: prev[name].HealthResetAt,
 			}
 			if setup.Hook {
@@ -184,7 +188,7 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 		reasons = append(reasons, Reason{Text: "The scheduler can't work", Detail: s.Problem})
 	}
 	if n := len(s.SetupLeft); n > 0 {
-		reasons = append(reasons, Reason{Text: fmt.Sprintf("Setup isn't finished (%d to do)", n),
+		reasons = append(reasons, Reason{Setup: true, Text: fmt.Sprintf("Setup isn't finished (%d to do)", n),
 			Detail: "Still to do: " + strings.Join(s.SetupLeft, ", ")})
 	}
 	if n := len(s.Waiting); n > 0 {
@@ -202,7 +206,7 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 		if !r.Enabled {
 			continue
 		}
-		if why := whyUnhealthy(r, now); why.Text != "" {
+		if why := whyUnhealthy(r, now); why.Text != "" && !turnOnOnly(r) {
 			reasons = append(reasons, why)
 		}
 		verdict = HealthOK
@@ -215,7 +219,7 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 		if !h.Enabled {
 			continue
 		}
-		if h.WatcherProblem != "" {
+		if h.WatcherProblem != "" && !h.TurnOn {
 			if _, seen := watcherProblems[h.Watcher]; !seen {
 				failing = append(failing, h.Watcher)
 				watcherProblems[h.Watcher] = h.WatcherProblem
@@ -223,7 +227,7 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 			listeners[h.Watcher] = append(listeners[h.Watcher], h.Name)
 			h.Problem = ownProblem(h)
 		}
-		if why := whyUnhealthy(h, now); why.Text != "" {
+		if why := whyUnhealthy(h, now); why.Text != "" && !turnOnOnly(h) {
 			why.Hook = true
 			if strings.HasSuffix(why.Text, " can't be scheduled") {
 				why.Text = h.Name + " can't run"
@@ -246,6 +250,10 @@ func assess(s *Status, now time.Time) (Health, []Reason) {
 	}
 	return verdict, reasons
 }
+
+// turnOnOnly is whether all that's wrong with an entry is that it, or its
+// watcher, isn't trusted: setup's steps list it (its reason is setup's).
+func turnOnOnly(r Routine) bool { return r.TurnOn && r.Problem != "" }
 
 // andList is names as said: "a", "a and b", "a, b and c".
 func andList(names []string) string {
@@ -278,6 +286,9 @@ func entryState(r Routine, now time.Time, idle string) (Health, string) {
 	if !r.Enabled {
 		return HealthNone, "Paused"
 	}
+	if turnOnOnly(r) {
+		return HealthError, "Needs turning on"
+	}
 	if why := whyUnhealthy(r, now); why.Text != "" {
 		return HealthError, why.Text
 	}
@@ -304,7 +315,7 @@ func entryState(r Routine, now time.Time, idle string) (Health, string) {
 // runs when its events come.
 func hookState(h Routine, now time.Time) (Health, string) {
 	health, summary := entryState(h, now, "Waiting for events")
-	if health == HealthError && h.Problem != "" {
+	if health == HealthError && h.Problem != "" && !turnOnOnly(h) {
 		return health, h.Name + " can't run"
 	}
 	return health, summary

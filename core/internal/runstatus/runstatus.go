@@ -105,6 +105,9 @@ type Reason struct {
 	// acknowledge them: choosing it shows them (`notifications list
 	// --waiting`), to acknowledge.
 	Acknowledge bool `json:"acknowledge,omitempty"`
+	// Setup is true when it's about setup steps still to do (turning on
+	// what isn't trusted among them): choosing it opens setup.
+	Setup bool `json:"setup,omitempty"`
 }
 
 // Waiting is a notification waiting for me to acknowledge it.
@@ -131,6 +134,10 @@ type Routine struct {
 	// reason, about the watcher, not one per hook.
 	Watcher        string `json:"watcher,omitempty"`
 	WatcherProblem string `json:"watcherProblem,omitempty"`
+	// TurnOn is true when all that keeps it from running is that it, or its
+	// watcher, isn't trusted: turning it on fixes it, setup lists it, and
+	// it's no reason of its own (setup's reason covers it).
+	TurnOn bool `json:"turnOn,omitempty"`
 	// HealthResetAt is when the scheduler last found that a permission it
 	// needs changed (its state, or which ones it needs): a run that started
 	// before then no longer counts toward its health, which is none until it

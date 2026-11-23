@@ -433,3 +433,35 @@ func TestWaitingNotifications(t *testing.T) {
 		t.Error("an unchanged list was written")
 	}
 }
+
+// What only needs turning on (it, or its watcher, isn't trusted) is no
+// reason of its own: setup lists it, and setup's one reason opens setup.
+// What's otherwise wrong stays its own reason.
+func TestWhatNeedsTurningOnIsSetups(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run-status.json")
+	if err := Sync(path, map[string]Setup{
+		"pr-reviewed":   {Hook: true, Enabled: true, Problem: "it isn't trusted: its executable changed", TurnOn: true},
+		"rick-gh-scout": {Hook: true, Enabled: true, Watcher: "gh", WatcherProblem: "gh isn't trusted (not trusted yet)", TurnOn: true},
+		"digest":        {Enabled: true, Problem: "not trusted yet", TurnOn: true},
+		"broken":        {Enabled: true, Problem: "its folder is missing"},
+	}, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetSetup(path, []string{"Turn on digest", "Turn on pr-reviewed", "Turn on rick-gh-scout"}, t0); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := Load(path)
+	var texts []string
+	for _, r := range s.Reasons {
+		texts = append(texts, r.Text)
+	}
+	if len(s.Reasons) != 2 || !s.Reasons[0].Setup || s.Reasons[0].Text != "Setup isn't finished (3 to do)" ||
+		s.Reasons[1].Text != "broken can't be scheduled" || s.Health != HealthError {
+		t.Fatalf("reasons %q", texts)
+	}
+	for _, h := range s.Hooks {
+		if h.Health != HealthError || h.Summary != "Needs turning on" {
+			t.Errorf("%s: %s %q", h.Name, h.Health, h.Summary)
+		}
+	}
+}

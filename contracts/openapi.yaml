@@ -1898,6 +1898,11 @@ components:
         run:
           description: Run is the run it's about (a history ID, as `runs show` takes), if any.
           type: string
+        setup:
+          description: |-
+            Setup is true when it's about setup steps still to do (turning on
+            what isn't trusted among them): choosing it opens setup.
+          type: boolean
         text:
           description: |-
             Text is a short headline ("standup failed"); Detail the full story (the
@@ -1955,6 +1960,12 @@ components:
             Summary is its state in a few words ("Next: tomorrow 09:20", "standup
             failed", "Paused"), for frontends to show as is.
           type: string
+        turnOn:
+          description: |-
+            TurnOn is true when all that keeps it from running is that it, or its
+            watcher, isn't trusted: turning it on fixes it, setup lists it, and
+            it's no reason of its own (setup's reason covers it).
+          type: boolean
         watcher:
           description: |-
             Watcher is the watcher a hook listens to, and WatcherProblem what's
@@ -2111,6 +2122,11 @@ components:
             type: string
           type: array
         done:
+          type: boolean
+        hook:
+          description: |-
+            Hook is true when Subject is a hook (a turn-on step): turning it on
+            trusts it, and its watcher when that isn't trusted (`hooks trust`).
           type: boolean
         optional:
           description: |-

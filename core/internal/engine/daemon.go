@@ -289,6 +289,16 @@ func (a *App) SyncStatus(now time.Time) error {
 // allSetups are the routines' setups (statusSetups) and the hooks'.
 func allSetups(a *App, jobs []scheduler.Job, problems map[string]string, now time.Time) map[string]runstatus.Setup {
 	setups := statusSetups(jobs, problems, now)
+	// A routine whose only problem is that it isn't trusted is setup's to
+	// turn on, not a reason of its own.
+	if all, _, err := a.All(); err == nil {
+		for _, x := range all {
+			if s, ok := setups[x.Name()]; ok && s.Problem != "" && OnlyTrust(a.Assess(x).All()) {
+				s.TurnOn = true
+				setups[x.Name()] = s
+			}
+		}
+	}
 	for name, setup := range hookSetups(a) {
 		setups[name] = setup
 	}

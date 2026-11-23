@@ -609,6 +609,7 @@ func hookSetups(a *App) map[string]runstatus.Setup {
 				}
 			}
 			setup.Problem, setup.WatcherProblem = strings.Join(own, "; "), strings.Join(watcher, "; ")
+			setup.TurnOn = OnlyTrust(rd.All())
 		}
 		out[x.Name()] = setup
 	}

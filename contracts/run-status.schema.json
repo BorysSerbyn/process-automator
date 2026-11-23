@@ -87,6 +87,10 @@
           "watcherProblem": {
             "type": "string"
           },
+          "turnOn": {
+            "type": "boolean",
+            "description": "TurnOn is true when all that keeps it from running is that it, or its\nwatcher, isn't trusted: turning it on fixes it, setup lists it, and\nit's no reason of its own (setup's reason covers it)."
+          },
           "healthResetAt": {
             "type": "string",
             "format": "date-time",
@@ -204,6 +208,10 @@
           },
           "watcherProblem": {
             "type": "string"
+          },
+          "turnOn": {
+            "type": "boolean",
+            "description": "TurnOn is true when all that keeps it from running is that it, or its\nwatcher, isn't trusted: turning it on fixes it, setup lists it, and\nit's no reason of its own (setup's reason covers it)."
           },
           "healthResetAt": {
             "type": "string",
@@ -333,6 +341,10 @@
           "acknowledge": {
             "type": "boolean",
             "description": "Acknowledge is true when it's about notifications waiting for me to\nacknowledge them: choosing it shows them (`notifications list\n--waiting`), to acknowledge."
+          },
+          "setup": {
+            "type": "boolean",
+            "description": "Setup is true when it's about setup steps still to do (turning on\nwhat isn't trusted among them): choosing it opens setup."
           }
         },
         "additionalProperties": false,

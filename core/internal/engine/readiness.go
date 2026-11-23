@@ -45,7 +45,7 @@ func (rd Readiness) All() []Problem {
 	case rd.TrustErr != nil:
 		all = append(all, Problem{Text: rd.TrustErr.Error()})
 	case rd.Untrusted != "":
-		all = append(all, Problem{Text: rd.Untrusted, Fix: rd.trustFix})
+		all = append(all, Problem{Text: rd.Untrusted, Fix: rd.trustFix, Trust: true})
 	}
 	return all
 }
@@ -63,6 +63,21 @@ type Problem struct {
 	// (failing, untrusted, paused, a permission only it needs): Text then
 	// says it about the hook, "its watcher <name> …" (see AboutWatcher).
 	Watcher string
+	// Trust is true for one turning it on fixes (`trust --yes --resume`):
+	// it, or its hook's watcher, isn't trusted (never, or not since it
+	// changed). Setup lists those, rather than each being a reason.
+	Trust bool
+}
+
+// OnlyTrust is whether problems are all ones turning it on fixes (and
+// there are some).
+func OnlyTrust(problems []Problem) bool {
+	for _, p := range problems {
+		if !p.Trust {
+			return false
+		}
+	}
+	return len(problems) > 0
 }
 
 // AboutWatcher is a problem with a hook's watcher said about the watcher

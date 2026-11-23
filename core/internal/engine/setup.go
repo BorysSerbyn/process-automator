@@ -20,6 +20,9 @@ type SetupStep struct {
 	Step string `json:"step" jsonschema:"enum=templates,enum=backend,enum=routine,enum=sign-in,enum=turn-on,enum=usage,enum=mcp"`
 	// Subject is the server or routine it's about (routine, sign-in, turn-on).
 	Subject string `json:"subject,omitempty"`
+	// Hook is true when Subject is a hook (a turn-on step): turning it on
+	// trusts it, and its watcher when that isn't trusted (`hooks trust`).
+	Hook bool `json:"hook,omitempty"`
 	// Title names the step ("Model backend", "Sign in to tracker").
 	Title string `json:"title"`
 	Done  bool   `json:"done"`
@@ -124,6 +127,7 @@ func (a *App) Setup() (SetupOutput, error) {
 		return SetupOutput{}, err
 	}
 	steps = append(steps, turnOns...)
+	steps = append(steps, a.hookTurnOnSteps()...)
 
 	out := SetupOutput{Steps: steps}
 	for _, st := range steps {
@@ -405,6 +409,37 @@ func (a *App) turnOnSteps(loaded []loadedRoutine) ([]SetupStep, error) {
 		steps = append(steps, st)
 	}
 	return steps, nil
+}
+
+// hookTurnOnSteps is a step per hook that's on but can't run only because
+// it, or its watcher, isn't trusted (never, or not since it changed):
+// turning it on trusts both, in one yes (`hooks trust --resume`). A hook
+// that's off is off on purpose: no step.
+func (a *App) hookTurnOnSteps() []SetupStep {
+	all, _, err := a.Hooks()
+	if err != nil {
+		return nil
+	}
+	var steps []SetupStep
+	for _, x := range all {
+		rd := a.Assess(x)
+		if rd.ConfigErr != nil || !rd.Config.Enabled || !OnlyTrust(rd.All()) {
+			continue
+		}
+		name := x.Name()
+		var why []string
+		for _, p := range rd.All() {
+			why = append(why, p.Text)
+		}
+		steps = append(steps, SetupStep{Step: StepTurnOn, Subject: name, Hook: true, Title: "Turn on " + name,
+			Status: Capitalize(strings.Join(why, "; ")),
+			Ask:    "Trust " + name + " (and its watcher, if it isn't trusted) to run when its events come?",
+			Commands: []string{
+				product.Command + " hooks trust " + name + " --check --json   # show me what it acts on and can reach before asking",
+				product.Command + " hooks trust " + name + " --yes --resume",
+			}})
+	}
+	return steps
 }
 
 // ChoiceLines are an enum setting's values, each with its help, aligned:

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/hooks"
 	"github.com/BorysSerbyn/process-automator/core/internal/watchers"
@@ -68,8 +69,24 @@ func TestTurningAHookOnTrustsItsWatcher(t *testing.T) {
 	if changed.Watcher.Trusted || len(changed.Watcher.Changes) == 0 || changed.Watcher.Untrusted != "changed since it was trusted" {
 		t.Fatalf("a changed watcher: %+v", changed.Watcher)
 	}
+	// A hook that's on but can't run only for trust is setup's to turn on.
+	turnOnStep := func() *engine.SetupStep {
+		for _, st := range cliJSON[engine.SetupOutput](t, cfg, "setup").Steps {
+			if st.Step == engine.StepTurnOn && st.Subject == "turnon-meet" {
+				return &st
+			}
+		}
+		return nil
+	}
+	if st := turnOnStep(); st == nil || !st.Hook || st.Done || !strings.Contains(st.Status, "isn't trusted") ||
+		!strings.Contains(strings.Join(st.Commands, "\n"), "hooks trust turnon-meet --yes --resume") {
+		t.Fatalf("setup's step for a hook whose watcher changed: %+v", st)
+	}
 	if again := cliJSON[TrustOutput](t, cfg, "hooks", "trust", "turnon-meet", "--yes"); !again.Watcher.Trusted {
 		t.Fatalf("trusting a trusted hook left its watcher untrusted: %+v", again.Watcher)
+	}
+	if st := turnOnStep(); st != nil {
+		t.Fatalf("a hook turned on is still a setup step: %+v", st)
 	}
 
 	// No such watcher: the hook is trusted, the review says why it hears nothing.
