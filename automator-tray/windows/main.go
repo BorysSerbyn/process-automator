@@ -138,6 +138,7 @@ func run(dir string, which tray.Window) error {
 	c := cli.CLI{Path: info.CLI, Command: info.Command}
 	ui.AppName = info.Name
 	a := fyneapp.NewWithID(id + ".windows")
+	a.Settings().SetTheme(ui.Theme())
 	w := a.NewWindow(info.Name)
 	sh := shell.New(c, w, ui.Background, info.Name)
 	// Run status, as it changes, for the screens that follow it and the
