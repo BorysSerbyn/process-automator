@@ -6,7 +6,7 @@ A program is a routine that runs an executable instead of a model: for work that
 procauto guide programs
 ```
 
-It has an example `program.yaml`, every key, what a program gets (its exit code, `$PA_RESULT`, dry runs, its environment, its output) and the steps once it's written. What follows is what the guide leaves out.
+It has an example `program.yaml`, every key, what a program gets (its exit code, `$PA_RESULT`, notifying you through `$PA_NOTIFY`, dry runs, its environment, its output) and the steps once it's written. What follows is what the guide leaves out.
 
 ## Building it
 Build it for the machine it runs on: a Go program for an Apple silicon Mac is `GOOS=darwin GOARCH=arm64 go build`. Anything it calls must be named by its full path or be on the guide's fixed PATH: it doesn't get your shell's.
