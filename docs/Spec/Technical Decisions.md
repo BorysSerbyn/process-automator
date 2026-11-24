@@ -711,6 +711,15 @@ A hook runs for an event, so it has no run now: `hooks fire <hook>` gives it one
 - **Run now with an empty event**: the action would run on nothing, and fail or do the wrong thing
 - **Replaying the watcher's last event**: the app keeps events' IDs, not their data, and the last one may have been handled
 
+## Decision: one window, its screens destinations in a sidebar
+The app has one window: a sidebar of sections (Routines, Hooks, Acknowledgements; Setup, Settings, Updates), shown and hidden with ☰, and in each section a stack of what was opened from it, with Back. With a window per screen, and one per routine, hook and watcher, I had several windows to find and close, and a link between screens opened yet another. The menus stay as they are: each item, reason and notification click opens its screen in that window, in the section it belongs to, and links inside the window stay in the section I'm in, so Back returns to where I was. The screens themselves didn't change: each is the same view as before, hosted as a destination, so the window is navigation and nothing else. Where it is follows the same rules on both OSes, as a value in each frontend's tested code (`NavigationState` in AutomatorUICore, `nav` in the windows app); the toolkits draw it (SwiftUI's `NavigationSplitView` and `NavigationStack`, Fyne's `Navigation` container). ☰ rather than macOS's sidebar button, so the two look alike. It opens fresh each time, centred with the sidebar shown: nothing about it is remembered.
+
+### Rejected
+- **A window per screen** (as it was): windows piling up, and links between screens opening more
+- **Tabs**: no room for routines, hooks and watchers opened from a list, nor for Back
+- **A SwiftUI `WindowGroup` scene**: automator-ui is an AppKit menu bar app whose windows are opened from its menu; a scene brings its own opening and restoring rules
+- **Remembering its size, place and sidebar**: something more to get wrong across screens of different sizes, for little
+
 ## Decision: hooks have a menu item and windows of their own, made of the routine window's parts
 A hook isn't a routine (no schedule, no run now, its own commands), so it never shows among routines: **Hooks ›** sits after **Routines ›**, while there are hooks, and the Hooks window lists hooks and their watchers. Prompts and programs show together, as routines do: which kind a hook is matters less to me than what it acts on. A hook's window is a routine's with its differences (fire with a sample event, what it acts on), built from the same parts (runs, memories, what it can reach or runs, sign-in, a file shown read-only), so a fix to one is a fix to both. The sample event goes to `hooks fire` as `--event-json`: the frontends' CLI runners pass no stdin, and the event is a line of JSON.
 
