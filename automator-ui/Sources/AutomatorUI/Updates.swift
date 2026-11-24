@@ -348,6 +348,8 @@ struct ManageUpdatesView: View {
                     note("xmark.octagon.fill", .red, error)
                 }
             }
+            // As wide as the cards below: its own content doesn't push it out.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
         }
     }
