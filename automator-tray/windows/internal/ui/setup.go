@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/cli"
@@ -391,7 +392,7 @@ func (s *Setup) header() fyne.CanvasObject {
 	if s.done {
 		icon = widget.NewIcon(successIcon("check"))
 	}
-	titles := container.NewVBox(heading("Setup", true))
+	titles := lines(pageTitle("Setup"))
 	if s.loaded {
 		subtitle := "Everything is set up."
 		switch {
@@ -404,7 +405,7 @@ func (s *Setup) header() fyne.CanvasObject {
 		titles.Add(secondary(subtitle))
 	}
 	again := widget.NewButtonWithIcon("Check Again", refreshIcon(), s.Load)
-	return container.NewBorder(nil, nil, container.NewCenter(sized(32, icon)), container.NewCenter(again), titles)
+	return container.NewBorder(nil, nil, container.NewCenter(padded(0, 0, 2, 4, sized(30, icon))), container.NewCenter(again), titles)
 }
 
 // stepGroup is the steps of one kind.
@@ -504,7 +505,7 @@ func (s *Setup) groupView(g stepGroup) []fyne.CanvasObject {
 	}
 	trailing := container.NewHBox(progress)
 	if g.allDone() {
-		trailing.Objects = append([]fyne.CanvasObject{container.NewCenter(widget.NewIcon(successIcon("check")))}, trailing.Objects...)
+		trailing.Objects = append([]fyne.CanvasObject{container.NewCenter(sized(18, doneMark()))}, trailing.Objects...)
 	}
 	objects := []fyne.CanvasObject{newDisclosure(open, true, func() {
 		s.toggled[g.id()] = !open
@@ -547,7 +548,7 @@ func (s *Setup) stepView(step cli.SetupStep, prominent bool) fyne.CanvasObject {
 	if msg := s.errors[stepID(step)]; msg != "" {
 		body.Add(errorRow(msg))
 	}
-	return container.NewVBox(row, padded(0, 12, 48, rowInset, body))
+	return container.NewVBox(row, padded(0, 14, 60, rowInset, body))
 }
 
 func (s *Setup) action(step cli.SetupStep) fyne.CanvasObject {
@@ -640,7 +641,7 @@ func stepText(step cli.SetupStep, prominent, expanded bool) fyne.CanvasObject {
 	if !expanded {
 		status.Wrapping, status.Truncation = fyne.TextWrapOff, fyne.TextTruncateEllipsis
 	}
-	return container.NewVBox(heading(step.Title, prominent), status)
+	return lines(heading(step.Title, prominent), status)
 }
 
 // stepTags is Done, Optional, or a spinner while the core works on it.
@@ -670,7 +671,7 @@ func (s *Setup) signInButton(step cli.SetupStep, enabled bool) fyne.CanvasObject
 	}
 	box := container.NewHBox()
 	if busy {
-		box.Add(secondary("Finish in your browser."))
+		box.Add(container.NewCenter(secondaryLine("Finish in your browser.")))
 	}
 	box.Add(b)
 	return box
@@ -694,7 +695,7 @@ func (s *Setup) templatePicker(step cli.SetupStep) fyne.CanvasObject {
 		var rows []fyne.CanvasObject
 		for i, t := range offered {
 			if i > 0 {
-				rows = append(rows, padded(0, 0, 12, 0, widget.NewSeparator()))
+				rows = append(rows, padded(0, 0, 42, 0, widget.NewSeparator()))
 			}
 			rows = append(rows, s.templateRow(t))
 		}
@@ -767,18 +768,20 @@ func (s *Setup) templateRow(t cli.TemplateInfo) fyne.CanvasObject {
 	id.Importance = widget.LowImportance
 	name := heading(t.Name, false)
 	name.Wrapping = fyne.TextWrapOff // on a line with its id
-	title := container.NewHBox(name, id)
+	// The id's smaller text sits on the name's baseline.
+	title := container.NewHBox(name, padded(theme.TextSize()-theme.CaptionTextSize(), 0, -theme.InnerPadding(), 0, id))
 	if t.Installed {
 		title.Add(tag("Installed", ""))
 	}
-	about := container.NewVBox(title)
+	about := lines(title)
 	if t.Description != "" {
 		about.Add(secondary(t.Description))
 	}
 	if w := t.WithWatcher; w != nil && !w.Installed {
 		about.Add(secondary("Comes with the watcher " + w.Name + " (" + w.ID + "), installed with it"))
 	}
-	box := container.NewVBox(container.NewBorder(nil, nil, container.NewVBox(check), nil, about))
+	// The box on the name's line, as a checkbox with its label.
+	box := container.NewVBox(container.NewBorder(nil, nil, container.NewVBox(padded(1, 0, 0, -theme.InnerPadding(), check)), nil, about))
 	if s.chosen[t.ID] && len(t.Params) > 0 {
 		params := container.NewVBox()
 		for _, p := range t.Params {
@@ -786,7 +789,7 @@ func (s *Setup) templateRow(t cli.TemplateInfo) fyne.CanvasObject {
 		}
 		box.Add(padded(0, 0, 36, 0, params))
 	}
-	return padded(2, 2, 4, 8, box)
+	return padded(4, 4, 6, rowInset-8, box)
 }
 
 // paramField is a template parameter: its name (marked when required), a
@@ -853,8 +856,8 @@ func (s *Setup) backendPicker(step cli.SetupStep) fyne.CanvasObject {
 		return nil
 	}
 	busy := s.working[stepID(step)]
+	// One under the other: side by side, Fyne gives each the widest's width.
 	choices := widget.NewRadioGroup(s.backend.Enum, nil)
-	choices.Horizontal = true
 	choices.Required = true
 	choices.Selected = s.backend.ValueText
 	choices.OnChanged = func(v string) {
@@ -884,13 +887,13 @@ func (s *Setup) preparation(step cli.SetupStep, prepare string) fyne.CanvasObjec
 	if subject == "" {
 		subject = "this"
 	}
-	lines := container.NewVBox()
+	steps := container.New(&linesLayout{gap: 6})
 	for _, l := range numbered(prepare) {
 		number := widget.NewLabel(l.number)
 		number.Importance = widget.LowImportance
 		number.TextStyle = fyne.TextStyle{Bold: true}
 		number.Alignment = fyne.TextAlignTrailing
-		lines.Add(container.NewBorder(nil, nil, container.NewVBox(fixedWidth(28, number)), nil, rich(l.text)))
+		steps.Add(container.NewBorder(nil, nil, container.NewVBox(fixedWidth(28, number)), nil, rich(l.text)))
 	}
 	done := widget.NewCheck("I've done this", nil)
 	done.Checked = s.prepared[id]
@@ -903,7 +906,7 @@ func (s *Setup) preparation(step cli.SetupStep, prepare string) fyne.CanvasObjec
 		s.refresh()
 	}
 	title := container.NewBorder(nil, nil, widget.NewIcon(primaryIcon("list")), nil, heading("First, set up "+subject, false))
-	return tinted(container.NewVBox(title, lines,
+	return tinted(container.NewVBox(title, steps,
 		container.NewBorder(nil, nil, done, s.signInButton(step, s.prepared[id]))))
 }
 
