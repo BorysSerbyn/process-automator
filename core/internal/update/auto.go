@@ -196,7 +196,7 @@ func Decide(st AutoState, f Facts) AutoPlan {
 	case f.Next != nil && f.Next.Sub(f.Now) < QuietBefore:
 		plan.Waiting = tag + " installs automatically after " + f.NextName + "'s run at " + later(*f.Next)
 	case st.PostponedUntil != nil && f.Now.Before(*st.PostponedUntil):
-		plan.Waiting = tag + " installs automatically a few minutes after the app's windows are closed"
+		plan.Waiting = tag + " installs automatically a few minutes after the app's window is closed"
 	case f.Now.Sub(f.AwakeSince) < AwakeFor || (f.FullyAwake != nil && !f.FullyAwake()):
 		plan.Waiting = tag + " installs automatically once the computer has been awake a few minutes"
 	default:

@@ -7,19 +7,20 @@ import SwiftUI
 /// automatic updates are on), asked on launch, every minute and when the
 /// menu opens; while one installs, what it's doing (`update progress`,
 /// every 2 seconds). The menu's Manage Updates… line says when one is
-/// available or installing, and opens the Manage Updates window. While one
-/// of the app's windows is open, or its menu is, automatic updates are held
+/// available or installing, and opens Updates in the app's window. While
+/// the app's window is open, or its menu is, automatic updates are held
 /// back (`update postpone`): one never restarts the app under me. Whether
 /// one is available, installing or waiting, and why, is the core's answer.
 @MainActor
-final class Updates: NSObject, NSWindowDelegate {
+final class Updates: NSObject {
     private let cli: CLI?
     let model: ManageUpdatesModel
     private var timer: Timer?
     private var following: Timer?
     /// The menu's line while the menu is open, so a fresh answer shows at once.
     private weak var menuItem: NSMenuItem?
-    private var window: NSWindow?
+    /// Opens Updates in the app's window (the app sets it).
+    var open: () -> Void = {}
 
     init(cli: CLI?) {
         self.cli = cli
@@ -38,7 +39,7 @@ final class Updates: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Whether one of the app's windows is open (not the menu bar's).
+    /// Whether the app's window is open (not the menu bar's menu).
     private static var windowOpen: Bool {
         NSApp.windows.contains { $0.isVisible && $0.styleMask.contains(.titled) }
     }
@@ -95,29 +96,14 @@ final class Updates: NSObject, NSWindowDelegate {
         model.readProgress()
     }
 
-    /// The Manage Updates window.
-    @objc func show() {
-        if window == nil {
-            let controller = NSHostingController(rootView: ManageUpdatesView(model: model))
-            let window = NSWindow(contentViewController: controller)
-            window.styleMask = [.titled, .closable, .resizable]
-            window.title = "Manage Updates"
-            window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 560, height: 640))
-            window.center()
-            window.delegate = self
-            self.window = window
-        }
+    /// Manage Updates…: Updates in the app's window.
+    @objc func show() { open() }
+
+    /// Updates shown in the app's window: read again, and automatic
+    /// updates held back.
+    func opened() {
         model.load()
         postpone()
-        bringToFront(window)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        DispatchQueue.main.async {
-            guard self.window?.isVisible == false else { return }  // reopened meanwhile
-            self.window = nil
-        }
     }
 }
 
@@ -344,7 +330,7 @@ struct ManageUpdatesView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Install updates automatically").font(.headline)
                         Text(
-                            "New releases install by themselves once they've been out an hour, when no routine is running and none of the app's windows is open. A notification tells you when one is installed."
+                            "New releases install by themselves once they've been out an hour, when no routine is running and the app's window isn't open. A notification tells you when one is installed."
                         )
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

@@ -235,8 +235,8 @@ func (u *Updates) render() fyne.CanvasObject {
 
 func (u *Updates) automaticView() fyne.CanvasObject {
 	left := container.NewVBox(widget.NewLabel("Install updates automatically"), secondary(
-		"New releases install by themselves once they've been out an hour, when no routine is running and none of "+
-			"the app's windows is open. A notification tells you when one is installed."))
+		"New releases install by themselves once they've been out an hour, when no routine is running and "+
+			"the app's window isn't open. A notification tells you when one is installed."))
 	switch {
 	case u.status != nil && u.status.Automatic && u.status.AutomaticBlocked != "":
 		left.Add(secondary("Not on this install: " + u.status.AutomaticBlocked + "."))

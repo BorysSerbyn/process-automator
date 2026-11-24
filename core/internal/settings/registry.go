@@ -129,7 +129,7 @@ var Registry = []Setting{
 	{
 		Key: "update.auto", Type: TypeBool, Default: true,
 		Description: "Install new releases by themselves, at a quiet moment: once a release has been out an hour, when " +
-			"nothing is running or about to, none of the app's windows is open and the computer has been awake a while. " +
+			"nothing is running or about to, the app's window isn't open and the computer has been awake a while. " +
 			"A notification says when one is installed, or failed.",
 	},
 	{

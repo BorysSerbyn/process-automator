@@ -26,10 +26,14 @@ import Testing
 @Test func backGoesToWhatItWasOpenedFrom() {
     var nav = NavigationState()
     nav.show(.routine("standup"))
+    #expect(nav.backTitle == "Routines")
+    nav.push(.routine("digest"))
+    #expect(nav.backTitle == "standup")
+    nav.back()
     nav.back()
     #expect(nav.section == .routines && nav.shown == .routines)
     nav.back()  // nothing to go back to
-    #expect(nav.shown == .routines)
+    #expect(nav.shown == .routines && nav.backTitle == nil)
 }
 
 // Opened from inside the window: on top of what shows, in the same

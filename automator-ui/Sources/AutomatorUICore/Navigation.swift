@@ -105,6 +105,12 @@ public struct NavigationState: Equatable, Sendable {
 
     public var canGoBack: Bool { !path.isEmpty }
 
+    /// The name of what Back goes to (nil: nothing to go back to).
+    public var backTitle: String? {
+        guard canGoBack else { return nil }
+        return path.count > 1 ? path[path.count - 2].title : section.title
+    }
+
     /// Opened from outside the window (the menu, a notification, opening
     /// the app): its section, with only it opened there.
     public mutating func show(_ destination: Destination) {

@@ -2,12 +2,12 @@ import AppKit
 import AutomatorUICore
 import SwiftUI
 
-/// automator-ui: the indicator (menu bar icon and menu), the routines and
-/// settings windows, the app's own desktop notifications and updates. It
+/// automator-ui: the indicator (menu bar icon and menu), the app's window
+/// (its screens in a sidebar), the app's own desktop notifications and updates. It
 /// shows what the core says and runs what the core offers, through its CLI
 /// only: it reads none of the core's files.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private let cli = CLI.bundled
     private var indicator: Indicator!
     private var updates: Updates!
@@ -20,13 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var refreshTimer: Timer?
     private var ticks = 0
 
-    private var routineWindows: RoutineWindows?
-    private var setupWindow: SetupWindow?
-    private var settingsWindow: NSWindow?
-    private var settingsModel: SettingsModel?
-    /// The settings groups open when the window last closed: the window and
-    /// its data are freed on close (SwiftUI holds a lot), this outlives them.
-    private var settingsOpenGroups: Set<String>?
+    /// The app's window; nil without the CLI.
+    private var window: MainWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // One copy at a time: the login item and a copy macOS opened by
@@ -41,24 +36,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let cli {
             // After a setup action, the app's notifications are asked for
             // again; run status follows on its own (status --watch).
-            setupWindow = SetupWindow(
-                cli: cli, openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name) },
-                changed: { [weak self] in self?.reload() })
-            routineWindows = RoutineWindows(
-                cli: cli, openSettings: { [weak self] in self?.openSettings() },
-                openSetup: { [weak self] in self?.setupWindow?.show() })
+            window = MainWindow(cli: cli, updates: updates, changed: { [weak self] in self?.reload() })
         }
+        updates.open = { [weak self] in self?.window?.show(.updates) }
+        // The menu's items, each opening its screen in the app's window.
         indicator = Indicator(
             updates: updates, quit: { [weak self] in self?.quit() },
-            openSettings: { [weak self] in self?.openSettings() },
-            openRoutines: { [weak self] in self?.routineWindows?.showList() },
-            openRoutine: { [weak self] name in self?.routineWindows?.showRoutine(name, review: true) },
+            openSettings: { [weak self] in self?.window?.show(.settings) },
+            openRoutines: { [weak self] in self?.window?.show(.routines) },
+            openRoutine: { [weak self] name in self?.window?.show(.routine(name), review: true) },
             openRun: { [weak self] id in self?.openRun(id) },
-            openHooks: { [weak self] in self?.routineWindows?.showHooks() },
-            openHook: { [weak self] name, run in self?.routineWindows?.showHook(name, run: run, review: run == nil) },
-            openAcknowledgements: { [weak self] in self?.routineWindows?.showAcknowledgements() },
-            openWatcher: { [weak self] name in self?.routineWindows?.showWatcher(name) },
-            openSetup: { [weak self] in self?.setupWindow?.show() })
+            openHooks: { [weak self] in self?.window?.show(.hooks) },
+            openHook: { [weak self] name, run in self?.window?.show(.hook(name), run: run, review: run == nil) },
+            openAcknowledgements: { [weak self] in self?.window?.show(.acknowledgements) },
+            openWatcher: { [weak self] name in self?.window?.show(.watcher(name)) },
+            openSetup: { [weak self] in self?.window?.show(.setup) })
         notifier.setUp(cli: cli) { [weak self] click in self?.show(click) }
         followStatus()
         updates.start()
@@ -101,8 +93,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         startScheduler()
         if reopenedByNotificationClick() { return false }
         switch Lifecycle.reopenWindow(for: status) {
-        case .setup: setupWindow?.show()
-        case .settings: openSettings()
+        case .setup: window?.show(.setup)
+        case .settings: window?.show(.settings)
         }
         return false
     }
@@ -131,54 +123,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return URL(fileURLWithPath: String(cString: path)).lastPathComponent == "usernoted"
     }
 
-    // MARK: Settings
-
-    private func openSettings() {
-        guard let cli else { return }
-        if settingsWindow == nil {
-            let model = SettingsModel(cli: cli, openGroups: settingsOpenGroups)
-            settingsModel = model
-            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
-            window.title = "\(AppInfo.name) Settings"
-            window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 640, height: 680))
-            window.center()
-            window.delegate = self
-            settingsWindow = window
-        }
-        settingsModel?.load()  // what changed elsewhere since it was last open
-        bringToFront(settingsWindow)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
-        settingsOpenGroups = settingsModel?.expanded
-        // Let go once the close is done, so the window, its views and the
-        // settings are freed until it's next opened.
-        DispatchQueue.main.async {
-            guard self.settingsWindow?.isVisible == false else { return }  // reopened meanwhile
-            self.settingsWindow = nil
-            self.settingsModel = nil
-        }
-    }
-
     /// A click on one of the app's notifications: its link, opened by the
     /// system's default handler; the run it's about, in its routine's (or
-    /// hook's) window; an update's, the Manage Updates window (what's new);
-    /// or the app (the Routines window).
+    /// hook's) screen; an update's, Updates (what's new); or the app
+    /// (Routines), in the app's window.
     private func show(_ click: Components.Schemas.ClickOutput) {
         if click.action == .open_hyphen_url, let link = click.url, let url = URL(string: link) {
             NSWorkspace.shared.open(url)
         } else if click.action == .show_hyphen_run, let routine = click.routine {
-            if click.hook == true {
-                routineWindows?.showHook(routine, run: click.run)
-            } else {
-                routineWindows?.showRoutine(routine, run: click.run)
-            }
+            window?.show(click.hook == true ? .hook(routine) : .routine(routine), run: click.run)
         } else if click.action == .show_hyphen_updates {
-            updates.show()
+            window?.show(.updates)
         } else {
-            routineWindows?.showList()
+            window?.show(.routines)
         }
     }
 
@@ -193,11 +150,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: The core's status
 
-    /// Shows the last status (the indicator, the routine windows) and
+    /// Shows the last status (the indicator, the app's window) and
     /// delivers new notifications.
     private func reload() {
         indicator.show(status)
-        routineWindows?.update(status)
+        window?.update(status)
         notifier.deliver()
     }
 
@@ -212,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard let self else { return }
                 self.ticks += 1
                 self.indicator.show(self.status)
-                self.routineWindows?.update(self.status)
+                self.window?.update(self.status)
                 if self.ticks % 4 == 0 { self.notifier.deliver() }
             }
         }
@@ -235,7 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 }
 
-/// An alert in front of everything (the app has no windows of its own open).
+/// An alert in front of everything (the app's window may not be open).
 @MainActor
 func showAlert(_ title: String, _ text: String) {
     NSApp.activate()

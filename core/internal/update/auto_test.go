@@ -37,7 +37,7 @@ func TestDecide(t *testing.T) {
 		{name: "a run", f: func(f *Facts) { f.Busy = "standup is running" }, waiting: "once nothing is running (standup is running)"},
 		{name: "a run due", f: func(f *Facts) { f.Next, f.NextName = in(time.Minute), "standup" }, waiting: "after standup's run at 12:01"},
 		{name: "a run later", f: func(f *Facts) { f.Next, f.NextName = in(time.Hour), "standup" }, install: true},
-		{name: "in use", st: func(s *AutoState) { s.PostponedUntil = in(time.Minute) }, waiting: "windows are closed"},
+		{name: "in use", st: func(s *AutoState) { s.PostponedUntil = in(time.Minute) }, waiting: "window is closed"},
 		{name: "was in use", st: func(s *AutoState) { s.PostponedUntil = ago(time.Second) }, install: true},
 		{name: "just woke", f: func(f *Facts) { f.AwakeSince = now.Add(-time.Minute) }, waiting: "awake"},
 		{name: "a maintenance wake", f: func(f *Facts) { f.FullyAwake = func() bool { return false } }, waiting: "awake"},
