@@ -252,9 +252,7 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
                 RoutinesListView(
                     model: model,
                     openRoutine: { [weak self] in self?.push(.routine($0)) },
-                    turnOn: { [weak self] in self?.push(.routine($0), review: true) },
-                    openSettings: { [weak self] in self?.push(.settings) },
-                    openSetup: { [weak self] in self?.push(.setup) })
+                    turnOn: { [weak self] in self?.push(.routine($0), review: true) })
             }
         case .hooks:
             if let model = hooksModel {

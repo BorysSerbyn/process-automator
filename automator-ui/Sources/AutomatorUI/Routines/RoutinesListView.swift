@@ -49,8 +49,6 @@ struct RoutinesListView: View {
     let openRoutine: (String) -> Void
     /// Opens a routine's window on its Turn On review.
     let turnOn: (String) -> Void
-    let openSettings: () -> Void
-    let openSetup: () -> Void
 
     var body: some View {
         ScrollView {
@@ -106,14 +104,6 @@ struct RoutinesListView: View {
                 }
             }
             Spacer()
-            Button(action: openSetup) {
-                Label("Setup", systemImage: "checklist")
-            }
-            .help("Add routines from templates, choose the model backend, sign in, trust and enable routines")
-            Button(action: openSettings) {
-                Label("Settings", systemImage: "gearshape")
-            }
-            .help("Open the app's settings")
         }
     }
 }

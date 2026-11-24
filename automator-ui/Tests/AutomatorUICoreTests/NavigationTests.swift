@@ -53,7 +53,7 @@ import Testing
     nav.push(.hook("open-meet"))
     #expect(nav.path == [.hook("open-meet")])
 
-    // A section's own screen (the Routines list's Settings button) switches to it.
+    // A section's own screen (Settings, say) switches to it.
     nav.push(.settings)
     #expect(nav.section == .settings && nav.path.isEmpty)
 }

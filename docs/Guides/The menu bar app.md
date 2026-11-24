@@ -33,7 +33,7 @@ One window holds everything: a sidebar with **Routines**, **Hooks** and **Acknow
 `procauto update status` says the same in a terminal, `procauto update notes` shows the notes, and `procauto settings set update.auto false` turns automatic updates off.
 
 ## Routines
-Every routine with its health, schedule in words, last run and status, and **Turn On…** beside one that needs turning on. **Setup** and **Settings** at the top open those. Click a routine to open it.
+Every routine with its health, schedule in words, last run and status, and **Turn On…** beside one that needs turning on. Click a routine to open it.
 
 ## Turning one on
 A routine, a program or a hook that's off or not trusted has **Turn On…**: on its screen (the header and a banner saying why it isn't on), beside it in Routines and Hooks, and from the menu and the reasons. It opens one review: what it does, in a line; any warning (an LLM hook that can write acts on outside data); what it still needs before it works: each permission macOS hasn't allowed it yet (Input Monitoring "for its watcher home-key", Notifications "for the notify plugin") with **Grant…**, and each sign-in with **Sign In…** (it can be turned on before either; the review says it won't run until they're allowed); and **Details**, folded: what it can reach or runs and, for a hook whose watcher isn't trusted yet, what its watcher runs. One button, **Trust and Turn On** (just **Turn On** when it's trusted already), trusts it, and a hook's watcher with it, and turns it on. If the core refuses, the review says why and stays open.

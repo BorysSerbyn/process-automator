@@ -77,7 +77,7 @@ func TestOpeningFromInsideStaysInTheSection(t *testing.T) {
 	if !slices.Equal(s.Path, []Destination{hook("open-meet"), watcher("cal")}) {
 		t.Fatalf("%+v", s.Path)
 	}
-	// A section's own screen (the Routines list's Settings button) switches to it.
+	// A section's own screen (Settings, say) switches to it.
 	s.Push(Destination{Kind: tray.SettingsWindow})
 	if s.Section != tray.SettingsWindow || s.CanGoBack() {
 		t.Fatalf("%+v", s)

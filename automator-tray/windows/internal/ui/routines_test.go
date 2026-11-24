@@ -34,12 +34,11 @@ func statusFrom(t *testing.T, file string) *cli.RunStatus {
 }
 
 // Every routine with its health, schedule in words, last run and summary;
-// a row opens its routine; Setup and Settings open theirs.
+// a row opens its routine; Setup and Settings are the sidebar's, not here.
 func TestRoutinesListsEachRoutine(t *testing.T) {
 	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "@routines.json"})
 	var opened []string
-	r := NewRoutines(f.CLI, now, func(n string) { opened = append(opened, n) }, func(n string) { opened = append(opened, "turn on "+n) },
-		func() { opened = append(opened, "setup") }, func() { opened = append(opened, "settings") })
+	r := NewRoutines(f.CLI, now, func(n string) { opened = append(opened, n) }, func(n string) { opened = append(opened, "turn on "+n) })
 	r.now = noon
 	r.Load()
 	r.Update(statusFrom(t, "status-routines.json"))
@@ -57,9 +56,10 @@ func TestRoutinesListsEachRoutine(t *testing.T) {
 		t.Fatal("no Turn On… for the routine that needs it, or one for a routine that's on")
 	}
 	test.Tap(button(t, c, "Turn On…"))
-	test.Tap(button(t, c, "Setup"))
-	test.Tap(button(t, c, "Settings"))
-	if strings.Join(opened, ",") != "digest,turn on digest,setup,settings" {
+	if len(buttons(c, "Setup")) != 0 || len(buttons(c, "Settings")) != 0 {
+		t.Fatal("the Routines list has Setup or Settings buttons: they're the sidebar's")
+	}
+	if strings.Join(opened, ",") != "digest,turn on digest" {
 		t.Fatalf("opened %q", opened)
 	}
 }
@@ -68,7 +68,7 @@ func TestRoutinesListsEachRoutine(t *testing.T) {
 // (a run ended), not on every status; no status is not responding.
 func TestRoutinesFollowRunStatus(t *testing.T) {
 	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "@routines.json"})
-	r := NewRoutines(f.CLI, now, func(string) {}, func(string) {}, func() {}, func() {})
+	r := NewRoutines(f.CLI, now, func(string) {}, func(string) {})
 	r.now = noon
 	r.Load()
 	mustShow(t, r.Content(), "Not responding")
@@ -89,11 +89,11 @@ func TestRoutinesFollowRunStatus(t *testing.T) {
 
 func TestRoutinesSayWhatWentWrong(t *testing.T) {
 	f := newFakeCLI(t, map[string]string{"routines list --kind all --json": "!the routines folder can't be read"})
-	r := NewRoutines(f.CLI, now, func(string) {}, func(string) {}, func() {}, func() {})
+	r := NewRoutines(f.CLI, now, func(string) {}, func(string) {})
 	r.Load()
 	mustShow(t, r.Content(), "Couldn't read the routines", "the routines folder can't be read")
 	f2 := newFakeCLI(t, map[string]string{"routines list --kind all --json": "[]"})
-	r2 := NewRoutines(f2.CLI, now, func(string) {}, func(string) {}, func() {}, func() {})
+	r2 := NewRoutines(f2.CLI, now, func(string) {}, func(string) {})
 	r2.Load()
 	mustShow(t, r2.Content(), "No routines installed.")
 }

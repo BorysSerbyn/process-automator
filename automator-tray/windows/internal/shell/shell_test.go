@@ -146,7 +146,7 @@ func TestLinksStayInTheSection(t *testing.T) {
 	if s.State().Section != tray.SetupWindow || s.State().BackTitle() != "Setup" {
 		t.Fatalf("%+v", s.State())
 	}
-	// The Routines list's Settings button switches to Settings.
+	// Pushing a section's own screen (Settings) switches to it.
 	s.Push(tray.Window{Kind: tray.SettingsWindow})
 	if _, ok := s.Shown().(*ui.Settings); !ok || s.State().CanGoBack() {
 		t.Fatalf("%T %+v", s.Shown(), s.State())

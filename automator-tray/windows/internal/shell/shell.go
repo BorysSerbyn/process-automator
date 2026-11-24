@@ -248,9 +248,7 @@ func (s *Shell) makeView(d nav.Destination) View {
 	case tray.SettingsWindow:
 		return ui.NewSettings(c, win, async, s.appName)
 	case tray.RoutinesWindow:
-		return ui.NewRoutines(c, async, push(tray.RoutineWindow), review(tray.RoutineWindow),
-			func() { s.Push(tray.Window{Kind: tray.SetupWindow}) },
-			func() { s.Push(tray.Window{Kind: tray.SettingsWindow}) })
+		return ui.NewRoutines(c, async, push(tray.RoutineWindow), review(tray.RoutineWindow))
 	case tray.RoutineWindow:
 		return ui.NewRoutine(c, win, async, d.Name, deleted)
 	case tray.AcknowledgementsWindow:

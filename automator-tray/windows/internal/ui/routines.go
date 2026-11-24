@@ -7,7 +7,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/cli"
@@ -21,12 +20,10 @@ import (
 type Routines struct {
 	cli   cli.CLI
 	async Async
-	// open opens a routine's window, and the Setup and Settings windows.
-	openRoutine  func(name string)
-	turnOn       func(name string)
-	openSetup    func()
-	openSettings func()
-	now          func() time.Time
+	// openRoutine opens a routine's screen.
+	openRoutine func(name string)
+	turnOn      func(name string)
+	now         func() time.Time
 
 	routines   []cli.RoutineInfo
 	status     *cli.RunStatus
@@ -40,9 +37,8 @@ type Routines struct {
 // NewRoutines makes the Routines window's content; Load reads it, Update
 // gives it run status.
 // turnOn opens a routine's window on its Turn On review.
-func NewRoutines(c cli.CLI, async Async, openRoutine, turnOn func(string), openSetup, openSettings func()) *Routines {
-	r := &Routines{cli: c, async: async, openRoutine: openRoutine, turnOn: turnOn, openSetup: openSetup, openSettings: openSettings,
-		now: time.Now}
+func NewRoutines(c cli.CLI, async Async, openRoutine, turnOn func(string)) *Routines {
+	r := &Routines{cli: c, async: async, openRoutine: openRoutine, turnOn: turnOn, now: time.Now}
 	r.scroll = container.NewVScroll(container.NewVBox())
 	r.refresh()
 	return r
@@ -142,9 +138,7 @@ func (r *Routines) header() fyne.CanvasObject {
 	if r.status != nil && r.status.Summary != "" && responding(r.status, r.now()) {
 		title.Add(secondary(r.status.Summary))
 	}
-	setup := widget.NewButtonWithIcon("Setup", theme.ListIcon(), r.openSetup)
-	settings := widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), r.openSettings)
-	return container.NewBorder(nil, nil, nil, container.NewCenter(container.NewHBox(setup, settings)), title)
+	return title
 }
 
 // row is one routine: its health and name, its schedule, its last run, its
