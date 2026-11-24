@@ -251,3 +251,22 @@ func ReopenWindow(s *cli.RunStatus) Window {
 	}
 	return Window{Kind: SettingsWindow}
 }
+
+// SameShape is whether menus a and b differ only in their rows' text, dot
+// colours and actions, so a shown menu can be changed in place: the same
+// rows, separators and submenus, each with or without a dot and enabled or
+// not alike. A desktop keeps the submenus it has loaded only while the menu
+// is changed in place; rebuilt, KDE can show a submenu empty for a while.
+func SameShape(a, b []MenuItem) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		x, y := a[i], b[i]
+		if x.Separator != y.Separator || (x.Health == "") != (y.Health == "") ||
+			(x.Action.Kind == None) != (y.Action.Kind == None) || !SameShape(x.Submenu, y.Submenu) {
+			return false
+		}
+	}
+	return true
+}

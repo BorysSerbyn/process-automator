@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 
 	"fyne.io/systray"
@@ -143,26 +144,71 @@ type view struct {
 	icons  map[tray.Frame][]byte
 	dots   map[string][]byte
 	choose func(tray.Action)
+
+	mu sync.Mutex
+	// shown is the menu shown and rows its items, row for row.
+	shown []tray.MenuItem
+	rows  []*row
+}
+
+// row is a shown menu item: its action is read when it's clicked, so a
+// menu changed in place does what it now says.
+type row struct {
+	item   *systray.MenuItem
+	action tray.Action
+	sub    []*row
 }
 
 func (v *view) SetIcon(f tray.Frame) { systray.SetIcon(v.icons[f]) }
 
-// SetMenu replaces the menu (the tray sets it only when it changed).
+// SetMenu shows the menu (the tray sets it only when it changed). Rows that
+// only say something else (the usual change) are changed in place: a menu
+// rebuilt is first sent to the desktop without its submenus' rows (the
+// library's workaround for GTK's dbusmenu), and KDE can keep a submenu
+// empty, and not open it, until it reads the menu again.
 func (v *view) SetMenu(items []tray.MenuItem) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.rows != nil && tray.SameShape(v.shown, items) {
+		v.update(v.rows, v.shown, items)
+		v.shown = items
+		return
+	}
 	systray.ResetMenu()
+	v.rows = nil
 	for _, it := range items {
-		v.add(nil, it)
+		v.rows = append(v.rows, v.add(nil, it))
+	}
+	v.shown = items
+}
+
+// update changes shown rows in place to say what items say.
+func (v *view) update(rows []*row, was, items []tray.MenuItem) {
+	for i, it := range items {
+		r := rows[i]
+		if r == nil { // a separator
+			continue
+		}
+		r.action = it.Action
+		if it.Text != was[i].Text {
+			r.item.SetTitle(desktop.Label(it.Text))
+		}
+		if it.Health != was[i].Health {
+			r.item.SetIcon(v.dots[it.Health])
+		}
+		v.update(r.sub, was[i].Submenu, it.Submenu)
 	}
 }
 
-func (v *view) add(parent *systray.MenuItem, it tray.MenuItem) {
+// add adds a row (nil for a separator).
+func (v *view) add(parent *systray.MenuItem, it tray.MenuItem) *row {
 	if it.Separator {
 		if parent == nil {
 			systray.AddSeparator()
 		} else {
 			parent.AddSeparator()
 		}
-		return
+		return nil
 	}
 	var m *systray.MenuItem
 	if parent == nil {
@@ -170,21 +216,26 @@ func (v *view) add(parent *systray.MenuItem, it tray.MenuItem) {
 	} else {
 		m = parent.AddSubMenuItem(desktop.Label(it.Text), "")
 	}
+	r := &row{item: m, action: it.Action}
 	if it.Health != "" {
 		m.SetIcon(v.dots[it.Health])
 	}
 	for _, sub := range it.Submenu {
-		v.add(m, sub)
+		r.sub = append(r.sub, v.add(m, sub))
 	}
 	if it.Action.Kind == tray.None {
 		if len(it.Submenu) == 0 {
 			m.Disable()
 		}
-		return
+		return r
 	}
 	go func() {
 		for range m.ClickedCh {
-			v.choose(it.Action)
+			v.mu.Lock()
+			a := r.action
+			v.mu.Unlock()
+			v.choose(a)
 		}
 	}()
+	return r
 }

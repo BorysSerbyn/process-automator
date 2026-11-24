@@ -215,3 +215,36 @@ func TestReopenWindowFollowsSetupLeft(t *testing.T) {
 		t.Fatal(w)
 	}
 }
+
+// A menu whose rows only say something else, or show another colour or
+// action, is changed in place; one with a row more, a dot gained or a row
+// turned enabled is rebuilt.
+func TestSameShape(t *testing.T) {
+	base := []MenuItem{{Text: "v1"}, separator(), {Text: "Routines", Submenu: []MenuItem{
+		{Text: "a — Paused", Health: "none", Action: Action{Kind: ShowWindow}},
+	}}}
+	relabelled := []MenuItem{{Text: "v2"}, separator(), {Text: "Routines", Submenu: []MenuItem{
+		{Text: "a — Next: 20:00", Health: "ok", Action: Action{Kind: OpenRun, Run: "r1"}},
+	}}}
+	if !SameShape(base, relabelled) {
+		t.Error("new labels, colours and actions rebuild the menu")
+	}
+	for name, other := range map[string][]MenuItem{
+		"a routine more": {{Text: "v1"}, separator(), {Text: "Routines", Submenu: []MenuItem{
+			{Text: "a", Health: "none", Action: Action{Kind: ShowWindow}}, {Text: "b", Health: "ok", Action: Action{Kind: ShowWindow}},
+		}}},
+		"a dot lost": {{Text: "v1"}, separator(), {Text: "Routines", Submenu: []MenuItem{
+			{Text: "a", Action: Action{Kind: ShowWindow}},
+		}}},
+		"a row enabled": {{Text: "v1", Action: Action{Kind: ShowWindow}}, separator(), {Text: "Routines", Submenu: []MenuItem{
+			{Text: "a", Health: "none", Action: Action{Kind: ShowWindow}},
+		}}},
+		"a separator moved": {separator(), {Text: "v1"}, {Text: "Routines", Submenu: []MenuItem{
+			{Text: "a", Health: "none", Action: Action{Kind: ShowWindow}},
+		}}},
+	} {
+		if SameShape(base, other) {
+			t.Errorf("%s: changed in place", name)
+		}
+	}
+}
