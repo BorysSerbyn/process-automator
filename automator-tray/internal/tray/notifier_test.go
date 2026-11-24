@@ -80,8 +80,8 @@ func TestNoDeliveryWhenTheCoreFails(t *testing.T) {
 	}
 }
 
-// A click asks the core what to show: a run opens it (`runs show --open`),
-// the app opens its routines (the window seam). Other actions do nothing.
+// A click asks the core what to show: a run opens in its routine's screen
+// on that run (the window seam), an update's Updates. Other actions do nothing.
 func TestAClickShowsWhatTheCoreSays(t *testing.T) {
 	f := newFakeCLI(t)
 	f.answer("notifications list --pending --json", pending)
@@ -91,7 +91,9 @@ func TestAClickShowsWhatTheCoreSays(t *testing.T) {
 	tr.notifier.deliver()
 
 	tr.Desk().Invoked(n.find("standup failed"), "default")
-	eventually(t, "the run to open", func() bool { return f.hasRun("runs show r-42 --open") })
+	eventually(t, "the routine on its run", func() bool {
+		return w.has(Window{Kind: RoutineWindow, Routine: "standup", Run: "r-42"})
+	})
 	if !f.hasRun("notifications open n1 --json") {
 		t.Fatalf("%q", f.ran())
 	}
@@ -130,14 +132,16 @@ func TestAcknowledgeOnANotification(t *testing.T) {
 	f.answer("notifications list --pending --json", `[{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"run",`+
 		`"title":"Door open","routine":"front-door","run":"r-7","urgent":true,"acknowledge":true}]`)
 	f.answer("notifications open n7 --json", `{"notification":"n7","action":"show-run","routine":"front-door","run":"r-7"}`)
-	tr, _, n, _ := newTray(t, f)
+	tr, _, n, w := newTray(t, f)
 	tr.notifier.deliver()
 	want := Note{Summary: "Door open", Actions: []string{"default", "Open", "acknowledge", "Acknowledge"}, Persistent: true, Urgent: true}
 	if got := n.notes[n.find("Door open")]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("posted %+v", got)
 	}
 	tr.Desk().Invoked(n.find("Door open"), "default")
-	eventually(t, "the run to open", func() bool { return f.hasRun("runs show r-7 --open") })
+	eventually(t, "the routine on its run", func() bool {
+		return w.has(Window{Kind: RoutineWindow, Routine: "front-door", Run: "r-7"})
+	})
 	if f.hasRun("notifications ack n7 --json") {
 		t.Fatal("a click acknowledged it")
 	}
@@ -167,4 +171,21 @@ func TestAClickOpensItsLink(t *testing.T) {
 	if f.hasRun("notifications ack n9 --json") || w.has(Window{Kind: RoutinesWindow}) {
 		t.Fatal("a click acknowledged it, or opened a window")
 	}
+}
+
+// A click on a hook's run opens the hook's screen on it; one on a run that
+// names no routine or hook, its report (`runs show --open`).
+func TestAClickOnAHooksRunOrAnUnnamedOne(t *testing.T) {
+	f := newFakeCLI(t)
+	f.answer("notifications list --pending --json", pending)
+	f.answer("notifications open n1 --json", `{"notification":"n1","action":"show-run","routine":"open-meet","run":"r-9","hook":true}`)
+	f.answer("notifications open n2 --json", `{"notification":"n2","action":"show-run","run":"r-10"}`)
+	tr, _, n, w := newTray(t, f)
+	tr.notifier.deliver()
+	tr.Desk().Invoked(n.find("standup failed"), "default")
+	eventually(t, "the hook on its run", func() bool {
+		return w.has(Window{Kind: HookWindow, Routine: "open-meet", Run: "r-9"})
+	})
+	tr.Desk().Invoked(n.find("Updated to v2.2.0"), "default")
+	eventually(t, "the run's report", func() bool { return f.hasRun("runs show r-10 --open") })
 }

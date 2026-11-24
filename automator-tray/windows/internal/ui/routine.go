@@ -214,6 +214,9 @@ func (r *Routine) loadSettings() {
 
 // The runs
 
+// ShowRun shows one of its runs (a notification's): the Runs tab, with it open.
+func (r *Routine) ShowRun(id string) { r.showRun(id) }
+
 // showRun shows one run: the Runs tab, with it open.
 func (r *Routine) showRun(id string) {
 	r.tab = RunsTab

@@ -50,6 +50,20 @@ func Badge(section tray.WindowKind, s *cli.RunStatus) string {
 	return ""
 }
 
+// UpdatesBadge is what the sidebar shows beside Updates: a newer release,
+// or one installing ("": neither).
+func UpdatesBadge(u *cli.UpdateStatus) string {
+	switch {
+	case u == nil:
+		return ""
+	case u.Installing:
+		return "Updating"
+	case u.UpdateAvailable:
+		return "New"
+	}
+	return ""
+}
+
 // Destination is something the window shows: a section's own screen, or
 // one routine's, hook's or watcher's (Name).
 type Destination struct {
@@ -104,6 +118,22 @@ func (s State) Shown() Destination {
 
 // CanGoBack is whether anything was opened on top of the section's screen.
 func (s State) CanGoBack() bool { return len(s.Path) > 0 }
+
+// BackTitle is the name of what Back goes to ("": nothing to go back to).
+func (s State) BackTitle() string {
+	switch len(s.Path) {
+	case 0:
+		return ""
+	case 1:
+		return Title(s.Section)
+	}
+	return s.Path[len(s.Path)-2].Title()
+}
+
+// Open is everything open: the section's screen and its path.
+func (s State) Open() []Destination {
+	return append([]Destination{{Kind: s.Section}}, s.Path...)
+}
 
 // Show is d opened from outside the window (the menu, a notification,
 // opening the app): its section, with only it opened there.

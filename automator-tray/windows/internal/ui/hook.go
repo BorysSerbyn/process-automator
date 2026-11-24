@@ -197,6 +197,9 @@ func (h *Hook) loadSettings() {
 	})
 }
 
+// ShowRun shows one of its runs (a notification's): the Runs tab, with it open.
+func (h *Hook) ShowRun(id string) { h.showRun(id) }
+
 func (h *Hook) showRun(id string) {
 	h.tab = RunsTab
 	h.history.open(id)

@@ -13,10 +13,11 @@ import (
 	"time"
 )
 
-// WindowKind is one of the app's windows (automator-ui's).
+// WindowKind is one of the app's screens (automator-ui's), each shown in
+// the app's window (the windows app's).
 type WindowKind string
 
-// The windows.
+// The screens.
 const (
 	SetupWindow    WindowKind = "setup"
 	SettingsWindow WindowKind = "settings"
@@ -36,7 +37,7 @@ const (
 	UpdatesWindow WindowKind = "updates"
 )
 
-// Window is a window to open, and what it's about.
+// Window is a screen to open in the app's window, and what it's about.
 type Window struct {
 	Kind WindowKind
 	// Routine names the routine, hook or watcher it's about.
@@ -44,6 +45,9 @@ type Window struct {
 	// Review opens a routine's or hook's window on its Turn On review, when
 	// it needs turning on (from the menu, a reason).
 	Review bool
+	// Run opens a routine's or hook's window on one of its runs (from a
+	// notification's click).
+	Run string
 }
 
 // Named is whether the window is about one routine, hook or watcher.
@@ -59,6 +63,9 @@ func (w Window) Command() []string {
 	case SettingsWindow:
 		return []string{"settings", "list", "--scope", "app"}
 	case RoutineWindow:
+		if w.Run != "" {
+			return []string{"runs", "show", w.Run}
+		}
 		if w.Review {
 			return []string{"routines", "trust", w.Routine, "--resume"}
 		}
@@ -68,6 +75,9 @@ func (w Window) Command() []string {
 	case AcknowledgementsWindow:
 		return []string{"notifications", "list", "--waiting"}
 	case HookWindow:
+		if w.Run != "" {
+			return []string{"runs", "show", w.Run}
+		}
 		if w.Review {
 			return []string{"hooks", "trust", w.Routine, "--resume"}
 		}
@@ -89,9 +99,9 @@ const WindowsApp = "automator-windows"
 // opened in a terminal instead.
 var StartGrace = 3 * time.Second
 
-// OpenWindow is the window seam: every window the tray opens goes through
-// it. Each is the windows app's (WindowsApp), one process per window that
-// exits when it closes; where the windows app isn't installed, there's no
+// OpenWindow is the window seam: every screen the tray opens goes through
+// it. Each shows in the windows app's one window (WindowsApp), whose
+// process exits when it closes; where the windows app isn't installed, there's no
 // display, or it fails as it starts, the window is its CLI command run in my
 // terminal (Window.Command), which stays open until Enter.
 func OpenWindow(cliPath string, w Window) error {
@@ -137,7 +147,7 @@ func openWindow(getenv func(string) string, cliPath string, w Window, terminal f
 }
 
 // WindowsCommand is the command line that opens w in the windows app
-// (`automator-windows <kind> [<name>]`), or nil when it isn't installed
+// (`automator-windows <kind> [<name> [review | run <id>]]`), or nil when it isn't installed
 // beside the CLI, or there's no display to show it on.
 func WindowsCommand(getenv func(string) string, cliPath string, w Window) []string {
 	if getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "" {
@@ -150,7 +160,10 @@ func WindowsCommand(getenv func(string) string, cliPath string, w Window) []stri
 		return nil
 	}
 	if w.Named() {
-		if w.Review {
+		switch {
+		case w.Run != "" && w.Kind != WatcherWindow:
+			return []string{exe, string(w.Kind), w.Routine, "run", w.Run}
+		case w.Review:
 			return []string{exe, string(w.Kind), w.Routine, "review"}
 		}
 		return []string{exe, string(w.Kind), w.Routine}

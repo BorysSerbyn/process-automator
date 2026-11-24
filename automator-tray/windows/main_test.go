@@ -11,6 +11,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/cli"
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/tray"
+	"github.com/BorysSerbyn/process-automator/automator-tray/windows/internal/shell"
 	"github.com/BorysSerbyn/process-automator/automator-tray/windows/internal/ui"
 )
 
@@ -29,6 +30,10 @@ func TestTheArgumentsNameAWindow(t *testing.T) {
 		{[]string{"acknowledgements"}, tray.Window{Kind: tray.AcknowledgementsWindow}, true},
 		{[]string{"hook", "open-meet"}, tray.Window{Kind: tray.HookWindow, Routine: "open-meet"}, true},
 		{[]string{"watcher", "cal"}, tray.Window{Kind: tray.WatcherWindow, Routine: "cal"}, true},
+		{[]string{"routine", "standup", "run", "r-42"}, tray.Window{Kind: tray.RoutineWindow, Routine: "standup", Run: "r-42"}, true},
+		{[]string{"hook", "open-meet", "run", "r-7"}, tray.Window{Kind: tray.HookWindow, Routine: "open-meet", Run: "r-7"}, true},
+		{[]string{"watcher", "cal", "run", "r-7"}, tray.Window{}, false},
+		{[]string{"routine", "standup", "run"}, tray.Window{}, false},
 		{[]string{"hook"}, tray.Window{}, false},
 		{[]string{"hooks", "x"}, tray.Window{}, false},
 		{[]string{"updates"}, tray.Window{Kind: tray.UpdatesWindow}, true},
@@ -44,32 +49,31 @@ func TestTheArgumentsNameAWindow(t *testing.T) {
 	}
 }
 
-// One window per kind, one per routine, each with a short lock name
-// (sockets' paths are short), whatever the routine's name.
-func TestEachRoutineHasItsOwnWindow(t *testing.T) {
-	a := lockName(tray.Window{Kind: tray.RoutineWindow, Routine: "standup"})
-	b := lockName(tray.Window{Kind: tray.RoutineWindow, Routine: "digest"})
-	long := lockName(tray.Window{Kind: tray.RoutineWindow, Routine: strings.Repeat("x", 200) + "/.."})
-	if a == b || len(long) > 40 || strings.ContainsAny(long, "/.") {
-		t.Fatal(a, b, long)
+// The app has one window: every screen asks for the same lock, and a later
+// start hands the open window its arguments, which name the same screen.
+func TestALaterStartHandsItsScreenToTheWindow(t *testing.T) {
+	for _, args := range [][]string{
+		{"setup"}, {"routine", "my report"}, {"hook", "open-meet", "review"}, {"routine", "standup", "run", "r-42"},
+	} {
+		line := askFor(args)
+		want, _ := window(args)
+		if strings.Contains(line, "\n") {
+			t.Fatalf("%q isn't one line", line)
+		}
+		if got, ok := asked(line); !ok || got != want {
+			t.Errorf("%q: %+v", args, got)
+		}
 	}
-	// A hook and a watcher have windows of their own, apart from a routine's.
-	hook := lockName(tray.Window{Kind: tray.HookWindow, Routine: "standup"})
-	watcher := lockName(tray.Window{Kind: tray.WatcherWindow, Routine: "standup"})
-	if hook == a || watcher == a || hook == watcher || len(hook) > 40 {
-		t.Fatal(a, hook, watcher)
-	}
-	if !strings.HasPrefix(a, "window-routine-") {
-		t.Fatal("a routine's window's lock moved: one open from before an update wouldn't be found")
-	}
-	if lockName(tray.Window{Kind: tray.SettingsWindow}) != "window-settings" {
-		t.Fatal("the Settings window's lock moved: one open from before an update wouldn't be found")
+	for _, line := range []string{"raise", "review", `["nope"]`, ""} {
+		if _, ok := asked(line); ok {
+			t.Errorf("%q asked for a screen", line)
+		}
 	}
 }
 
 // A reason about a watcher (one wrong for every hook on it), chosen in the
-// tray's menu, starts this app for the watcher's window, which opens on
-// that watcher.
+// tray's menu, starts this app for the watcher's screen, which the window
+// opens on that watcher, under Hooks.
 func TestAReasonAboutAWatcherOpensItsWindow(t *testing.T) {
 	line := `{"schemaVersion":1,"updatedAt":"2026-11-17T08:05:00Z","validUntil":"2026-11-17T08:06:00Z","health":"error",` +
 		`"busy":false,"routines":[],"hooks":[{"name":"home-joke","enabled":true,"health":"error"},{"name":"say-hi","enabled":true,"health":"error"}],` +
@@ -98,8 +102,10 @@ func TestAReasonAboutAWatcherOpensItsWindow(t *testing.T) {
 	if err != nil || which != (tray.Window{Kind: tray.WatcherWindow, Routine: "home-key"}) {
 		t.Fatalf("%q: %+v %v", argv[1:], which, err)
 	}
-	w, view, _ := newWindow(test.NewTempApp(t), cli.CLI{Path: "/nonexistent", Command: "acme-auto"}, "Acme", which, func(tray.Window) {})
-	if _, ok := view.(*ui.Watcher); !ok || w.Title() != "home-key" {
-		t.Fatalf("opened %T titled %q", view, w.Title())
+	w := test.NewTempApp(t).NewWindow("Acme")
+	sh := shell.New(cli.CLI{Path: "/nonexistent", Command: "acme-auto"}, w, func(work func() func()) { work()() }, "Acme")
+	sh.Show(which)
+	if _, ok := sh.Shown().(*ui.Watcher); !ok || w.Title() != "home-key — Acme" || sh.State().Section != tray.HooksWindow {
+		t.Fatalf("showing %T titled %q", sh.Shown(), w.Title())
 	}
 }

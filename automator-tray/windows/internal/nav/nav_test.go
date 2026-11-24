@@ -40,8 +40,19 @@ func TestOpeningFromOutsideShowsItInItsSection(t *testing.T) {
 func TestBackGoesToWhatItWasOpenedFrom(t *testing.T) {
 	s := New(tray.RoutinesWindow)
 	s.Show(routine("standup"))
+	if s.BackTitle() != "Routines" {
+		t.Fatal(s.BackTitle())
+	}
+	s.Push(routine("digest"))
+	if s.BackTitle() != "standup" || len(s.Open()) != 3 {
+		t.Fatal(s.BackTitle(), s.Open())
+	}
+	s.Back()
 	s.Back()
 	s.Back() // nothing to go back to
+	if s.BackTitle() != "" {
+		t.Fatal(s.BackTitle())
+	}
 	if s.Section != tray.RoutinesWindow || s.Shown() != (Destination{Kind: tray.RoutinesWindow}) {
 		t.Fatalf("%+v", s)
 	}
@@ -118,5 +129,14 @@ func TestTheSidebarCountsWhatWaits(t *testing.T) {
 	if Badge(tray.AcknowledgementsWindow, s) != "1" || Badge(tray.SetupWindow, s) != "2 to do" ||
 		Badge(tray.RoutinesWindow, s) != "" || Badge(tray.SetupWindow, nil) != "" {
 		t.Fatal(Badge(tray.AcknowledgementsWindow, s), Badge(tray.SetupWindow, s))
+	}
+}
+
+// Updates shows a newer release, or one installing.
+func TestTheSidebarSaysWhenAnUpdateIsThere(t *testing.T) {
+	if UpdatesBadge(nil) != "" || UpdatesBadge(&cli.UpdateStatus{}) != "" ||
+		UpdatesBadge(&cli.UpdateStatus{UpdateAvailable: true}) != "New" ||
+		UpdatesBadge(&cli.UpdateStatus{UpdateAvailable: true, Installing: true}) != "Updating" {
+		t.Fatal("badges")
 	}
 }

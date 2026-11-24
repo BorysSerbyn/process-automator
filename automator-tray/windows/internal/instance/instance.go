@@ -1,6 +1,6 @@
-// Package instance keeps one window of each kind: the first windows app
-// started for a window holds it, and one started after asks it to come to
-// the front, then exits. It works with or without a session bus: a lock
+// Package instance keeps one window: the first windows app started holds
+// it, and one started after asks it for what it was started for (to come
+// to the front, showing a screen), then exits. It works with or without a session bus: a lock
 // the kernel lets go of when the holder exits, however it exits, and a
 // socket beside it to ask through.
 package instance
@@ -42,7 +42,7 @@ func Dir(getenv func(string) string, app string) string {
 // returns ErrHeld.
 func Claim(dir, name string) (*Holder, error) { return Ask(dir, name, "raise") }
 
-// Ask is Claim, asking the window that's open for ask (one word: what it
+// Ask is Claim, asking the window that's open for ask (one line: what it
 // should show as it comes to the front) when another process holds it.
 func Ask(dir, name, ask string) (*Holder, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {

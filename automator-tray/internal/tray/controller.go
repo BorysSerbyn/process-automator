@@ -246,8 +246,9 @@ func (t *Tray) open(w Window) {
 }
 
 // showClick shows what a click on one of the app's notifications should:
-// the link it's about (open-url), the run it's about, an update's the
-// Manage Updates window, or the app (its routines).
+// the link it's about (open-url), the run it's about in its routine's or
+// hook's screen (its report when it names neither), an update's Updates,
+// or the app (its routines), as automator-ui's click does.
 func (t *Tray) showClick(click cli.ClickOutput) {
 	if click.Action == "open-url" && click.URL != "" {
 		if err := t.openURL(click.URL); err != nil {
@@ -256,7 +257,14 @@ func (t *Tray) showClick(click cli.ClickOutput) {
 		return
 	}
 	if click.Action == "show-run" && click.Run != "" {
-		t.openRun(click.Run)
+		switch {
+		case click.Routine == "":
+			t.openRun(click.Run)
+		case click.Hook:
+			t.open(Window{Kind: HookWindow, Routine: click.Routine, Run: click.Run})
+		default:
+			t.open(Window{Kind: RoutineWindow, Routine: click.Routine, Run: click.Run})
+		}
 		return
 	}
 	if click.Action == "show-updates" {

@@ -1,8 +1,9 @@
-// automator-windows is the windows of an app built on process-automator on
-// Linux, automator-ui's windows' counterpart: the tray starts it for one
-// window (`automator-windows setup`, `automator-windows routine standup`,
-// `automator-windows hook open-meet`),
-// and it exits when that window closes.
+// automator-windows is the window of an app built on process-automator on
+// Linux, automator-ui's window's counterpart: the tray starts it for one of
+// its screens (`automator-windows setup`, `automator-windows routine standup`,
+// `automator-windows hook open-meet run r-42`), which it shows in the app's
+// one window; started again while that window is open, it hands the screen
+// to it and exits. It exits when the window closes.
 // Like the tray, it acts only through the app's CLI, and its names come
 // from the package's install.env. It's a program of its own so that the
 // tray, always running, stays small and needs no cgo: Fyne (OpenGL, X11 and
@@ -11,8 +12,7 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -29,6 +29,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/cli"
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/tray"
 	"github.com/BorysSerbyn/process-automator/automator-tray/windows/internal/instance"
+	"github.com/BorysSerbyn/process-automator/automator-tray/windows/internal/shell"
 	"github.com/BorysSerbyn/process-automator/automator-tray/windows/internal/ui"
 )
 
@@ -37,7 +38,7 @@ func main() {
 	log.SetPrefix("automator-windows: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env (default: found beside this program)")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review]|hooks|hook <name> [review]|watcher <name>|acknowledgements|updates")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review|run <id>]|hooks|hook <name> [review|run <id>]|watcher <name>|acknowledgements|updates")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -49,23 +50,21 @@ func main() {
 	}
 	if err := run(*dir, w); err != nil {
 		if errors.Is(err, instance.ErrHeld) {
-			return // the window that's open came to the front
+			return // the window that's open shows it, in front
 		}
 		log.Fatal(err)
 	}
 }
 
-// PostponeEvery is how often a window holds automatic updates back while
-// it's open (`update postpone`, which holds them a few minutes).
+// PostponeEvery is how often the window holds automatic updates back while
+// it's open (`update postpone`, which holds them a few minutes), and reads
+// where updates stand for its sidebar.
 const PostponeEvery = time.Minute
 
-// content is a window's content: what it shows, and reading it again.
-type content interface {
-	Content() fyne.CanvasObject
-	Load()
-}
+// Size is the window's size when it opens: always the same, centred.
+var Size = fyne.NewSize(960, 760)
 
-// window is the window the arguments name.
+// window is the screen the arguments name.
 func window(args []string) (tray.Window, error) {
 	if len(args) == 0 {
 		return tray.Window{}, errors.New("which window?")
@@ -77,8 +76,11 @@ func window(args []string) (tray.Window, error) {
 			return w, nil
 		}
 	case tray.RoutineWindow, tray.HookWindow, tray.WatcherWindow:
-		if len(args) == 3 && args[2] == "review" && w.Kind != tray.WatcherWindow {
+		switch {
+		case len(args) == 3 && args[2] == "review" && w.Kind != tray.WatcherWindow:
 			w.Review, args = true, args[:2]
+		case len(args) == 4 && args[2] == "run" && args[3] != "" && w.Kind != tray.WatcherWindow:
+			w.Run, args = args[3], args[:2]
 		}
 		if len(args) == 2 && args[1] != "" {
 			w.Routine = args[1]
@@ -91,21 +93,25 @@ func window(args []string) (tray.Window, error) {
 	return w, fmt.Errorf("the %s window takes no arguments", w.Kind)
 }
 
-// lockName is the window's lock: one window of each kind, one per routine,
-// hook or watcher.
-func lockName(w tray.Window) string {
-	if !w.Named() {
-		return "window-" + string(w.Kind)
-	}
-	sum := sha256.Sum256([]byte(w.Routine)) // a socket's path is short
-	return "window-" + string(w.Kind) + "-" + hex.EncodeToString(sum[:8])
+// lockName is the window's lock: the app has one window.
+const lockName = "window"
+
+// askFor is what a later start asks the open window for: the screen it was
+// started for, as its arguments (one line of JSON).
+func askFor(args []string) string {
+	b, _ := json.Marshal(args)
+	return string(b)
 }
 
-// reviewer is a window that can open its Turn On review.
-type reviewer interface{ Review() }
-
-// statusFollower is a window that shows run status as it changes.
-type statusFollower interface{ Update(*cli.RunStatus) }
+// asked is the screen a later start asked for (askFor's), if it names one.
+func asked(line string) (tray.Window, bool) {
+	var args []string
+	if json.Unmarshal([]byte(line), &args) != nil {
+		return tray.Window{}, false
+	}
+	w, err := window(args)
+	return w, err == nil
+}
 
 func run(dir string, which tray.Window) error {
 	exe, err := os.Executable()
@@ -123,11 +129,7 @@ func run(dir string, which tray.Window) error {
 	if id == "" {
 		id = info.Command
 	}
-	ask := "raise"
-	if which.Review {
-		ask = "review"
-	}
-	holder, err := instance.Ask(instance.Dir(os.Getenv, id), lockName(which), ask)
+	holder, err := instance.Ask(instance.Dir(os.Getenv, id), lockName, askFor(flag.Args()))
 	if err != nil {
 		return err
 	}
@@ -136,137 +138,73 @@ func run(dir string, which tray.Window) error {
 	c := cli.CLI{Path: info.CLI, Command: info.Command}
 	ui.AppName = info.Name
 	a := fyneapp.NewWithID(id + ".windows")
-	open := func(win tray.Window) {
-		if err := tray.OpenWindow(info.CLI, win); err != nil {
-			log.Print(err)
-		}
-	}
-	w, view, size := newWindow(a, c, info.Name, which, open)
-	// The Routines and Hooks windows, and a routine's, hook's or watcher's,
-	// show run status as it changes.
-	if f, ok := view.(statusFollower); ok {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		var last *cli.RunStatus // the UI's thread's
-		go c.Follow(ctx, func(s *cli.RunStatus) {
-			fyne.Do(func() {
-				last = s
-				f.Update(s)
-			})
+	w := a.NewWindow(info.Name)
+	sh := shell.New(c, w, ui.Background, info.Name)
+	// Run status, as it changes, for the screens that follow it and the
+	// sidebar's counts.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var last *cli.RunStatus // the UI's thread's
+	go c.Follow(ctx, func(s *cli.RunStatus) {
+		fyne.Do(func() {
+			last = s
+			sh.Update(s)
 		})
-		// Shown again now and then, so one past its validUntil shows as not
-		// responding.
-		go func() {
-			for range time.Tick(15 * time.Second) {
-				fyne.Do(func() { f.Update(last) })
-			}
-		}()
-	}
+	})
+	// Shown again now and then, so one past its validUntil shows as not
+	// responding; the plan's usage read again while Settings shows.
+	go func() {
+		for range time.Tick(15 * time.Second) {
+			fyne.Do(func() { sh.Update(last) })
+		}
+	}()
+	go func() {
+		for range time.Tick(ui.UsageEvery) {
+			fyne.Do(sh.LoadUsage)
+		}
+	}()
 	w.SetMaster() // closing it ends the process
 	ui.Focus = func() { w.Show(); w.RequestFocus() }
-	w.SetContent(view.Content())
-	w.Resize(size)
+	w.SetContent(sh.Content())
+	w.Resize(Size)
 	w.CenterOnScreen()
-	// Asked for again: to the front, and read again (automator-ui's show()).
-	// Once the window has closed, the app's loop is gone: the window is let
-	// go, so the next ask starts a process of its own, and one that came in
-	// meanwhile is dropped.
+	// Asked for again: the screen asked for, in front (automator-ui's
+	// show()). Once the window has closed, the app's loop is gone: the
+	// window is let go, so the next ask starts a process of its own, and
+	// one that came in meanwhile is dropped.
 	var stopped atomic.Bool
 	a.Lifecycle().SetOnStopped(func() {
 		stopped.Store(true)
 		holder.Release()
 	})
 	go func() {
-		for asked := range holder.Raised {
+		for line := range holder.Raised {
 			fyne.Do(func() {
 				if stopped.Load() {
 					return
 				}
 				w.Show()
 				w.RequestFocus()
-				view.Load()
-				if r, ok := view.(reviewer); ok && asked == "review" {
-					r.Review()
+				if next, ok := asked(line); ok {
+					sh.Show(next)
 				}
 			})
 		}
 	}()
-	// Opened to turn it on: its review shows once it's read, if it needs it.
-	if r, ok := view.(reviewer); ok && which.Review {
-		r.Review()
-	}
-	// While it's open, automatic updates wait: one restarts the app.
+	// While it's open, automatic updates wait: one restarts the app. Where
+	// they stand shows in the sidebar.
 	go func() {
 		for ; !stopped.Load(); time.Sleep(PostponeEvery) {
 			if err := c.PostponeUpdate(); err != nil {
 				log.Printf("postponing automatic updates: %v", err)
 			}
+			if u, err := c.UpdateStatus(); err == nil {
+				fyne.Do(func() { sh.UpdateStatus(&u) })
+			}
 		}
 	}()
 	// What the CLI answers waits for the app's loop, which starts here.
-	view.Load()
+	sh.Show(which)
 	w.ShowAndRun()
 	return nil
-}
-
-// newWindow is the window which names, in a (appName's), with what it
-// shows and its size; open opens another window (a routine's from Setup, a watcher's
-// from a hook's).
-func newWindow(a fyne.App, c cli.CLI, appName string, which tray.Window, open func(tray.Window)) (w fyne.Window, view content, size fyne.Size) {
-	size = fyne.NewSize(640, 680)
-	switch which.Kind {
-	case tray.SetupWindow:
-		w = a.NewWindow(appName + " Setup")
-		view = ui.NewSetup(c, w, ui.Background, func(routine string) {
-			open(tray.Window{Kind: tray.RoutineWindow, Routine: routine})
-		})
-	case tray.SettingsWindow:
-		w = a.NewWindow(appName + " Settings")
-		s := ui.NewSettings(c, w, ui.Background, appName)
-		// While it shows, read usage again now and then.
-		go func() {
-			for range time.Tick(ui.UsageEvery) {
-				fyne.Do(s.LoadUsage)
-			}
-		}()
-		view = s
-	case tray.RoutinesWindow:
-		w = a.NewWindow("Routines")
-		size = fyne.NewSize(600, 460)
-		view = ui.NewRoutines(c, ui.Background,
-			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name}) },
-			func(name string) { open(tray.Window{Kind: tray.RoutineWindow, Routine: name, Review: true}) },
-			func() { open(tray.Window{Kind: tray.SetupWindow}) },
-			func() { open(tray.Window{Kind: tray.SettingsWindow}) })
-	case tray.RoutineWindow:
-		w = a.NewWindow(which.Routine)
-		size = fyne.NewSize(680, 760)
-		view = ui.NewRoutine(c, w, ui.Background, which.Routine, func() { w.Close() })
-	case tray.AcknowledgementsWindow:
-		w = a.NewWindow("Acknowledgements")
-		size = fyne.NewSize(560, 440)
-		view = ui.NewAcknowledgements(c, ui.Background)
-	case tray.HooksWindow:
-		w = a.NewWindow("Hooks")
-		size = fyne.NewSize(620, 520)
-		view = ui.NewHooks(c, ui.Background,
-			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) },
-			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name, Review: true}) },
-			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
-	case tray.HookWindow:
-		w = a.NewWindow(which.Routine)
-		size = fyne.NewSize(680, 760)
-		view = ui.NewHook(c, w, ui.Background, which.Routine, func() { w.Close() },
-			func(name string) { open(tray.Window{Kind: tray.WatcherWindow, Routine: name}) })
-	case tray.WatcherWindow:
-		w = a.NewWindow(which.Routine)
-		size = fyne.NewSize(640, 680)
-		view = ui.NewWatcher(c, w, ui.Background, which.Routine, func() { w.Close() },
-			func(name string) { open(tray.Window{Kind: tray.HookWindow, Routine: name}) })
-	case tray.UpdatesWindow:
-		w = a.NewWindow("Manage Updates")
-		size = fyne.NewSize(560, 640)
-		view = ui.NewUpdates(c, ui.Background)
-	}
-	return w, view, size
 }
