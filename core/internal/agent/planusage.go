@@ -15,10 +15,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
 
-// PlanUsage asks Claude Code for the plan's usage: `claude -p /usage` with
-// stream-json output carries it as a usage_report (documented in the Agent
-// SDK as experimental). /usage is a local command: no model call, no tokens.
-// It needs the claude.ai login (a setup token gets no report).
+// PlanUsage asks Claude Code for the plan's usage (the protocol's UsageArgs).
 func (b *ClaudeCode) PlanUsage(ctx context.Context) ([]usage.Limit, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -27,9 +24,7 @@ func (b *ClaudeCode) PlanUsage(ctx context.Context) ([]usage.Limit, error) {
 		return nil, err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	cmd := exec.CommandContext(ctx, b.Path, "-p", "/usage",
-		"--output-format", "stream-json", "--verbose", "--no-session-persistence",
-		"--setting-sources", "", "--strict-mcp-config", "--tools", "", "--restricted")
+	cmd := exec.CommandContext(ctx, b.Path, b.protocol().UsageArgs()...)
 	cmd.Dir, cmd.Env = dir, b.env()
 	cmd.WaitDelay = cliWaitDelay
 	var stderr bytes.Buffer
@@ -38,11 +33,11 @@ func (b *ClaudeCode) PlanUsage(ctx context.Context) ([]usage.Limit, error) {
 	if err != nil {
 		return nil, fmt.Errorf("claude /usage: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	return parseUsageReport(out)
+	return b.protocol().UsageReport(out)
 }
 
 // parseUsageReport reads the usage report's limit rows out of stream-json
-// output, by kind; unknown fields and kinds are left alone.
+// output (2.1.331's), by kind; unknown fields and kinds are left alone.
 func parseUsageReport(stream []byte) ([]usage.Limit, error) {
 	sc := bufio.NewScanner(bytes.NewReader(stream))
 	sc.Buffer(make([]byte, 64*1024), 4*1024*1024)

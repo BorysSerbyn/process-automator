@@ -43,8 +43,10 @@ COMMAND=procauto
 FOLDER=process-automator
 PUBLIC=1
 
-# The oldest Claude Code the claude-code backend is built and tested against
-# (the flags and output it relies on): an older one is refused.
+# The Claude Code a new install requires: the version the newest of the
+# claude-code backend's implementations is for (agent.NewestClaudeCode; a
+# test keeps them equal). An install already there keeps running on an older
+# Claude Code, through the implementation for its version.
 CLAUDE_CODE_MIN=2.1.331
 
 # Public releases are read from GitHub's web pages (WEB) with curl, ignoring

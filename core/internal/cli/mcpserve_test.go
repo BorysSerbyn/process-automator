@@ -14,6 +14,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
@@ -45,6 +46,9 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	// Nor run the real claude (mcp connect).
 	runClaudeMCP = fakeClaudeMCP
+	agent.RunClaudeVersion = func(context.Context, string) ([]byte, error) {
+		return []byte(agent.NewestClaudeCode().Since().String() + " (Claude Code)"), nil
+	}
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
 	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.

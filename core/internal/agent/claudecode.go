@@ -43,6 +43,16 @@ type ClaudeCode struct {
 	// OAuthToken, if set, is passed as CLAUDE_CODE_OAUTH_TOKEN (from
 	// `claude setup-token`); otherwise Claude Code uses its own login.
 	OAuthToken string
+	// Protocol is how this Claude Code's version is run (ClaudeCodeAt); nil
+	// is the newest.
+	Protocol ClaudeCodeProtocol
+}
+
+func (b *ClaudeCode) protocol() ClaudeCodeProtocol {
+	if b.Protocol == nil {
+		return NewestClaudeCode()
+	}
+	return b.Protocol
 }
 
 // Name implements CLITool.
@@ -68,18 +78,6 @@ func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
-	mcpConfig, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{
-		r.MCP.Name: map[string]any{
-			"type": "http", "url": r.MCP.URL,
-			"headers": map[string]string{"Authorization": "Bearer " + r.MCP.Token},
-			// Claude Code's own limit on one tool call over HTTP (about a
-			// minute by default) would cut off a slow plugin call (a first
-			// git fetch of the day in a script) long before the routine's
-			// timeout: the routine's timeout bounds a run, as codex's
-			// tool_timeout_sec does there.
-			"timeout": toolCallTimeout.Milliseconds(),
-		},
-	}})
 	builtins, err := claudeBuiltins(r.BuiltinTools, r.DryRun)
 	if err != nil {
 		return nil, err
@@ -88,37 +86,21 @@ func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
-	args := []string{
-		"-p", "--output-format", "json",
-		"--system-prompt", system,
-		"--tools", strings.Join(builtins, ","), // "" is none
-		"--strict-mcp-config", "--mcp-config", string(mcpConfig),
-		"--allowedTools", strings.Join(append([]string{"mcp__" + r.MCP.Name}, builtins...), ","),
-		"--permission-mode", "dontAsk", // anything not allowed is denied, never prompted
-		"--setting-sources", "", // ignore settings, hooks and plugins (user's and the folder's)
-		"--restricted", // file tools stay in the working folder
-		"--disable-slash-commands",
-		"--no-chrome",
-		"--max-turns", fmt.Sprint(r.MaxTurns),
+	run := ClaudeRun{
+		System: system, Builtins: builtins, MCP: r.MCP, ToolTimeout: toolCallTimeout,
+		MaxTurns: r.MaxTurns, Model: model, Effort: r.Effort,
 	}
 	if r.OutputSchema != nil {
 		schema, err := json.Marshal(r.OutputSchema)
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, "--json-schema", string(schema))
+		run.Schema = string(schema)
 	}
-	if r.SaveSession && r.SessionID != "" {
-		args = append(args, "--session-id", r.SessionID)
-	} else {
-		args = append(args, "--no-session-persistence")
+	if r.SaveSession {
+		run.SessionID = r.SessionID
 	}
-	if model != "" {
-		args = append(args, "--model", model)
-	}
-	if r.Effort != "" {
-		args = append(args, "--effort", r.Effort)
-	}
+	args := b.protocol().RunArgs(run)
 	cmd := exec.CommandContext(ctx, b.Path, args...)
 	cmd.Env = b.env()
 	return cmd, nil
@@ -168,21 +150,8 @@ func withProjectInstructions(system, folder, file string) (string, error) {
 
 // Result implements CLITool: Claude Code's `--output-format json` result.
 func (b *ClaudeCode) Result(_ CLIRun, stdout, stderr []byte, runErr error) (*Output, error) {
-	var res struct {
-		Result     string `json:"result"`
-		Structured any    `json:"structured_output"`
-		IsError    bool   `json:"is_error"`
-		Subtype    string `json:"subtype"`
-		// total_cost_usd is left out on purpose: on a Claude plan it's an
-		// estimate at API prices, not a charge, so nothing records it.
-		Usage struct {
-			InputTokens              int `json:"input_tokens"`
-			OutputTokens             int `json:"output_tokens"`
-			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
-			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-		} `json:"usage"`
-	}
-	if err := json.Unmarshal(stdout, &res); err != nil {
+	res, err := b.protocol().Result(stdout)
+	if err != nil {
 		msg := strings.TrimSpace(string(stderr) + "\n" + string(stdout))
 		if limit := planLimitError(msg, time.Now()); limit != nil {
 			return nil, limit
@@ -192,16 +161,12 @@ func (b *ClaudeCode) Result(_ CLIRun, stdout, stderr []byte, runErr error) (*Out
 		}
 		return nil, fmt.Errorf("claude: unreadable output: %s", msg)
 	}
-	u := res.Usage
 	out := &Output{
-		Text:         res.Result,
-		InputTokens:  u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
-		OutputTokens: u.OutputTokens,
-		CachedTokens: u.CacheReadInputTokens,
-		Structured:   res.Structured,
+		Text: res.Text, InputTokens: res.InputTokens, OutputTokens: res.OutputTokens,
+		CachedTokens: res.CachedTokens, Structured: res.Structured,
 	}
 	if res.IsError || runErr != nil {
-		msg := res.Result
+		msg := res.Text
 		if msg == "" {
 			msg = res.Subtype
 		}
@@ -216,27 +181,8 @@ func (b *ClaudeCode) Result(_ CLIRun, stdout, stderr []byte, runErr error) (*Out
 	return out, nil
 }
 
-// env is the caller's environment minus anything that would make Claude Code
-// bill an API key instead of the subscription.
-func (b *ClaudeCode) env() []string {
-	var env []string
-	for _, kv := range os.Environ() {
-		k, _, _ := strings.Cut(kv, "=")
-		switch k {
-		case "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
-			"CLAUDE_CODE_DISABLE_AUTO_MEMORY", "CLAUDE_CODE_DISABLE_ORG_MEMORY":
-			continue
-		}
-		env = append(env, kv)
-	}
-	// Memories are user-driven only (`procauto memory`): Claude Code must not
-	// write its own, nor read org-level ones into the routine.
-	env = append(env, "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1", "CLAUDE_CODE_DISABLE_ORG_MEMORY=1")
-	if b.OAuthToken != "" {
-		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+b.OAuthToken)
-	}
-	return env
-}
+// env is the caller's environment as this Claude Code's runs take it.
+func (b *ClaudeCode) env() []string { return b.protocol().RunEnv(os.Environ(), b.OAuthToken) }
 
 // startMessage is the user turn for prompts written entirely as system text.
 const startMessage = "Run the routine now."

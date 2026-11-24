@@ -854,9 +854,10 @@ macOS delivers a click on one of the app's notifications twice: the notification
 - **Ignoring a reopen near a click in time**: a guess about timing, which a slow machine or a quick second open breaks
 - **No window on reopen**: opening the app from Finder or Spotlight while it runs should still show where it stands
 
-## Decision: the installer requires a minimum Claude Code
-The `claude-code` backend depends on Claude Code's flags and output, and an older Claude Code fails in the middle of a run, on a schedule, where nobody is watching. So `install.sh` names the oldest version the backend is tested against (`CLAUDE_CODE_MIN`) and refuses to install when Claude Code is missing or older. It's raised when the backend starts relying on something newer. `--without-claude-code` is for installs that only use another backend.
+## Decision: Claude Code through a protocol, one implementation per version
+The `claude-code` backend depends on Claude Code's flags and output, and a Claude Code that doesn't match them fails in the middle of a run, on a schedule, where nobody is watching. So everything the backend asks of Claude Code is one interface, with an implementation per Claude Code version that changed something it relies on, picked at run time from `claude --version`. A new install requires the newest implementation's version (`install.sh` refuses an older or missing Claude Code, before downloading anything). An app already installed is updated without having to update Claude Code too: it keeps using the implementation for the version it has, and only a Claude Code older than every implementation kept is refused, with a clear message rather than a broken run. A new implementation is added only when a Claude Code release breaks one of these operations. `--without-claude-code` skips the installer's check, for installs that only use another backend.
 
 ### Rejected
-- **Checking at every run**: `claude --version` starts Node for each run, and an install that passes the check rarely moves back to an older Claude Code
-- **A note instead of a refusal**: notes in an installer's output get skipped, and the failure would only show up later as broken runs
+- **One minimum, raised with each change**: every app update that needed a newer Claude Code would require updating Claude Code first
+- **Checking `claude --version` on every run**: it would start Node on every run, so the version is cached until the binary changes
+- **A note in the installer instead of a refusal**: notes in an installer's output get skipped, and the failure would only show up later as broken runs

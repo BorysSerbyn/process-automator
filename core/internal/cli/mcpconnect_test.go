@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/claudemcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
@@ -18,7 +19,12 @@ import (
 // fakeClaudeMCP stands in for `claude mcp add|remove --scope user`: it edits
 // .claude.json in $CLAUDE_CONFIG_DIR (a temporary folder in tests) the way
 // Claude Code does, keeping what else is there.
-func fakeClaudeMCP(_ context.Context, args ...string) error {
+func fakeClaudeMCP(_ context.Context, argv func(agent.ClaudeCodeProtocol) []string) error {
+	args := argv(agent.NewestClaudeCode())
+	if len(args) == 0 || args[0] != "mcp" {
+		return errors.New("not a claude mcp call")
+	}
+	args = args[1:]
 	path, err := claudemcp.ConfigPath()
 	if err != nil {
 		return err
@@ -54,7 +60,9 @@ func fakeClaudeMCP(_ context.Context, args ...string) error {
 func connectClaude(t *testing.T) {
 	t.Helper()
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	if err := fakeClaudeMCP(context.Background(), "add", "--scope", "user", "procauto", "--", os.Args[0], "mcp", "serve"); err != nil {
+	if err := fakeClaudeMCP(context.Background(), func(p agent.ClaudeCodeProtocol) []string {
+		return p.MCPAddArgs("procauto", []string{os.Args[0], "mcp", "serve"})
+	}); err != nil {
 		t.Fatal(err)
 	}
 }

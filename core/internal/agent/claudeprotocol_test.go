@@ -1,0 +1,96 @@
+package agent
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestClaudeCodeVersions(t *testing.T) {
+	v, err := ParseClaudeCodeVersion("2.1.331 (Claude Code)\n")
+	if err != nil || v.String() != "2.1.331" {
+		t.Fatalf("parsed %v, %v", v, err)
+	}
+	if _, err := ParseClaudeCodeVersion("Claude Code"); err == nil {
+		t.Fatal("no version parsed as one")
+	}
+	for _, c := range []struct {
+		a, b string
+		less bool
+	}{{"2.1.9", "2.1.10", true}, {"2.1.10", "2.1.9", false}, {"2.1", "2.1.0", false}, {"2.1", "2.1.1", true}, {"3.0.0", "2.9.9", false}} {
+		if got := mustVersion(c.a).Less(mustVersion(c.b)); got != c.less {
+			t.Errorf("%s < %s: %v", c.a, c.b, got)
+		}
+	}
+}
+
+// The implementations are kept oldest first, each from a later version.
+func TestClaudeCodeProtocolsOrdered(t *testing.T) {
+	for i := 1; i < len(claudeCodeProtocols); i++ {
+		if !claudeCodeProtocols[i-1].Since().Less(claudeCodeProtocols[i].Since()) {
+			t.Fatalf("implementation %d (%s) isn't newer than the one before (%s)",
+				i, claudeCodeProtocols[i].Since(), claudeCodeProtocols[i-1].Since())
+		}
+	}
+}
+
+// A Claude Code gets the newest implementation at or below its version, and
+// one older than every implementation is refused.
+func TestClaudeCodeFor(t *testing.T) {
+	saved := claudeCodeProtocols
+	t.Cleanup(func() { claudeCodeProtocols = saved })
+	older, newer := fakeProtocol{since: "2.0.0"}, fakeProtocol{since: "2.2.0"}
+	claudeCodeProtocols = []ClaudeCodeProtocol{older, newer}
+	for v, want := range map[string]ClaudeCodeProtocol{"2.0.0": older, "2.1.999": older, "2.2.0": newer, "3.0": newer} {
+		if got, err := ClaudeCodeFor(mustVersion(v)); err != nil || got != want {
+			t.Errorf("%s: got %v, %v", v, got, err)
+		}
+	}
+	_, err := ClaudeCodeFor(mustVersion("1.9.9"))
+	var old *ClaudeCodeTooOld
+	if !errors.As(err, &old) || old.Need.String() != "2.0.0" {
+		t.Fatalf("an older Claude Code: %v", err)
+	}
+	if NewestClaudeCode() != newer || OldestClaudeCode() != older {
+		t.Fatal("newest and oldest")
+	}
+}
+
+type fakeProtocol struct {
+	claudeCode2_1_331
+	since string
+}
+
+func (f fakeProtocol) Since() ClaudeCodeVersion { return mustVersion(f.since) }
+
+// `claude --version` runs once per binary, again when the binary changes.
+func TestInstalledClaudeCodeCached(t *testing.T) {
+	saved := RunClaudeVersion
+	t.Cleanup(func() { RunClaudeVersion = saved })
+	calls, version := 0, "2.1.331"
+	RunClaudeVersion = func(context.Context, string) ([]byte, error) {
+		calls++
+		return []byte(version + " (Claude Code)"), nil
+	}
+	path := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(path, []byte("one"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if v, err := InstalledClaudeCode(context.Background(), path); err != nil || v.String() != "2.1.331" {
+			t.Fatalf("%v, %v", v, err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("ran claude --version %d times", calls)
+	}
+	version = "2.2.0"
+	if err := os.WriteFile(path, []byte("updated"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := InstalledClaudeCode(context.Background(), path); v.String() != "2.2.0" || calls != 2 {
+		t.Fatalf("after an update: %v (%d runs)", v, calls)
+	}
+}

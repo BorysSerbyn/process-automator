@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 )
 
 // The app's identity is said three times: here (the binary), in install.sh
@@ -44,4 +46,12 @@ func assignments(t *testing.T, path, pattern string) map[string]string {
 		}
 	}
 	return out
+}
+
+// A new install requires the Claude Code the newest implementation is for.
+func TestInstallerRequiresNewestClaudeCode(t *testing.T) {
+	install := assignments(t, "../../../install.sh", `^([A-Z_]+)=(.*)$`)
+	if got, want := install["CLAUDE_CODE_MIN"], agent.NewestClaudeCode().Since().String(); got != want {
+		t.Fatalf("install.sh's CLAUDE_CODE_MIN is %q, but the newest Claude Code implementation is for %s", got, want)
+	}
 }

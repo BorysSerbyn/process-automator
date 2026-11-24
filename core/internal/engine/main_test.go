@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/permissions"
 )
 
@@ -27,6 +28,10 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	checkAll = checkHere
+	// Nor runs the real claude: any claude found is the newest supported.
+	agent.RunClaudeVersion = func(context.Context, string) ([]byte, error) {
+		return []byte(agent.NewestClaudeCode().Since().String() + " (Claude Code)"), nil
+	}
 	// A daemon started by a test never runs the login shell or reads the
 	// plan's usage (Claude Code's sign-in).
 	saveLoginPath = func(string) error { return nil }

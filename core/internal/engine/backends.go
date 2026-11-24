@@ -120,9 +120,13 @@ var Backends = map[string]BackendDef{
 			return cc.PlanUsage(ctx)
 		},
 		Ready: func(a *App) (string, string) {
-			if _, err := find(a, agent.FindClaude); err != nil {
+			path, err := find(a, agent.FindClaude)
+			if err != nil {
 				return "Claude Code isn't installed (no claude command found): install it from " +
 					"https://claude.com/claude-code and sign in to it", ""
+			}
+			if _, err := agent.ClaudeCodeAt(context.Background(), path); err != nil {
+				return err.Error(), ""
 			}
 			return "", ""
 		},
@@ -179,7 +183,11 @@ func claudeCode(a *App) (*agent.ClaudeCode, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't read the Claude Code token: %w", err)
 	}
-	return &agent.ClaudeCode{Path: path, OAuthToken: token}, nil
+	protocol, err := agent.ClaudeCodeAt(context.Background(), path)
+	if err != nil {
+		return nil, err
+	}
+	return &agent.ClaudeCode{Path: path, OAuthToken: token, Protocol: protocol}, nil
 }
 
 // find looks for an agent CLI's binary; when it isn't on PATH it may have
