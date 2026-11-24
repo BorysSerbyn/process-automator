@@ -22,8 +22,8 @@ func Background(work func() func()) {
 	}()
 }
 
-// settingRow is one setting: its label on the left, its control (by type)
-// on the right, its description and the core's message under them
+// settingRow is one setting: its label, its description and the core's
+// message under it, on the left; its control (by type) on the right
 // (automator-ui's SettingRow). win is for the path control's folder dialog;
 // busy disables it while the core works on a change.
 func settingRow(win fyne.Window, s cli.Setting, label, problem string, busy bool, set func(string), reset func()) fyne.CanvasObject {
@@ -37,8 +37,9 @@ func settingRow(win fyne.Window, s cli.Setting, label, problem string, busy bool
 		name.Importance = widget.LowImportance
 		tags.Add(tag(s.Inactive, ""))
 	}
-	// Its words take the row's width, under the label and the control.
-	words := container.NewVBox()
+	// Its words under its label; the control at the right, beside them all
+	// (automator-ui's row).
+	words := lines(tags)
 	if s.Description != "" {
 		words.Add(secondary(s.Description))
 	}
@@ -57,19 +58,17 @@ func settingRow(win fyne.Window, s cli.Setting, label, problem string, busy bool
 		if busy {
 			r.Disable()
 		}
-		controls.Add(r)
+		controls.Add(container.NewCenter(r))
 	}
 	for _, c := range control(win, s, label, busy || s.NotImplemented || s.Inactive != "", set) {
-		controls.Add(c)
+		controls.Add(container.NewCenter(c))
 	}
 	if s.Unit != "" {
 		u := widget.NewLabel(s.Unit)
 		u.Importance = widget.LowImportance
-		controls.Add(u)
+		controls.Add(container.NewCenter(u))
 	}
-	return padded(4, 4, rowInset-8, rowInset-8, container.NewVBox(
-		container.NewBorder(nil, nil, nil, controls, container.NewVBox(tags)),
-		words))
+	return padded(4, 4, rowInset-8, rowInset-8, container.NewBorder(nil, nil, nil, container.NewCenter(controls), words))
 }
 
 // control is a setting's control by its type: a toggle, a picker, a field

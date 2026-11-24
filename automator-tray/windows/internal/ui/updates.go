@@ -219,7 +219,7 @@ func (u *Updates) render() fyne.CanvasObject {
 	if u.status != nil {
 		version = u.status.Current
 	}
-	head := container.NewVBox(heading("Updates", true))
+	head := lines(pageTitle("Updates"))
 	if version != "" {
 		head.Add(secondary(AppName + " " + version))
 	}
@@ -234,7 +234,7 @@ func (u *Updates) render() fyne.CanvasObject {
 }
 
 func (u *Updates) automaticView() fyne.CanvasObject {
-	left := container.NewVBox(widget.NewLabel("Install updates automatically"), secondary(
+	left := lines(widget.NewLabel("Install updates automatically"), secondary(
 		"New releases install by themselves once they've been out an hour, when no routine is running and "+
 			"the app's window isn't open. A notification tells you when one is installed."))
 	switch {
@@ -260,7 +260,7 @@ func (u *Updates) installedView(version string) fyne.CanvasObject {
 	if version == "" {
 		title = "Installed"
 	}
-	head := container.NewVBox(secondary("INSTALLED"), heading(title, false))
+	head := lines(secondary("INSTALLED"), heading(title, false))
 	var link fyne.CanvasObject
 	if u.notes != nil {
 		link = releaseLink(u.notes.URL)
@@ -313,7 +313,7 @@ func (u *Updates) checkView() []fyne.CanvasObject {
 			detail += "."
 		}
 	}
-	left := container.NewVBox(heading(title, false))
+	left := lines(heading(title, false))
 	if detail != "" {
 		left.Add(secondary(detail))
 	}
@@ -362,7 +362,7 @@ func (u *Updates) installingView() []fyne.CanvasObject {
 	if tag != "" {
 		title += " to " + tag
 	}
-	head := container.NewVBox(heading(title, false))
+	head := lines(heading(title, false))
 	if p != nil && p.StartedAt != nil {
 		head.Add(secondary("Started " + lowerDay(when(*p.StartedAt, u.now()))))
 	}
@@ -408,7 +408,7 @@ func notesView(n *cli.Notes, err string) fyne.CanvasObject {
 	case err != "":
 		body = secondary(err)
 	case n == nil:
-		body = container.NewHBox(widget.NewActivity(), secondary("Reading the release notes…"))
+		body = container.NewHBox(widget.NewActivity(), secondaryLine("Reading the release notes…"))
 		if a, ok := body.(*fyne.Container).Objects[0].(*widget.Activity); ok {
 			a.Start()
 		}

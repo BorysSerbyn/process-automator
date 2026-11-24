@@ -23,12 +23,14 @@ import (
 func usageView(r *cli.Report, problem string, now time.Time) []fyne.CanvasObject {
 	limit := fyne.CanvasObject(container.NewHBox())
 	if r != nil && r.Kind == "plan" && r.LimitPercent != nil {
-		limit = secondary("Limit: " + number(*r.LimitPercent) + "% of the plan")
+		l := secondary("Limit: " + number(*r.LimitPercent) + "% of the plan")
+		l.Wrapping = fyne.TextWrapOff
+		limit = l
 	}
 	title := heading("LLM usage", true)
 	objects := []fyne.CanvasObject{
 		padded(6, 6, rowInset-8, rowInset-8, container.NewBorder(nil, nil,
-			widget.NewIcon(primaryIcon("gauge")), container.NewCenter(limit), title)),
+			container.NewCenter(widget.NewIcon(primaryIcon("gauge"))), container.NewCenter(limit), title)),
 		divider(),
 	}
 	inset := func(o fyne.CanvasObject) fyne.CanvasObject { return padded(6, 6, rowInset-8, rowInset-8, o) }
@@ -50,7 +52,7 @@ func usageView(r *cli.Report, problem string, now time.Time) []fyne.CanvasObject
 	case problem != "":
 		objects = append(objects, inset(errorRow(problem)))
 	default:
-		objects = append(objects, inset(container.NewHBox(spinner(), secondary("Reading usage…"))))
+		objects = append(objects, inset(container.NewHBox(spinner(), secondaryLine("Reading usage…"))))
 	}
 	return objects
 }
@@ -90,8 +92,13 @@ func planUsage(r *cli.Report, now time.Time, inset func(fyne.CanvasObject) fyne.
 	if r.ReadError != "" {
 		notes = append(notes, secondary("Couldn't read usage just now: "+r.ReadError))
 	}
-	if len(notes) > 0 {
-		objects = append(objects, padded(0, 8, rowInset+114, rowInset, container.NewVBox(notes...)))
+	switch {
+	case len(notes) > 0 && known:
+		// Under the windows' bars.
+		objects = append(objects, padded(0, 8, rowInset+114, rowInset, lines(notes...)))
+	case len(notes) > 0:
+		// Under "Not read yet.", where it starts.
+		objects = append(objects, padded(-12, 6, rowInset-8, rowInset-8, lines(notes...)))
 	}
 	return objects
 }

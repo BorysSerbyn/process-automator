@@ -207,7 +207,7 @@ func (s *Settings) startAtLogin() fyne.CanvasObject {
 	if installed {
 		about = s.appName + " starts when you log in."
 	}
-	left := container.NewVBox(widget.NewLabel("Start at login"), secondary(about))
+	left := lines(widget.NewLabel("Start at login"), secondary(about))
 	if s.loginError != "" {
 		left.Add(errorRow(s.loginError))
 	}
