@@ -67,11 +67,14 @@ func New(c cli.CLI, win fyne.Window, async ui.Async, appName string) *Shell {
 		state: nav.New(tray.RoutinesWindow), views: map[nav.Destination]View{}, sidebarShown: true,
 		sidebar: container.NewVBox(), bar: container.NewHBox(), body: container.NewStack(),
 	}
-	width := canvas.NewRectangle(color.Transparent)
+	// The sidebar's background, a shade off the window's, sets its width.
+	width := canvas.NewRectangle(sidebarShade())
 	width.SetMinSize(fyne.NewSize(SidebarWidth, 0))
 	s.side = container.NewBorder(nil, nil, nil, widget.NewSeparator(),
-		container.NewStack(width, container.NewVScroll(s.sidebar)))
-	main := container.NewBorder(container.NewVBox(s.bar, widget.NewSeparator()), nil, nil, nil, s.body)
+		container.NewStack(width, container.NewThemeOverride(
+			container.NewVScroll(container.New(layout.NewCustomPaddedLayout(10, 10, 8, 8), s.sidebar)),
+			sidebarTheme{fyne.CurrentApp().Settings().Theme()})))
+	main := container.NewBorder(container.NewVBox(container.New(layout.NewCustomPaddedLayout(2, 2, 6, 6), s.bar), widget.NewSeparator()), nil, nil, nil, s.body)
 	s.root = container.NewBorder(nil, nil, s.side, nil, main)
 	s.drawBar()
 	s.drawSidebar()
@@ -269,7 +272,7 @@ func (s *Shell) drawBar() {
 	menu.Importance = widget.LowImportance
 	objects := []fyne.CanvasObject{menu}
 	if back := s.state.BackTitle(); back != "" {
-		b := widget.NewButtonWithIcon(back, theme.NavigateBackIcon(), s.Back)
+		b := widget.NewButtonWithIcon(back, ui.ChevronLeftIcon, s.Back)
 		b.Importance = widget.LowImportance
 		objects = append(objects, b)
 	}
@@ -282,7 +285,7 @@ func (s *Shell) drawSidebar() {
 	var objects []fyne.CanvasObject
 	for i, group := range nav.Groups {
 		if i > 0 {
-			objects = append(objects, widget.NewSeparator())
+			objects = append(objects, container.New(layout.NewCustomPaddedLayout(6, 6, 8, 8), widget.NewSeparator()))
 		}
 		for _, section := range group {
 			b := widget.NewButtonWithIcon(nav.Title(section), icon(section), func() { s.Select(section) })
@@ -297,8 +300,9 @@ func (s *Shell) drawSidebar() {
 			}
 			row := fyne.CanvasObject(b)
 			if badge != "" {
-				t := canvas.NewText(badge+"  ", theme.Color(theme.ColorNameForeground))
+				t := canvas.NewText(badge+"  ", theme.Color(theme.ColorNamePlaceHolder))
 				t.TextSize = theme.CaptionTextSize()
+				t.TextStyle = fyne.TextStyle{Bold: true}
 				row = container.NewStack(b, container.NewHBox(layout.NewSpacer(), container.NewCenter(t)))
 			}
 			objects = append(objects, row)
@@ -308,18 +312,49 @@ func (s *Shell) drawSidebar() {
 	s.sidebar.Refresh()
 }
 
+// icon is a section's, as automator-ui's sidebar has them: a clock, a
+// bolt, a bubble with a check, a checklist, a gear, an arrow down.
 func icon(section tray.WindowKind) fyne.Resource {
 	switch section {
 	case tray.RoutinesWindow:
-		return theme.HistoryIcon()
+		return ui.ClockIcon
 	case tray.HooksWindow:
-		return theme.MediaFastForwardIcon()
+		return ui.BoltIcon
 	case tray.AcknowledgementsWindow:
-		return theme.ConfirmIcon()
+		return ui.AcknowledgeIcon
 	case tray.SetupWindow:
-		return theme.ListIcon()
+		return ui.ChecklistIcon
 	case tray.SettingsWindow:
 		return theme.SettingsIcon()
 	}
-	return theme.DownloadIcon()
+	return ui.DownloadCircleIcon
+}
+
+// sidebarShade is the sidebar's background: the window's, a shade darker.
+func sidebarShade() color.Color {
+	r, g, b, _ := theme.Color(theme.ColorNameForeground).RGBA()
+	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 8}
+}
+
+// sidebarTheme is the window's theme in the sidebar: the section shown is
+// marked with a tint of the accent colour, its name and icon in the accent
+// (a sidebar's selection), not a solid button; rows are compact.
+type sidebarTheme struct{ fyne.Theme }
+
+func (t sidebarTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
+	switch n {
+	case theme.ColorNamePrimary:
+		r, g, b, _ := t.Theme.Color(theme.ColorNamePrimary, v).RGBA()
+		return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x30}
+	case theme.ColorNameForegroundOnPrimary:
+		return t.Theme.Color(theme.ColorNamePrimary, v)
+	}
+	return t.Theme.Color(n, v)
+}
+
+func (t sidebarTheme) Size(n fyne.ThemeSizeName) float32 {
+	if n == theme.SizeNameInnerPadding {
+		return 7
+	}
+	return t.Theme.Size(n)
 }
