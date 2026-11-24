@@ -119,7 +119,7 @@ func (n Notification) Waiting() bool { return n.Acknowledge && n.AcknowledgedAt 
 type ClickOutput struct {
 	Notification string `json:"notification"`
 	// Action is open-url, show-run (Routine's Run), show-updates (the
-	// Manage Updates window) or show-app.
+	// window's Updates) or show-app.
 	Action  string `json:"action"`
 	Routine string `json:"routine,omitempty"`
 	Run     string `json:"run,omitempty"`

@@ -25,7 +25,7 @@ procauto templates install projects/acme/standup --set channel=C0123456789
 - The template is copied into your routines folder, where it's yours to edit. Parameter values become settings (`routines.<name>.params.<param>`), so you can change them later (see [[Guides/Settings|Settings]])
 - `templates list` shows only the ones for your OS; `--all` shows every one
 - Programs, hooks and watchers can be templates too: `templates list` shows each one's kind. Installing one adds it off and untrusted, as adding it from its files would; one that ships as source is built first, so its toolchain (e.g. `go`, or Xcode's `swiftc`) must be installed. Installing a hook installs the watcher it listens to with it when you don't have it. Turn them on with `routines trust <name> --resume` or `hooks trust <name> --resume`
-- In the menu bar app: Setup window › **Templates**
+- In the menu bar app: Setup › **Templates**
 
 Check which servers an installed routine uses (`procauto routines show <name>`), add any that are missing ([[Guides/Adding a plugin|Adding a plugin]]) and sign in to them ([[Guides/Plugins and sign-ins|Plugins and sign-ins]]).
 
@@ -44,7 +44,7 @@ A routine runs for real only once you've trusted it with what it can reach: its 
 procauto routines trust digest     # shows what it can reach and what changed, then asks
 ```
 
-In the menu bar app: **Turn On…** (in the routine's window, beside it in the Routines window, or from the menu), then **Trust and Turn On**, which also resumes it; Setup's turn-on steps do the same. Only you can trust a routine: Claude can't, through the MCP server.
+In the menu bar app: **Turn On…** (on the routine's screen, beside it in Routines, or from the menu), then **Trust and Turn On**, which also resumes it; Setup's turn-on steps do the same. Only you can trust a routine: Claude can't, through the MCP server.
 
 **Trust is taken away** when any of what it can reach changes (a new server, tool, built-in tool, plugin section or folder). Its prompt, schedule, model and other settings don't affect it. An untrusted routine isn't scheduled (the dot turns red: "can't be scheduled"), and running it for real is refused, until you trust it again.
 
@@ -57,9 +57,9 @@ procauto routines resume digest           # runs on its schedule (once trusted)
 procauto routines pause digest            # doesn't; you can still run it by hand
 ```
 
-In the menu bar app: **Pause** / **Resume** in its window. A routine without a schedule only runs by hand.
+In the menu bar app: **Pause** / **Resume** on its screen. A routine without a schedule only runs by hand.
 
-To change when it runs, use the schedule picker in its window, or set a cron (local time):
+To change when it runs, use the schedule picker on its screen, or set a cron (local time):
 
 ```sh
 procauto schedule describe '20 9 * * 1-5'                       # "At 09:20, Monday through Friday", next times
@@ -87,7 +87,7 @@ procauto runs show digest/2026-11-19T092022        # one run: inputs, tool calls
 procauto runs show digest/2026-11-19T092022 --open # as a readable report
 ```
 
-In the menu bar app: the routine window's **Runs** tab. Outcomes are `success`, `failed`, `needs-reauth`, `missed`, `skipped` (over the usage limit) and `stopped`. History is kept for `history.retention-days` (90 by default).
+In the menu bar app: the routine's **Runs** tab. Outcomes are `success`, `failed`, `needs-reauth`, `missed`, `skipped` (over the usage limit) and `stopped`. History is kept for `history.retention-days` (90 by default).
 
 ## Memories
 Memories are short, lasting rules you give routines, e.g. "Leave out issues labelled wontfix". They're yours only: routines read them, never write them.

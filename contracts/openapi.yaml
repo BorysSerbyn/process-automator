@@ -133,7 +133,7 @@ components:
             Action is what to show: open-url (the notification has a link: open
             URL with the system's default handler), show-run (it's about a run: its
             routine's window, on that run), show-updates (about an update: the
-            app's updates, its Manage Updates window) or show-app (about the app
+            app's updates, its window's Updates) or show-app (about the app
             itself: the app).
           enum:
             - open-url

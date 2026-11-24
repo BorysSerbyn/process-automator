@@ -1,4 +1,4 @@
-Back to [[Home]]. See also [[Guides/The menu bar app#Settings window|Settings window]].
+Back to [[Home]]. See also [[Guides/The menu bar app#Settings|Settings in the app]].
 
 ```sh
 procauto settings list                      # every setting: value, default, description
@@ -9,7 +9,7 @@ procauto settings set llm.backend claude-code
 procauto settings reset llm.backend         # back to the default
 ```
 
-`settings set` checks the value before saving it, and changes apply at once (the scheduler re-reads them). In the menu bar app, **Settings** holds the app-wide ones and each routine's window its own.
+`settings set` checks the value before saving it, and changes apply at once (the scheduler re-reads them). In the menu bar app, **Settings** holds the app-wide ones and each routine's screen its own.
 
 ## App-wide
 | Setting | Default | |
@@ -23,7 +23,7 @@ procauto settings reset llm.backend         # back to the default
 | `history.retention-days` | `90` | How long run history and logs are kept |
 | `runs.failure-notifications` | `true` | The app's own notification when a run fails, needs a sign-in, is missed or skipped |
 | `memories.max-chars` | `4000` | How much each memories file may hold |
-| `update.auto` | `true` | Install new releases by themselves at a quiet moment (also the switch in **Manage Updates**); see [[Guides/Getting started#Update\|Update]] |
+| `update.auto` | `true` | Install new releases by themselves at a quiet moment (also the switch in **Updates**); see [[Guides/Getting started#Update\|Update]] |
 | `update.source-dir` | | The checkout `update` builds from when no release has a download for this machine (empty: the one this build came from) |
 
 ## Per routine
@@ -45,4 +45,4 @@ Keeps scheduled runs from using too much, depending on the backend:
 A run that doesn't start is recorded as skipped, with the reason, and the dot turns red. Runs you start by hand still run, with a warning. `procauto usage` shows where you stand; so does the **LLM usage** card in the Settings window.
 
 ## Start at login
-The scheduler and the menu bar app (on Linux, the tray, in desktop sessions) start at login. `procauto login-items status|enable|disable` (or **Start at login** in the Settings window) changes that; it doesn't start or stop what's running now.
+The scheduler and the menu bar app (on Linux, the tray, in desktop sessions) start at login. `procauto login-items status|enable|disable` (or **Start at login** in Settings) changes that; it doesn't start or stop what's running now.

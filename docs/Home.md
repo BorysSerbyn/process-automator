@@ -1,9 +1,9 @@
-Process Automator runs LLM **routines** on a schedule and **hooks** on events: prompt files that a model runs in the background, at a time or when something happens, with the tools I allow from MCP servers. A Go core and the `procauto` CLI do the work; on macOS, automator-ui (a menu bar status indicator with settings, routines, hooks and setup windows) sits on top, and on Linux a tray (automator-tray) with the same windows (automator-windows). On its own the app does nothing: the routines and hooks I add give it a purpose.
+Process Automator runs LLM **routines** on a schedule and **hooks** on events: prompt files that a model runs in the background, at a time or when something happens, with the tools I allow from MCP servers. A Go core and the `procauto` CLI do the work; on macOS, automator-ui (a menu bar status indicator, and one window with routines, hooks, setup and settings) sits on top, and on Linux a tray (automator-tray) with the same window (automator-windows). On its own the app does nothing: the routines and hooks I add give it a purpose.
 
 ## Guides
 Everything needed to use the app, in reading order:
 - [[Guides/Getting started|Getting started]] (what it is; install, setup, update, uninstall)
-- [[Guides/The menu bar app|The menu bar app]] (the status dot, its menu and windows, notifications; the Linux tray)
+- [[Guides/The menu bar app|The menu bar app]] (the status dot, its menu and window, notifications; the Linux tray)
 - [[Guides/Routines|Routines]] (templates, dry runs, trust, turning them on, running, history, memories)
 - [[Guides/Writing a routine|Writing a routine]] (the routine file, through `procauto guide routines`)
 - [[Guides/Writing a program|Writing a program]] (a routine that runs an executable instead of a model, through `procauto guide programs`)

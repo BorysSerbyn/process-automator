@@ -29,22 +29,22 @@ The menu lists each reason; click one to open the run it's about.
 | *routine* missed its run | The computer was asleep or off past the routine's `staleness`, or other runs took too long. Run it by hand if it still matters (`run <name>`, or `run <name> --date <day>` for a past day) |
 | *routine* didn't start at *time* | Its time passed without a run: the scheduler may be stuck. Check the scheduler log |
 | *routine* is stuck | Its run is going past its timeout. `procauto stop <name>` |
-| *hook* can't run | A hook that's on, whose watcher is missing, not trusted or failing (its polls fail, or its stream keeps ending), or which isn't trusted. `procauto hooks show <name>` and `procauto watchers show <watcher>` say which; a watcher that isn't trusted is trusted with the hook (`procauto hooks trust <name>`, or **Turn On…** in its window) ([[Guides/Writing a hook\|Writing a hook]]) |
+| *hook* can't run | A hook that's on, whose watcher is missing, not trusted or failing (its polls fail, or its stream keeps ending), or which isn't trusted. `procauto hooks show <name>` and `procauto watchers show <watcher>` say which; a watcher that isn't trusted is trusted with the hook (`procauto hooks trust <name>`, or **Turn On…** on its screen) ([[Guides/Writing a hook\|Writing a hook]]) |
 | *hook* was skipped | It was paused for running far past its rate: its action may set it off again. Fix that, then `procauto hooks resume <name>` |
 
 A routine stays red until its next run goes well (or you pause it).
 
 ## Run history
-`procauto runs` lists recent runs with their outcome and reason; `procauto runs show <id>` shows one in full: its inputs, every tool call, what it wrote (and any write errors), tokens and its final reply. In the menu bar app, a routine window's **Runs** tab shows the same. Dry runs aren't recorded: run them in a terminal (`run <name> --dry-run`) to see what they do.
+`procauto runs` lists recent runs with their outcome and reason; `procauto runs show <id>` shows one in full: its inputs, every tool call, what it wrote (and any write errors), tokens and its final reply. In the menu bar app, a routine's **Runs** tab shows the same. Dry runs aren't recorded: run them in a terminal (`run <name> --dry-run`) to see what they do.
 
 ## Logs
 | | |
 |---|---|
 | Scheduler (macOS) | `~/Library/Logs/process-automator/scheduler.log` |
 | Scheduler (Linux) | `journalctl --user -u procauto-scheduler` |
-| Tray and its windows (Linux) | `frontend.log` in the data folder (started again past 1 MB; the one before is `frontend.log.old`): why a window opened in a terminal, why the scheduler didn't start |
+| Tray and its window (Linux) | `frontend.log` in the data folder (started again past 1 MB; the one before is `frontend.log.old`): why a screen opened in a terminal, why the scheduler didn't start |
 | Runs started in the background (`start`, **Run Now** in the menu bar app) | `start.log` in the data folder |
-| Updates (installed automatically, or from Manage Updates) | `update.log` in the data folder |
+| Updates (installed automatically, or from Updates) | `update.log` in the data folder |
 | Changes made by Claude through the MCP server | `mcp-changes.jsonl` in the data folder |
 
 `procauto paths` shows the data folder (and `frontend log`).

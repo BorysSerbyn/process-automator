@@ -12,7 +12,7 @@ procauto mcp tools <server>          # its tools (--json marks the read-only one
 procauto mcp call <server> <tool> '<json args>'   # call one tool by hand (writes run for real)
 ```
 
-`auth login` opens your browser for OAuth sign-ins and asks for keys and tokens in the terminal; with `--browser` it asks for them on a local page instead. `procauto setup` and the Setup window offer a sign-in for each server your routines use. Sign-ins are refreshed automatically; when one can't be, runs end with "needs a sign-in" and you run `auth login` again.
+`auth login` opens your browser for OAuth sign-ins and asks for keys and tokens in the terminal; with `--browser` it asks for them on a local page instead. `procauto setup` and Setup in the app offer a sign-in for each server your routines use. Sign-ins are refreshed automatically; when one can't be, runs end with "needs a sign-in" and you run `auth login` again.
 
 ## Two accounts of one service
 In two Slack workspaces (or with two Google or Linear accounts), add the second as an account of the first, then sign in to it with its own credentials:

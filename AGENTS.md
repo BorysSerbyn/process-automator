@@ -41,7 +41,7 @@ It downloads the latest release for this machine, checks its checksum (and on ma
 2. A code-signing identity named `Process Automator Dev`, which keeps macOS permission grants across rebuilds. *They* create it in Keychain Access, following `docs/Guides/Getting started.md` → "Building it from the checkout"; check with `security find-identity -v -p codesigning`.
 3. `make install`. It builds the core and the app, installs them as above, and remembers this checkout: `procauto update` builds newer tagged releases from it until releases are published.
 
-On Linux: Go (from their package manager, with their go-ahead), then `make package-linux LINUX_ARCH=<amd64|arm64> LINUX_WINDOWS=none` (without Docker the windows can't be built, and the tray opens them in a terminal; with Docker running, leave out `LINUX_WINDOWS=none`) and `./install.sh --yes --from build/dist/<the .tar.gz it made>`.
+On Linux: Go (from their package manager, with their go-ahead), then `make package-linux LINUX_ARCH=<amd64|arm64> LINUX_WINDOWS=none` (without Docker the app's window can't be built, and the tray opens its screens in a terminal; with Docker running, leave out `LINUX_WINDOWS=none`) and `./install.sh --yes --from build/dist/<the .tar.gz it made>`.
 
 If `~/.local/bin` isn't on their PATH, use `~/.local/bin/procauto` below and tell them how to add it.
 

@@ -195,16 +195,16 @@ The Linux frontend is automator-tray, a Go binary on `fyne.io/systray`, which sp
 - **One process for the tray and the windows** (Fyne's own tray): its OpenGL window stack, through cgo, would stay loaded while no window is open, which is nearly always
 - **Notifications through `notify-send`**: may not be installed, and gives no clicks back
 
-Updates are the Manage Updates window's, as on macOS; without the windows app, the terminal asks (`update --ask`, the core saying what's available and asking). Whatever the tray waits for (a CLI command, the notification service) has a time limit: one that hangs mustn't stop notifications or update checks for the rest of its life.
+Updates are the window's Updates, as on macOS; without the windows app, the terminal asks (`update --ask`, the core saying what's available and asking). Whatever the tray waits for (a CLI command, the notification service) has a time limit: one that hangs mustn't stop notifications or update checks for the rest of its life.
 
-## Decision: Linux's windows are Fyne, one process per window, in a module of their own
-automator-windows is Go on Fyne, so it uses the tray's CLI runner, app discovery and window function as they are, builds with the same toolchain, and runs on X11 and Wayland from one binary (GLFW 3.4). The tray starts one process per window, which exits when the window closes: the toolkit and its OpenGL stack are loaded only while a window is open, and a window that can't open (no OpenGL, a broken display) costs the tray nothing: it falls back to the terminal. One window of each kind is a file lock the kernel releases however the holder exits, with a socket beside it to bring the open window to the front; it needs no session bus and is tested without one. It's a module of its own inside the tray's because Fyne moves shared dependencies (it requires a newer `fyne.io/systray`) and needs cgo: in its own module the tray's dependency versions, binary and CGO-free `go build ./...` stay exactly as they were.
+## Decision: Linux's window is Fyne, a process of its own while it's open, in a module of their own
+automator-windows is Go on Fyne, so it uses the tray's CLI runner, app discovery and window function as they are, builds with the same toolchain, and runs on X11 and Wayland from one binary (GLFW 3.4). The tray starts it for the window, and it exits when the window closes: the toolkit and its OpenGL stack are loaded only while the window is open, and a window that can't open (no OpenGL, a broken display) costs the tray nothing: it falls back to the terminal. The one window is a file lock the kernel releases however the holder exits, with a socket beside it to hand the open window what a later start was asked to show; it needs no session bus and is tested without one. It's a module of its own inside the tray's because Fyne moves shared dependencies (it requires a newer `fyne.io/systray`) and needs cgo: in its own module the tray's dependency versions, binary and CGO-free `go build ./...` stay exactly as they were.
 
 ### Rejected
 - **GTK 4 through gotk4**: cgo as well, a GTK stack, and much longer builds; Go bindings less settled than Fyne
 - **A web UI** (Wails, a WebKitGTK window): a web engine per window, and a second language for the views
 - **One resident windows process** the tray talks to: a toolkit loaded all day, or a lifecycle to manage, for windows opened now and then
-- **One window of each kind through the session bus** (a bus name, a raise method): needs a bus; the lock works anywhere and is simpler to test
+- **One window through the session bus** (a bus name, a method to show a screen): needs a bus; the lock works anywhere and is simpler to test
 - **The windows in the tray's module**: Fyne's requirements would move the tray's own dependencies, and its CGO-free builds of `./...` would fail on Fyne's cgo
 
 ## Decision: the Linux windows app is built in Docker
@@ -511,15 +511,15 @@ Releases come out several times a day, and nobody clicks Update that often, so u
 - **Updating development builds too**: a release would replace the build I'm testing
 
 ## Decision: frontends postpone automatic updates while they're open
-An automatic update restarts the menu bar app or tray, so it waits while I'm using them. A frontend says so with `update postpone` (when its menu opens, and every minute while one of its windows is open), which holds installs back for five minutes; the scheduler reads it like any other fact. On Linux each window is a process of the windows app, so each window postpones for itself, whoever opened it.
+An automatic update restarts the menu bar app or tray, so it waits while I'm using them. A frontend says so with `update postpone` (when its menu opens, and every minute while its window is open), which holds installs back for five minutes; the scheduler reads it like any other fact. On Linux the window is the windows app's process, so it postpones for itself, whoever opened it.
 
 ### Rejected
-- **A long-lived `update hold` process per window**: one left behind by a crashed window would hold updates back for ever, and the tray's terminal windows have no process to watch
+- **A long-lived `update hold` process for the window**: one left behind by a crashed window would hold updates back for ever, and the tray's terminal windows have no process to watch
 - **The frontend reporting which windows are open**: the core would need to know frontends' windows; "in use" is all it needs
 - **Not installing while any frontend runs**: the menu bar app always runs
 
 ## Decision: release notes come from the GitHub API, kept a day
-Manage Updates shows a release's notes as written on its GitHub release, Markdown included. They come from the API's release by tag, with no token for a public app (one request each, well within the unauthenticated limit) and the same sign-in as `update` for a private one, and are kept for a day, the copy kept standing in when GitHub can't be reached. Frontends render the Markdown themselves (headings, bullets, links): presentation, not logic.
+Updates shows a release's notes as written on its GitHub release, Markdown included. They come from the API's release by tag, with no token for a public app (one request each, well within the unauthenticated limit) and the same sign-in as `update` for a private one, and are kept for a day, the copy kept standing in when GitHub can't be reached. Frontends render the Markdown themselves (headings, bullets, links): presentation, not logic.
 
 ### Rejected
 - **The releases page's HTML**: scraping a page whose markup changes
@@ -712,12 +712,13 @@ A hook runs for an event, so it has no run now: `hooks fire <hook>` gives it one
 - **Replaying the watcher's last event**: the app keeps events' IDs, not their data, and the last one may have been handled
 
 ## Decision: one window, its screens destinations in a sidebar
-The app has one window: a sidebar of sections (Routines, Hooks, Acknowledgements; Setup, Settings, Updates), shown and hidden with ☰, and in each section a stack of what was opened from it, with Back. With a window per screen, and one per routine, hook and watcher, I had several windows to find and close, and a link between screens opened yet another. The menus stay as they are: each item, reason and notification click opens its screen in that window, in the section it belongs to, and links inside the window stay in the section I'm in, so Back returns to where I was. The screens themselves didn't change: each is the same view as before, hosted as a destination, so the window is navigation and nothing else. Where it is follows the same rules on both OSes, as a value in each frontend's tested code (`NavigationState` in AutomatorUICore, `nav` in the windows app); the toolkits draw it (SwiftUI's `NavigationSplitView` and `NavigationStack`, Fyne's `Navigation` container). ☰ rather than macOS's sidebar button, so the two look alike. It opens fresh each time, centred with the sidebar shown: nothing about it is remembered.
+The app has one window: a sidebar of sections (Routines, Hooks, Acknowledgements; Setup, Settings, Updates), shown and hidden with ☰, and in each section a stack of what was opened from it, with Back. With a window per screen, and one per routine, hook and watcher, I had several windows to find and close, and a link between screens opened yet another. The menus stay as they are: each item, reason and notification click opens its screen in that window, in the section it belongs to, and links inside the window stay in the section I'm in, so Back returns to where I was. The screens themselves didn't change: each is the same view as before, hosted as a destination, so the window is navigation and nothing else. Where it is follows the same rules on both OSes, as a value in each frontend's tested code (`NavigationState` in AutomatorUICore, `nav` in the windows app), and both draw it the same way: a sidebar, and a bar with ☰ and Back inside the window's content. ☰ rather than macOS's sidebar button, so the two look alike. It opens fresh each time, centred with the sidebar shown: nothing about it is remembered. On Linux it's still a process started when the window opens, now one for the window rather than one per screen: a later start hands it the screen and exits, so the tray and its window seam didn't change.
 
 ### Rejected
 - **A window per screen** (as it was): windows piling up, and links between screens opening more
 - **Tabs**: no room for routines, hooks and watchers opened from a list, nor for Back
 - **A SwiftUI `WindowGroup` scene**: automator-ui is an AppKit menu bar app whose windows are opened from its menu; a scene brings its own opening and restoring rules
+- **SwiftUI's `NavigationSplitView` and `NavigationStack`, Fyne's `Navigation` container**: each toolkit's own sidebar toggle, Back and title, which differ between the two; on macOS they live in the window's toolbar, which a window hosting SwiftUI from AppKit has to bridge, and the window would resize itself to each screen's ideal size
 - **Remembering its size, place and sidebar**: something more to get wrong across screens of different sizes, for little
 
 ## Decision: hooks have a menu item and windows of their own, made of the routine window's parts
