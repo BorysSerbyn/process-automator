@@ -22,7 +22,7 @@ func TestInstallKeepsMineAndRestoresIt(t *testing.T) {
 `
 	_ = os.WriteFile(settings, []byte(mine), 0o600)
 	ours := "'/x/procauto' usage statusline"
-	if err := Install(settings, savedPath, ours); err != nil {
+	if err := Install(format(settings), savedPath, ours); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(settings)
@@ -33,25 +33,25 @@ func TestInstallKeepsMineAndRestoresIt(t *testing.T) {
 	if strings.Index(got, `"model"`) > strings.Index(got, `"statusLine"`) || strings.Index(got, `"statusLine"`) > strings.Index(got, `"hooks"`) {
 		t.Errorf("key order changed:\n%s", got)
 	}
-	if ok, _ := Installed(settings); !ok {
+	if ok, _ := Installed(format(settings)); !ok {
 		t.Error("not installed")
 	}
-	if orig, _ := Original(savedPath); orig != "bash ~/.claude/statusline-codeburn.sh" {
+	if orig, _ := Original(format(settings), savedPath); orig != "bash ~/.claude/statusline-codeburn.sh" {
 		t.Errorf("original %q", orig)
 	}
 	// Installing again (the app moved) keeps the original.
-	_ = Install(settings, savedPath, "'/y/procauto' usage statusline")
-	if orig, _ := Original(savedPath); orig != "bash ~/.claude/statusline-codeburn.sh" {
+	_ = Install(format(settings), savedPath, "'/y/procauto' usage statusline")
+	if orig, _ := Original(format(settings), savedPath); orig != "bash ~/.claude/statusline-codeburn.sh" {
 		t.Errorf("original after reinstall %q", orig)
 	}
-	if err := Uninstall(settings, savedPath); err != nil {
+	if err := Uninstall(format(settings), savedPath); err != nil {
 		t.Fatal(err)
 	}
 	b, _ = os.ReadFile(settings)
 	if !strings.Contains(string(b), `"command": "bash ~/.claude/statusline-codeburn.sh"`) {
 		t.Errorf("not restored:\n%s", b)
 	}
-	if ok, _ := Installed(settings); ok {
+	if ok, _ := Installed(format(settings)); ok {
 		t.Error("still installed")
 	}
 }
@@ -59,15 +59,20 @@ func TestInstallKeepsMineAndRestoresIt(t *testing.T) {
 func TestInstallWithoutAStatusLine(t *testing.T) {
 	dir := t.TempDir()
 	settings, savedPath := filepath.Join(dir, "settings.json"), filepath.Join(dir, "statusline.json")
-	if err := Install(settings, savedPath, "procauto usage statusline"); err != nil {
+	if err := Install(format(settings), savedPath, "procauto usage statusline"); err != nil {
 		t.Fatal(err)
 	}
-	if orig, _ := Original(savedPath); orig != "" {
+	if orig, _ := Original(format(settings), savedPath); orig != "" {
 		t.Errorf("original %q", orig)
 	}
-	_ = Uninstall(settings, savedPath)
+	_ = Uninstall(format(settings), savedPath)
 	b, _ := os.ReadFile(settings)
 	if strings.Contains(string(b), "statusLine") {
 		t.Errorf("a status line was left:\n%s", b)
 	}
+}
+
+// format is Claude Code's status line format (as its protocol gives it) at settings.
+func format(settings string) Format {
+	return Format{SettingsPath: settings, Key: "statusLine", Type: "command", TypeField: "type", CommandField: "command"}
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
-	"github.com/BorysSerbyn/process-automator/core/internal/claudemcp"
+	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
 
@@ -27,18 +27,9 @@ type MCPConnectOutput struct {
 	Already bool `json:"already,omitempty"`
 }
 
-// runClaudeMCP runs the claude command line argv gives for the installed
-// Claude Code's version. Tests replace it: they never run the real claude.
-var runClaudeMCP = func(ctx context.Context, argv func(agent.ClaudeCodeProtocol) []string) error {
-	path, err := agent.FindClaude()
-	if err != nil {
-		return err
-	}
-	protocol, err := agent.ClaudeCodeAt(ctx, path)
-	if err != nil {
-		return err
-	}
-	args := argv(protocol)
+// runClaude runs the claude at path with args. Tests replace it: they never
+// run the real claude.
+var runClaude = func(ctx context.Context, path string, args ...string) error {
 	out, err := exec.CommandContext(ctx, path, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("claude %s: %v: %s", strings.Join(args[:min(2, len(args))], " "), err, strings.TrimSpace(string(out)))
@@ -91,8 +82,16 @@ func newMCPConnectCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			app, err := loadApp(cmd)
+			if err != nil {
+				return err
+			}
+			path, protocol, err := engine.FindClaudeCode(app)
+			if err != nil {
+				return err
+			}
 			out := MCPConnectOutput{Server: product.Command, Command: command}
-			problem, err := claudemcp.Problem(product.Command)
+			problem, err := agent.ClaudeMCPProblem(protocol, product.Command)
 			if err != nil {
 				return err
 			}
@@ -100,18 +99,15 @@ func newMCPConnectCmd() *cobra.Command {
 				out.Already = true
 				return emit(cmd, out, "Claude Code already has "+product.Command+"'s MCP server.")
 			}
-			path, _ := claudemcp.ConfigPath()
-			if _, there, _ := claudemcp.UserServer(path, product.Command); there {
-				remove := func(p agent.ClaudeCodeProtocol) []string { return p.MCPRemoveArgs(product.Command) }
-				if err := runClaudeMCP(cmd.Context(), remove); err != nil {
+			if _, there, _ := protocol.MCPServer(product.Command); there {
+				if err := runClaude(cmd.Context(), path, protocol.MCPRemoveArgs(product.Command)...); err != nil {
 					return err
 				}
 			}
-			add := func(p agent.ClaudeCodeProtocol) []string { return p.MCPAddArgs(product.Command, command) }
-			if err := runClaudeMCP(cmd.Context(), add); err != nil {
+			if err := runClaude(cmd.Context(), path, protocol.MCPAddArgs(product.Command, command)...); err != nil {
 				return err
 			}
-			if problem, err := claudemcp.Problem(product.Command); err != nil {
+			if problem, err := agent.ClaudeMCPProblem(protocol, product.Command); err != nil {
 				return err
 			} else if problem != "" {
 				return errors.New("claude mcp add didn't register it: " + problem)

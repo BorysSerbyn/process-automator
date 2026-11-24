@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/config"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
@@ -117,8 +118,18 @@ func newStatusLineCmd() *cobra.Command {
 			if err != nil {
 				return nil // a status line mustn't fail over this
 			}
-			_ = usage.RecordStatusLine(a.Layout.PlanUsage(), in, time.Now())
-			if mine, _ := statusline.Original(a.Layout.StatusLine()); mine != "" {
+			protocol, err := agent.ClaudeCodeForStatusLine(in)
+			if err != nil {
+				return nil
+			}
+			if session, weekly, err := protocol.StatusLineUsage(in); err == nil {
+				_ = usage.RecordStatusLine(a.Layout.PlanUsage(), session, weekly, time.Now())
+			}
+			format, err := protocol.StatusLine()
+			if err != nil {
+				return nil
+			}
+			if mine, _ := statusline.Original(format, a.Layout.StatusLine()); mine != "" {
 				_ = runShell(mine, bytes.NewReader(in), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			}
 			return nil
@@ -133,7 +144,7 @@ func newStatusLineCmd() *cobra.Command {
 			Use: use, Short: short, Args: cobra.NoArgs,
 			Annotations: map[string]string{annNotReadOnly: "it changes Claude Code's settings"},
 			RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
-				settingsPath, err := statusline.SettingsPath()
+				format, err := engine.ClaudeStatusLine(a)
 				if err != nil {
 					return err
 				}
@@ -142,16 +153,16 @@ func newStatusLineCmd() *cobra.Command {
 					if cerr != nil {
 						return cerr
 					}
-					err = statusline.Install(settingsPath, a.Layout.StatusLine(), command)
+					err = statusline.Install(format, a.Layout.StatusLine(), command)
 				} else {
-					err = statusline.Uninstall(settingsPath, a.Layout.StatusLine())
+					err = statusline.Uninstall(format, a.Layout.StatusLine())
 				}
 				if err != nil {
 					return err
 				}
 				out := StatusLineOutput{}
-				out.Installed, _ = statusline.Installed(settingsPath)
-				out.Wraps, _ = statusline.Original(a.Layout.StatusLine())
+				out.Installed, _ = statusline.Installed(format)
+				out.Wraps, _ = statusline.Original(format, a.Layout.StatusLine())
 				if wantsJSON(cmd) {
 					return writeJSON(cmd.OutOrStdout(), out)
 				}

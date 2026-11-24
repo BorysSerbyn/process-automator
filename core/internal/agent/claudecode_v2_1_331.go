@@ -2,9 +2,15 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
 
@@ -122,4 +128,105 @@ func (claudeCode2_1_331) MCPAddArgs(name string, command []string) []string {
 
 func (claudeCode2_1_331) MCPRemoveArgs(name string) []string {
 	return []string{"mcp", "remove", "--scope", "user", name}
+}
+
+// claudeBuiltins2_1_331: any of Claude Code's tool names goes; these are the
+// common ones, and the read-only ones are all a dry run gets.
+var claudeBuiltins2_1_331 = BuiltinSet{Open: true, Tools: []BuiltinTool{
+	{Name: "Read", Allows: "reading files", ReadOnly: true},
+	{Name: "Glob", Allows: "finding files by name pattern", ReadOnly: true},
+	{Name: "Grep", Allows: "searching file contents", ReadOnly: true},
+	{Name: "WebSearch", Allows: "searching the web", ReadOnly: true},
+	{Name: "WebFetch", Allows: "fetching a web page", ReadOnly: true},
+	{Name: "Bash", Allows: "running shell commands"},
+	{Name: "Edit", Allows: "changing files"},
+	{Name: "Write", Allows: "creating and overwriting files"},
+}}
+
+func (claudeCode2_1_331) ProjectInstructions() string { return "CLAUDE.md" }
+
+func (claudeCode2_1_331) Builtins() *BuiltinSet { return &claudeBuiltins2_1_331 }
+
+// MCPServer reads .claude.json, in $CLAUDE_CONFIG_DIR or my home folder:
+// its top-level mcpServers are the user-scope ones (what `claude mcp add
+// --scope user` registers).
+func (claudeCode2_1_331) MCPServer(name string) (ClaudeMCPServer, bool, error) {
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ClaudeMCPServer{}, false, err
+		}
+		dir = home
+	}
+	b, err := os.ReadFile(filepath.Join(dir, ".claude.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return ClaudeMCPServer{}, false, nil
+	}
+	if err != nil {
+		return ClaudeMCPServer{}, false, err
+	}
+	var cfg struct {
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return ClaudeMCPServer{}, false, fmt.Errorf("reading Claude Code's config: %w", err)
+	}
+	s, ok := cfg.MCPServers[name]
+	return ClaudeMCPServer{Command: s.Command, Args: s.Args}, ok, nil
+}
+
+func (claudeCode2_1_331) PlanLimit(msg string, now time.Time) *PlanLimitError {
+	return planLimitError(msg, now)
+}
+
+func (claudeCode2_1_331) SignInNeeded(msg string) bool {
+	msg = strings.ToLower(msg)
+	return strings.Contains(msg, "log in") || strings.Contains(msg, "login")
+}
+
+// StatusLine: settings.json in $CLAUDE_CONFIG_DIR or ~/.claude, its
+// statusLine entry ({"type": "command", "command": …}).
+func (claudeCode2_1_331) StatusLine() (statusline.Format, error) {
+	path := ""
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		path = filepath.Join(dir, "settings.json")
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return statusline.Format{}, err
+		}
+		path = filepath.Join(home, ".claude", "settings.json")
+	}
+	return statusline.Format{SettingsPath: path, Key: "statusLine", Type: "command", TypeField: "type", CommandField: "command"}, nil
+}
+
+// StatusLineUsage: rate_limits' five_hour and seven_day, each with
+// used_percentage and resets_at (Unix seconds).
+func (claudeCode2_1_331) StatusLineUsage(input []byte) (session, weekly *usage.PlanWindow, err error) {
+	var in struct {
+		RateLimits struct {
+			FiveHour *statusWindow `json:"five_hour"`
+			SevenDay *statusWindow `json:"seven_day"`
+		} `json:"rate_limits"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return nil, nil, fmt.Errorf("status line input: %w", err)
+	}
+	return in.RateLimits.FiveHour.window(), in.RateLimits.SevenDay.window(), nil
+}
+
+type statusWindow struct {
+	UsedPercentage *float64 `json:"used_percentage"`
+	ResetsAt       *int64   `json:"resets_at"`
+}
+
+func (s *statusWindow) window() *usage.PlanWindow {
+	if s == nil || s.UsedPercentage == nil || s.ResetsAt == nil {
+		return nil
+	}
+	return &usage.PlanWindow{UsedPercent: *s.UsedPercentage, ResetsAt: time.Unix(*s.ResetsAt, 0)}
 }

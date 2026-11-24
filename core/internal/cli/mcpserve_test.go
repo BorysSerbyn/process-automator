@@ -45,9 +45,9 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	// Nor run the real claude (mcp connect).
-	runClaudeMCP = fakeClaudeMCP
-	agent.RunClaudeVersion = func(context.Context, string) ([]byte, error) {
-		return []byte(agent.NewestClaudeCode().Since().String() + " (Claude Code)"), nil
+	runClaude = fakeClaude
+	engine.FindClaudeCode = func(*engine.App) (string, agent.ClaudeCodeProtocol, error) {
+		return "claude", agent.NewestClaudeCode(), nil
 	}
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }

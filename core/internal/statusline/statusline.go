@@ -3,8 +3,9 @@
 // recorded when the app can't read it from /usage. It wraps whatever status
 // line I have: Claude Code runs the app's command, which records the usage
 // and runs mine with the same input, so my status line looks the same.
-// Only the statusLine entry of Claude Code's settings is changed; the rest
-// of the file keeps its keys and their order.
+// Only the status line entry of Claude Code's settings is changed; the rest
+// of the file keeps its keys and their order. Where that entry is and its
+// shape are the Claude Code version's (Format, from its protocol).
 package statusline
 
 import (
@@ -14,7 +15,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
@@ -23,41 +23,44 @@ import (
 // Marker ends the app's status line command ("<procauto> usage statusline").
 const Marker = "usage statusline"
 
-// SettingsPath is Claude Code's user settings file ($CLAUDE_CONFIG_DIR or ~/.claude).
-func SettingsPath() (string, error) {
-	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		return filepath.Join(dir, "settings.json"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".claude", "settings.json"), nil
+// Format is how a Claude Code version keeps its status line: its settings
+// file, the entry's key in it, and the entry's type and command fields.
+type Format struct {
+	SettingsPath string
+	Key          string
+	Type         string // the entry's type for a command
+	TypeField    string
+	CommandField string
+}
+
+// command is the entry's command.
+func (f Format) command(entry json.RawMessage) string {
+	var v map[string]any
+	_ = json.Unmarshal(entry, &v)
+	c, _ := v[f.CommandField].(string)
+	return c
 }
 
 // saved is my status line as it was before the app wrapped it.
 type saved struct {
-	// StatusLine is the statusLine entry, absent when there was none.
+	// StatusLine is the status line entry, absent when there was none.
 	StatusLine json.RawMessage `json:"statusLine,omitempty"`
 }
 
 // Installed reports whether Claude Code's status line runs the app's command.
-func Installed(settingsPath string) (bool, error) {
-	sl, err := statusLineOf(settingsPath)
+func Installed(f Format) (bool, error) {
+	sl, err := statusLineOf(f)
 	if err != nil || sl == nil {
 		return false, err
 	}
-	var v struct {
-		Command string `json:"command"`
-	}
-	_ = json.Unmarshal(sl, &v)
-	return strings.HasSuffix(strings.TrimSpace(v.Command), Marker), nil
+	return strings.HasSuffix(strings.TrimSpace(f.command(sl)), Marker), nil
 }
 
 // Install makes Claude Code's status line run command (the app's), saving the
 // one I had in savedPath to run and to restore. Already installed, it only
 // updates the command (e.g. the app moved), keeping what was saved.
-func Install(settingsPath, savedPath, command string) error {
+func Install(f Format, savedPath, command string) error {
+	settingsPath := f.SettingsPath
 	return atomicfile.Locked(settingsPath, func() error {
 		b, err := readSettings(settingsPath)
 		if err != nil {
@@ -67,30 +70,30 @@ func Install(settingsPath, savedPath, command string) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", settingsPath, err)
 		}
-		current := obj.get("statusLine")
-		entry := map[string]any{"type": "command"}
+		current := obj.get(f.Key)
+		entry := map[string]any{f.TypeField: f.Type}
 		if current != nil {
 			_ = json.Unmarshal(current, &entry)
 		}
-		was, _ := entry["command"].(string)
-		if !strings.HasSuffix(strings.TrimSpace(was), Marker) {
+		if !strings.HasSuffix(strings.TrimSpace(f.command(current)), Marker) {
 			if err := atomicfile.WriteJSON(savedPath, saved{StatusLine: current}); err != nil {
 				return err
 			}
 		}
-		entry["type"], entry["command"] = "command", command
+		entry[f.TypeField], entry[f.CommandField] = f.Type, command
 		raw, err := json.Marshal(entry)
 		if err != nil {
 			return err
 		}
-		obj.set("statusLine", raw)
+		obj.set(f.Key, raw)
 		return atomicfile.Write(settingsPath, obj.encode())
 	})
 }
 
 // Uninstall puts back the status line I had (none, if I had none).
-func Uninstall(settingsPath, savedPath string) error {
-	if ok, err := Installed(settingsPath); err != nil || !ok {
+func Uninstall(f Format, savedPath string) error {
+	settingsPath := f.SettingsPath
+	if ok, err := Installed(f); err != nil || !ok {
 		return err
 	}
 	s, err := loadSaved(savedPath)
@@ -106,7 +109,7 @@ func Uninstall(settingsPath, savedPath string) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", settingsPath, err)
 		}
-		obj.set("statusLine", s.StatusLine) // nil removes it
+		obj.set(f.Key, s.StatusLine) // nil removes it
 		return atomicfile.Write(settingsPath, obj.encode())
 	})
 	if err != nil {
@@ -116,18 +119,12 @@ func Uninstall(settingsPath, savedPath string) error {
 }
 
 // Original is the status line command the app wraps ("" when I had none).
-func Original(savedPath string) (string, error) {
+func Original(f Format, savedPath string) (string, error) {
 	s, err := loadSaved(savedPath)
 	if err != nil || s.StatusLine == nil {
 		return "", err
 	}
-	var v struct {
-		Command string `json:"command"`
-	}
-	if err := json.Unmarshal(s.StatusLine, &v); err != nil {
-		return "", err
-	}
-	return v.Command, nil
+	return f.command(s.StatusLine), nil
 }
 
 func loadSaved(path string) (saved, error) {
@@ -142,16 +139,16 @@ func loadSaved(path string) (saved, error) {
 	return s, json.Unmarshal(b, &s)
 }
 
-func statusLineOf(settingsPath string) (json.RawMessage, error) {
-	b, err := readSettings(settingsPath)
+func statusLineOf(f Format) (json.RawMessage, error) {
+	b, err := readSettings(f.SettingsPath)
 	if err != nil {
 		return nil, err
 	}
 	obj, err := parseObject(b)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", settingsPath, err)
+		return nil, fmt.Errorf("%s: %w", f.SettingsPath, err)
 	}
-	return obj.get("statusLine"), nil
+	return obj.get(f.Key), nil
 }
 
 // readSettings reads the settings file; none is an empty object.

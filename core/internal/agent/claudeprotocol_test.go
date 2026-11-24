@@ -67,10 +67,10 @@ func (f fakeProtocol) Since() ClaudeCodeVersion { return mustVersion(f.since) }
 
 // `claude --version` runs once per binary, again when the binary changes.
 func TestInstalledClaudeCodeCached(t *testing.T) {
-	saved := RunClaudeVersion
-	t.Cleanup(func() { RunClaudeVersion = saved })
+	saved := runClaudeVersion
+	t.Cleanup(func() { runClaudeVersion = saved })
 	calls, version := 0, "2.1.331"
-	RunClaudeVersion = func(context.Context, string) ([]byte, error) {
+	runClaudeVersion = func(context.Context, string) ([]byte, error) {
 		calls++
 		return []byte(version + " (Claude Code)"), nil
 	}
@@ -92,5 +92,62 @@ func TestInstalledClaudeCodeCached(t *testing.T) {
 	}
 	if v, _ := InstalledClaudeCode(context.Background(), path); v.String() != "2.2.0" || calls != 2 {
 		t.Fatalf("after an update: %v (%d runs)", v, calls)
+	}
+}
+
+// The user-scope MCP servers are read from Claude Code's config file.
+func TestClaudeCodeMCPServer(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	p, path := NewestClaudeCode(), filepath.Join(dir, ".claude.json")
+	if _, ok, err := p.MCPServer("app"); ok || err != nil {
+		t.Errorf("no config file: %v %v", ok, err)
+	}
+	if problem, _ := ClaudeMCPProblem(p, "app"); problem == "" {
+		t.Error("no server, no problem")
+	}
+	_ = os.WriteFile(path, []byte(`{"projects":{"/x":{"mcpServers":{"app":{"command":"/p"}}}},`+
+		`"mcpServers":{"app":{"type":"stdio","command":"/bin/sh","args":["mcp","serve"],"env":{}}}}`), 0o600)
+	s, ok, err := p.MCPServer("app")
+	if err != nil || !ok || s.Command != "/bin/sh" || len(s.Args) != 2 {
+		t.Errorf("registered: %+v %v %v", s, ok, err)
+	}
+	if problem, err := ClaudeMCPProblem(p, "app"); problem != "" || err != nil {
+		t.Errorf("registered, yet: %q %v", problem, err)
+	}
+	if _, ok, _ := p.MCPServer("other"); ok {
+		t.Error("found a server that isn't there")
+	}
+	_ = os.WriteFile(path, []byte(`{"mcpServers":{"app":{"command":"/gone/app"}}}`), 0o600)
+	if problem, _ := ClaudeMCPProblem(p, "app"); problem == "" {
+		t.Error("a server whose command is gone, no problem")
+	}
+	_ = os.WriteFile(path, []byte(`{`), 0o600)
+	if _, _, err := p.MCPServer("app"); err == nil {
+		t.Error("a broken config file read as fine")
+	}
+}
+
+// The status line picks the implementation by the version in its input, and
+// reads the plan's windows from it.
+func TestClaudeCodeStatusLine(t *testing.T) {
+	in := []byte(`{"version":"` + NewestClaudeCode().Since().String() + `","rate_limits":{"five_hour":{"used_percentage":42,"resets_at":1700000000},"seven_day":{"used_percentage":7}}}`)
+	p, err := ClaudeCodeForStatusLine(in)
+	if err != nil || p != NewestClaudeCode() {
+		t.Fatalf("%v, %v", p, err)
+	}
+	session, weekly, err := p.StatusLineUsage(in)
+	if err != nil || session == nil || session.UsedPercent != 42 || session.ResetsAt.Unix() != 1700000000 || weekly != nil {
+		t.Fatalf("session %+v weekly %+v: %v", session, weekly, err)
+	}
+	if _, err := ClaudeCodeForStatusLine([]byte(`{"version":"0.1.0"}`)); err == nil {
+		t.Fatal("a Claude Code older than every implementation got one")
+	}
+	if p, _ := ClaudeCodeForStatusLine([]byte(`{}`)); p != NewestClaudeCode() {
+		t.Fatal("no version: not the newest")
+	}
+	f, err := p.StatusLine()
+	if err != nil || f.Key != "statusLine" || f.CommandField != "command" {
+		t.Fatalf("format %+v %v", f, err)
 	}
 }

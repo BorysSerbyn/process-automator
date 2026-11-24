@@ -131,45 +131,22 @@ func Refresh(path string, maxAge time.Duration, now time.Time, fetch func() ([]L
 	return plan, err
 }
 
-// RecordStatusLine records the plan usage in Claude Code's status line input
-// (rate_limits: five_hour and seven_day, used_percentage and resets_at).
-// Input without them changes nothing.
-func RecordStatusLine(path string, input []byte, now time.Time) error {
-	var in struct {
-		RateLimits struct {
-			FiveHour *statusWindow `json:"five_hour"`
-			SevenDay *statusWindow `json:"seven_day"`
-		} `json:"rate_limits"`
-	}
-	if err := json.Unmarshal(input, &in); err != nil {
-		return fmt.Errorf("status line input: %w", err)
-	}
-	five, seven := in.RateLimits.FiveHour.window(), in.RateLimits.SevenDay.window()
-	if five == nil && seven == nil {
+// RecordStatusLine records the plan's windows as Claude Code's status line
+// gave them (session: the 5-hour one); nil ones are left as they were.
+func RecordStatusLine(path string, session, weekly *PlanWindow, now time.Time) error {
+	if session == nil && weekly == nil {
 		return nil
 	}
 	return atomicfile.UpdateJSON(path, LoadPlan, func(p *Plan) error {
-		if five != nil {
-			p.Session = five
+		if session != nil {
+			p.Session = session
 		}
-		if seven != nil {
-			p.Weekly = seven
+		if weekly != nil {
+			p.Weekly = weekly
 		}
 		p.RecordedAt = &now
 		return nil
 	})
-}
-
-type statusWindow struct {
-	UsedPercentage *float64 `json:"used_percentage"`
-	ResetsAt       *int64   `json:"resets_at"` // Unix seconds
-}
-
-func (s *statusWindow) window() *PlanWindow {
-	if s == nil || s.UsedPercentage == nil || s.ResetsAt == nil {
-		return nil
-	}
-	return &PlanWindow{UsedPercent: *s.UsedPercentage, ResetsAt: time.Unix(*s.ResetsAt, 0)}
 }
 
 // RecordLimitHit records that a run hit the plan's session or weekly limit:

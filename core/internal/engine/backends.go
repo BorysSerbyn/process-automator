@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
+	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 	"github.com/BorysSerbyn/process-automator/core/internal/sysenv"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
@@ -110,7 +112,7 @@ var Backends = map[string]BackendDef{
 		AgentModel:        func(_ *App, model string) (string, error) { return agent.ClaudeModel(model) },
 		ModelProviders:    []string{agent.AnthropicProvider},
 		DefaultModel:      "Claude Code's default",
-		Builtins:          &agent.ClaudeBuiltins,
+		Builtins:          agent.NewestClaudeCode().Builtins(),
 		CheckBuiltinTools: agent.CheckClaudeBuiltins,
 		PlanUsage: func(ctx context.Context, a *App) ([]usage.Limit, error) {
 			cc, err := claudeCode(a)
@@ -120,13 +122,8 @@ var Backends = map[string]BackendDef{
 			return cc.PlanUsage(ctx)
 		},
 		Ready: func(a *App) (string, string) {
-			path, err := find(a, agent.FindClaude)
-			if err != nil {
-				return "Claude Code isn't installed (no claude command found): install it from " +
-					"https://claude.com/claude-code and sign in to it", ""
-			}
-			if _, err := agent.ClaudeCodeAt(context.Background(), path); err != nil {
-				return err.Error(), ""
+			if _, _, err := FindClaudeCode(a); err != nil {
+				return claudeCodeProblem(err), ""
 			}
 			return "", ""
 		},
@@ -172,20 +169,52 @@ var Backends = map[string]BackendDef{
 	},
 }
 
+// FindClaudeCode is the installed Claude Code: its binary, and the protocol
+// for its version. Tests replace it: they never run the real claude.
+var FindClaudeCode = func(a *App) (string, agent.ClaudeCodeProtocol, error) {
+	path, err := find(a, agent.FindClaude)
+	if err != nil {
+		return "", nil, err
+	}
+	protocol, err := agent.ClaudeCodeAt(context.Background(), path)
+	if err != nil {
+		return "", nil, err
+	}
+	return path, protocol, nil
+}
+
+// ClaudeStatusLine is where the installed Claude Code keeps its status line.
+func ClaudeStatusLine(a *App) (statusline.Format, error) {
+	_, protocol, err := FindClaudeCode(a)
+	if err != nil {
+		return statusline.Format{}, err
+	}
+	return protocol.StatusLine()
+}
+
+// claudeCodeProblem says what's wrong with Claude Code, from FindClaudeCode's error.
+func claudeCodeProblem(err error) string {
+	var old *agent.ClaudeCodeTooOld
+	if errors.As(err, &old) {
+		return err.Error()
+	}
+	if errors.Is(err, agent.ErrNoClaude) {
+		return "Claude Code isn't installed (no claude command found): install it from " +
+			"https://claude.com/claude-code and sign in to it"
+	}
+	return "Claude Code can't be used: " + err.Error()
+}
+
 // claudeCode is the claude CLI, with the `claude setup-token` token when
 // one is stored (optional: without it, Claude Code's own login).
 func claudeCode(a *App) (*agent.ClaudeCode, error) {
-	path, err := agent.FindClaude()
+	path, protocol, err := FindClaudeCode(a)
 	if err != nil {
 		return nil, err
 	}
 	token, _, err := secrets.Lookup(a.Connector.Secrets, ClaudeCodeTokenKey)
 	if err != nil {
 		return nil, fmt.Errorf("can't read the Claude Code token: %w", err)
-	}
-	protocol, err := agent.ClaudeCodeAt(context.Background(), path)
-	if err != nil {
-		return nil, err
 	}
 	return &agent.ClaudeCode{Path: path, OAuthToken: token, Protocol: protocol}, nil
 }

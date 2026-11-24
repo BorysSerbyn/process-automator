@@ -21,7 +21,8 @@ func (e *PlanLimitError) Error() string { return "claude: " + e.Message }
 
 var planLimit = regexp.MustCompile(`(?i)you've hit your (session|weekly) limit(?:\s*·\s*resets\s+(.+))?`)
 
-// planLimitError reads a plan-limit message, or returns nil for any other.
+// planLimitError reads a plan-limit message, or returns nil for any other
+// (Claude Code 2.1.331's wording: claudeCode2_1_331.PlanLimit).
 func planLimitError(msg string, now time.Time) *PlanLimitError {
 	m := planLimit.FindStringSubmatch(msg)
 	if m == nil {

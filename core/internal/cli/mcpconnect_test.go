@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
-	"github.com/BorysSerbyn/process-automator/core/internal/claudemcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine/enginetest"
 )
@@ -19,16 +18,12 @@ import (
 // fakeClaudeMCP stands in for `claude mcp add|remove --scope user`: it edits
 // .claude.json in $CLAUDE_CONFIG_DIR (a temporary folder in tests) the way
 // Claude Code does, keeping what else is there.
-func fakeClaudeMCP(_ context.Context, argv func(agent.ClaudeCodeProtocol) []string) error {
-	args := argv(agent.NewestClaudeCode())
+func fakeClaude(_ context.Context, _ string, args ...string) error {
 	if len(args) == 0 || args[0] != "mcp" {
 		return errors.New("not a claude mcp call")
 	}
 	args = args[1:]
-	path, err := claudemcp.ConfigPath()
-	if err != nil {
-		return err
-	}
+	path := claudeConfig()
 	cfg := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil {
 		if err := json.Unmarshal(b, &cfg); err != nil {
@@ -55,14 +50,15 @@ func fakeClaudeMCP(_ context.Context, argv func(agent.ClaudeCodeProtocol) []stri
 	return os.WriteFile(path, b, 0o600)
 }
 
+// claudeConfig is Claude Code's config file in the test's CLAUDE_CONFIG_DIR.
+func claudeConfig() string { return filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), ".claude.json") }
+
 // connectClaude gives a test its own Claude Code config, with the app's MCP
 // server registered.
 func connectClaude(t *testing.T) {
 	t.Helper()
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	if err := fakeClaudeMCP(context.Background(), func(p agent.ClaudeCodeProtocol) []string {
-		return p.MCPAddArgs("procauto", []string{os.Args[0], "mcp", "serve"})
-	}); err != nil {
+	if err := fakeClaude(context.Background(), "claude", agent.NewestClaudeCode().MCPAddArgs("procauto", []string{os.Args[0], "mcp", "serve"})...); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -101,8 +97,11 @@ func TestMCPConnect(t *testing.T) {
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, ".claude.json"))
 	var got struct {
-		MCPServers map[string]claudemcp.Server `json:"mcpServers"`
-		Theme      string                      `json:"theme"`
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+		Theme string `json:"theme"`
 	}
 	_ = json.Unmarshal(b, &got)
 	srv := got.MCPServers["procauto"]

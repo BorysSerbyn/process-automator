@@ -2,15 +2,18 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
 
@@ -43,6 +46,69 @@ type ClaudeCodeProtocol interface {
 	MCPAddArgs(name string, command []string) []string
 	// MCPRemoveArgs removes the user-scope MCP server name.
 	MCPRemoveArgs(name string) []string
+	// MCPServer is the user-scope MCP server registered as name, read from
+	// Claude Code's own config (no claude process, so it's quick enough for
+	// every scheduler pass); ok is false when there's none.
+	MCPServer(name string) (s ClaudeMCPServer, ok bool, err error)
+	// ProjectInstructions is the file in a folder Claude Code takes project
+	// instructions from (the core adds it to the system prompt itself).
+	ProjectInstructions() string
+	// Builtins are Claude Code's built-in tools as routines name them.
+	Builtins() *BuiltinSet
+	// PlanLimit reads a run's message as the plan's usage limit being hit,
+	// nil for any other message.
+	PlanLimit(msg string, now time.Time) *PlanLimitError
+	// SignInNeeded says a run's error message is Claude Code not signed in.
+	SignInNeeded(msg string) bool
+	// StatusLine is where Claude Code's settings keep its status line.
+	StatusLine() (statusline.Format, error)
+	// StatusLineUsage reads the plan's 5-hour (session) and weekly windows
+	// from the status line's input; nil for one it doesn't carry.
+	StatusLineUsage(input []byte) (session, weekly *usage.PlanWindow, err error)
+}
+
+// ClaudeCodeForStatusLine is the implementation for the Claude Code that ran
+// the status line, from the version its input carries (no claude process:
+// the status line runs often); the newest when it carries none.
+func ClaudeCodeForStatusLine(input []byte) (ClaudeCodeProtocol, error) {
+	var in struct {
+		Version string `json:"version"`
+	}
+	if json.Unmarshal(input, &in) != nil || in.Version == "" {
+		return NewestClaudeCode(), nil
+	}
+	v, err := ParseClaudeCodeVersion(in.Version)
+	if err != nil {
+		return NewestClaudeCode(), nil
+	}
+	return ClaudeCodeFor(v)
+}
+
+// ClaudeMCPServer is a stdio MCP server as Claude Code runs it.
+type ClaudeMCPServer struct {
+	Command string
+	Args    []string
+}
+
+// ClaudeMCPProblem says why Claude Code (through p) doesn't have the app's
+// MCP server, registered as name, "" when it has: none is registered, or one
+// whose command is gone.
+func ClaudeMCPProblem(p ClaudeCodeProtocol, name string) (string, error) {
+	s, ok, err := p.MCPServer(name)
+	switch {
+	case err != nil:
+		return "", err
+	case !ok:
+		return "Claude Code doesn't have " + name + "'s MCP server, so /mcp doesn't list it", nil
+	case s.Command != "" && filepath.IsAbs(s.Command) && !isFile(s.Command):
+		return "Claude Code's " + name + " MCP server runs " + s.Command + ", which isn't there anymore", nil
+	}
+	return "", nil
+}
+
+func isFile(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && !info.IsDir()
 }
 
 // ClaudeRun is a headless run as the backend has worked it out; a protocol
@@ -166,9 +232,9 @@ type cachedVersion struct {
 	v     ClaudeCodeVersion
 }
 
-// RunClaudeVersion runs `<path> --version`. Tests replace it: they never run
+// runClaudeVersion runs `<path> --version`. Tests replace it: they never run
 // the real claude.
-var RunClaudeVersion = func(ctx context.Context, path string) ([]byte, error) {
+var runClaudeVersion = func(ctx context.Context, path string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	return exec.CommandContext(ctx, path, "--version").Output()
@@ -187,7 +253,7 @@ func InstalledClaudeCode(ctx context.Context, path string) (ClaudeCodeVersion, e
 	if ok && c.stamp == stamp {
 		return c.v, nil
 	}
-	out, err := RunClaudeVersion(ctx, path)
+	out, err := runClaudeVersion(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("claude --version: %w", err)
 	}

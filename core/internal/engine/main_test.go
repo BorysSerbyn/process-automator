@@ -28,9 +28,9 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	checkAll = checkHere
-	// Nor runs the real claude: any claude found is the newest supported.
-	agent.RunClaudeVersion = func(context.Context, string) ([]byte, error) {
-		return []byte(agent.NewestClaudeCode().Since().String() + " (Claude Code)"), nil
+	// Nor runs the real claude: Claude Code is there, at the newest version supported.
+	FindClaudeCode = func(*App) (string, agent.ClaudeCodeProtocol, error) {
+		return "claude", agent.NewestClaudeCode(), nil
 	}
 	// A daemon started by a test never runs the login shell or reads the
 	// plan's usage (Claude Code's sign-in).

@@ -41,8 +41,8 @@ func newUninstallCmd() *cobra.Command {
 					return errors.New("nothing removed")
 				}
 			}
-			if settingsPath, err := statusline.SettingsPath(); err == nil {
-				if err := statusline.Uninstall(settingsPath, a.Layout.StatusLine()); err != nil {
+			if format, err := engine.ClaudeStatusLine(a); err == nil {
+				if err := statusline.Uninstall(format, a.Layout.StatusLine()); err != nil {
 					fmt.Fprintln(cmd.ErrOrStderr(), "warning: putting back your Claude Code status line:", err)
 				}
 			}

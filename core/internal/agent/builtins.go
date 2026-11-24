@@ -41,20 +41,6 @@ func (s BuiltinSet) readOnly(name string) bool {
 	return false
 }
 
-// ClaudeBuiltins are Claude Code's built-in tools: any of its tool names
-// goes; these are the common ones, and the read-only ones are all a dry run
-// gets.
-var ClaudeBuiltins = BuiltinSet{Open: true, Tools: []BuiltinTool{
-	{Name: "Read", Allows: "reading files", ReadOnly: true},
-	{Name: "Glob", Allows: "finding files by name pattern", ReadOnly: true},
-	{Name: "Grep", Allows: "searching file contents", ReadOnly: true},
-	{Name: "WebSearch", Allows: "searching the web", ReadOnly: true},
-	{Name: "WebFetch", Allows: "fetching a web page", ReadOnly: true},
-	{Name: "Bash", Allows: "running shell commands"},
-	{Name: "Edit", Allows: "changing files"},
-	{Name: "Write", Allows: "creating and overwriting files"},
-}}
-
 // Codex's built-in tool names in builtinTools. Each is named by what it
 // allows, since Codex's own switches (a sandbox mode, feature flags) aren't
 // tools.

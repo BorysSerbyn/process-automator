@@ -58,12 +58,15 @@ func (b *ClaudeCode) protocol() ClaudeCodeProtocol {
 // Name implements CLITool.
 func (*ClaudeCode) Name() string { return "claude-code" }
 
+// ErrNoClaude is FindClaude's error when there's no claude.
+var ErrNoClaude = errors.New("claude-code backend: the `claude` CLI isn't on PATH (https://claude.com/claude-code)")
+
 // FindClaude locates the claude binary on PATH (which includes the user's
 // login-shell PATH, whoever started the command: see sysenv).
 func FindClaude() (string, error) {
 	p, err := exec.LookPath("claude")
 	if err != nil {
-		return "", errors.New("claude-code backend: the `claude` CLI isn't on PATH (https://claude.com/claude-code)")
+		return "", ErrNoClaude
 	}
 	return p, nil
 }
@@ -78,11 +81,11 @@ func (b *ClaudeCode) Command(ctx context.Context, r CLIRun) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
-	builtins, err := claudeBuiltins(r.BuiltinTools, r.DryRun)
+	builtins, err := claudeBuiltins(b.protocol().Builtins(), r.BuiltinTools, r.DryRun)
 	if err != nil {
 		return nil, err
 	}
-	system, err := withProjectInstructions(r.System, r.Folder, "CLAUDE.md")
+	system, err := withProjectInstructions(r.System, r.Folder, b.protocol().ProjectInstructions())
 	if err != nil {
 		return nil, err
 	}
@@ -111,13 +114,13 @@ var builtinNameRE = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 // claudeBuiltins validates the routine's built-in tool names and, in a dry
 // run, keeps only the read-only ones: built-ins run inside Claude Code, where
 // the gateway can't intercept them.
-func claudeBuiltins(names []string, dryRun bool) ([]string, error) {
+func claudeBuiltins(set *BuiltinSet, names []string, dryRun bool) ([]string, error) {
 	var out []string
 	for _, n := range names {
 		if !builtinNameRE.MatchString(n) {
 			return nil, fmt.Errorf("builtinTools: %q isn't a Claude Code tool name (e.g. Read, Grep, Bash)", n)
 		}
-		if dryRun && !ClaudeBuiltins.readOnly(n) {
+		if dryRun && !set.readOnly(n) {
 			continue
 		}
 		out = append(out, n)
@@ -125,9 +128,10 @@ func claudeBuiltins(names []string, dryRun bool) ([]string, error) {
 	return out, nil
 }
 
-// CheckClaudeBuiltins says whether builtinTools are names the claude-code backend takes.
+// CheckClaudeBuiltins says whether builtinTools are names the claude-code
+// backend takes (Claude Code's tool names: the form is all any version checks).
 func CheckClaudeBuiltins(names []string) error {
-	_, err := claudeBuiltins(names, false)
+	_, err := claudeBuiltins(NewestClaudeCode().Builtins(), names, false)
 	return err
 }
 
@@ -153,7 +157,7 @@ func (b *ClaudeCode) Result(_ CLIRun, stdout, stderr []byte, runErr error) (*Out
 	res, err := b.protocol().Result(stdout)
 	if err != nil {
 		msg := strings.TrimSpace(string(stderr) + "\n" + string(stdout))
-		if limit := planLimitError(msg, time.Now()); limit != nil {
+		if limit := b.protocol().PlanLimit(msg, time.Now()); limit != nil {
 			return nil, limit
 		}
 		if runErr != nil {
@@ -170,10 +174,10 @@ func (b *ClaudeCode) Result(_ CLIRun, stdout, stderr []byte, runErr error) (*Out
 		if msg == "" {
 			msg = res.Subtype
 		}
-		if limit := planLimitError(msg, time.Now()); limit != nil {
+		if limit := b.protocol().PlanLimit(msg, time.Now()); limit != nil {
 			return out, limit
 		}
-		if strings.Contains(strings.ToLower(msg), "log in") || strings.Contains(strings.ToLower(msg), "login") {
+		if b.protocol().SignInNeeded(msg) {
 			msg += " (sign in by running `claude` once, or store a `claude setup-token` token with `" + product.Command + " auth login claude-code`)"
 		}
 		return out, fmt.Errorf("claude: %s", msg)

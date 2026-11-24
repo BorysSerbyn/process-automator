@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
-	"github.com/BorysSerbyn/process-automator/core/internal/claudemcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/schedule"
@@ -240,11 +239,11 @@ func (a *App) usageStep() (SetupStep, bool, error) {
 	if err != nil || !plan.CantRead() {
 		return SetupStep{}, false, err
 	}
-	settingsPath, err := statusline.SettingsPath()
+	format, err := ClaudeStatusLine(a)
 	if err != nil {
-		return SetupStep{}, false, err
+		return SetupStep{}, false, nil // Claude Code's own problem is the backend's
 	}
-	installed, err := statusline.Installed(settingsPath)
+	installed, err := statusline.Installed(format)
 	if err != nil {
 		return SetupStep{}, false, err
 	}
@@ -268,8 +267,10 @@ func (a *App) MCPStep() (SetupStep, bool, error) {
 	if err != nil || def.Name != "claude-code" {
 		return SetupStep{}, false, err
 	}
-	problem, err := claudemcp.Problem(product.Command)
-	if err != nil {
+	problem := ""
+	if _, protocol, err := FindClaudeCode(a); err != nil {
+		problem = claudeCodeProblem(err)
+	} else if problem, err = agent.ClaudeMCPProblem(protocol, product.Command); err != nil {
 		return SetupStep{}, false, err
 	}
 	st := SetupStep{Step: StepMCP, Title: "Claude Code connection", Done: problem == "", Auto: true,

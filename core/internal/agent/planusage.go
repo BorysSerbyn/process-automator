@@ -37,7 +37,7 @@ func (b *ClaudeCode) PlanUsage(ctx context.Context) ([]usage.Limit, error) {
 }
 
 // parseUsageReport reads the usage report's limit rows out of stream-json
-// output (2.1.331's), by kind; unknown fields and kinds are left alone.
+// output (Claude Code 2.1.331's: claudeCode2_1_331.UsageReport), by kind; unknown fields and kinds are left alone.
 func parseUsageReport(stream []byte) ([]usage.Limit, error) {
 	sc := bufio.NewScanner(bytes.NewReader(stream))
 	sc.Buffer(make([]byte, 64*1024), 4*1024*1024)
