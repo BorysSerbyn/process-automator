@@ -256,7 +256,7 @@ func (w *Watcher) render() fyne.CanvasObject {
 }
 
 func (w *Watcher) header() fyne.CanvasObject {
-	title := container.NewVBox(heading(w.name, true))
+	title := lines(pageTitle(w.name))
 	if d := w.detail; d != nil {
 		line := container.NewHBox(quiet(modeText(d.WatcherInfo)))
 		for _, t := range watcherTags(d.WatcherInfo) {
@@ -440,6 +440,6 @@ func warning(title, message string) fyne.CanvasObject {
 	bg.StrokeColor = tint(theme.ColorNameWarning, 77)
 	bg.StrokeWidth = 1
 	bg.CornerRadius = 10
-	body := container.NewVBox(heading(title, false), secondary(message))
+	body := lines(heading(title, false), secondary(message))
 	return container.NewStack(bg, padded(6, 6, 8, 8, container.NewBorder(nil, nil, container.NewVBox(icon), nil, body)))
 }

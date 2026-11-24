@@ -133,7 +133,7 @@ func (a *Acknowledgements) render() fyne.CanvasObject {
 	case n > 1:
 		subtitle = itoa(n) + " waiting. The dot stays red until you acknowledge them."
 	}
-	title := container.NewVBox(heading("Acknowledgements", true), padded(-8, 0, 0, 0, secondary(subtitle)))
+	title := lines(pageTitle("Acknowledgements"), secondary(subtitle))
 	var all fyne.CanvasObject = container.NewHBox()
 	if len(a.waiting) > 1 {
 		b := widget.NewButton("Acknowledge All", func() { a.acknowledge("") })
@@ -192,7 +192,7 @@ func (a *Acknowledgements) card(n cli.Notification) fyne.CanvasObject {
 		urgent = container.NewVBox(padded(8, 0, 0, 0, tag("Urgent", theme.ColorNameError)))
 	}
 	head := container.NewBorder(nil, nil, container.NewVBox(padded(4, 0, 0, 0, sized(24, icon))), urgent,
-		container.NewVBox(title, padded(-12, 0, 0, 0, meta)))
+		lines(title, meta))
 	content := container.NewVBox(head)
 	id := n.ID
 	body := strings.TrimSpace(n.Body)

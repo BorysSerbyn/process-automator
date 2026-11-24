@@ -61,7 +61,7 @@ func executableRows(p cli.ProgramInfo, signIn fyne.CanvasObject, writes bool) []
 			fyne.CurrentApp().Clipboard().SetContent(sum)
 		})
 		cp.Importance = widget.LowImportance
-		exeRows = append(exeRows, container.NewHBox(secondary("SHA-256 "+shortChecksum(sum)), cp))
+		exeRows = append(exeRows, container.NewHBox(secondaryLine("SHA-256 "+shortChecksum(sum)), cp))
 	}
 	objects := []fyne.CanvasObject{padded(6, 0, 0, 0, infoRow("Executable", exeRows...))}
 	if writes {

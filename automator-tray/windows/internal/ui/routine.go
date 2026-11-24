@@ -495,20 +495,14 @@ func (r *Routine) render() fyne.CanvasObject {
 func (r *Routine) header() fyne.CanvasObject {
 	e := r.entry()
 	health := ""
-	title := container.NewVBox(heading(r.name, true))
+	title := lines(pageTitle(r.name))
 	if e != nil {
 		health = e.Health
 		if e.Summary != "" {
-			s := text(e.Summary)
-			if e.Health == "error" {
-				s.Importance = widget.DangerImportance
-			} else {
-				s.Importance = widget.LowImportance
-			}
-			title.Add(s)
+			title.Add(headerSummary(e.Summary, e.Health == "error"))
 		}
 	}
-	return container.NewBorder(nil, nil, healthDot(health, 12), container.NewCenter(r.controls()), title)
+	return container.NewBorder(nil, nil, padded(0, 0, 0, 2, healthDot(health, 12)), container.NewCenter(r.controls()), title)
 }
 
 func (r *Routine) controls() fyne.CanvasObject {

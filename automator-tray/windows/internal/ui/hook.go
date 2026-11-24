@@ -444,19 +444,14 @@ func (h *Hook) render() fyne.CanvasObject {
 func (h *Hook) header() fyne.CanvasObject {
 	e := h.entry()
 	health := ""
-	title := container.NewVBox(heading(h.name, true))
+	title := lines(pageTitle(h.name))
 	if e != nil {
 		health = e.Health
 		if e.Summary != "" {
-			s := text(e.Summary)
-			s.Importance = widget.LowImportance
-			if e.Health == "error" {
-				s.Importance = widget.DangerImportance
-			}
-			title.Add(s)
+			title.Add(headerSummary(e.Summary, e.Health == "error"))
 		}
 	}
-	return container.NewBorder(nil, nil, healthDot(health, 12), container.NewCenter(h.controls()), title)
+	return container.NewBorder(nil, nil, padded(0, 0, 0, 2, healthDot(health, 12)), container.NewCenter(h.controls()), title)
 }
 
 func (h *Hook) controls() fyne.CanvasObject {
@@ -627,7 +622,7 @@ func (h *Hook) statusRows() []fyne.CanvasObject {
 // (its watcher, the event type, batches, staleness, rate) opens under it.
 func (h *Hook) trigger() []fyne.CanvasObject {
 	d := h.detail
-	line := container.NewVBox(heading("When it runs", false), secondary(onText(d.On)))
+	line := lines(heading("When it runs", false), secondary(onText(d.On)))
 	tags := container.NewHBox()
 	if w := d.Watcher; w != nil {
 		if !w.Enabled {
