@@ -94,8 +94,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Opened again while running (from Finder, Spotlight or Launchpad): the
     /// scheduler started, and Setup while setup isn't done, else Settings.
+    /// A click on one of its notifications reaches the app as a reopen too,
+    /// sent by the notification daemon after the click itself: that one
+    /// opens nothing, the click shows what it's about.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         startScheduler()
+        if reopenedByNotificationClick() { return false }
         switch Lifecycle.reopenWindow(for: status) {
         case .setup: setupWindow?.show()
         case .settings: openSettings()
@@ -113,6 +117,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 cli, failed: { showAlert("Couldn't stop the scheduler", $0.message) },
                 terminate: { NSApp.terminate(nil) })
         }
+    }
+
+    /// Whether the reopen being handled was sent by macOS's notification
+    /// daemon (`usernoted`), which sends one for every click on the app's
+    /// notifications.
+    private func reopenedByNotificationClick() -> Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+            let pid = event.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?.int32Value, pid > 0
+        else { return false }
+        var path = [CChar](repeating: 0, count: 4096)
+        guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return false }
+        return URL(fileURLWithPath: String(cString: path)).lastPathComponent == "usernoted"
     }
 
     // MARK: Settings

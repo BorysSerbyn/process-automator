@@ -846,3 +846,10 @@ A routine, program or hook that isn't trusted (or whose watcher isn't), never or
 ### Rejected
 - **A reason per item, each opening its window**: three changed hooks were three lines, and turning each on meant opening the menu, the window, acting, closing, and again
 - **Turning them all on with one confirm, unreviewed**: each changed executable is what trust exists to show
+
+## Decision: a reopen from a notification click is told by its sender
+macOS delivers a click on one of the app's notifications twice: the notification response, then a reopen Apple event sent by `usernoted`, the same event Finder, Spotlight and Launchpad send. automator-ui answers a reopen with Setup or Settings, so it reads the reopen's sender (its PID, then its executable) and opens nothing for one from `usernoted`: the click alone decides what opens.
+
+### Rejected
+- **Ignoring a reopen near a click in time**: a guess about timing, which a slow machine or a quick second open breaks
+- **No window on reopen**: opening the app from Finder or Spotlight while it runs should still show where it stands

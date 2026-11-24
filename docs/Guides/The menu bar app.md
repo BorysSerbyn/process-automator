@@ -2,7 +2,7 @@ Back to [[Home]]. See also [[Guides/Routines|Routines]], [[Guides/Writing a hook
 
 The menu bar app (automator-ui, macOS) starts at login. On Linux the tray takes its place: see [[#The Linux tray|The Linux tray]]. It's an hourglass in the menu bar with a status dot; everything it does is also a `procauto` command.
 
-**Quit** stops the app: the menu bar app and the scheduler, so no routine runs until you open it again. Both start again at your next login, as before. **Opening the app** (**Process Automator** in `~/Applications`, Spotlight or Launchpad) starts the scheduler if it isn't running; opening it while it runs opens **Setup** while setup has steps left, else **Settings**. In a terminal, `procauto login-items stop` and `procauto login-items start` do the same.
+**Quit** stops the app: the menu bar app and the scheduler, so no routine runs until you open it again. Both start again at your next login, as before. **Opening the app** (**Process Automator** in `~/Applications`, Spotlight or Launchpad) starts the scheduler if it isn't running; opening it while it runs opens **Setup** while setup has steps left, else **Settings** (a click on one of its notifications opens only what it's about). In a terminal, `procauto login-items stop` and `procauto login-items start` do the same.
 
 ## The dot
 | Dot | Means |
