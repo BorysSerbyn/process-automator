@@ -46,15 +46,27 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	// Nor run the real claude (mcp connect).
 	runClaude = fakeClaude
-	// A stand-in claude, first on PATH, that only fails; its version is the
-	// newest supported, answered without running it.
-	fakeClaudeDir, err := os.MkdirTemp("", "fake-claude-")
+	// Stand-ins for claude and codex, first on PATH, that only fail; their
+	// versions are the newest supported, answered without running them, and
+	// Codex's sign-in check says it's signed in.
+	fakeCLIDir, err := os.MkdirTemp("", "fake-clis-")
 	if err != nil {
 		panic(err)
 	}
-	_ = os.WriteFile(filepath.Join(fakeClaudeDir, "claude"), []byte("#!/bin/sh\necho 'tests never run claude' >&2\nexit 1\n"), 0o700)
-	_ = os.Setenv("PATH", fakeClaudeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	agent.SetClaudeVersionForTests(func() (string, error) { return agent.NewestClaudeCode().Since().String(), nil })
+	for _, name := range []string{"claude", "codex"} {
+		_ = os.WriteFile(filepath.Join(fakeCLIDir, name), []byte("#!/bin/sh\necho 'tests never run "+name+"' >&2\nexit 1\n"), 0o700)
+	}
+	_ = os.Setenv("PATH", fakeCLIDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	agent.SetVersionForTests(func(name string) (string, error) {
+		switch name {
+		case "claude":
+			return agent.NewestClaudeCode().Since().String(), nil
+		case "codex":
+			return agent.NewestCodex().Since().String(), nil
+		}
+		return "", errors.New("tests never run " + name)
+	})
+	engine.CodexLoginStatus = func(context.Context, string, agent.CodexProtocol) (string, error) { return "", nil }
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
 	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.
@@ -75,7 +87,7 @@ func TestMain(m *testing.M) {
 	}
 	code := m.Run()
 	_ = os.RemoveAll(claudeDir)
-	_ = os.RemoveAll(fakeClaudeDir)
+	_ = os.RemoveAll(fakeCLIDir)
 	os.Exit(code)
 }
 

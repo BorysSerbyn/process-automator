@@ -16,12 +16,7 @@ func withClaudeVersion(t *testing.T, v string) {
 	t.Helper()
 	saved := testClaudeVersion
 	testClaudeVersion = v
-	undo := agent.SetClaudeVersionForTests(func() (string, error) {
-		if testClaudeVersion == "" {
-			return "", os.ErrInvalid
-		}
-		return testClaudeVersion, nil
-	})
+	undo := agent.SetVersionForTests(testVersion)
 	t.Cleanup(func() { undo(); testClaudeVersion = saved })
 }
 

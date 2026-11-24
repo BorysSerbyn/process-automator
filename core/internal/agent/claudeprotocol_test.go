@@ -1,31 +1,12 @@
 package agent
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-	"time"
 )
-
-func TestClaudeCodeVersions(t *testing.T) {
-	v, err := ParseClaudeCodeVersion("2.1.331 (Claude Code)\n")
-	if err != nil || v.String() != "2.1.331" {
-		t.Fatalf("parsed %v, %v", v, err)
-	}
-	if _, err := ParseClaudeCodeVersion("Claude Code"); err == nil {
-		t.Fatal("no version parsed as one")
-	}
-	for _, c := range []struct {
-		a, b string
-		less bool
-	}{{"2.1.9", "2.1.10", true}, {"2.1.10", "2.1.9", false}, {"2.1", "2.1.0", false}, {"2.1", "2.1.1", true}, {"3.0.0", "2.9.9", false}} {
-		if got := mustVersion(c.a).Less(mustVersion(c.b)); got != c.less {
-			t.Errorf("%s < %s: %v", c.a, c.b, got)
-		}
-	}
-}
 
 // The implementations are kept oldest first, each from a later version.
 func TestClaudeCodeProtocolsOrdered(t *testing.T) {
@@ -50,8 +31,8 @@ func TestClaudeCodeFor(t *testing.T) {
 		}
 	}
 	_, err := ClaudeCodeFor(mustVersion("1.9.9"))
-	var old *ClaudeCodeTooOld
-	if !errors.As(err, &old) || old.Need.String() != "2.0.0" {
+	var old *TooOldError
+	if !errors.As(err, &old) || old.Need.String() != "2.0.0" || !strings.Contains(err.Error(), "claude update") {
 		t.Fatalf("an older Claude Code: %v", err)
 	}
 	if NewestClaudeCode() != newer || OldestClaudeCode() != older {
@@ -64,71 +45,7 @@ type fakeProtocol struct {
 	since string
 }
 
-func (f fakeProtocol) Since() ClaudeCodeVersion { return mustVersion(f.since) }
-
-// `claude --version` runs once per binary, shared through the cache file by
-// other processes, and again when the binary changes or an hour has passed.
-// A failure is kept for a minute.
-func TestInstalledClaudeCodeCached(t *testing.T) {
-	calls, version, fail := 0, "2.1.331", error(nil)
-	t.Cleanup(SetClaudeVersionForTests(func() (string, error) { calls++; return version, fail }))
-	dir := t.TempDir()
-	path, cache := filepath.Join(dir, "claude"), filepath.Join(dir, "claude-version.json")
-	if err := os.WriteFile(path, []byte("one"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	for range 2 {
-		if v, err := InstalledClaudeCode(ctx, path, cache); err != nil || v.String() != "2.1.331" {
-			t.Fatalf("%v, %v", v, err)
-		}
-	}
-	forget := func() {
-		claudeVersions.Lock()
-		claudeVersions.m = map[string]cachedVersion{}
-		claudeVersions.Unlock()
-	}
-	forget() // another process: only the file
-	if v, _ := InstalledClaudeCode(ctx, path, cache); v.String() != "2.1.331" || calls != 1 {
-		t.Fatalf("ran claude --version %d times", calls)
-	}
-	version = "2.2.0"
-	if err := os.WriteFile(path, []byte("updated"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if v, _ := InstalledClaudeCode(ctx, path, cache); v.String() != "2.2.0" || calls != 2 {
-		t.Fatalf("after an update: %v (%d runs)", v, calls)
-	}
-	// An hour later (a shim whose file never changes), it's asked again.
-	age := func(d time.Duration) {
-		claudeVersions.Lock()
-		c := claudeVersions.m[path]
-		c.At = c.At.Add(-d)
-		claudeVersions.m[path] = c
-		claudeVersions.Unlock()
-	}
-	version = "2.3.0"
-	age(claudeVersionTTL)
-	if v, _ := InstalledClaudeCode(ctx, path, cache); v.String() != "2.3.0" || calls != 3 {
-		t.Fatalf("after an hour: %v (%d runs)", v, calls)
-	}
-	// A failure is kept for a minute, then asked again.
-	fail = errors.New("hung")
-	age(claudeVersionTTL)
-	for range 2 {
-		if _, err := InstalledClaudeCode(ctx, path, cache); err == nil {
-			t.Fatal("a failing --version gave a version")
-		}
-	}
-	if calls != 4 {
-		t.Fatalf("a failure wasn't kept: %d runs", calls)
-	}
-	fail = nil
-	age(claudeVersionErrorTTL)
-	if v, err := InstalledClaudeCode(ctx, path, cache); err != nil || v.String() != "2.3.0" || calls != 5 {
-		t.Fatalf("after a minute: %v %v (%d runs)", v, err, calls)
-	}
-}
+func (f fakeProtocol) Since() Version { return mustVersion(f.since) }
 
 // The user-scope MCP servers are read from Claude Code's config file.
 func TestClaudeCodeMCPServer(t *testing.T) {

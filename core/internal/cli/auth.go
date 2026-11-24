@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
@@ -58,7 +59,7 @@ type loginUI interface {
 // it asks for, then a remote server's OAuth sign-in.
 func login(ctx context.Context, a *engine.App, name string, ui loginUI) error {
 	if name == "codex" {
-		return errors.New("the codex backend uses Codex's own sign-in: run `codex login` in a terminal")
+		return errors.New("the codex backend uses Codex's own sign-in: run `" + agent.NewestCodex().LoginCommand() + "` in a terminal")
 	}
 	s, ok := a.FindSignIn(name)
 	if !ok {

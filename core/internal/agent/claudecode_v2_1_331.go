@@ -18,7 +18,7 @@ import (
 // claudeCode2_1_331 is Claude Code from 2.1.331.
 type claudeCode2_1_331 struct{}
 
-func (claudeCode2_1_331) Since() ClaudeCodeVersion { return mustVersion("2.1.331") }
+func (claudeCode2_1_331) Since() Version { return mustVersion("2.1.331") }
 
 func (claudeCode2_1_331) RunArgs(r ClaudeRun) []string {
 	mcpConfig, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{

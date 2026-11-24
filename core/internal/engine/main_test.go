@@ -29,9 +29,11 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	checkAll = checkHere
-	// Nor runs the real claude: a stand-in is first on PATH, and its version
-	// is testClaudeVersion's, without running it.
-	undo := fakeClaudeOnPath()
+	// Nor runs the real claude or codex: stand-ins are first on PATH, their
+	// versions are testClaudeVersion's and testCodexVersion's, answered
+	// without running them, and Codex's sign-in check says it's signed in.
+	undo := fakeCLIsOnPath()
+	CodexLoginStatus = func(context.Context, string, agent.CodexProtocol) (string, error) { return "", nil }
 	// A daemon started by a test never runs the login shell or reads the
 	// plan's usage (Claude Code's sign-in).
 	saveLoginPath = func(string) error { return nil }
@@ -47,25 +49,36 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// testClaudeVersion is the version the stand-in claude reports ("" fails).
-var testClaudeVersion = agent.NewestClaudeCode().Since().String()
+// testClaudeVersion and testCodexVersion are the versions the stand-in
+// claude and codex report ("" fails).
+var (
+	testClaudeVersion = agent.NewestClaudeCode().Since().String()
+	testCodexVersion  = agent.NewestCodex().Since().String()
+)
 
-// fakeClaudeOnPath puts a claude that only fails first on PATH, and has
-// --version answered without running it (testClaudeVersion).
-func fakeClaudeOnPath() (undo func()) {
-	dir, err := os.MkdirTemp("", "fake-claude-")
+// testVersion answers `<name> --version` for the stand-ins.
+func testVersion(name string) (string, error) {
+	v := map[string]string{"claude": testClaudeVersion, "codex": testCodexVersion}[name]
+	if v == "" {
+		return "", errors.New(name + " --version failed")
+	}
+	return v, nil
+}
+
+// fakeCLIsOnPath puts a claude and a codex that only fail first on PATH,
+// and has --version answered without running them (testVersion).
+func fakeCLIsOnPath() (undo func()) {
+	dir, err := os.MkdirTemp("", "fake-clis-")
 	if err != nil {
 		panic(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte("#!/bin/sh\necho 'tests never run claude' >&2\nexit 1\n"), 0o700); err != nil {
-		panic(err)
+	for _, name := range []string{"claude", "codex"} {
+		script := "#!/bin/sh\necho 'tests never run " + name + "' >&2\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
+			panic(err)
+		}
 	}
 	_ = os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	restore := agent.SetClaudeVersionForTests(func() (string, error) {
-		if testClaudeVersion == "" {
-			return "", errors.New("claude --version failed")
-		}
-		return testClaudeVersion, nil
-	})
+	restore := agent.SetVersionForTests(testVersion)
 	return func() { restore(); _ = os.RemoveAll(dir) }
 }

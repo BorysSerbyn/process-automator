@@ -9,13 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/settings"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
 
-// codexOnPath puts a stand-in codex on PATH (it's never run: the sign-in
-// check is replaced), and makes the sign-in check report problem.
+// codexOnPath puts a stand-in codex alone on PATH (it's never run: its
+// version is answered and the sign-in check is replaced), and makes the
+// sign-in check report problem.
 func codexOnPath(t *testing.T, problem string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -27,7 +29,7 @@ func codexOnPath(t *testing.T, problem string) {
 	}
 	t.Setenv("PATH", dir)
 	orig := CodexLoginStatus
-	CodexLoginStatus = func(context.Context, string) (string, error) { return problem, nil }
+	CodexLoginStatus = func(context.Context, string, agent.CodexProtocol) (string, error) { return problem, nil }
 	codexLogin = loginCache{}
 	t.Cleanup(func() { CodexLoginStatus, codexLogin = orig, loginCache{} })
 }
@@ -59,6 +61,51 @@ func TestCodexReady(t *testing.T) {
 	}
 	if _, err := a.NewBackend(); err != nil {
 		t.Errorf("new backend: %v", err)
+	}
+}
+
+// withCodexVersion makes the stand-in codex report v ("" fails) for one test.
+func withCodexVersion(t *testing.T, v string) {
+	t.Helper()
+	saved := testCodexVersion
+	testCodexVersion = v
+	undo := agent.SetVersionForTests(testVersion)
+	t.Cleanup(func() { undo(); testCodexVersion = saved })
+}
+
+// The installed Codex's version picks its implementation; one too old or
+// one whose --version fails is the backend's problem, before its sign-in is
+// asked, and a run doesn't start on it.
+func TestCodexReadinessByVersion(t *testing.T) {
+	for _, c := range []struct {
+		name, version, problem string
+	}{
+		{"supported", agent.NewestCodex().Since().String(), ""},
+		{"newer", "codex-cli 999.0.0", ""},
+		{"too old", "codex-cli 0.0.1", "Codex 0.0.1 is too old: this app needs " + agent.OldestCodex().Since().String() + " or later (update it with `npm install -g @openai/codex@latest`"},
+		{"version fails", "", "Codex can't be used: codex --version: "},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			a := testApp(t)
+			useCodex(t, a)
+			codexOnPath(t, "")
+			asked := false
+			CodexLoginStatus = func(context.Context, string, agent.CodexProtocol) (string, error) { asked = true; return "", nil }
+			withCodexVersion(t, c.version)
+			st, err := a.BackendReady()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.problem == "" && st.Problem != "" || !strings.Contains(st.Problem, c.problem) {
+				t.Fatalf("problem %q, want %q", st.Problem, c.problem)
+			}
+			if asked != (c.problem == "") {
+				t.Errorf("sign-in asked: %v", asked)
+			}
+			if _, err := a.NewBackend(); (err == nil) != (c.problem == "") {
+				t.Errorf("new backend: %v", err)
+			}
+		})
 	}
 }
 

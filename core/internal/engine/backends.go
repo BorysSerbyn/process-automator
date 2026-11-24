@@ -141,27 +141,26 @@ var Backends = map[string]BackendDef{
 		Ready:          localReady,
 	},
 	"codex": {
-		New: func(*App) (agent.Backend, error) {
-			path, err := agent.FindCodex()
+		New: func(a *App) (agent.Backend, error) {
+			path, protocol, err := findCodex(a)
 			if err != nil {
 				return nil, err
 			}
-			return &agent.CLI{Tool: &agent.Codex{Path: path}}, nil
+			return &agent.CLI{Tool: &agent.Codex{Path: path, Protocol: protocol}}, nil
 		},
 		AgentModel:        func(_ *App, model string) (string, error) { return agent.CodexModel(model) },
 		ModelProviders:    []string{agent.OpenAIProvider},
 		DefaultModel:      "Codex's default",
-		Builtins:          &agent.CodexBuiltins,
+		Builtins:          agent.NewestCodex().Builtins(),
 		CheckBuiltinTools: agent.CheckCodexBuiltins,
 		Experimental:      true, // tried only with a fake model provider
 		Ready: func(a *App) (string, string) {
-			path, err := find(a, agent.FindCodex)
+			path, protocol, err := findCodex(a)
 			if err != nil {
-				return "Codex isn't installed (no codex command found): install it from " +
-					"https://developers.openai.com/codex/cli and sign in to it with `codex login`", ""
+				return codexProblem(err), ""
 			}
-			if problem := codexLogin.check(path); problem != "" {
-				return "Codex isn't signed in (" + problem + "): run `codex login` in a terminal", ""
+			if problem := codexLogin.check(path, protocol); problem != "" {
+				return "Codex isn't signed in (" + problem + "): run `" + protocol.LoginCommand() + "` in a terminal", ""
 			}
 			return "", ""
 		},
@@ -175,7 +174,7 @@ var FindClaudeCode = func(a *App) (string, agent.ClaudeCodeProtocol, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	protocol, err := agent.ClaudeCodeAt(context.Background(), path, a.Layout.ClaudeVersion())
+	protocol, err := agent.ClaudeCodeAt(context.Background(), path, a.Layout.CLIVersions())
 	if err != nil {
 		return "", nil, err
 	}
@@ -211,7 +210,7 @@ func UninstallClaudeStatusLine(a *App) error {
 
 // claudeCodeProblem says what's wrong with Claude Code, from FindClaudeCode's error.
 func claudeCodeProblem(err error) string {
-	var old *agent.ClaudeCodeTooOld
+	var old *agent.TooOldError
 	if errors.As(err, &old) {
 		return err.Error()
 	}
@@ -250,8 +249,35 @@ func find(a *App, look func() (string, error)) (string, error) {
 	return look()
 }
 
-// CodexLoginStatus is how Codex's sign-in is checked (`codex login status`);
-// tests replace it.
+// findCodex is the installed Codex: its binary, and the protocol for its
+// version (tests answer the version without running codex).
+func findCodex(a *App) (string, agent.CodexProtocol, error) {
+	path, err := find(a, agent.FindCodex)
+	if err != nil {
+		return "", nil, err
+	}
+	protocol, err := agent.CodexAt(context.Background(), path, a.Layout.CLIVersions())
+	if err != nil {
+		return "", nil, err
+	}
+	return path, protocol, nil
+}
+
+// codexProblem says what's wrong with Codex, from findCodex's error.
+func codexProblem(err error) string {
+	var old *agent.TooOldError
+	if errors.As(err, &old) {
+		return err.Error()
+	}
+	if errors.Is(err, agent.ErrNoCodex) {
+		return "Codex isn't installed (no codex command found): install it from " +
+			"https://developers.openai.com/codex/cli and sign in to it with `" + agent.NewestCodex().LoginCommand() + "`"
+	}
+	return "Codex can't be used: " + err.Error()
+}
+
+// CodexLoginStatus is how Codex's sign-in is checked (the protocol's login
+// status command); tests replace it.
 var CodexLoginStatus = agent.CodexLoginStatus
 
 // codexLogin remembers Codex's sign-in for a minute: the scheduler asks every
@@ -267,7 +293,7 @@ type loginCache struct {
 
 // check is why the CLI at path isn't signed in ("" when it is, or when that
 // can't be told).
-func (c *loginCache) check(path string) string {
+func (c *loginCache) check(path string, protocol agent.CodexProtocol) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.path == path && time.Since(c.at) < time.Minute {
@@ -275,7 +301,7 @@ func (c *loginCache) check(path string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	problem, err := CodexLoginStatus(ctx, path)
+	problem, err := CodexLoginStatus(ctx, path, protocol)
 	if err != nil {
 		problem = "" // can't tell: a run says so if it isn't
 	}

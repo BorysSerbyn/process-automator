@@ -40,23 +40,3 @@ func (s BuiltinSet) readOnly(name string) bool {
 	}
 	return false
 }
-
-// Codex's built-in tool names in builtinTools. Each is named by what it
-// allows, since Codex's own switches (a sandbox mode, feature flags) aren't
-// tools.
-const (
-	codexShell     = "shell"
-	codexWrite     = "write"
-	codexNetwork   = "network"
-	codexWebSearch = "web_search"
-	codexViewImage = "view_image"
-)
-
-// CodexBuiltins are the names builtinTools takes on the codex backend.
-var CodexBuiltins = BuiltinSet{Tools: []BuiltinTool{
-	{Name: codexShell, Allows: "running commands, in Codex's sandbox (read-only without write)", ReadOnly: true},
-	{Name: codexWrite, Allows: "commands and Codex's file edits changing files in the run's folder"},
-	{Name: codexNetwork, Allows: "commands reaching the network (with write)"},
-	{Name: codexWebSearch, Allows: "searching the web", ReadOnly: true},
-	{Name: codexViewImage, Allows: "looking at image files", ReadOnly: true},
-}}

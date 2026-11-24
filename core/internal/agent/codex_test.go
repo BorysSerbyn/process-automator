@@ -279,11 +279,11 @@ func TestCodexModelAndEffort(t *testing.T) {
 		t.Errorf("a Claude model: %v", err)
 	}
 	for _, e := range []string{"", "low", "medium", "high", "xhigh", "max"} {
-		if got, err := codexEffort(e); err != nil || got != e {
+		if got, err := codexEffort(NewestCodex(), e); err != nil || got != e {
 			t.Errorf("effort %q: %q %v", e, got, err)
 		}
 	}
-	if _, err := codexEffort("turbo"); err == nil {
+	if _, err := codexEffort(NewestCodex(), "turbo"); err == nil {
 		t.Error("an unknown effort was accepted")
 	}
 	r := codexBase
@@ -309,7 +309,7 @@ func TestCodexBuiltins(t *testing.T) {
 			t.Errorf("%v accepted", bad)
 		}
 	}
-	got, _ := codexBuiltins([]string{"shell", "write", "network", "view_image"}, true)
+	got, _ := NewestCodex().AllowBuiltins([]string{"shell", "write", "network", "view_image"}, true)
 	if len(got) != 2 || !got["shell"] || !got["view_image"] {
 		t.Errorf("dry run: %v", got)
 	}
