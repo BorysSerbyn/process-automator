@@ -46,9 +46,15 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
 	// Nor run the real claude (mcp connect).
 	runClaude = fakeClaude
-	engine.FindClaudeCode = func(*engine.App) (string, agent.ClaudeCodeProtocol, error) {
-		return "claude", agent.NewestClaudeCode(), nil
+	// A stand-in claude, first on PATH, that only fails; its version is the
+	// newest supported, answered without running it.
+	fakeClaudeDir, err := os.MkdirTemp("", "fake-claude-")
+	if err != nil {
+		panic(err)
 	}
+	_ = os.WriteFile(filepath.Join(fakeClaudeDir, "claude"), []byte("#!/bin/sh\necho 'tests never run claude' >&2\nexit 1\n"), 0o700)
+	_ = os.Setenv("PATH", fakeClaudeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	agent.SetClaudeVersionForTests(func() (string, error) { return agent.NewestClaudeCode().Since().String(), nil })
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
 	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.
@@ -69,6 +75,7 @@ func TestMain(m *testing.M) {
 	}
 	code := m.Run()
 	_ = os.RemoveAll(claudeDir)
+	_ = os.RemoveAll(fakeClaudeDir)
 	os.Exit(code)
 }
 

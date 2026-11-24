@@ -89,6 +89,9 @@ func (l Layout) PlanUsage() string { return l.in("plan-usage.json") }
 // it (to run it, and to put it back).
 func (l Layout) StatusLine() string { return l.in("statusline.json") }
 
+// ClaudeVersion keeps the installed Claude Code's version, by binary (agent.InstalledClaudeCode).
+func (l Layout) ClaudeVersion() string { return l.in("claude-version.json") }
+
 // LoginPath caches the login shell's PATH.
 func (l Layout) LoginPath() string { return l.in("login-path") }
 

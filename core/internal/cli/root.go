@@ -125,6 +125,11 @@ func refreshStatus(cmd *cobra.Command) {
 	if isReadOnly(cmd) && path != "usage" {
 		return
 	}
+	// Claude Code's status line runs often: it records the plan's usage and
+	// nothing else, so there's no setup to refresh.
+	if path == "usage statusline" {
+		return
+	}
 	// No data folder (none yet, or `uninstall --purge` just removed it):
 	// nothing to record, and recording would make it again.
 	cfg, err := configPath(cmd)

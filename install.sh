@@ -183,7 +183,7 @@ check_claude_code() {
   local how="install it (https://claude.com/claude-code), or pass --without-claude-code to use another model backend"
   have claude || die "$NAME needs Claude Code $CLAUDE_CODE_MIN or later, and \`claude\` isn't on your PATH: $how"
   local v
-  v=$(claude --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n 1) || v=""
+  v=$(claude --version 2>/dev/null </dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n 1) || v=""
   [ -n "$v" ] || die "can't tell which Claude Code \`claude\` is (\`claude --version\` printed no version): $NAME needs $CLAUDE_CODE_MIN or later"
   version_at_least "$v" "$CLAUDE_CODE_MIN" ||
     die "$NAME needs Claude Code $CLAUDE_CODE_MIN or later, and yours is $v: update it (\`claude update\`), then run this again"

@@ -267,10 +267,13 @@ func (a *App) MCPStep() (SetupStep, bool, error) {
 	if err != nil || def.Name != "claude-code" {
 		return SetupStep{}, false, err
 	}
-	problem := ""
-	if _, protocol, err := FindClaudeCode(a); err != nil {
-		problem = claudeCodeProblem(err)
-	} else if problem, err = agent.ClaudeMCPProblem(protocol, product.Command); err != nil {
+	// Claude Code missing or too old is the backend step's problem.
+	_, protocol, err := FindClaudeCode(a)
+	if err != nil {
+		return SetupStep{}, false, nil
+	}
+	problem, err := agent.ClaudeMCPProblem(protocol, product.Command)
+	if err != nil {
 		return SetupStep{}, false, err
 	}
 	st := SetupStep{Step: StepMCP, Title: "Claude Code connection", Done: problem == "", Auto: true,

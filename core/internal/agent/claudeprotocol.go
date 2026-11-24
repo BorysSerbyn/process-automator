@@ -3,16 +3,19 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/atomicfile"
 	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
@@ -58,13 +61,28 @@ type ClaudeCodeProtocol interface {
 	// PlanLimit reads a run's message as the plan's usage limit being hit,
 	// nil for any other message.
 	PlanLimit(msg string, now time.Time) *PlanLimitError
-	// SignInNeeded says a run's error message is Claude Code not signed in.
-	SignInNeeded(msg string) bool
+	// SignInHint is what to add to a run's error message when it's Claude
+	// Code not signed in (how to sign in), "" for any other.
+	SignInHint(msg string) string
 	// StatusLine is where Claude Code's settings keep its status line.
 	StatusLine() (statusline.Format, error)
 	// StatusLineUsage reads the plan's 5-hour (session) and weekly windows
 	// from the status line's input; nil for one it doesn't carry.
 	StatusLineUsage(input []byte) (session, weekly *usage.PlanWindow, err error)
+}
+
+// ClaudeStatusLineFormats are the status line formats of every implementation
+// kept, newest first, each once: where to look for the app's status line
+// when the installed Claude Code can't say (it's gone, or too old).
+func ClaudeStatusLineFormats() []statusline.Format {
+	var out []statusline.Format
+	for i := len(claudeCodeProtocols) - 1; i >= 0; i-- {
+		f, err := claudeCodeProtocols[i].StatusLine()
+		if err == nil && !slices.Contains(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // ClaudeCodeForStatusLine is the implementation for the Claude Code that ran
@@ -220,56 +238,136 @@ func (v ClaudeCodeVersion) String() string {
 	return strings.Join(parts, ".")
 }
 
-// claudeVersions caches `claude --version` by binary, until the binary
-// changes (an update replaces it): the scheduler asks on every run.
+// The installed Claude Code's version is kept, by binary, in memory and in
+// a file (cacheFile) so short-lived commands share it: the scheduler asks on
+// every pass, CLI commands and the setup window on each run. It's asked
+// again when the binary changes (an update replaces it), after an hour (a
+// version manager's shim doesn't change when what it runs does), and a
+// failure is kept for a minute (a claude that hangs on --version mustn't
+// hold up every pass).
+const (
+	claudeVersionTTL      = time.Hour
+	claudeVersionErrorTTL = time.Minute
+)
+
+type cachedVersion struct {
+	Stamp   string    `json:"stamp"`
+	Version string    `json:"version,omitempty"`
+	Error   string    `json:"error,omitempty"`
+	At      time.Time `json:"at"`
+}
+
+func (c cachedVersion) fresh(stamp string, now time.Time) bool {
+	ttl := claudeVersionTTL
+	if c.Error != "" {
+		ttl = claudeVersionErrorTTL
+	}
+	return c.Stamp == stamp && !c.At.After(now) && now.Sub(c.At) < ttl
+}
+
+func (c cachedVersion) result() (ClaudeCodeVersion, error) {
+	if c.Error != "" {
+		return nil, errors.New(c.Error)
+	}
+	return ParseClaudeCodeVersion(c.Version)
+}
+
 var claudeVersions = struct {
 	sync.Mutex
 	m map[string]cachedVersion
 }{m: map[string]cachedVersion{}}
 
-type cachedVersion struct {
-	stamp string
-	v     ClaudeCodeVersion
-}
-
-// runClaudeVersion runs `<path> --version`. Tests replace it: they never run
-// the real claude.
+// runClaudeVersion runs `<path> --version`, with nothing on its standard
+// input. Tests replace it (SetClaudeVersionForTests): they never run claude.
 var runClaudeVersion = func(ctx context.Context, path string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, path, "--version").Output()
+	return exec.CommandContext(ctx, path, "--version").Output() // stdin: /dev/null
 }
 
-// InstalledClaudeCode is the version of the Claude Code at path.
-func InstalledClaudeCode(ctx context.Context, path string) (ClaudeCodeVersion, error) {
+// SetClaudeVersionForTests makes every claude report version (or fail with
+// err) without running it; it returns the function that undoes it.
+func SetClaudeVersionForTests(version func() (string, error)) (undo func()) {
+	saved := runClaudeVersion
+	runClaudeVersion = func(context.Context, string) ([]byte, error) {
+		v, err := version()
+		return []byte(v + " (Claude Code)"), err
+	}
+	claudeVersions.Lock()
+	claudeVersions.m = map[string]cachedVersion{}
+	claudeVersions.Unlock()
+	return func() {
+		runClaudeVersion = saved
+		claudeVersions.Lock()
+		claudeVersions.m = map[string]cachedVersion{}
+		claudeVersions.Unlock()
+	}
+}
+
+// InstalledClaudeCode is the version of the Claude Code at path, kept in
+// cacheFile ("" keeps it in memory only).
+func InstalledClaudeCode(ctx context.Context, path, cacheFile string) (ClaudeCodeVersion, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
 	stamp := fmt.Sprint(info.ModTime().UnixNano(), info.Size())
+	now := time.Now()
 	claudeVersions.Lock()
 	c, ok := claudeVersions.m[path]
 	claudeVersions.Unlock()
-	if ok && c.stamp == stamp {
-		return c.v, nil
+	if !ok && cacheFile != "" {
+		c, ok = readVersionCache(cacheFile)[path]
 	}
+	if ok && c.fresh(stamp, now) {
+		return c.result()
+	}
+	c = cachedVersion{Stamp: stamp, At: now}
 	out, err := runClaudeVersion(ctx, path)
-	if err != nil {
-		return nil, fmt.Errorf("claude --version: %w", err)
+	var v ClaudeCodeVersion
+	if err == nil {
+		v, err = ParseClaudeCodeVersion(string(out))
 	}
-	v, err := ParseClaudeCodeVersion(string(out))
 	if err != nil {
-		return nil, fmt.Errorf("claude --version: %w", err)
+		err = fmt.Errorf("claude --version: %w", err)
+		if ctx.Err() != nil {
+			return nil, err // cancelled: not the binary's answer
+		}
+		c.Error = err.Error()
+	} else {
+		c.Version = v.String()
 	}
 	claudeVersions.Lock()
-	claudeVersions.m[path] = cachedVersion{stamp, v}
+	claudeVersions.m[path] = c
 	claudeVersions.Unlock()
-	return v, nil
+	if cacheFile != "" {
+		writeVersionCache(cacheFile, path, c)
+	}
+	return v, err
+}
+
+func readVersionCache(file string) map[string]cachedVersion {
+	m := map[string]cachedVersion{}
+	if b, err := os.ReadFile(file); err == nil {
+		_ = json.Unmarshal(b, &m)
+	}
+	return m
+}
+
+// writeVersionCache records path's entry; a failure only costs a --version
+// next time.
+func writeVersionCache(file, path string, c cachedVersion) {
+	_ = atomicfile.UpdateJSON(file, func(p string) (map[string]cachedVersion, error) {
+		return readVersionCache(p), nil
+	}, func(m map[string]cachedVersion) error {
+		m[path] = c
+		return nil
+	})
 }
 
 // ClaudeCodeAt is the implementation for the Claude Code at path.
-func ClaudeCodeAt(ctx context.Context, path string) (ClaudeCodeProtocol, error) {
-	v, err := InstalledClaudeCode(ctx, path)
+func ClaudeCodeAt(ctx context.Context, path, cacheFile string) (ClaudeCodeProtocol, error) {
+	v, err := InstalledClaudeCode(ctx, path, cacheFile)
 	if err != nil {
 		return nil, err
 	}

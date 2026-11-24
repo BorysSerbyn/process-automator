@@ -345,6 +345,19 @@ func TestPlanUsageFallback(t *testing.T) {
 	if w := rep.Windows[0]; w.UsedPercent == nil || *w.UsedPercent != 33 || rep.RecordedAt == nil {
 		t.Errorf("not recorded: %+v", rep)
 	}
+	// A Claude Code older than every implementation records nothing, but my
+	// status line still shows.
+	root = NewRoot(nil)
+	out.Reset()
+	root.SetOut(&out)
+	root.SetArgs([]string{"--config", cfg, "usage", "statusline"})
+	root.SetIn(strings.NewReader(`{"version":"0.0.1","rate_limits":{"five_hour":{"used_percentage":99,"resets_at":1}}}`))
+	if err := root.Execute(); err != nil || out.String() != "mine" {
+		t.Errorf("status line on a too-old Claude Code printed %q (%v)", out.String(), err)
+	}
+	if rep, _ := a.Usage(context.Background(), time.Now()); *rep.Windows[0].UsedPercent != 33 {
+		t.Errorf("a too-old Claude Code's usage was recorded: %+v", rep)
+	}
 	if _, err := cli(t, cfg, "usage", "statusline", "uninstall"); err != nil {
 		t.Fatal(err)
 	}

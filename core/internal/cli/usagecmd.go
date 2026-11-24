@@ -118,11 +118,12 @@ func newStatusLineCmd() *cobra.Command {
 			if err != nil {
 				return nil // a status line mustn't fail over this
 			}
+			// A Claude Code older than every implementation records nothing,
+			// but my own status line still shows.
 			protocol, err := agent.ClaudeCodeForStatusLine(in)
 			if err != nil {
-				return nil
-			}
-			if session, weekly, err := protocol.StatusLineUsage(in); err == nil {
+				protocol = agent.OldestClaudeCode()
+			} else if session, weekly, err := protocol.StatusLineUsage(in); err == nil {
 				_ = usage.RecordStatusLine(a.Layout.PlanUsage(), session, weekly, time.Now())
 			}
 			format, err := protocol.StatusLine()
@@ -155,7 +156,7 @@ func newStatusLineCmd() *cobra.Command {
 					}
 					err = statusline.Install(format, a.Layout.StatusLine(), command)
 				} else {
-					err = statusline.Uninstall(format, a.Layout.StatusLine())
+					err = engine.UninstallClaudeStatusLine(a)
 				}
 				if err != nil {
 					return err

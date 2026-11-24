@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/product"
 	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
@@ -183,9 +184,12 @@ func (claudeCode2_1_331) PlanLimit(msg string, now time.Time) *PlanLimitError {
 	return planLimitError(msg, now)
 }
 
-func (claudeCode2_1_331) SignInNeeded(msg string) bool {
+func (claudeCode2_1_331) SignInHint(msg string) string {
 	msg = strings.ToLower(msg)
-	return strings.Contains(msg, "log in") || strings.Contains(msg, "login")
+	if !strings.Contains(msg, "log in") && !strings.Contains(msg, "login") {
+		return ""
+	}
+	return " (sign in by running `claude` once, or store a `claude setup-token` token with `" + product.Command + " auth login claude-code`)"
 }
 
 // StatusLine: settings.json in $CLAUDE_CONFIG_DIR or ~/.claude, its

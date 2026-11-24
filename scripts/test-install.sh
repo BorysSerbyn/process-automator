@@ -38,20 +38,31 @@ cp "$artifact" "$sandbox/"
 claude_min=$(install_var CLAUDE_CODE_MIN)
 [ -n "$claude_min" ] || fail "$installer has no CLAUDE_CODE_MIN"
 fake_claude() { mkdir -p "$sandbox/$1" && printf '#!/bin/sh\necho "%s (Claude Code)"\n' "$2" > "$sandbox/$1/claude" && chmod +x "$sandbox/$1/claude"; }
-fake_claude claude-old 0.9.0
-fake_claude claude-ok "$claude_min"
 
 echo "--- Claude Code check"
-if out=$(PATH="$sandbox/claude-old:$PATH" "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
-  fail "an older Claude Code than $claude_min was accepted"
+# Older ones are refused, compared part by part as numbers (2.1.40 is
+# older than 2.1.331, though it sorts after it as text).
+IFS=. read -r major minor patch <<<"$claude_min"
+older=("0.9.0" "$major.$minor.$((patch - 1))")
+[ "$minor" -gt 0 ] && older+=("$major.$((minor - 1)).$((patch + 1000))")
+for v in "${older[@]}"; do
+  fake_claude "claude-$v" "$v"
+  if out=$(PATH="$sandbox/claude-$v:$PATH" "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
+    fail "Claude Code $v, older than $claude_min, was accepted"
+  fi
+  grep -q "needs Claude Code $claude_min or later, and yours is $v" <<<"$out" || fail "Claude Code $v was refused without saying so: $out"
+done
+# Missing: only where no claude comes with the system's own folders.
+if [ ! -e /usr/bin/claude ] && [ ! -e /bin/claude ]; then
+  if out=$(PATH=/usr/bin:/bin:/usr/sbin:/sbin "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
+    fail "installing without Claude Code was accepted"
+  fi
+  grep -q "isn't on your PATH" <<<"$out" || fail "a missing Claude Code was refused without saying so: $out"
 fi
-grep -q "needs Claude Code $claude_min or later, and yours is 0.9.0" <<<"$out" || fail "an older Claude Code was refused without saying so: $out"
-if out=$(PATH=/usr/bin:/bin:/usr/sbin:/sbin "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
-  fail "installing without Claude Code was accepted"
-fi
-grep -q "isn't on your PATH" <<<"$out" || fail "a missing Claude Code was refused without saying so: $out"
 [ ! -e "$HOME/.local/bin/$command" ] || fail "a refused install left files"
-export PATH="$sandbox/claude-ok:$PATH"
+# A newer one than required installs (the main install below).
+fake_claude claude-newer "$major.$((minor + 1)).0"
+export PATH="$sandbox/claude-newer:$PATH"
 
 echo "--- install"
 "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only

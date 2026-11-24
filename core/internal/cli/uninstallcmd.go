@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
-	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
 )
@@ -41,10 +40,8 @@ func newUninstallCmd() *cobra.Command {
 					return errors.New("nothing removed")
 				}
 			}
-			if format, err := engine.ClaudeStatusLine(a); err == nil {
-				if err := statusline.Uninstall(format, a.Layout.StatusLine()); err != nil {
-					fmt.Fprintln(cmd.ErrOrStderr(), "warning: putting back your Claude Code status line:", err)
-				}
+			if err := engine.UninstallClaudeStatusLine(a); err != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), "warning: putting back your Claude Code status line:", err)
 			}
 			args := []string{installer, "uninstall", "--config", a.Layout.Config()}
 			if purge {

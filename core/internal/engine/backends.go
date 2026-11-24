@@ -11,7 +11,6 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/secrets"
 	"github.com/BorysSerbyn/process-automator/core/internal/statusline"
-	"github.com/BorysSerbyn/process-automator/core/internal/sysenv"
 	"github.com/BorysSerbyn/process-automator/core/internal/usage"
 )
 
@@ -176,20 +175,38 @@ var FindClaudeCode = func(a *App) (string, agent.ClaudeCodeProtocol, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	protocol, err := agent.ClaudeCodeAt(context.Background(), path)
+	protocol, err := agent.ClaudeCodeAt(context.Background(), path, a.Layout.ClaudeVersion())
 	if err != nil {
 		return "", nil, err
 	}
 	return path, protocol, nil
 }
 
-// ClaudeStatusLine is where the installed Claude Code keeps its status line.
+// ClaudeStatusLine is where the installed Claude Code keeps its status line;
+// the newest implementation's place when Claude Code can't say (it's gone,
+// or too old): where it is doesn't depend on running claude.
 func ClaudeStatusLine(a *App) (statusline.Format, error) {
-	_, protocol, err := FindClaudeCode(a)
-	if err != nil {
-		return statusline.Format{}, err
+	if _, protocol, err := FindClaudeCode(a); err == nil {
+		return protocol.StatusLine()
 	}
-	return protocol.StatusLine()
+	return agent.NewestClaudeCode().StatusLine()
+}
+
+// UninstallClaudeStatusLine puts back the status line I had before the app
+// wrapped it, wherever a Claude Code version keeps it: the installed one's
+// first, then every other implementation's.
+func UninstallClaudeStatusLine(a *App) error {
+	formats := agent.ClaudeStatusLineFormats()
+	if f, err := ClaudeStatusLine(a); err == nil {
+		formats = append([]statusline.Format{f}, formats...)
+	}
+	for _, f := range formats {
+		if ok, err := statusline.Installed(f); err != nil || !ok {
+			continue
+		}
+		return statusline.Uninstall(f, a.Layout.StatusLine())
+	}
+	return nil
 }
 
 // claudeCodeProblem says what's wrong with Claude Code, from FindClaudeCode's error.
@@ -228,7 +245,7 @@ func find(a *App, look func() (string, error)) (string, error) {
 	}
 	cache := a.Layout.LoginPath()
 	if info, err := os.Stat(cache); err != nil || time.Since(info.ModTime()) > time.Minute {
-		_ = sysenv.SaveLoginShellPath(cache)
+		_ = saveLoginPath(cache)
 	}
 	return look()
 }

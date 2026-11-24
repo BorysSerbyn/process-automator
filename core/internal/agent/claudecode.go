@@ -177,9 +177,7 @@ func (b *ClaudeCode) Result(_ CLIRun, stdout, stderr []byte, runErr error) (*Out
 		if limit := b.protocol().PlanLimit(msg, time.Now()); limit != nil {
 			return out, limit
 		}
-		if b.protocol().SignInNeeded(msg) {
-			msg += " (sign in by running `claude` once, or store a `claude setup-token` token with `" + product.Command + " auth login claude-code`)"
-		}
+		msg += b.protocol().SignInHint(msg)
 		return out, fmt.Errorf("claude: %s", msg)
 	}
 	return out, nil

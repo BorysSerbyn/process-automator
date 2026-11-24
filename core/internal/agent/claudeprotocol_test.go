@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestClaudeCodeVersions(t *testing.T) {
@@ -65,33 +66,67 @@ type fakeProtocol struct {
 
 func (f fakeProtocol) Since() ClaudeCodeVersion { return mustVersion(f.since) }
 
-// `claude --version` runs once per binary, again when the binary changes.
+// `claude --version` runs once per binary, shared through the cache file by
+// other processes, and again when the binary changes or an hour has passed.
+// A failure is kept for a minute.
 func TestInstalledClaudeCodeCached(t *testing.T) {
-	saved := runClaudeVersion
-	t.Cleanup(func() { runClaudeVersion = saved })
-	calls, version := 0, "2.1.331"
-	runClaudeVersion = func(context.Context, string) ([]byte, error) {
-		calls++
-		return []byte(version + " (Claude Code)"), nil
-	}
-	path := filepath.Join(t.TempDir(), "claude")
+	calls, version, fail := 0, "2.1.331", error(nil)
+	t.Cleanup(SetClaudeVersionForTests(func() (string, error) { calls++; return version, fail }))
+	dir := t.TempDir()
+	path, cache := filepath.Join(dir, "claude"), filepath.Join(dir, "claude-version.json")
 	if err := os.WriteFile(path, []byte("one"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	ctx := context.Background()
 	for range 2 {
-		if v, err := InstalledClaudeCode(context.Background(), path); err != nil || v.String() != "2.1.331" {
+		if v, err := InstalledClaudeCode(ctx, path, cache); err != nil || v.String() != "2.1.331" {
 			t.Fatalf("%v, %v", v, err)
 		}
 	}
-	if calls != 1 {
+	forget := func() {
+		claudeVersions.Lock()
+		claudeVersions.m = map[string]cachedVersion{}
+		claudeVersions.Unlock()
+	}
+	forget() // another process: only the file
+	if v, _ := InstalledClaudeCode(ctx, path, cache); v.String() != "2.1.331" || calls != 1 {
 		t.Fatalf("ran claude --version %d times", calls)
 	}
 	version = "2.2.0"
 	if err := os.WriteFile(path, []byte("updated"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := InstalledClaudeCode(context.Background(), path); v.String() != "2.2.0" || calls != 2 {
+	if v, _ := InstalledClaudeCode(ctx, path, cache); v.String() != "2.2.0" || calls != 2 {
 		t.Fatalf("after an update: %v (%d runs)", v, calls)
+	}
+	// An hour later (a shim whose file never changes), it's asked again.
+	age := func(d time.Duration) {
+		claudeVersions.Lock()
+		c := claudeVersions.m[path]
+		c.At = c.At.Add(-d)
+		claudeVersions.m[path] = c
+		claudeVersions.Unlock()
+	}
+	version = "2.3.0"
+	age(claudeVersionTTL)
+	if v, _ := InstalledClaudeCode(ctx, path, cache); v.String() != "2.3.0" || calls != 3 {
+		t.Fatalf("after an hour: %v (%d runs)", v, calls)
+	}
+	// A failure is kept for a minute, then asked again.
+	fail = errors.New("hung")
+	age(claudeVersionTTL)
+	for range 2 {
+		if _, err := InstalledClaudeCode(ctx, path, cache); err == nil {
+			t.Fatal("a failing --version gave a version")
+		}
+	}
+	if calls != 4 {
+		t.Fatalf("a failure wasn't kept: %d runs", calls)
+	}
+	fail = nil
+	age(claudeVersionErrorTTL)
+	if v, err := InstalledClaudeCode(ctx, path, cache); err != nil || v.String() != "2.3.0" || calls != 5 {
+		t.Fatalf("after a minute: %v %v (%d runs)", v, err, calls)
 	}
 }
 
