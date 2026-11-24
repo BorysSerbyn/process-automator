@@ -865,3 +865,10 @@ Claude Code is what most installs run on, so a new install requires the newest i
 - **A note in the installer instead of a refusal**: notes in an installer's output get skipped, and the failure would only show up later as broken runs
 - **Requiring Codex in the installer too**: most installs never use it, and a backend chosen later says what it needs (setup, `doctor`)
 - **A protocol for Claude Code only**: Codex's flags and config keys (its feature toggles especially) change between releases too, and a run broken by one would be found the same way, on a schedule
+
+## Decision: a release keeps the previous release's signer
+macOS keeps a permission granted to the app (Calendars, Input Monitoring, …) across an update only while the app's designated requirement, its identifier and signing certificate, stays the same. A release signed with another certificate takes every grant away from everyone who updates, silently: watchers that need one go red. So `make publish` compares the new macOS app's designated requirement with the previous release's and refuses a different one, unless `ALLOW_NEW_SIGNER=1` says the change is meant (moving to a Developer ID, say).
+
+### Rejected
+- **Remembering which identity to use**: the mistake it guards against is signing with the wrong one, so the check has to look at what was actually published
+- **Comparing with the local install**: a dev build may be signed differently on purpose; the previous release is what updates come from

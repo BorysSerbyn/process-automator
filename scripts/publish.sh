@@ -21,6 +21,11 @@
 #                   docs/Progress.md ("- X.Y.Z, …: a; b"), as bullets; else
 #                   the commit subjects since the previous release. GitHub's
 #                   generated changelog link follows them.
+#   ALLOW_NEW_SIGNER=1
+#                   publishes a macOS app signed by another certificate than
+#                   the previous release's (otherwise refused: macOS drops
+#                   every permission granted to the app when its signer
+#                   changes)
 #   DRY_RUN=1       builds and tests everything, then stops before pushing
 set -euo pipefail
 scripts="$(cd "$(dirname "$0")" && pwd)"
@@ -86,6 +91,31 @@ timed "package: macos" "make package SOURCE_DIR= SIGN_IDENTITY='$identity' DIST=
 
 zip=$(find "$out" -name "*-$version-macos.zip")
 [[ -n $zip ]] || die "no $version macOS artifact in $out (is the build's version $version?)"
+# The same signer as the previous release: macOS keeps the permissions granted
+# to the app (Calendars, Input Monitoring…) across an update only when its
+# designated requirement (its identifier and signing certificate) is the same.
+designated() { codesign -dr - "$1" 2>&1 | sed -n 's/^designated => //p'; }
+previous=$(gh release view -R "$repo" --json tagName --jq .tagName 2>/dev/null || true)
+if [[ -n $previous ]]; then
+  prev="$out/../$previous-previous"
+  rm -rf "$prev" && mkdir -p "$prev"
+  if gh release download "$previous" -R "$repo" --pattern '*-macos.zip' --dir "$prev" >/dev/null 2>&1; then
+    mkdir "$prev/app" && ditto -x -k "$prev"/*-macos.zip "$prev/app"
+    was=$(designated "$(find "$prev/app" -maxdepth 2 -name '*.app' | head -n 1)")
+    mkdir "$prev/new" && ditto -x -k "$zip" "$prev/new"
+    now=$(designated "$(find "$prev/new" -maxdepth 2 -name '*.app' | head -n 1)")
+    if [[ $was != "$now" ]]; then
+      [[ -n ${ALLOW_NEW_SIGNER:-} ]] ||
+        die "this release is signed differently from $previous, so macOS would drop every permission granted to the app (was: $was; now: $now). Sign it as $previous was, or set ALLOW_NEW_SIGNER=1 if the change is meant"
+      echo "publish: signer changed from $previous's (ALLOW_NEW_SIGNER): $was → $now"
+    else
+      echo "publish: signed as $previous was"
+    fi
+  else
+    echo "publish: warning: can't download $previous's macOS app to compare its signer"
+  fi
+  rm -rf "$prev"
+fi
 timed "test: install (macos artifact)" "INSTALL_SH='$installer' '$scripts/test-install.sh' '$zip'"
 cp "$installer" "$out/install.sh"
 (cd "$out" && shasum -a 256 -- * > SHA256SUMS && cat SHA256SUMS)
