@@ -98,6 +98,52 @@ func (*stackLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	return s
 }
 
+// lines stacks text close together, as a VStack's spacing of 2 or 3
+// does: each label keeps its padding at the top of the first and the bottom
+// of the last, but the ones between overlap, leaving gap between texts.
+func lines(objects ...fyne.CanvasObject) *fyne.Container {
+	return container.New(&linesLayout{gap: 2}, objects...)
+}
+
+type linesLayout struct{ gap float32 }
+
+// spacing is how far each object goes under the one above it.
+func (l *linesLayout) spacing() float32 { return l.gap - 2*theme.InnerPadding() }
+
+func (l *linesLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	y := float32(0)
+	for _, o := range objects {
+		if !shown(o) {
+			continue
+		}
+		h := o.MinSize().Height
+		o.Move(fyne.NewPos(0, y))
+		o.Resize(fyne.NewSize(size.Width, h))
+		y += h + l.spacing()
+	}
+}
+
+// shown is whether a line takes room: visible, and not empty.
+func shown(o fyne.CanvasObject) bool { return o.Visible() && o.MinSize().Height > 0 }
+
+func (l *linesLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var s fyne.Size
+	n := 0
+	for _, o := range objects {
+		if !shown(o) {
+			continue
+		}
+		m := o.MinSize()
+		s.Width = max(s.Width, m.Width)
+		s.Height += m.Height
+		n++
+	}
+	if n > 1 {
+		s.Height += float32(n-1) * l.spacing()
+	}
+	return s
+}
+
 // divider is a hairline between rows, inset from the card's edge.
 func divider() fyne.CanvasObject {
 	return padded(0, 0, rowInset, 0, widget.NewSeparator())
@@ -106,6 +152,15 @@ func divider() fyne.CanvasObject {
 // text is a label that wraps.
 func text(s string) *widget.Label {
 	l := widget.NewLabel(s)
+	l.Wrapping = fyne.TextWrapWord
+	return l
+}
+
+// pageTitle is a screen's title: big and bold.
+func pageTitle(s string) *widget.Label {
+	l := widget.NewLabel(s)
+	l.TextStyle = fyne.TextStyle{Bold: true}
+	l.SizeName = theme.SizeNameHeadingText
 	l.Wrapping = fyne.TextWrapWord
 	return l
 }
@@ -130,12 +185,50 @@ func secondary(s string) *widget.RichText {
 	return t
 }
 
+// headerSummary is a routine's or a hook's summary under its title: quiet,
+// or red when it's in error.
+func headerSummary(s string, danger bool) *widget.Label {
+	l := text(s)
+	l.Importance = widget.LowImportance
+	if danger {
+		l.Importance = widget.DangerImportance
+	}
+	return l
+}
+
+// summaryText is a row's summary, at its right: quiet, or red when it's an
+// error; one line, cut short with an ellipsis.
+func summaryText(s string, danger bool) *widget.RichText {
+	colour := theme.ColorNamePlaceHolder
+	if danger {
+		colour = theme.ColorNameError
+	}
+	t := widget.NewRichText(&widget.TextSegment{Text: s, Style: widget.RichTextStyle{
+		ColorName: colour, SizeName: theme.SizeNameText, Inline: true, Alignment: fyne.TextAlignTrailing,
+	}})
+	t.Truncation = fyne.TextTruncateEllipsis
+	return t
+}
+
+// leadingIcon is an icon beside the first line of a label's text.
+func leadingIcon(icon fyne.CanvasObject) fyne.CanvasObject {
+	top := theme.InnerPadding() + (theme.TextSize()*1.3-theme.IconInlineSize())/2
+	return container.NewVBox(padded(top, 0, 0, 0, icon))
+}
+
+// secondaryLine is quieter text on one line, beside something else.
+func secondaryLine(s string) *widget.RichText {
+	t := secondary(s)
+	t.Wrapping = fyne.TextWrapOff
+	return t
+}
+
 // errorRow is the core's message when it refused something.
 func errorRow(message string) fyne.CanvasObject {
 	l := text(message)
 	l.Importance = widget.DangerImportance
 	icon := widget.NewIcon(theme.NewErrorThemedResource(theme.ErrorIcon()))
-	return container.NewBorder(nil, nil, container.NewVBox(padded(6, 0, 0, 0, icon)), nil, l)
+	return container.NewBorder(nil, nil, leadingIcon(icon), nil, l)
 }
 
 // banner is a window-wide note above the content.
@@ -145,11 +238,11 @@ func banner(title, message string) fyne.CanvasObject {
 	bg.StrokeColor = tint(theme.ColorNameError, 77)
 	bg.StrokeWidth = 1
 	bg.CornerRadius = 10
-	body := container.NewVBox(heading(title, false))
+	body := lines(heading(title, false))
 	if message != "" {
 		body.Add(secondary(message))
 	}
-	return container.NewStack(bg, padded(6, 6, 8, 8, container.NewBorder(nil, nil, container.NewVBox(icon), nil, body)))
+	return container.NewStack(bg, padded(4, 4, 12, 6, container.NewBorder(nil, nil, leadingIcon(icon), nil, body)))
 }
 
 // tag is a small capsule: Done, Optional, Installed, why a setting is inactive.
@@ -157,15 +250,15 @@ func tag(s string, colour fyne.ThemeColorName) fyne.CanvasObject {
 	if colour == "" {
 		colour = theme.ColorNameForeground
 	}
-	bg := canvas.NewRectangle(tint(colour, 36))
-	bg.CornerRadius = 8
+	bg := canvas.NewRectangle(tint(colour, 31))
+	bg.CornerRadius = theme.CaptionTextSize()
 	t := canvas.NewText(s, theme.Color(colour))
 	if colour == theme.ColorNameForeground {
 		t.Color = theme.Color(theme.ColorNamePlaceHolder)
 	}
 	t.TextSize = theme.CaptionTextSize()
 	t.TextStyle = fyne.TextStyle{Bold: true}
-	return container.NewCenter(container.NewStack(bg, padded(1, 1, 6, 6, t)))
+	return container.NewCenter(container.NewStack(bg, padded(2, 2, 7, 7, t)))
 }
 
 // spinner shows the core is working on something.
@@ -223,13 +316,8 @@ func newDisclosure(open, prominent bool, toggle func(), content fyne.CanvasObjec
 }
 
 func (d *disclosure) CreateRenderer() fyne.WidgetRenderer {
-	icon := theme.MenuExpandIcon()
-	if d.open {
-		icon = theme.MenuDropDownIcon()
-	}
-	chevron := widget.NewIcon(icon)
-	row := container.NewBorder(nil, nil, container.NewCenter(chevron), nil, d.content)
-	return widget.NewSimpleRenderer(container.NewStack(d.hover, padded(d.vertical-6, d.vertical-6, rowInset-4, rowInset, row)))
+	row := container.NewBorder(nil, nil, container.NewCenter(padded(0, 0, 0, 4, chevron(d.open))), nil, d.content)
+	return widget.NewSimpleRenderer(container.NewStack(d.hover, padded(d.vertical-6, d.vertical-6, rowInset-2, rowInset, row)))
 }
 
 // Tapped opens or closes it.
@@ -423,7 +511,7 @@ func icon(name string) fyne.Resource {
 	case "check":
 		return theme.ConfirmIcon()
 	case "list":
-		return theme.ListIcon()
+		return ChecklistIcon
 	case "gauge":
 		return theme.InfoIcon()
 	}
@@ -439,9 +527,7 @@ func sized(side float32, o fyne.CanvasObject) fyne.CanvasObject {
 // (grey when the step is optional).
 func mark(step cli.SetupStep) fyne.CanvasObject {
 	if step.Done {
-		disc := canvas.NewCircle(theme.Color(theme.ColorNameSuccess))
-		check := widget.NewIcon(theme.NewColoredResource(theme.ConfirmIcon(), theme.ColorNameForegroundOnSuccess))
-		return sized(20, container.NewStack(disc, padded(-4, -4, -4, -4, check)))
+		return sized(20, doneMark())
 	}
 	ring := canvas.NewCircle(color.Transparent)
 	ring.StrokeWidth = 1.5
@@ -450,6 +536,13 @@ func mark(step cli.SetupStep) fyne.CanvasObject {
 		ring.StrokeColor = theme.Color(theme.ColorNamePlaceHolder)
 	}
 	return sized(20, ring)
+}
+
+// doneMark is a check in a green disc: done.
+func doneMark() fyne.CanvasObject {
+	disc := canvas.NewCircle(theme.Color(theme.ColorNameSuccess))
+	check := widget.NewIcon(theme.NewColoredResource(theme.ConfirmIcon(), theme.ColorNameForegroundOnSuccess))
+	return container.NewStack(disc, padded(3, 3, 3, 3, check))
 }
 
 // tinted is a box tinted with the theme's primary colour: what to do first.

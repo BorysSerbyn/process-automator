@@ -113,8 +113,8 @@ func (h *Hooks) refresh() {
 }
 
 func (h *Hooks) render() fyne.CanvasObject {
-	box := container.NewVBox(heading("Hooks", true),
-		secondary("Prompts and programs run when something happens, instead of on a schedule."))
+	box := container.NewVBox(lines(pageTitle("Hooks"),
+		secondary("Prompts and programs run when something happens, instead of on a schedule.")))
 	if !responding(h.status, h.now()) {
 		box.Add(banner("Not responding", "The scheduler isn't updating its status, so what's shown may be out of date."))
 	}
@@ -127,7 +127,7 @@ func (h *Hooks) render() fyne.CanvasObject {
 		var rows []fyne.CanvasObject
 		for i, hk := range h.hooks {
 			if i > 0 {
-				rows = append(rows, padded(0, 0, 38, 0, widget.NewSeparator()))
+				rows = append(rows, listDivider())
 			}
 			rows = append(rows, h.hookRow(hk))
 		}
@@ -171,30 +171,19 @@ func (h *Hooks) hookRow(hk cli.HookInfo) fyne.CanvasObject {
 	if hk.IsProgram() {
 		kind = "Program"
 	}
-	name := container.NewHBox(widget.NewLabelWithStyle(hk.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), tag(kind, ""))
-	lines := container.NewVBox(name, secondary(onText(hk.On)))
+	name := container.NewHBox(rowTitle(hk.Name), tag(kind, ""))
+	body := lines(name, secondary(onText(hk.On)))
 	if last != nil {
-		lines.Add(lastRunLine(last, h.now()))
+		body.Add(lastRunLine(last, h.now()))
 	}
-	trailing := container.NewHBox()
-	if summary != "" {
-		s := widget.NewLabel(summary)
-		s.Truncation = fyne.TextTruncateEllipsis
-		s.Importance = widget.LowImportance
-		if health == "error" {
-			s.Importance = widget.DangerImportance
-		}
-		trailing.Add(fixedWidth(170, s))
-	}
-	row := container.NewBorder(nil, nil, healthDot(health, 10), container.NewCenter(trailing), lines)
 	n := hk.Name
-	return withTurnOn(hk.TurnOn, func() { h.turnOn(n) }, newLinkRow(func() { h.openHook(n) }, padded(4, 4, 0, 0, row)))
+	return listRow(health, padded(4, 4, 0, 0, body), summary, turnOnFunc(hk.TurnOn, func() { h.turnOn(n) }), func() { h.openHook(n) })
 }
 
 // watcherRow is one watcher: its name and state, how it runs, the hooks
 // listening, and why it's failing; the row opens it.
 func (h *Hooks) watcherRow(w cli.WatcherInfo) fyne.CanvasObject {
-	name := container.NewHBox(widget.NewLabelWithStyle(w.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	name := container.NewHBox(rowTitle(w.Name))
 	for _, t := range watcherTags(w) {
 		name.Add(t)
 	}
@@ -202,7 +191,7 @@ func (h *Hooks) watcherRow(w cli.WatcherInfo) fyne.CanvasObject {
 	if len(w.Hooks) > 0 {
 		heard = "Heard by " + strings.Join(w.Hooks, ", ")
 	}
-	lines := container.NewVBox(name, secondary(modeText(w)), secondary(heard))
+	body := lines(name, secondary(modeText(w)), secondary(heard))
 	if w.Error != "" {
 		why := w.Error
 		if w.ErrorAt != nil {
@@ -210,8 +199,8 @@ func (h *Hooks) watcherRow(w cli.WatcherInfo) fyne.CanvasObject {
 		}
 		l := text(why)
 		l.Importance = widget.DangerImportance
-		lines.Add(l)
+		body.Add(l)
 	}
 	n := w.Name
-	return newLinkRow(func() { h.openWatcher(n) }, padded(4, 4, 0, 0, lines))
+	return newLinkRow(func() { h.openWatcher(n) }, padded(4, 4, 0, 0, body))
 }

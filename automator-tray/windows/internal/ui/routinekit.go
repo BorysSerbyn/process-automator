@@ -28,7 +28,10 @@ func healthDot(health string, size float32) fyne.CanvasObject {
 	if !ok {
 		c = healthColours["none"]
 	}
-	return container.NewCenter(sized(size, canvas.NewCircle(c)))
+	dot := canvas.NewCircle(c)
+	dot.StrokeColor = tint(theme.ColorNameForeground, 30)
+	dot.StrokeWidth = 0.5
+	return container.NewCenter(sized(size, dot))
 }
 
 // outcomeColour is the colour of a run's outcome tag.
@@ -49,25 +52,59 @@ func outcomeColour(outcome string) fyne.ThemeColorName {
 // outcomeTag is a run's outcome, as the core names it.
 func outcomeTag(outcome string) fyne.CanvasObject { return tag(outcome, outcomeColour(outcome)) }
 
-// linkRow is a row that opens something: its content, then a chevron; the
-// whole row is the button, and it highlights on hover.
+// linkRow is a row that opens something: its content, what goes at its
+// right (a summary, a button), then a chevron; the whole row is the button,
+// and it highlights on hover. Its content's text starts where a list's
+// divider does, whatever goes at its right.
 type linkRow struct {
 	widget.BaseWidget
-	content fyne.CanvasObject
-	open    func()
-	hover   *canvas.Rectangle
+	content  fyne.CanvasObject
+	trailing []fyne.CanvasObject
+	open     func()
+	hover    *canvas.Rectangle
 }
 
-func newLinkRow(open func(), content fyne.CanvasObject) *linkRow {
-	r := &linkRow{content: content, open: open, hover: canvas.NewRectangle(color.Transparent)}
+func newLinkRow(open func(), content fyne.CanvasObject, trailing ...fyne.CanvasObject) *linkRow {
+	r := &linkRow{content: content, trailing: trailing, open: open, hover: canvas.NewRectangle(color.Transparent)}
 	r.ExtendBaseWidget(r)
 	return r
 }
 
 func (r *linkRow) CreateRenderer() fyne.WidgetRenderer {
-	chevron := widget.NewIcon(theme.NavigateNextIcon())
-	row := container.NewBorder(nil, nil, nil, container.NewCenter(chevron), r.content)
-	return widget.NewSimpleRenderer(container.NewStack(r.hover, padded(4, 4, rowInset-6, rowInset-6, row)))
+	right := container.NewHBox()
+	for _, t := range r.trailing {
+		right.Add(container.NewCenter(t))
+	}
+	right.Add(container.NewCenter(chevron(false)))
+	row := container.NewBorder(nil, nil, nil, right, r.content)
+	return widget.NewSimpleRenderer(container.NewStack(r.hover, padded(4, 4, rowInset-theme.InnerPadding(), rowInset, row)))
+}
+
+// listInset is where a list's text starts in its row (and its dividers):
+// after its health dot.
+const listInset = rowInset + 10 + 10
+
+// listRow is a routine's or a hook's row in its list: its health dot, its
+// lines, its summary at the right (red when it's in error), Turn On… while
+// it needs turning on (turnOn nil: not), then the chevron. Every state lines
+// up the same: the dot, the text and the chevron don't move.
+func listRow(health string, content fyne.CanvasObject, summary string, turnOn, open func()) *linkRow {
+	var trailing []fyne.CanvasObject
+	if summary != "" {
+		trailing = append(trailing, fixedWidth(180, summaryText(summary, health == "error")))
+	}
+	if turnOn != nil {
+		b := widget.NewButton("Turn On…", turnOn)
+		b.Importance = widget.HighImportance
+		trailing = append(trailing, b)
+	}
+	dot := padded(0, 0, theme.InnerPadding(), 10-theme.InnerPadding(), healthDot(health, 10))
+	return newLinkRow(open, container.NewBorder(nil, nil, dot, nil, content), trailing...)
+}
+
+// listDivider is the hairline between a list's rows, from where their text starts.
+func listDivider() fyne.CanvasObject {
+	return padded(0, 0, listInset, 0, widget.NewSeparator())
 }
 
 // Tapped opens it.
@@ -107,7 +144,11 @@ func segmented(choices []string, chosen string, choose func(string)) fyne.Canvas
 
 // cardTitle is a card's title row, with what goes at its right.
 func cardTitle(title string, trailing ...fyne.CanvasObject) fyne.CanvasObject {
-	return padded(4, 0, rowInset-8, rowInset-8, container.NewBorder(nil, nil, nil, container.NewHBox(trailing...), heading(title, false)))
+	right := container.NewHBox()
+	for _, t := range trailing {
+		right.Add(container.NewCenter(t))
+	}
+	return padded(4, 0, rowInset-8, rowInset-8, container.NewBorder(nil, nil, nil, right, heading(title, false)))
 }
 
 // quiet is a small grey label.

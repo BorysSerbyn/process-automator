@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/BorysSerbyn/process-automator/automator-tray/internal/cli"
@@ -122,7 +123,7 @@ func (r *Routines) render() fyne.CanvasObject {
 		var rows []fyne.CanvasObject
 		for i, rt := range r.routines {
 			if i > 0 {
-				rows = append(rows, padded(0, 0, 38, 0, widget.NewSeparator()))
+				rows = append(rows, listDivider())
 			}
 			rows = append(rows, r.row(rt))
 		}
@@ -134,7 +135,7 @@ func (r *Routines) render() fyne.CanvasObject {
 }
 
 func (r *Routines) header() fyne.CanvasObject {
-	title := container.NewVBox(heading("Routines", true))
+	title := lines(pageTitle("Routines"))
 	if r.status != nil && r.status.Summary != "" && responding(r.status, r.now()) {
 		title.Add(secondary(r.status.Summary))
 	}
@@ -153,40 +154,33 @@ func (r *Routines) row(rt cli.RoutineInfo) fyne.CanvasObject {
 			last = st.LastRun
 		}
 	}
-	name := container.NewHBox(widget.NewLabelWithStyle(rt.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	name := container.NewHBox(rowTitle(rt.Name))
 	schedule := rt.ScheduleText
 	if schedule == "" {
 		schedule = "No schedule"
 	}
-	lines := container.NewVBox(name, secondary(schedule))
+	body := lines(name, secondary(schedule))
 	if last != nil {
-		lines.Add(lastRunLine(last, r.now()))
+		body.Add(lastRunLine(last, r.now()))
 	}
-	trailing := container.NewHBox()
-	if summary != "" {
-		s := widget.NewLabel(summary)
-		s.Truncation = fyne.TextTruncateEllipsis
-		if health == "error" {
-			s.Importance = widget.DangerImportance
-		} else {
-			s.Importance = widget.LowImportance
-		}
-		trailing.Add(fixedWidth(170, s))
-	}
-	row := container.NewBorder(nil, nil, healthDot(health, 10), container.NewCenter(trailing), lines)
 	name2 := rt.Name
-	return withTurnOn(rt.TurnOn, func() { r.turnOn(name2) }, newLinkRow(func() { r.openRoutine(name2) }, padded(4, 4, 0, 0, row)))
+	return listRow(health, padded(4, 4, 0, 0, body), summary, turnOnFunc(rt.TurnOn, func() { r.turnOn(name2) }), func() { r.openRoutine(name2) })
 }
 
-// withTurnOn puts Turn On… beside a list's row while it needs turning on:
-// it opens the window on its review.
-func withTurnOn(needed bool, turnOn func(), row fyne.CanvasObject) fyne.CanvasObject {
+// turnOnFunc is Turn On… for a list's row while it needs turning on (it
+// opens the window on its review), nil when it doesn't.
+func turnOnFunc(needed bool, turnOn func()) func() {
 	if !needed {
-		return row
+		return nil
 	}
-	b := widget.NewButton("Turn On…", turnOn)
-	b.Importance = widget.HighImportance
-	return container.NewBorder(nil, nil, nil, padded(0, 0, 0, rowInset-6, container.NewCenter(b)), row)
+	return turnOn
+}
+
+// rowTitle is a list row's name: bold, a little bigger than the lines under it.
+func rowTitle(s string) *widget.Label {
+	l := widget.NewLabelWithStyle(s, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	l.SizeName = theme.SizeNameSubHeadingText
+	return l
 }
 
 // lastRunLine is a last run in a line: when, how it ended, why.
@@ -195,10 +189,10 @@ func lastRunLine(last *cli.LastRun, now time.Time) fyne.CanvasObject {
 	if last.StartedAt != nil {
 		at = "Last run " + when(*last.StartedAt, now)
 	}
-	row := container.NewHBox(quiet(at), outcomeTag(last.Outcome))
+	row := container.NewHBox(secondaryLine(at), outcomeTag(last.Outcome))
 	if last.Reason != "" {
-		reason := quiet(last.Reason)
-		reason.Truncation = fyne.TextTruncateEllipsis
+		reason := secondary(last.Reason)
+		reason.Wrapping, reason.Truncation = fyne.TextWrapOff, fyne.TextTruncateEllipsis
 		return container.NewBorder(nil, nil, row, nil, reason)
 	}
 	return container.NewHBox(row, layout.NewSpacer())
