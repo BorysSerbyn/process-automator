@@ -16,6 +16,10 @@
 #   --yes                ask nothing (no terminal needed); setup is left to
 #                        `<COMMAND> setup` (or `setup --json` for an LLM)
 #   --files-only         only files: no login items started, no keychain (tests)
+#   --without-claude-code
+#                        install without Claude Code, for routines on another
+#                        model backend (otherwise Claude Code at
+#                        CLAUDE_CODE_MIN or later is required)
 # Environment: INSTALL_DIR, BIN_DIR (see scripts/install-app.sh). Public
 # releases are downloaded with curl, signed in to nothing. Private ones are
 # read with GH_TOKEN or GITHUB_TOKEN, else the first account the GitHub CLI is
@@ -39,6 +43,10 @@ COMMAND=procauto
 FOLDER=process-automator
 PUBLIC=1
 
+# The oldest Claude Code the claude-code backend is built and tested against
+# (the flags and output it relies on): an older one is refused.
+CLAUDE_CODE_MIN=2.1.331
+
 # Public releases are read from GitHub's web pages (WEB) with curl, ignoring
 # any .curlrc (-q) so nothing is sent but the request; private ones
 # through its API.
@@ -46,7 +54,7 @@ WEB=https://github.com
 API=https://api.github.com
 
 main() {
-  local version="" from="" yes="" files_only=""
+  local version="" from="" yes="" files_only="" claude_code=1
   while [ $# -gt 0 ]; do
     case $1 in
       --version|--from)
@@ -55,10 +63,11 @@ main() {
         shift 2 ;;
       --yes) yes=1; shift ;;
       --files-only) files_only=1; shift ;;
+      --without-claude-code) claude_code=""; shift ;;
       -h|--help)
         # Piped (curl ... | bash), there's no file to read the help from.
         if [ -f "$0" ]; then sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'
-        else echo "Options: --version <vX.Y.Z>, --from <archive>, --yes, --files-only (the script's header says more)"; fi
+        else echo "Options: --version <vX.Y.Z>, --from <archive>, --yes, --files-only, --without-claude-code (the script's header says more)"; fi
         exit 0 ;;
       *) die "unknown option $1 (see --help)" ;;
     esac
@@ -77,6 +86,7 @@ main() {
   esac
   [ "$os/$arch" != macos/amd64 ] || die "$NAME needs a Mac with Apple silicon: there's no release for Intel Macs"
   prerequisites "$os" "$from"
+  [ -z "$claude_code" ] || check_claude_code
   [ -n "$from" ] || [ -n "$PUBLIC" ] || pick_token
 
   tmp=$(mktemp -d)
@@ -164,6 +174,30 @@ prerequisites() {
     have secret-tool || say "Note: secret-tool isn't installed; sign-ins need it to keep their secrets (package libsecret-tools)."
   fi
   if [ ${#missing[@]} -gt 0 ]; then die "missing: ${missing[*]}"; fi
+}
+
+# check_claude_code: Claude Code is installed, at CLAUDE_CODE_MIN or later.
+check_claude_code() {
+  local how="install it (https://claude.com/claude-code), or pass --without-claude-code to use another model backend"
+  have claude || die "$NAME needs Claude Code $CLAUDE_CODE_MIN or later, and \`claude\` isn't on your PATH: $how"
+  local v
+  v=$(claude --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n 1) || v=""
+  [ -n "$v" ] || die "can't tell which Claude Code \`claude\` is (\`claude --version\` printed no version): $NAME needs $CLAUDE_CODE_MIN or later"
+  version_at_least "$v" "$CLAUDE_CODE_MIN" ||
+    die "$NAME needs Claude Code $CLAUDE_CODE_MIN or later, and yours is $v: update it (\`claude update\`), then run this again"
+  say "Claude Code $v OK."
+}
+
+# version_at_least <a> <b>: dotted version a is b or later.
+version_at_least() {
+  local IFS=. i x y
+  # shellcheck disable=SC2206 # split on dots
+  local a=($1) b=($2)
+  for ((i = 0; i < ${#a[@]} || i < ${#b[@]}; i++)); do
+    x=${a[i]:-0} y=${b[i]:-0}
+    if ((10#$x > 10#$y)); then return 0; fi
+    if ((10#$x < 10#$y)); then return 1; fi
+  done
 }
 
 token() { echo "${GH_TOKEN:-${GITHUB_TOKEN:-}}"; }

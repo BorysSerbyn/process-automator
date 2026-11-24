@@ -34,6 +34,25 @@ sum() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 
 # A SHA256SUMS beside the artifact, as a release has.
 cp "$artifact" "$sandbox/"
 (cd "$sandbox" && sum "$(basename "$artifact")" > SHA256SUMS)
+# Claude Code, as a stand-in reporting a version: the real one never runs.
+claude_min=$(install_var CLAUDE_CODE_MIN)
+[ -n "$claude_min" ] || fail "$installer has no CLAUDE_CODE_MIN"
+fake_claude() { mkdir -p "$sandbox/$1" && printf '#!/bin/sh\necho "%s (Claude Code)"\n' "$2" > "$sandbox/$1/claude" && chmod +x "$sandbox/$1/claude"; }
+fake_claude claude-old 0.9.0
+fake_claude claude-ok "$claude_min"
+
+echo "--- Claude Code check"
+if out=$(PATH="$sandbox/claude-old:$PATH" "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
+  fail "an older Claude Code than $claude_min was accepted"
+fi
+grep -q "needs Claude Code $claude_min or later, and yours is 0.9.0" <<<"$out" || fail "an older Claude Code was refused without saying so: $out"
+if out=$(PATH=/usr/bin:/bin:/usr/sbin:/sbin "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
+  fail "installing without Claude Code was accepted"
+fi
+grep -q "isn't on your PATH" <<<"$out" || fail "a missing Claude Code was refused without saying so: $out"
+[ ! -e "$HOME/.local/bin/$command" ] || fail "a refused install left files"
+export PATH="$sandbox/claude-ok:$PATH"
+
 echo "--- install"
 "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only
 

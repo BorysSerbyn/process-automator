@@ -13,6 +13,7 @@ Process Automator runs **routines**: prompt files that a model (Claude) runs on 
 
 ## Requirements
 - macOS 14 or later on a Mac with Apple silicon (Intel Macs aren't supported), or Linux (x86-64 or ARM64)
+- [Claude Code](https://claude.com/claude-code) at the version `install.sh` names (`CLAUDE_CODE_MIN`) or later: the installer refuses an older one (`claude update`). Routines on another model backend don't need it: `--without-claude-code`
 - Linux only: `secret-tool` (package `libsecret-tools`) to keep sign-ins, and a systemd user session to start the scheduler at login. The tray needs a desktop with a system tray (StatusNotifierItem): on GNOME, the AppIndicator extension, which Ubuntu enables by default
 
 ## Install
@@ -37,7 +38,7 @@ It downloads the latest release for your machine, checks its checksum (and on ma
 | macOS | `~/Applications/Process Automator.app` |
 | Linux | `~/.local/lib/process-automator` |
 
-`./install.sh --help` lists its options (`--version`, `--from <archive>`, `--yes`).
+`./install.sh --help` lists its options (`--version`, `--from <archive>`, `--yes`, `--without-claude-code`).
 
 ### Building it from the checkout
 When there's no published release for your machine, `install.sh` says so. Build it instead:
