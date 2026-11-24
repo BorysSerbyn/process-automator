@@ -356,9 +356,16 @@ graphical_session() {
 }
 
 # start_tray <exe>: starts the tray in the session the one stopped ran in,
-# else in this one if it's graphical; fails when there's none.
+# else in this one if it's graphical; fails when there's none. Inside a
+# systemd service (an update runs as one, and so does a tray KDE or GNOME
+# started from its autostart entry), a new session isn't enough: when the
+# service ends, systemd stops everything left in it, the tray started here
+# included. There the tray starts as a unit of its own (start_tray_unit).
 start_tray() {
   local exe=$1
+  if [ -n "${INVOCATION_ID:-}" ] && start_tray_unit "$exe"; then
+    return 0
+  fi
   if [ ${#tray_env[@]} -gt 0 ]; then
     setsid env -i "${tray_env[@]}" "$exe" </dev/null >/dev/null 2>&1 &
   elif graphical_session; then
@@ -366,6 +373,29 @@ start_tray() {
   else
     return 1
   fi
+}
+
+# start_tray_unit <exe>: starts the tray as a systemd user unit, so it
+# outlives the service this runs in: the tray's autostart unit when the
+# desktop starts autostart entries through systemd and it runs <exe> (login
+# then sees the tray as its own: KDE's Autostart settings show it running),
+# else a transient unit in the session the one stopped ran in. Fails without
+# a systemd user manager, so the caller starts it the usual way.
+start_tray_unit() {
+  local exe=$1 unit
+  command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1 || return 1
+  if [ -n "$UI_LABEL" ] && command -v systemd-escape >/dev/null 2>&1; then
+    unit="app-$(systemd-escape "${UI_LABEL%.desktop}")@autostart.service"
+    if systemctl --user show -p ExecStart --value "$unit" 2>/dev/null | grep -qF "$exe" &&
+      systemctl --user start "$unit" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+  command -v systemd-run >/dev/null 2>&1 || return 1
+  local env=()
+  [ ${#tray_env[@]} -eq 0 ] || env=(env -i "${tray_env[@]}")
+  systemd-run --user --collect --quiet --property=Type=exec \
+    --unit="$COMMAND-tray-$(date +%s)" -- "${env[@]}" "$exe" </dev/null >/dev/null 2>&1
 }
 
 launchd_domain() { echo "gui/$(id -u)"; }
