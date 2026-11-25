@@ -74,7 +74,7 @@ A routine's screen (or a program's, for a program hook), but:
 How it runs (its interval and timeout, when polled), when it last polled or started and last printed an event, and why it's failing; **Events it prints**: each event its file declares, by its label, with the hooks acting on it (one that declares none says to list them, without turning anything red); the hooks listening (click one to open it); what it runs (its executable and SHA-256, arguments, secrets with **Sign In…**), with **Trust** while it isn't trusted (turning on a hook that listens to it trusts it too, so this is rarely needed); and its description file, read-only. **Pause** stops it (the hooks listening show that as their problem); **Delete…** keeps the hooks listening, which then hear nothing.
 
 ## Acknowledgements
-Each notification a routine or hook asked you to acknowledge: its title and text, what sent it and when, **Show Run**, and **Acknowledge**; **Acknowledge All** when there are several. The notification itself has **Acknowledge** too (on Linux, where the desktop shows notification buttons); clicking the notification opens its run, without acknowledging it. The dot stays red until none waits.
+Each notification a routine or hook asked you to acknowledge: its title and text, what sent it and when, **Show Run**, and **Acknowledge**; **Acknowledge All** when there are several; **All caught up** when none waits. Under them, **Past acknowledgements**: the ones you've acknowledged, the most recent first, each with when you acknowledged it and **Show Run**; the latest few show, **Show More** shows older ones (the app keeps them up to 30 days). Acknowledging one moves it there. The notification itself has **Acknowledge** too (on Linux, where the desktop shows notification buttons); clicking the notification opens its run, without acknowledging it. The dot stays red until none waits.
 
 ## Setup
 Setup's steps, grouped: **Templates** (tick templates, fill in their parameters, **Install Selected**), **Model backend** (pick one; **Enter API Key…** for `claude-api`; on `local`, its server and model appear under the choice: Enter keeps Ollama on this machine, then type the model, e.g. `qwen3:8b`), **Plan usage** (**Set Up**), **Claude Code** (connected as soon as Setup shows it; **Connect** tries again), **Routines to fix** (**Open <routine>…**), **Sign-ins** (**Sign In…** opens your browser), **Turn on routines** (each one's review, as [[#Turning one on]] shows it, then **Trust and Turn On**: it's trusted and runs on its schedule). **Check Again** re-reads where setup stands. See [[Guides/Getting started#Set it up|Set it up]].
@@ -101,7 +101,7 @@ A screen opens in your terminal instead (`$TERMINAL`, else the first of `xdg-ter
 | Routines | `procauto routines list` |
 | A routine | `procauto routines show <routine>` (on its review: `procauto routines trust <routine> --resume`; on a run: `procauto runs show <run>`) |
 | Hooks | `procauto hooks list` |
-| Acknowledgements | `procauto notifications list --waiting` |
+| Acknowledgements | `procauto notifications list --waiting` (past ones: `--acknowledged`) |
 | A hook | `procauto hooks show <hook>` (on its review: `procauto hooks trust <hook> --resume`; on a run: `procauto runs show <run>`) |
 | A watcher | `procauto watchers show <watcher>` |
 | Updates | `procauto update --ask` |
