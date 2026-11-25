@@ -36,14 +36,6 @@ struct RoutineDetailView: View {
                         title: "Couldn't read \(model.name)", message: error, systemImage: "xmark.octagon.fill",
                         tint: .red)
                 }
-                if let detail = model.detail, detail.turnOn == true {
-                    Banner(
-                        title: "\(model.name) isn't on", message: detail.untrusted ?? "It's paused.",
-                        systemImage: "power"
-                    ) {
-                        Button("Turn On…", action: model.startTurnOn)
-                    }
-                }
                 if let detail = model.detail {
                     PermissionsBanner(name: model.name, permissions: detail.permissions ?? [], granter: model.granter)
                 }

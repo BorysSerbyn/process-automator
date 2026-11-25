@@ -175,15 +175,14 @@ func TestTurningOnARoutine(t *testing.T) {
 		"memory list --routine digest --json":   "[]",
 	})
 	c := r.Content()
-	mustShow(t, c, "digest isn't on", "it's never been trusted", "Can't schedule", "Never", "None")
-	if len(buttons(c, "Turn On…")) != 2 || len(buttons(c, "Pause")) != 0 || len(buttons(c, "Resume")) != 0 {
+	mustShow(t, c, "Can't schedule", "Never", "None")
+	if len(buttons(c, "Turn On…")) != 1 || len(buttons(c, "Pause")) != 0 || len(buttons(c, "Resume")) != 0 {
 		t.Fatal("not one action, Turn On…, for a routine that's off")
 	}
 	r.ShowTab(RunsTab)
 	mustShow(t, r.Content(), "It hasn't run yet.")
 	test.Tap(button(t, r.Content(), "Turn On…"))
 	mustShow(t, r.Content(), "Turn on digest", "Details")
-	mustNotShow(t, r.Content(), "digest isn't on")
 	test.Tap(rowOf(t, r.Content(), "Details"))
 	mustShow(t, r.Content(), "notify_me", "Tinted tools write")
 	test.Tap(button(t, r.Content(), "Trust and Turn On"))

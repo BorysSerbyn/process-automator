@@ -407,16 +407,6 @@ func (h *Hook) render() fyne.CanvasObject {
 	}
 	if h.turnOn.showing {
 		box.Add(h.turnOn.view())
-	} else if d := h.detail; d != nil && d.TurnOn {
-		why := d.Untrusted
-		if why == "" && d.Enabled {
-			why = d.Problem
-		}
-		if why == "" {
-			why = "It's off."
-		}
-		on := widget.NewButton("Turn On…", h.turnOn.start)
-		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(on), banner(h.name+" isn't on", why)))
 	}
 	if d := h.detail; d != nil && !h.turnOn.showing {
 		if b := h.granter.banner(h.name, d.Permissions); b != nil {

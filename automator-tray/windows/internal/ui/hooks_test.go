@@ -188,9 +188,10 @@ func TestTurningOnAHookAndItsWatcher(t *testing.T) {
 	}
 	h, f, events := newHookFor(t, "brief", replies)
 	c := h.Content()
-	mustShow(t, c, "Paused", "brief isn't on", "not trusted yet: review what it can reach")
+	mustShow(t, c, "Paused")
+	mustNotShow(t, c, "brief isn't on")
 	mustNotShow(t, c, "Its watcher cal isn't trusted")
-	if len(buttons(c, "Turn On…")) != 2 || len(buttons(c, "Resume")) != 0 || len(buttons(c, "Pause")) != 0 {
+	if len(buttons(c, "Turn On…")) != 1 || len(buttons(c, "Resume")) != 0 || len(buttons(c, "Pause")) != 0 {
 		t.Fatal("not one action, Turn On…, for a hook that's off")
 	}
 	test.Tap(button(t, c, "Turn On…"))

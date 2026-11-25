@@ -461,13 +461,6 @@ func (r *Routine) render() fyne.CanvasObject {
 	}
 	if r.turnOn.showing {
 		box.Add(r.turnOn.view())
-	} else if d := r.detail; d != nil && d.TurnOn {
-		why := d.Untrusted
-		if why == "" {
-			why = "It's paused."
-		}
-		on := widget.NewButton("Turn On…", r.turnOn.start)
-		box.Add(container.NewBorder(nil, nil, nil, container.NewCenter(on), banner(r.name+" isn't on", why)))
 	}
 	if d := r.detail; d != nil && !r.turnOn.showing {
 		if b := r.granter.banner(r.name, d.Permissions); b != nil {
