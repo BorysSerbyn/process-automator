@@ -236,6 +236,8 @@ func guideValues() map[string]string {
 		"command":        product.Command,
 		"outcomeTool":    agent.OutcomeTool,
 		"outcomes":       codeList([]string{agent.OutcomeDone, agent.OutcomeNothingToDo, agent.OutcomeFailed}, "or"),
+		"callCap":        fmt.Sprint(agent.CallResultCap >> 10),
+		"runCap":         fmt.Sprint(agent.RunResultCap >> 10),
 		"paramTypes":     codeList(types, "or"),
 		"resultEnv":      programs.ResultEnv,
 		"triggerEnv":     programs.TriggerEnv,

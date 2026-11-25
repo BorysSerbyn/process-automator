@@ -10,6 +10,10 @@ automator.parameters:
     description: Only notes about this
 model: anthropic/claude-sonnet-5-5
 tools: [list_notes, notify_me]      # the only tools the model may call
+automator.outcome:                  # how it reports: needed
+  done: I'm notified once about today's notes on the topic.
+  nothingToDo: [There are no notes about the topic]  # [] for none
+  writes: [notify_me]               # optional: done needs a successful call
 ---
 {{role "system"}}
 You read my notes for me, unattended: no one answers questions during a run.
@@ -18,4 +22,5 @@ You read my notes for me, unattended: no one answers questions during a run.
 {{role "user"}}
 Today is {{today}}. List my notes and pick those about {{topic}}.
 If there are any, notify me once: a short title, one line per note.
+If the notes can't be listed, or the list looks cut short, that's a failure, not "no notes".
 Reply with the notification you sent, or that there was nothing.
