@@ -164,6 +164,9 @@ func (t *Template) parse(text string) error {
 		if err != nil {
 			return err
 		}
+		if err := hooks.RequireOutcome(h); err != nil {
+			return err
+		}
 		t.describe(h.Description)
 		t.Watcher, t.On = h.On.Watcher, h.On.Type
 	case KindWatcher:

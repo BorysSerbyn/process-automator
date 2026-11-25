@@ -41,7 +41,7 @@ func TestHookCommands(t *testing.T) {
 	watcher := hookFiles(t, watchers.DescriptionFile, "description: My calendar\nexecutable: ./watch\nmode: poll\ninterval: 30s\n", "watch", "true\n")
 	program := hookFiles(t, hooks.DescriptionFile, "description: Opens Meet\nexecutable: ./act\nwrites: true\n"+
 		"on: {watcher: cal, type: meeting.started}\nstaleness: 2m\n", "act", "echo \"args: $*\"\ncat\n")
-	prompt := hookFiles(t, "brief.prompt", "---\ndescription: Briefs me\nautomator.on: {watcher: cal, type: meeting.started}\n"+
+	prompt := hookFiles(t, "brief.prompt", "---\ndescription: Briefs me\nautomator.on: {watcher: cal, type: meeting.started}\nautomator.outcome: {done: I have my brief, nothingToDo: []}\n"+
 		"automator.builtinTools: [Bash]\n---\nBrief me on {{event.data.title}}.\n", "", "")
 
 	// Watchers: added from a path only; it runs once trusted.
@@ -67,7 +67,7 @@ func TestHookCommands(t *testing.T) {
 	}
 	// Like routines create, it refuses servers and tools that don't exist.
 	bogus := filepath.Join(t.TempDir(), "bogus.prompt")
-	if err := os.WriteFile(bogus, []byte("---\nautomator.on: {watcher: cal}\nautomator.servers: [nowhere]\n---\nHi\n"), 0o600); err != nil {
+	if err := os.WriteFile(bogus, []byte("---\nautomator.on: {watcher: cal}\nautomator.servers: [nowhere]\nautomator.outcome: {done: I have my brief, nothingToDo: []}\n---\nHi\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := cli(t, cfg, "hooks", "add", "bogus", "--from", bogus); err == nil || !strings.Contains(out, "no installed plugin or server provides") {

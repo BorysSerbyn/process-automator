@@ -158,7 +158,7 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 			lastRunFinding(add, status, name, false)
 		}
 	}
-	hookFindings(cmd, a, status, add, addProblem)
+	hookFindings(cmd, a, status, add, addProblem, func(f Finding) { findings = append(findings, f) })
 	return findings
 }
 
@@ -183,7 +183,7 @@ func lastRunFinding(add func(area, subject, problem, fix string), status *runsta
 }
 
 // hookFindings adds what keeps each hook that's on from running.
-func hookFindings(cmd *cobra.Command, a *engine.App, status *runstatus.Status, add func(area, subject, problem, fix string), addProblem func(area, subject string, p engine.Problem)) {
+func hookFindings(cmd *cobra.Command, a *engine.App, status *runstatus.Status, add func(area, subject, problem, fix string), addProblem func(area, subject string, p engine.Problem), warn func(Finding)) {
 	all, broken, err := a.Hooks()
 	if err != nil {
 		add("hook", "hooks folder", err.Error(), "")
@@ -200,6 +200,11 @@ func hookFindings(cmd *cobra.Command, a *engine.App, status *runstatus.Status, a
 		rd.Check(cmd.Context(), a, x)
 		for _, p := range rd.All() {
 			addProblem("hook", x.Name(), p)
+		}
+		for _, w := range rd.Warnings {
+			warn(Finding{Area: "hook", Subject: x.Name(), Problem: w, Warning: true,
+				Fix: "add " + routines.Namespace + ".outcome to its prompt (`" + product.Command + " guide hooks`), then `" +
+					product.Command + " hooks update " + x.Name() + " --from <file>`"})
 		}
 		if rd.ConfigErr == nil {
 			lastRunFinding(add, status, x.Name(), true)

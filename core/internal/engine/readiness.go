@@ -103,7 +103,7 @@ func (a *App) Assess(x Runnable) Readiness {
 	}
 	rd.Problems = append(x.problems(a), PermissionProblems(x.Name(), a.Permissions(x))...)
 	rd.Untrusted, rd.TrustErr = a.Untrusted(x)
-	if l, ok := x.(*llmRoutine); ok && !l.r.Outcome.Declared() {
+	if outcomeUndeclared(x) {
 		rd.Warnings = append(rd.Warnings, routines.ErrNoOutcome.Error()+
 			"; until it does, it can report only done or failed, told nothing of what done means")
 	}
@@ -117,4 +117,15 @@ func (rd *Readiness) Check(ctx context.Context, a *App, x Runnable) {
 	if rd.ConfigErr == nil {
 		x.check(ctx, a, rd)
 	}
+}
+
+// outcomeUndeclared is an LLM routine or hook without an outcome contract.
+func outcomeUndeclared(x Runnable) bool {
+	switch v := x.(type) {
+	case *llmRoutine:
+		return !v.r.Outcome.Declared()
+	case *hook:
+		return v.h.Prompt != nil && !v.h.Prompt.Outcome.Declared()
+	}
+	return false
 }

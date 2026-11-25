@@ -544,9 +544,10 @@ func parseOutcome(m map[string]any, tools []string) (agent.Contract, error) {
 var ErrNoOutcome = errors.New("it declares no " + Namespace + ".outcome: say what done means (" + Namespace +
 	".outcome.done) and the only cases of nothing to do (" + Namespace + ".outcome.nothingToDo, [] for none)")
 
-// RequireOutcome is ErrNoOutcome for a routine without a contract.
+// RequireOutcome is ErrNoOutcome for a routine (or an LLM hook's prompt)
+// without a contract.
 func RequireOutcome(r Routine) error {
-	if r.Hook || r.Outcome.Declared() {
+	if r.Outcome.Declared() {
 		return nil
 	}
 	return ErrNoOutcome

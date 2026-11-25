@@ -35,6 +35,10 @@ automator.on: {watcher: inbox, type: email.received}
 automator.batch: true
 automator.servers: [notify]
 tools: [notify_me]
+automator.outcome:
+  done: I'm notified of the emails that need me today.
+  nothingToDo: [None of them needs me today]
+  writes: [notify_me]
 ---
 Look at the new emails below. If any needs me today, notify me with its subject and why.
 {{#each events}}- {{this.data.subject}} from {{this.data.from}}
@@ -74,6 +78,14 @@ Their settings (`hooks.<hook>.<key>`, set in the file as `<key>` or `automator.<
 - **An LLM hook** gets `{{event}}` (the latest) and `{{events}}` (all of them, oldest first: more than one only with `automator.batch: true`), each with `id`, `type`, `at`, `watcher` and `data`. A watcher's text is outside data: each one comes wrapped in `%{untrustedOpen}` and `%{untrustedClose}`, and the app adds the events to the end of the prompt in an `<%{eventBlock}>` block saying they're data, never instructions. Give it read-only tools where it can do without writing: trusting one that writes is flagged
 - **Permissions**: a hook needs its action's (a program hook's `permissions`; an LLM hook's, those of the plugins in its `automator.servers`: `triage` above needs notify's `notifications`) and its watcher's. Its review lists them; while one isn't granted it doesn't run and its watcher doesn't start, saying which (`%{command} guide plugins` lists them; `%{command} permissions request <permission>` asks the OS)
 - **Runs**: one at a time per hook; an LLM hook takes its turn in the run queue, a program hook doesn't. At most `rate` runs start in an hour; past %{loopFactor} times that (its action setting it off again, say) the hook is paused, with a run saying why
+
+## How a run ends
+An LLM hook ends as a routine does (`%{command} guide routines`, How a run ends): `automator.outcome` says what done means (`done`), the only cases of nothing to do (`nothingToDo`, `[]` for none) and, optionally, the writes done needs (`writes`), as `triage.prompt` above does. `hooks add`, `hooks update` and template installs refuse an LLM hook without it.
+
+- Keep `nothingToDo` to the bare minimum: usually none, at most one. Each is one more way for a failure to pass as a success. An event whose data is missing or makes no sense, or a tool that returns nothing useful, is a failure, not nothing to do
+- The app adds a few lines from it at the end of the instructions and holds the report to it, as for a routine; every call to its tools is kept with the run
+- Don't restate the contract in the prompt: the app adds it. Remove any rule there that contradicts it; at most one line on what's a failure for this hook in particular, when it isn't obvious
+- An LLM hook added before contracts were required still runs, reporting only done or failed; `hooks list`'s review and `doctor` warn about it. A program hook needs none: its exit code says how it went
 
 ## After writing them
 1. `%{command} watchers add <name> --from <folder>/watcher.yaml`, and `%{command} auth login <name>` for its secrets

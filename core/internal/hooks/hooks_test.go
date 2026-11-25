@@ -11,7 +11,7 @@ import (
 
 const programHook = "description: Opens Meet\nexecutable: ./act\nwrites: false\non: {watcher: calendar, type: meeting.started}\nstaleness: 2m\nrate: 5\n"
 
-const promptHook = "---\ndescription: Triage\nautomator.on: {watcher: inbox, type: email.received}\nautomator.batch: true\nautomator.rate: 10\n---\nLook at {{event.data.subject}}.\n"
+const promptHook = "---\ndescription: Triage\nautomator.on: {watcher: inbox, type: email.received}\nautomator.batch: true\nautomator.rate: 10\nautomator.outcome: {done: I know which emails need me, nothingToDo: []}\n---\nLook at {{event.data.subject}}.\n"
 
 func TestParse(t *testing.T) {
 	h, err := Parse("open-meet", DescriptionFile, programHook)
@@ -120,5 +120,25 @@ func TestAddLoadDelete(t *testing.T) {
 	}
 	if path, err := Delete(store, "triage"); err != nil || !strings.HasSuffix(path, PromptFile) || Exists(store, "triage") {
 		t.Fatalf("delete: %s %v", path, err)
+	}
+}
+
+// An LLM hook must declare its outcome contract to be added; one already on
+// disk without one still loads (it's offered only done or failed).
+func TestAddRequiresAnOutcomeContract(t *testing.T) {
+	src := t.TempDir()
+	bare := filepath.Join(src, "bare.prompt")
+	_ = os.WriteFile(bare, []byte("---\nautomator.on: {watcher: inbox}\n---\nGo.\n"), 0o600)
+	store := filepath.Join(t.TempDir(), "hooks")
+	if _, err := Add(store, "bare", bare, false); err == nil || !strings.Contains(err.Error(), "outcome") {
+		t.Fatalf("added an LLM hook without a contract: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(store, "bare"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(store, "bare", PromptFile), []byte("---\nautomator.on: {watcher: inbox}\n---\nGo.\n"), 0o600)
+	set, err := Load(store)
+	if err != nil || len(set.Hooks) != 1 || len(set.Errors) != 0 || set.Hooks[0].Prompt.Outcome.Declared() {
+		t.Fatalf("an older hook without a contract: %+v %v", set, err)
 	}
 }

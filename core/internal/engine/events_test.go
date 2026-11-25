@@ -320,7 +320,7 @@ func TestBatching(t *testing.T) {
 	m := &fakeModel{gate: make(chan struct{})}
 	useModel(t, a, m)
 	addWatcher(t, a, "inbox", "executable: ./watch\nmode: stream\n", "exec sleep 30\n")
-	addHook(t, a, "triage", "triage.prompt", "---\nautomator.on: {watcher: inbox}\nautomator.batch: true\n---\nGo. {{> memories}}\n", "")
+	addHook(t, a, "triage", "triage.prompt", "---\nautomator.on: {watcher: inbox}\nautomator.batch: true\nautomator.outcome: {done: It is done, nothingToDo: []}\n---\nGo. {{> memories}}\n", "")
 	e, stop := startEvents(t, a)
 	defer stop()
 	if len(e.listening["inbox"]) != 1 {

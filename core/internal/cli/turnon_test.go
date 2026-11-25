@@ -90,7 +90,7 @@ func TestTurningAHookOnTrustsItsWatcher(t *testing.T) {
 	}
 
 	// No such watcher: the hook is trusted, the review says why it hears nothing.
-	missing := hookFiles(t, "lonely.prompt", "---\nautomator.on: {watcher: nowhere}\n---\nHi\n", "", "")
+	missing := hookFiles(t, "lonely.prompt", "---\nautomator.on: {watcher: nowhere}\nautomator.outcome: {done: I have my brief, nothingToDo: []}\n---\nHi\n", "", "")
 	cliJSON[HookChange](t, cfg, "hooks", "add", "turnon-lonely", "--from", missing)
 	lonely := cliJSON[TrustOutput](t, cfg, "hooks", "trust", "turnon-lonely", "--yes", "--resume")
 	if !lonely.Trusted || lonely.Watcher == nil || lonely.Watcher.Trusted || lonely.Watcher.Program != nil {

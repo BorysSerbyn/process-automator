@@ -310,6 +310,15 @@ func Exists(store, name string) bool {
 	return err == nil && info.IsDir()
 }
 
+// RequireOutcome is routines.ErrNoOutcome for an LLM hook without an
+// outcome contract; a program hook reports through its exit code.
+func RequireOutcome(h Hook) error {
+	if h.Prompt == nil {
+		return nil
+	}
+	return routines.RequireOutcome(*h.Prompt)
+}
+
 // Add copies the hook whose file is at from (a .prompt file, or a hook's
 // description file with the executable it names beside it) into store as
 // name: a new hook, or (replace) in place of the one there. Nothing changes
@@ -321,6 +330,9 @@ func Add(store, name, from string, replace bool) (Hook, error) {
 	}
 	h, err := Parse(name, from, string(raw))
 	if err != nil {
+		return Hook{}, err
+	}
+	if err := RequireOutcome(h); err != nil {
 		return Hook{}, err
 	}
 	switch exists := Exists(store, name); {

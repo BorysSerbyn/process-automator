@@ -216,7 +216,7 @@ func TestHookNeedsItsActionsAndWatchersPermissions(t *testing.T) {
 	addHook(t, a, "click", hooks.DescriptionFile,
 		"executable: ./act\nwrites: false\non: {watcher: keys}\npermissions: [accessibility]\n", "true\n")
 	addHook(t, a, "tell", "tell.prompt",
-		"---\nautomator.on: {watcher: keys}\nautomator.servers: [notify]\ntools: [notify_me]\n---\nTell me.", "")
+		"---\nautomator.on: {watcher: keys}\nautomator.servers: [notify]\ntools: [notify_me]\nautomator.outcome: {done: It is done, nothingToDo: []}\n---\nTell me.", "")
 	click, _ := a.FindHook("click")
 	tell, _ := a.FindHook("tell")
 	if got := needNames(a.Permissions(click)); got != "input-monitoring=not-checked(watcher:keys) accessibility=not-checked(hook:click)" {
