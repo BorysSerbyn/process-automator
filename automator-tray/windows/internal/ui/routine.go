@@ -641,8 +641,9 @@ func firstNonEmpty(s ...string) string {
 }
 
 // toolCalls are every call the run made, in order (older records: only its
-// writes), with their arguments and errors; writes are tinted.
-func toolCalls(res *cli.RunResult) fyne.CanvasObject {
+// writes), folded under their heading until open: each with its arguments
+// and what it returned or its error; writes are tinted.
+func toolCalls(res *cli.RunResult, open bool, toggle func()) fyne.CanvasObject {
 	calls := res.Calls
 	if len(calls) == 0 {
 		for _, w := range res.Writes {
@@ -652,15 +653,25 @@ func toolCalls(res *cli.RunResult) fyne.CanvasObject {
 	if len(calls) == 0 {
 		return container.NewHBox()
 	}
-	writes := 0
+	writes, failed := 0, 0
 	for _, c := range calls {
 		if c.Write {
 			writes++
+		}
+		if c.Error != "" {
+			failed++
 		}
 	}
 	title := plural(len(calls), "tool call", "tool calls")
 	if writes > 0 {
 		title += ", " + plural(writes, "write", "writes")
+	}
+	if failed > 0 {
+		title += ", " + itoa(failed) + " failed"
+	}
+	head := newDisclosure(open, false, toggle, quiet(title))
+	if !open {
+		return head
 	}
 	var rows []fyne.CanvasObject
 	for i, c := range calls {
@@ -673,6 +684,12 @@ func toolCalls(res *cli.RunResult) fyne.CanvasObject {
 			name.Importance = widget.WarningImportance
 			line.Add(tag("write", theme.ColorNameWarning))
 		}
+		if c.Intercepted {
+			line.Add(tag("intercepted", theme.ColorNamePrimary))
+		}
+		if c.At != nil {
+			line.Add(quiet(c.At.Local().Format("15:04:05")))
+		}
 		row := container.NewVBox(line)
 		for _, a := range arguments(c.Args) {
 			arg := widget.NewLabelWithStyle(a, fyne.TextAlignLeading, fyne.TextStyle{Monospace: true})
@@ -680,12 +697,45 @@ func toolCalls(res *cli.RunResult) fyne.CanvasObject {
 			arg.SizeName = captionSize
 			row.Add(padded(-8, -4, 24, 0, arg))
 		}
-		if c.Error != "" {
+		switch {
+		case c.Error != "":
 			row.Add(padded(0, 0, 24, 0, errorRow(c.Error)))
+		case c.Result != "":
+			// What the tool returned is outside data: shown as it came.
+			out := widget.NewLabelWithStyle("→ "+c.Result, fyne.TextAlignLeading, fyne.TextStyle{Monospace: true})
+			out.Wrapping = fyne.TextWrapBreak
+			out.SizeName = captionSize
+			row.Add(padded(-8, -4, 24, 0, out))
+		}
+		if note := clippedText(c); note != "" {
+			row.Add(padded(0, 0, 24, 0, quiet(note)))
 		}
 		rows = append(rows, padded(2, 2, 6, 6, row))
 	}
-	return container.NewVBox(quiet(title), card(true, rows...))
+	return container.NewVBox(head, card(true, rows...))
+}
+
+// clippedText says what of a call's result the record kept, when it was
+// clipped (automator-ui's words).
+func clippedText(c cli.ToolCall) string {
+	if !c.Truncated {
+		return ""
+	}
+	kept := len(c.Result)
+	if c.Error != "" {
+		kept = len(c.Error)
+	}
+	if c.ResultSize <= 0 {
+		return "Clipped: the run's record keeps only so much."
+	}
+	return "Clipped: " + byteSize(kept) + " of " + byteSize(c.ResultSize) + " kept."
+}
+
+func byteSize(n int) string {
+	if n < 1024 {
+		return itoa(n) + " bytes"
+	}
+	return itoa((n+512)/1024) + " KiB"
 }
 
 // arguments are a call's arguments by name: text as is, anything else as JSON.

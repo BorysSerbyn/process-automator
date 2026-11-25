@@ -149,6 +149,16 @@ struct RunDetail: View {
                 if result.dryRun { Tag(text: "dry run", tint: .blue) }
             }
         }
+        if let kase = result._case, !kase.isEmpty {
+            Text("Nothing to do: \(kase)").font(.subheadline).fixedSize(horizontal: false, vertical: true)
+        }
+        if let evidence = result.evidence, !evidence.isEmpty {
+            Text(verbatim: evidence)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if !result.text.isEmpty {
             Text(markdown(result.text))
                 .textSelection(.enabled)
@@ -241,20 +251,37 @@ struct ProgramRunView: View {
     }
 }
 
-/// Every tool call a run made, in order: one row each, opening to its
-/// arguments; writes are tinted and start open.
+/// Every tool call a run made, in order, folded under its heading: one row
+/// each, opening to its arguments and what it returned or its error; writes
+/// are tinted and start open.
 struct ToolCallsView: View {
     let calls: [Components.Schemas.Call]
+    @State private var open = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(heading)
-                .font(.subheadline.weight(.semibold))
+            Button {
+                open.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                        .frame(width: 12)
+                    Text(heading).font(.subheadline.weight(.semibold))
+                }
                 .foregroundStyle(.secondary)
-            SettingsCard(nested: true) {
-                ForEach(Array(calls.enumerated()), id: \.offset) { index, call in
-                    if index > 0 { Divider().padding(.leading, 34) }
-                    CallRow(number: index + 1, call: call)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(open ? "expanded" : "collapsed")
+            .help(open ? "Hide the tool calls" : "Show the tool calls")
+            if open {
+                SettingsCard(nested: true) {
+                    ForEach(Array(calls.enumerated()), id: \.offset) { index, call in
+                        if index > 0 { Divider().padding(.leading, 34) }
+                        CallRow(number: index + 1, call: call)
+                    }
                 }
             }
         }
@@ -262,13 +289,16 @@ struct ToolCallsView: View {
 
     private var heading: String {
         let writes = calls.filter(\.write).count
-        let total = calls.count == 1 ? "1 tool call" : "\(calls.count) tool calls"
-        return writes == 0 ? total : "\(total), \(writes == 1 ? "1 write" : "\(writes) writes")"
+        let failed = calls.filter(\.failed).count
+        var text = calls.count == 1 ? "1 tool call" : "\(calls.count) tool calls"
+        if writes > 0 { text += ", \(writes == 1 ? "1 write" : "\(writes) writes")" }
+        if failed > 0 { text += ", \(failed) failed" }
+        return text
     }
 }
 
 /// One tool call: its number, tool, whether it writes, and whether it
-/// failed; open, its arguments and error.
+/// failed; open, its arguments, and what it returned or its error.
 struct CallRow: View {
     let number: Int
     let call: Components.Schemas.Call
@@ -279,7 +309,7 @@ struct CallRow: View {
     private func toggle() { open = !isOpen }
 
     var body: some View {
-        DisclosureRow(open: isOpen, prominent: false, help: "its arguments", toggle: toggle) {
+        DisclosureRow(open: isOpen, prominent: false, help: "what it was called with and returned", toggle: toggle) {
             Text("\(number)")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.tertiary)
@@ -288,19 +318,55 @@ struct CallRow: View {
                 .font(.callout.monospaced())
                 .foregroundStyle(call.write ? Color.orange : Color.primary)
             if call.write { Tag(text: "write", tint: .orange) }
+            if call.intercepted == true { Tag(text: "intercepted", tint: .blue) }
             Spacer(minLength: 8)
-            if call.error?.isEmpty == false {
+            if let at = call.at {
+                Text(at.formatted(date: .omitted, time: .standard))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+            if call.failed {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red).help("It failed")
             }
         }
         if isOpen {
             VStack(alignment: .leading, spacing: 6) {
                 ArgumentsView(args: call.args)
-                if let error = call.error, !error.isEmpty { RowError(message: error) }
+                if let error = call.error, !error.isEmpty {
+                    RowError(message: error)
+                } else if let result = call.result, !result.isEmpty {
+                    CallResultView(text: result)
+                }
+                if let note = call.truncatedText {
+                    Label(note, systemImage: "scissors").font(.caption).foregroundStyle(.secondary)
+                }
             }
             .padding(.leading, 58)
             .padding(.trailing, SettingsMetrics.rowInset)
             .padding(.bottom, 10)
+        }
+    }
+}
+
+/// What a tool returned, as it came (monospace, never read as markup); a
+/// long one scrolls in a box of its own.
+struct CallResultView: View {
+    let text: String
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        let label = Text(verbatim: text)
+            .font(.caption.monospaced())
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        if text.split(separator: "\n", omittingEmptySubsequences: false).count > 16 || text.count > 1500 {
+            ScrollView { label }
+                .frame(height: 220)
+                .background(Color.primary.opacity(0.035), in: shape)
+        } else {
+            label.background(Color.primary.opacity(0.035), in: shape)
         }
     }
 }

@@ -888,3 +888,22 @@ private let waitingNote = """
     try await Task.sleep(for: .milliseconds(300))
     #expect(!pending.busy)
 }
+
+@Test func readsTheToolCallRecord() throws {
+    let run = """
+        {"text":"","writes":[],"dryRun":false,"backend":"claude-code","toolCalls":3,"inputTokens":0,"outputTokens":0,
+         "cachedTokens":0,"promptSource":"p","outcome":"nothing_to_do","case":"My update is already in the thread",
+         "evidence":"my reply at 09:12","calls":[
+          {"tool":"read","args":{},"write":false,"at":"2026-11-25T09:00:00Z","result":"latest: April","truncated":true,"resultSize":9000},
+          {"tool":"post","args":{"text":"hi"},"write":true,"error":"not_in_channel"},
+          {"tool":"post","args":{},"write":true,"intercepted":true,"result":"DRY RUN"}]}
+        """
+    let r = try CoreJSON.decoder().decode(Components.Schemas.Result.self, from: Data(run.utf8))
+    let calls = try #require(r.calls)
+    #expect(r._case == "My update is already in the thread")
+    #expect(r.evidence == "my reply at 09:12")
+    #expect(calls[0].output == "latest: April")
+    #expect(calls[0].truncatedText == "Clipped: 13 bytes of 9 KiB kept.")
+    #expect(calls[1].failed && calls[1].output == "not_in_channel" && calls[1].truncatedText == nil)
+    #expect(calls[2].intercepted == true)
+}

@@ -132,8 +132,11 @@ type RunResult struct {
 	InputTokens  int        `json:"inputTokens"`
 	OutputTokens int        `json:"outputTokens"`
 	CachedTokens int        `json:"cachedTokens"`
-	// Outcome is the routine's own report: done or nothing_to_do.
-	Outcome string `json:"outcome,omitempty"`
+	// Outcome is the routine's own report: done or nothing_to_do; Case is
+	// the nothing-to-do case it cited, Evidence what it gave as showing it.
+	Outcome  string `json:"outcome,omitempty"`
+	Case     string `json:"case,omitempty"`
+	Evidence string `json:"evidence,omitempty"`
 }
 
 // Write is a tool call that can change things (older records list only these).
@@ -143,12 +146,20 @@ type Write struct {
 	Error string         `json:"error,omitempty"`
 }
 
-// ToolCall is one tool call a run made (a write: one that can change things).
+// ToolCall is one tool call a run made (a write: one that can change
+// things), with what it returned or its error, as the run's record kept it:
+// Truncated when clipped, ResultSize then its size before; Intercepted is a
+// write a dry run didn't make.
 type ToolCall struct {
-	Tool  string         `json:"tool"`
-	Args  map[string]any `json:"args"`
-	Write bool           `json:"write,omitempty"`
-	Error string         `json:"error,omitempty"`
+	Tool        string         `json:"tool"`
+	Args        map[string]any `json:"args"`
+	Write       bool           `json:"write,omitempty"`
+	At          *time.Time     `json:"at,omitempty"`
+	Result      string         `json:"result,omitempty"`
+	Error       string         `json:"error,omitempty"`
+	Truncated   bool           `json:"truncated,omitempty"`
+	ResultSize  int            `json:"resultSize,omitempty"`
+	Intercepted bool           `json:"intercepted,omitempty"`
 }
 
 // Memory is one of a routine's memories (`memory list --routine`).

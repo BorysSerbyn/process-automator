@@ -243,7 +243,14 @@ func TestARoutinesRuns(t *testing.T) {
 	r.ShowTab(RunsTab)
 	c := r.Content()
 	mustShow(t, c, "2 runs", "2 tool calls", "$0.04", "Slack said: not_in_channel", "Posted the standup to #team.",
-		"done", "2 tool calls, 1 write", "post_message", "channel: #team", "1200 in · 340 out · 800 cached · claude-api")
+		"done", "Posted in #team at 09:21", "3 tool calls, 1 write", "1200 in · 340 out · 800 cached · claude-api")
+	// The tool calls are folded until opened: then each with its arguments
+	// and what it returned, clipped ones saying so.
+	mustNotShow(t, c, "channel: #team")
+	test.Tap(rowOf(t, c, "3 tool calls, 1 write"))
+	c = r.Content()
+	mustShow(t, c, "post_message", "channel: #team", "→ 3 messages, the latest at 09:02", "Clipped: 31 bytes of 9 KiB kept.",
+		"→ posted ts=1732", "report_outcome")
 	test.Tap(button(t, c, "Open Report"))
 	f.mustHaveRun(t, "runs show standup/2026-11-21T092001 --open")
 	// Closing it hides what it did.

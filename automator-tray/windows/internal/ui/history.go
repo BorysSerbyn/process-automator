@@ -36,11 +36,13 @@ type runHistory struct {
 	runErrors    map[string]string
 	openRuns     map[string]bool
 	openedLatest bool
+	// openCalls are the runs whose tool calls are shown (folded at first).
+	openCalls map[string]bool
 }
 
 func newRunHistory(c cli.CLI, async Async, name string, now func() time.Time, redraw func(), failed func(string)) *runHistory {
 	return &runHistory{cli: c, async: async, name: name, now: now, redraw: redraw, failed: failed,
-		entries: map[string]cli.RunEntry{}, runErrors: map[string]string{}, openRuns: map[string]bool{}}
+		entries: map[string]cli.RunEntry{}, runErrors: map[string]string{}, openRuns: map[string]bool{}, openCalls: map[string]bool{}}
 }
 
 // load reads the runs again; the latest starts open the first time.
@@ -186,12 +188,23 @@ func (h *runHistory) detail(id string) fyne.CanvasObject {
 		if len(tags.Objects) > 0 {
 			box.Add(tags)
 		}
+		if res.Case != "" {
+			box.Add(text("Nothing to do: " + res.Case))
+		}
+		if res.Evidence != "" {
+			evidence := quiet(res.Evidence)
+			evidence.Wrapping = fyne.TextWrapWord
+			box.Add(evidence)
+		}
 		if res.Text != "" {
 			out := text(res.Text)
 			out.Selectable = true
 			box.Add(card(true, padded(4, 4, 6, 6, out)))
 		}
-		box.Add(toolCalls(res))
+		box.Add(toolCalls(res, h.openCalls[id], func() {
+			h.openCalls[id] = !h.openCalls[id]
+			h.redraw()
+		}))
 		tokens := fmt.Sprintf("%d in · %d out · %d cached · %s", res.InputTokens, res.OutputTokens, res.CachedTokens, res.Backend)
 		box.Add(container.NewBorder(nil, nil, quiet(tokens), report))
 	} else {

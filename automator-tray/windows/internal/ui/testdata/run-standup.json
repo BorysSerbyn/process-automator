@@ -1,6 +1,8 @@
 {"id": "standup/2026-11-21T092001", "routine": "standup", "trigger": "schedule", "startedAt": "2026-11-21T09:20:01Z", "outcome": "success",
  "result": {"text": "Posted the standup to #team.", "writes": [{"tool": "post_message", "args": {"channel": "#team", "text": "Yesterday: …"}}],
-  "calls": [{"tool": "list_messages", "args": {"channel": "#team", "limit": 20}, "write": false},
-            {"tool": "post_message", "args": {"channel": "#team", "text": "Yesterday: …"}, "write": true}],
-  "dryRun": false, "backend": "claude-api", "toolCalls": 2, "inputTokens": 1200, "outputTokens": 340, "cachedTokens": 800,
-  "promptSource": "/home/me/.config/acme/routines/standup.prompt", "outcome": "done"}}
+  "calls": [{"tool": "list_messages", "args": {"channel": "#team", "limit": 20}, "write": false, "at": "2026-11-21T09:20:05Z",
+             "result": "3 messages, the latest at 09:02", "truncated": true, "resultSize": 9000},
+            {"tool": "post_message", "args": {"channel": "#team", "text": "Yesterday: …"}, "write": true, "result": "posted ts=1732"},
+            {"tool": "report_outcome", "args": {"outcome": "done", "reason": "posted"}, "write": false, "result": "Recorded."}],
+  "dryRun": false, "backend": "claude-api", "toolCalls": 3, "inputTokens": 1200, "outputTokens": 340, "cachedTokens": 800,
+  "promptSource": "/home/me/.config/acme/routines/standup.prompt", "outcome": "done", "evidence": "Posted in #team at 09:21"}}
