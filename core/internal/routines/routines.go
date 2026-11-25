@@ -73,6 +73,10 @@ type Routine struct {
 	// Plugins holds the routine's section for each in-process plugin it uses
 	// (automator.plugins.<name>), as written; the plugin decodes its own.
 	Plugins map[string]any
+	// Outcome is its outcome contract (automator.outcome): what done means,
+	// the only cases of nothing to do, and the writes done needs. Zero when
+	// it declares none.
+	Outcome agent.Contract
 	Source  string
 	// Hook is set for a hook's prompt (ParseHook): its settings are
 	// hooks.<name>.<field>, it has no schedule, and HookKeys holds the keys
@@ -116,7 +120,13 @@ var Fields = []Field{
 		"that doesn't list the selected backend won't install."},
 	{Name: "plugins", Written: Namespace + ".plugins.<name>", Type: "section", Description: "Settings for an in-process " +
 		"plugin that takes them from routines; the plugin must be one of its servers."},
+	{Name: "outcome", Type: "section", Description: "Its outcome contract (see How a run ends): `done`, what success means; " +
+		"`nothingToDo`, the only cases of nothing to do (none: it can't report nothing_to_do); `writes`, tools of its " +
+		"`tools` done needs a successful call of."},
 }
+
+// OutcomeKeys are automator.outcome's keys.
+var OutcomeKeys = []string{"done", "nothingToDo", "writes"}
 
 // Param is one routine parameter. Its value is a per-routine setting; a
 // parameter without a default is required.
@@ -315,9 +325,15 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 	// which Dotprompt files under the namespace "automator.plugins", or nested
 	// under automator.plugins; any other deeper automator.* key is unknown.
 	plugins := map[string]any{}
+	var outcome map[string]any // automator.outcome, dotted or nested
 	for ns, entries := range doc.Ext {
 		switch {
 		case ns == Namespace:
+		case ns == Namespace+".outcome":
+			outcome = map[string]any{}
+			for field, v := range entries {
+				outcome[field] = v
+			}
 		case ns == Namespace+".plugins":
 			for name, section := range entries {
 				plugins[name] = section
@@ -387,6 +403,15 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 				}
 				plugins[name] = section
 			}
+		case k == "outcome":
+			m, ok := v.(map[string]any)
+			if !ok {
+				return Routine{}, fmt.Errorf("%s.outcome: want a section (done, nothingToDo, writes)", Namespace)
+			}
+			if outcome != nil {
+				return Routine{}, fmt.Errorf("%s.outcome is written twice", Namespace)
+			}
+			outcome = m
 		case k == "platforms":
 			if err := decodeStrict(map[string]any{"p": v}, &struct {
 				P *[]string `json:"p"`
@@ -417,9 +442,14 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 	if err := agent.CheckToolNames(servers, doc.Tools); err != nil {
 		return Routine{}, fmt.Errorf("tools: %w", err)
 	}
+	contract, err := parseOutcome(outcome, doc.Tools)
+	if err != nil {
+		return Routine{}, err
+	}
 	r := Routine{
 		Name: name, Path: path, Servers: servers, Tools: doc.Tools, Model: doc.Model, Description: doc.Description,
 		File: file, Params: params, Platforms: platforms, Backends: backends, Source: string(raw),
+		Outcome: contract,
 	}
 	if hook {
 		r.Hook, r.HookKeys = true, hookKeys
@@ -462,6 +492,64 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 		}
 	}
 	return r, nil
+}
+
+// parseOutcome reads automator.outcome: done says what success is,
+// nothingToDo the only cases of nothing to do (both needed once the section's
+// there; [] for none), and writes are tools of its own done needs a
+// successful call of (optional).
+func parseOutcome(m map[string]any, tools []string) (agent.Contract, error) {
+	var c agent.Contract
+	if m == nil {
+		return c, nil
+	}
+	var in struct {
+		Done        string    `json:"done"`
+		NothingToDo *[]string `json:"nothingToDo"`
+		Writes      []string  `json:"writes"`
+	}
+	if err := decodeStrict(m, &in); err != nil {
+		return c, fmt.Errorf("%s.outcome: %w (its keys: %s)", Namespace, err, strings.Join(OutcomeKeys, ", "))
+	}
+	c.Done, c.Writes = strings.TrimSpace(in.Done), in.Writes
+	if c.Done == "" {
+		return c, fmt.Errorf("%s.outcome.done: say what success means, in a sentence", Namespace)
+	}
+	if in.NothingToDo == nil {
+		return c, fmt.Errorf("%s.outcome.nothingToDo: list the only cases in which there's nothing to do ([] for none)", Namespace)
+	}
+	seen := map[string]bool{}
+	for _, k := range *in.NothingToDo {
+		k = strings.TrimSpace(k)
+		switch {
+		case k == "":
+			return c, fmt.Errorf("%s.outcome.nothingToDo: a case is empty", Namespace)
+		case seen[k]:
+			return c, fmt.Errorf("%s.outcome.nothingToDo: %q is listed twice", Namespace, k)
+		}
+		seen[k] = true
+		c.NothingToDo = append(c.NothingToDo, k)
+	}
+	for _, w := range c.Writes {
+		if !slices.Contains(tools, w) {
+			return c, fmt.Errorf("%s.outcome.writes: %q isn't one of its tools", Namespace, w)
+		}
+	}
+	return c, nil
+}
+
+// ErrNoOutcome is a routine without an outcome contract: one written before
+// they were required still loads and runs, but a new or changed one, or a
+// template, needs one.
+var ErrNoOutcome = errors.New("it declares no " + Namespace + ".outcome: say what done means (" + Namespace +
+	".outcome.done) and the only cases of nothing to do (" + Namespace + ".outcome.nothingToDo, [] for none)")
+
+// RequireOutcome is ErrNoOutcome for a routine without a contract.
+func RequireOutcome(r Routine) error {
+	if r.Hook || r.Outcome.Declared() {
+		return nil
+	}
+	return ErrNoOutcome
 }
 
 // inputNames are the inputs every routine gets; parameters can't reuse them.
@@ -587,10 +675,12 @@ func ParseHook(path, name, source string) (Routine, error) {
 	return parseSource(path, name, []byte(source), true)
 }
 
-// Create validates source and writes it as a new routine in dir; it never
+// Create validates source (an outcome contract required) and writes it as a new routine in dir; it never
 // replaces an existing file.
 func Create(dir, name, source string) (Routine, error) {
-	if _, err := Parse(name, source); err != nil {
+	if r, err := Parse(name, source); err != nil {
+		return Routine{}, err
+	} else if err := RequireOutcome(r); err != nil {
 		return Routine{}, err
 	}
 	path := filepath.Join(dir, name+Ext)
@@ -616,9 +706,11 @@ func Create(dir, name, source string) (Routine, error) {
 	return parse(path, name)
 }
 
-// Update validates source and atomically replaces an existing routine's file.
+// Update validates source (an outcome contract required) and atomically replaces an existing routine's file.
 func Update(dir, name, source string) (Routine, error) {
-	if _, err := Parse(name, source); err != nil {
+	if r, err := Parse(name, source); err != nil {
+		return Routine{}, err
+	} else if err := RequireOutcome(r); err != nil {
 		return Routine{}, err
 	}
 	path := filepath.Join(dir, name+Ext)

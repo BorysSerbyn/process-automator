@@ -219,7 +219,7 @@ func TestServeEndToEnd(t *testing.T) {
 		}
 		return res
 	}
-	src := "---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * 1-5\"\n---\nSay hi. {{> memories}}\n"
+	src := "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * 1-5\"\n---\nSay hi. {{> memories}}\n"
 	if res := call("routines_create", map[string]any{"routine": "hello", "source": src}); res.IsError {
 		t.Fatalf("create: %s", resultText(res))
 	}

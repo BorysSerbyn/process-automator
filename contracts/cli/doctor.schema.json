@@ -3,7 +3,8 @@
   "$id": "doctor.schema.json",
   "properties": {
     "ok": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "OK is that there are no findings but warnings."
     },
     "findings": {
       "items": {
@@ -35,6 +36,10 @@
           },
           "open": {
             "type": "string"
+          },
+          "warning": {
+            "type": "boolean",
+            "description": "Warning is a finding that doesn't make the status red, nor doctor\nfail, but wants fixing (an LLM routine without an outcome contract)."
           }
         },
         "additionalProperties": false,

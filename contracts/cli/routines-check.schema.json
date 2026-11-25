@@ -50,6 +50,13 @@
         },
         "type": "array",
         "description": "Tools are an LLM routine's allowlisted tools and the server offering each."
+      },
+      "warnings": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "description": "Warnings don't keep it from running, but want fixing (an LLM routine\nwithout an outcome contract)."
       }
     },
     "additionalProperties": false,

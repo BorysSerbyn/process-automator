@@ -73,7 +73,7 @@ func TestRoutineDeleteClearsSettings(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	withNotesServer(t, cfg)
 	src := filepath.Join(t.TempDir(), "x.prompt")
-	_ = os.WriteFile(src, []byte("---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\n---\nhi {{> memories}}\n"), 0o600)
+	_ = os.WriteFile(src, []byte("---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\n---\nhi {{> memories}}\n"), 0o600)
 	if out, err := cli(t, cfg, "routines", "create", "x", "--from", src); err != nil || !strings.Contains(out, "paused") {
 		t.Fatalf("create: %s %v", out, err)
 	}
@@ -144,7 +144,7 @@ func TestRemoveKeepsSharedSecrets(t *testing.T) {
 func TestParallelCreateStaysDisabled(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	withNotesServer(t, cfg)
-	src := "---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\n---\nhi {{> memories}}\n"
+	src := "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\n---\nhi {{> memories}}\n"
 	var wg sync.WaitGroup
 	wins := make(chan bool, 8)
 	for range 8 {

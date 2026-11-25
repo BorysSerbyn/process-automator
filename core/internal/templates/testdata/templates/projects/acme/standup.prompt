@@ -1,5 +1,8 @@
 ---
 description: Drafts the team's daily stand-up from yesterday's work
+automator.outcome:
+  done: The stand-up draft is sent to me.
+  nothingToDo: []
 automator.schedule: "15 9 * * 1-5"
 automator.servers: [notify]
 automator.parameters:

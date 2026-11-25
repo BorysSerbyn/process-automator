@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
+	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 )
 
 // Readiness is whether a routine of either kind can run, as far as can be
@@ -29,6 +30,9 @@ type Readiness struct {
 	Problems []Problem
 	// Tools are an LLM routine's allowlisted tools as a run gets them (Check).
 	Tools []agent.CheckedTool
+	// Warnings don't keep it from running, but want fixing: an LLM routine
+	// without an outcome contract (written before they were required).
+	Warnings []string
 
 	trustFix string
 }
@@ -99,6 +103,10 @@ func (a *App) Assess(x Runnable) Readiness {
 	}
 	rd.Problems = append(x.problems(a), PermissionProblems(x.Name(), a.Permissions(x))...)
 	rd.Untrusted, rd.TrustErr = a.Untrusted(x)
+	if l, ok := x.(*llmRoutine); ok && !l.r.Outcome.Declared() {
+		rd.Warnings = append(rd.Warnings, routines.ErrNoOutcome.Error()+
+			"; until it does, it can report only done or failed, told nothing of what done means")
+	}
 	return rd
 }
 

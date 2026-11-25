@@ -143,7 +143,7 @@ func TestRoutineToolsChecked(t *testing.T) {
 	}
 	file := filepath.Join(filepath.Dir(cfg), "routines", "r.prompt")
 	src := func(server, tool string) string {
-		return "---\nautomator.servers: [" + server + "]\ntools: [" + tool + "]\n---\nGo. {{> memories}}\n"
+		return "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.servers: [" + server + "]\ntools: [" + tool + "]\n---\nGo. {{> memories}}\n"
 	}
 	out, err := cli(t, cfg, "routines", "create", "r", "--source", src("fx", "missing_thing"))
 	if err == nil || !strings.Contains(out, "prompt lists tools no connected server offers: missing_thing") {

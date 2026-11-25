@@ -10,6 +10,7 @@ import (
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
+	"github.com/BorysSerbyn/process-automator/core/internal/routines"
 	"github.com/BorysSerbyn/process-automator/core/internal/runstatus"
 )
 
@@ -25,10 +26,14 @@ type Finding struct {
 	// address of the OS's page that turns it on (absent when there's none).
 	Permission string `json:"permission,omitempty"`
 	Open       string `json:"open,omitempty"`
+	// Warning is a finding that doesn't make the status red, nor doctor
+	// fail, but wants fixing (an LLM routine without an outcome contract).
+	Warning bool `json:"warning,omitempty"`
 }
 
 // DoctorOutput is `doctor --json`.
 type DoctorOutput struct {
+	// OK is that there are no findings but warnings.
 	OK       bool      `json:"ok"`
 	Findings []Finding `json:"findings"`
 }
@@ -47,23 +52,33 @@ func newDoctorCmd() *cobra.Command {
 		Args:        cobra.NoArgs,
 		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
 			out := DoctorOutput{Findings: diagnose(cmd, a, time.Now())}
-			out.OK = len(out.Findings) == 0
-			switch {
-			case wantsJSON(cmd):
+			n := 0
+			for _, f := range out.Findings {
+				if !f.Warning {
+					n++
+				}
+			}
+			out.OK = n == 0
+			if wantsJSON(cmd) {
 				if err := writeJSON(cmd.OutOrStdout(), out); err != nil {
 					return err
 				}
-			case out.OK:
-				fmt.Fprintln(cmd.OutOrStdout(), "No problems found.")
-			default:
+			} else {
+				if out.OK {
+					fmt.Fprintln(cmd.OutOrStdout(), "No problems found.")
+				}
 				for _, f := range out.Findings {
-					fmt.Fprintf(cmd.OutOrStdout(), "✗ %s (%s): %s\n", f.Subject, f.Area, f.Problem)
+					mark := "✗"
+					if f.Warning {
+						mark = "!"
+					}
+					fmt.Fprintf(cmd.OutOrStdout(), "%s %s (%s): %s\n", mark, f.Subject, f.Area, f.Problem)
 					if f.Fix != "" {
 						fmt.Fprintf(cmd.OutOrStdout(), "    fix: %s\n", f.Fix)
 					}
 				}
 			}
-			switch n := len(out.Findings); n {
+			switch n {
 			case 0:
 			case 1:
 				return reported(errors.New("1 problem"))
@@ -133,6 +148,11 @@ func diagnose(cmd *cobra.Command, a *engine.App, now time.Time) []Finding {
 		name := x.Name()
 		for _, p := range rd.All() {
 			addProblem("routine", name, p)
+		}
+		for _, w := range rd.Warnings {
+			findings = append(findings, Finding{Area: "routine", Subject: name, Problem: w, Warning: true,
+				Fix: "add " + routines.Namespace + ".outcome to its file (`" + product.Command + " guide routines`), then `" +
+					product.Command + " routines update " + name + " --from <file>`"})
 		}
 		if rd.ConfigErr == nil {
 			lastRunFinding(add, status, name, false)

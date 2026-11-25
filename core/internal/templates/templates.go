@@ -209,6 +209,9 @@ func Check(dir string) error {
 }
 
 func checkOne(set *routines.Set, r routines.Routine, now time.Time) error {
+	if err := routines.RequireOutcome(r); err != nil {
+		return err
+	}
 	if !strings.Contains(r.Source, "{{> memories}}") {
 		return errors.New("it lacks {{> memories}}")
 	}

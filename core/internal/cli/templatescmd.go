@@ -142,6 +142,9 @@ func newTemplatesInstallCmd() *cobra.Command {
 			}
 			// Settings first (disabled, parameter values), the file last: the
 			// scheduler never sees a half-installed or enabled routine.
+			if err := routines.RequireOutcome(t.Routine); err != nil {
+				return fmt.Errorf("template %s: %w", t.ID, err)
+			}
 			rdir := a.Layout.Routines()
 			r := t.Routine
 			r.Name = name

@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,7 +18,7 @@ func TestTrust(t *testing.T) {
 	cfg := a.Layout.Config()
 	withNotesServer(t, cfg)
 	src := func(tools string) string {
-		return "---\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\ntools: [" + tools + "]\n---\nGo. {{> memories}}\n"
+		return "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.servers: [notes]\nautomator.schedule: \"0 9 * * *\"\ntools: [" + tools + "]\n---\nGo. {{> memories}}\n"
 	}
 	if _, err := cli(t, cfg, "routines", "create", "fresh", "--source", src("list_notes")); err != nil {
 		t.Fatal(err)
@@ -95,7 +97,7 @@ func TestDoctor(t *testing.T) {
 	a, _ := enginetest.Fixture(t, map[string]string{"ok": "queue"}, nil)
 	cfg := a.Layout.Config()
 	withNotesServer(t, cfg)
-	_, _ = cli(t, cfg, "routines", "create", "new", "--source", "---\nautomator.servers: [notes]\ntools: [list_notes]\n---\nGo.")
+	_, _ = cli(t, cfg, "routines", "create", "new", "--source", "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.servers: [notes]\ntools: [list_notes]\n---\nGo.")
 	_, _ = cli(t, cfg, "settings", "set", "routines.new.enabled", "true")
 	out, err := cli(t, cfg, "doctor", "--json")
 	if err == nil {
@@ -133,5 +135,39 @@ func TestTrustCheckAndPause(t *testing.T) {
 	}
 	if _, err := cli(t, cfg, "routines", "pause", "nope"); err == nil {
 		t.Error("paused a routine that doesn't exist")
+	}
+}
+
+// A routine written before outcome contracts were required still runs:
+// doctor and routines check warn about it, without failing on it.
+func TestNoOutcomeContractIsAWarning(t *testing.T) {
+	a, _ := enginetest.Fixture(t, map[string]string{"ok": "queue"}, nil)
+	cfg := a.Layout.Config()
+	if err := os.WriteFile(filepath.Join(a.Layout.Routines(), "old.prompt"), []byte("---\nautomator.schedule: \"0 9 * * *\"\n---\nGo. {{> memories}}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := cli(t, cfg, "routines", "check", "old")
+	if err != nil || !strings.Contains(out, "ok    old") || !strings.Contains(out, "warning: it declares no automator.outcome") {
+		t.Fatalf("check: %v\n%s", err, out)
+	}
+	out, _ = cli(t, cfg, "doctor", "--json")
+	if !strings.Contains(out, `"subject": "old"`) || !strings.Contains(out, `"warning": true`) || strings.Contains(out, `"subject": "ok"`) {
+		t.Fatalf("doctor:\n%s", out)
+	}
+}
+
+// A tool its server marks read-only can't be one of the writes done needs.
+func TestOutcomeWritesAreWriteTools(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	if out, err := cli(t, cfg, "plugins", "add", "fx", "--dir", pluginFolder(t, "good")); err != nil {
+		t.Fatalf("plugins add: %v\n%s", err, out)
+	}
+	out, err := cli(t, cfg, "routines", "create", "r", "--source",
+		"---\nautomator.outcome: {done: d, nothingToDo: [], writes: [read_thing]}\nautomator.servers: [fx]\ntools: [read_thing]\n---\nGo. {{> memories}}")
+	if err == nil {
+		out, err = cli(t, cfg, "routines", "check", "r")
+	}
+	if err == nil || !strings.Contains(out, "read_thing isn't a write tool") {
+		t.Fatalf("%v\n%s", err, out)
 	}
 }

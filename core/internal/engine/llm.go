@@ -155,6 +155,12 @@ func (rd *Readiness) CheckTools(ctx context.Context, a *App, r routines.Routine)
 	}
 	tools, err := agent.CheckTools(ctx, a.Connector, RunOf(r, rd.Config.WorkFolder, ""), r.Servers, r.Tools)
 	rd.Tools = tools
+	for _, t := range tools {
+		if t.ReadOnly && slices.Contains(r.Outcome.Writes, t.Name) {
+			rd.Problems = append(rd.Problems, Problem{Text: fmt.Sprintf("%s.outcome.writes: %s isn't a write tool (%s marks it read-only)",
+				routines.Namespace, t.Name, t.Server)})
+		}
+	}
 	if err != nil {
 		fix := ""
 		var nr *mcp.NeedsReauthError
@@ -236,6 +242,7 @@ func (l *llmRoutine) run(ctx context.Context, a *App, rc runContext) (*RunResult
 			Partials: l.set.PromptPartials(mem),
 			Effort:   cfg.Effort,
 			Folder:   cfg.WorkFolder, SaveSession: saveSession, SessionID: sessionID, BuiltinTools: cfg.BuiltinTools,
+			Contract: r.Outcome,
 		})
 	}
 	out, err := attempt()

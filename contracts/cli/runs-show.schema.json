@@ -101,11 +101,11 @@
             "properties": {
               "tool": {
                 "type": "string",
-                "description": "Tool is the routine's name for it (server/tool when it names the server)."
+                "description": "Tool is the routine's name for it (server/tool when it names the\nserver); report_outcome for the routine's report."
               },
               "server": {
                 "type": "string",
-                "description": "Server is the server offering it (absent in records from before\nthey said)."
+                "description": "Server is the server offering it (absent in records from before\nthey said, and for report_outcome)."
               },
               "args": {
                 "type": "object"
@@ -114,9 +114,29 @@
                 "type": "boolean",
                 "description": "Write is whether the tool can change things (not read-only): such\ncalls are intercepted in dry runs, and are also listed in Writes."
               },
+              "at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "At is when it was made (absent in records from before it was kept)."
+              },
+              "result": {
+                "type": "string",
+                "description": "Result is what the tool returned (its text; other content as a\nplaceholder), clipped (Truncated) past CallResultCap, or past what's\nleft of RunResultCap; absent when it failed or returned nothing."
+              },
               "error": {
                 "type": "string",
                 "description": "Error is the tool's error, when the call failed."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "Truncated says Result (or Error) was clipped; ResultSize is then its\nsize in bytes before it was."
+              },
+              "resultSize": {
+                "type": "integer"
+              },
+              "intercepted": {
+                "type": "boolean",
+                "description": "Intercepted is a write a dry run didn't make (it counts as done)."
               }
             },
             "additionalProperties": false,
@@ -165,6 +185,13 @@
           "description": "Outcome is the routine's own report when the run succeeded: done or\nnothing_to_do (a failed report fails the run). Reason says why."
         },
         "reason": {
+          "type": "string"
+        },
+        "case": {
+          "type": "string",
+          "description": "Case is the nothing-to-do case a nothing_to_do report cited (one of\nthe routine's automator.outcome.nothingToDo); Evidence is what the\nreport gave as showing its outcome."
+        },
+        "evidence": {
           "type": "string"
         }
       },

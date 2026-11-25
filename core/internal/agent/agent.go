@@ -22,7 +22,6 @@ import (
 
 	"github.com/BorysSerbyn/process-automator/core/internal/mcp"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
-	"github.com/BorysSerbyn/process-automator/core/pluginapi"
 )
 
 // MaxTurns bounds the model/tool loop of one run.
@@ -65,6 +64,9 @@ type Request struct {
 	SaveSession  bool
 	SessionID    string
 	BuiltinTools []string
+	// Contract is the routine's outcome contract (automator.outcome): how
+	// it's told to report, and what its report is held to.
+	Contract Contract
 }
 
 // Write is a side-effecting tool call (intercepted in dry-run).
@@ -75,21 +77,6 @@ type Write struct {
 	// they said).
 	Server string         `json:"server,omitempty"`
 	Args   map[string]any `json:"args"`
-	// Error is the tool's error, when the call failed.
-	Error string `json:"error,omitempty"`
-}
-
-// Call is one tool call a run made.
-type Call struct {
-	// Tool is the routine's name for it (server/tool when it names the server).
-	Tool string `json:"tool"`
-	// Server is the server offering it (absent in records from before
-	// they said).
-	Server string         `json:"server,omitempty"`
-	Args   map[string]any `json:"args"`
-	// Write is whether the tool can change things (not read-only): such
-	// calls are intercepted in dry runs, and are also listed in Writes.
-	Write bool `json:"write"`
 	// Error is the tool's error, when the call failed.
 	Error string `json:"error,omitempty"`
 }
@@ -121,42 +108,20 @@ type Result struct {
 	// nothing_to_do (a failed report fails the run). Reason says why.
 	Outcome string `json:"outcome,omitempty"`
 	Reason  string `json:"reason,omitempty"`
+	// Case is the nothing-to-do case a nothing_to_do report cited (one of
+	// the routine's automator.outcome.nothingToDo); Evidence is what the
+	// report gave as showing its outcome.
+	Case     string `json:"case,omitempty"`
+	Evidence string `json:"evidence,omitempty"`
 
 	reported *reported // set by the report_outcome tool
 	reauth   error     // a sign-in that failed during the run
+	writeOf  []int     // the call each of Writes is
+	kept     int       // bytes of results the record keeps so far
 
 	// mu guards what tool calls record: a backend may run them concurrently
 	// (agent CLI backends serve them over HTTP, each in its own goroutine).
 	mu sync.Mutex
-}
-
-// startCall records a tool call as it starts, and returns where it's
-// recorded (write is -1 for a read-only tool) for endCall.
-func (r *Result) startCall(tool, server string, args map[string]any, isWrite bool) (call, write int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.ToolCalls++
-	r.Calls = append(r.Calls, Call{Tool: tool, Server: server, Args: args, Write: isWrite})
-	call, write = len(r.Calls)-1, -1
-	if isWrite {
-		r.Writes = append(r.Writes, Write{Tool: tool, Server: server, Args: args})
-		write = len(r.Writes) - 1
-	}
-	return call, write
-}
-
-// endCall records how a call failed (errText "" when it didn't), and the
-// first sign-in that failed during the run.
-func (r *Result) endCall(call, write int, errText string, reauth error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.Calls[call].Error = errText
-	if write >= 0 {
-		r.Writes[write].Error = errText
-	}
-	if reauth != nil && r.reauth == nil {
-		r.reauth = reauth
-	}
 }
 
 // report records the routine's own outcome (report_outcome).
@@ -240,8 +205,8 @@ func (a *Agent) Run(ctx context.Context, req Request) (*Result, error) {
 	}
 	out, err := a.Backend.Run(ctx, Job{
 		Name: req.Name, Source: req.Source, Input: req.Input,
-		Partials: req.Partials, Tools: append(tools, outcomeTool(res)), MaxTurns: MaxTurns,
-		Instructions: outcomeInstructions, Effort: effort(req.Effort),
+		Partials: req.Partials, Tools: append(tools, outcomeTool(res, req.Contract)), MaxTurns: MaxTurns,
+		Instructions: req.Contract.Instructions(), Effort: effort(req.Effort),
 		Folder: req.Folder, SaveSession: req.SaveSession, SessionID: req.SessionID, BuiltinTools: req.BuiltinTools, DryRun: a.DryRun,
 	})
 	if out != nil {
@@ -261,7 +226,7 @@ func (a *Agent) Run(ctx context.Context, req Request) (*Result, error) {
 		}
 		res.Output = out.Structured
 	}
-	return res, verdict(res)
+	return res, verdict(res, req.Contract)
 }
 
 // discovered is an allowlisted tool and the server session offering it.
@@ -451,9 +416,11 @@ func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []str
 			Name: name, Description: desc, InputSchema: schema, Annotations: f.tool.Annotations,
 			Call: func(ctx context.Context, args map[string]any) (*sdk.CallToolResult, error) {
 				a.logf("→ %s %s", entry, compact(args))
-				call, write := res.startCall(entry, server, args, !readOnly)
-				if write >= 0 && a.DryRun {
-					return textResult("DRY RUN: this call was not executed. Treat it as successful and finish.", false), nil
+				call := res.startCall(entry, server, args, !readOnly)
+				if !readOnly && a.DryRun {
+					const intercepted = "DRY RUN: this call was not executed. Treat it as successful and finish."
+					res.endCall(call, callEnd{result: intercepted, intercepted: true})
+					return textResult(intercepted, false), nil
 				}
 				out, err := session.CallTool(ctx, &sdk.CallToolParams{Name: toolName, Arguments: args})
 				switch {
@@ -462,10 +429,12 @@ func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []str
 					if errors.Is(err, mcp.ErrNeedsReauth) {
 						reauth = err
 					}
-					res.endCall(call, write, err.Error(), reauth)
+					res.endCall(call, callEnd{err: err.Error(), reauth: reauth})
 					return nil, fmt.Errorf("%s: %w", entry, err)
 				case out.IsError:
-					res.endCall(call, write, pluginapi.ResultText(out), nil)
+					res.endCall(call, callEnd{err: firstNonEmpty(resultText(out), "the tool reported an error")})
+				default:
+					res.endCall(call, callEnd{result: resultText(out)})
 				}
 				return out, nil
 			},
@@ -509,12 +478,21 @@ func toMap(v any) (map[string]any, error) {
 }
 
 func compact(m map[string]any) string {
-	b, _ := json.Marshal(m)
+	b, _ := json.Marshal(redactArgs(m))
 	b = bytes.ReplaceAll(b, []byte(`\n`), []byte(` `))
 	if len(b) > 160 {
 		return string(b[:157]) + "..."
 	}
 	return string(b)
+}
+
+func firstNonEmpty(s ...string) string {
+	for _, v := range s {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // effort normalizes a routine's effort: "default" means none.

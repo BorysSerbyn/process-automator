@@ -1,6 +1,7 @@
 package routines
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -168,7 +169,7 @@ func TestParameters(t *testing.T) {
 
 func TestCreateUpdateDelete(t *testing.T) {
 	dir := t.TempDir()
-	src := "---\nautomator.servers: [notes]\n---\nDo it. {{> memories}}\n"
+	src := "---\nautomator.servers: [notes]\nautomator.outcome: {done: It did it., nothingToDo: []}\n---\nDo it. {{> memories}}\n"
 	if _, err := Create(dir, "Bad Name", src); err == nil {
 		t.Fatal("bad name accepted")
 	}
@@ -216,7 +217,7 @@ func TestCreateUpdateDelete(t *testing.T) {
 
 func TestPluginSections(t *testing.T) {
 	dir := t.TempDir()
-	ok := "---\nautomator.servers: [scripts]\nautomator.plugins:\n  scripts: {sweep: ./sweep.sh}\n---\nGo. {{> memories}}\n"
+	ok := "---\nautomator.servers: [scripts]\nautomator.outcome: {done: d, nothingToDo: []}\nautomator.plugins:\n  scripts: {sweep: ./sweep.sh}\n---\nGo. {{> memories}}\n"
 	r, err := Create(dir, "a", ok)
 	if err != nil {
 		t.Fatal(err)
@@ -274,5 +275,63 @@ func TestToolsNamedWithTheirServer(t *testing.T) {
 	}
 	if len(set.Errors) != 1 || !strings.Contains(set.Errors[0].Error(), "chat-work isn't one of its servers") {
 		t.Fatalf("errors: %v", set.Errors)
+	}
+}
+
+// automator.outcome is the routine's outcome contract: nested or dotted,
+// done needed once it's there, writes among its tools.
+func TestOutcomeContract(t *testing.T) {
+	const head = "---\nautomator.servers: [slack]\ntools: [slack_read_channel, slack_send_message]\n"
+	r, err := Parse("scrum", head+`automator.outcome:
+  done: A reply is posted in today's Polly "Daily Stand-Up" thread.
+  nothingToDo: ["I already replied in today's thread", "No stand-up today (a holiday)"]
+  writes: [slack_send_message]
+---
+Go.`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := r.Outcome
+	if !c.Declared() || len(c.NothingToDo) != 2 || len(c.Writes) != 1 || c.Writes[0] != "slack_send_message" {
+		t.Fatalf("contract: %+v", c)
+	}
+	dotted, err := Parse("d", head+"automator.outcome.done: Posted.\nautomator.outcome.nothingToDo: []\n---\nGo.")
+	if err != nil || dotted.Outcome.Done != "Posted." || len(dotted.Outcome.NothingToDo) != 0 {
+		t.Fatalf("dotted: %+v, %v", dotted.Outcome, err)
+	}
+	// None declared: the zero contract. Such a file still loads and runs
+	// (one written before contracts were required), but isn't created or
+	// updated.
+	none, err := Parse("n", head+"---\nGo.")
+	if err != nil || none.Outcome.Declared() || !errors.Is(RequireOutcome(none), ErrNoOutcome) {
+		t.Fatalf("no contract: %+v, %v", none.Outcome, err)
+	}
+	dir := t.TempDir()
+	if _, err := Create(dir, "n", head+"---\nGo."); !errors.Is(err, ErrNoOutcome) {
+		t.Fatalf("created without a contract: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "n.prompt"), []byte(head+"---\nGo."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if set, err := Load(dir); err != nil || len(set.Routines) != 1 {
+		t.Fatalf("an old routine without a contract didn't load: %v %+v", err, set)
+	}
+	if _, err := Update(dir, "n", head+"---\nGo. Now."); !errors.Is(err, ErrNoOutcome) {
+		t.Fatalf("updated without a contract: %v", err)
+	}
+	for bad, want := range map[string]string{
+		"automator.outcome:\n  nothingToDo: [x]\n":                                                      "outcome.done",
+		"automator.outcome:\n  done: d\n  nothingToDo: []\n  writes: [slack_react]\n":                   `"slack_react" isn't one of its tools`,
+		"automator.outcome:\n  done: d\n  nothingToDo: []\n  writes: [notify_me]\n":                     "isn't one of its tools",
+		"automator.outcome:\n  done: d\n  nothingToDo: [a, a]\n":                                        "listed twice",
+		"automator.outcome:\n  done: d\n  nothingToDo: ['']\n":                                          "empty",
+		"automator.outcome:\n  done: d\n  nothingToDo: []\n  succeeds: x\n":                             "unknown field",
+		"automator.outcome: done\n":                                                                     "want a section",
+		"automator.outcome.done: d\nautomator.outcome.nothingToDo: []\nautomator.outcome:\n  done: e\n": "written twice",
+		"automator.outcome:\n  done: d\n  nothingToDo: just one\n":                                      "outcome",
+	} {
+		if _, err := Parse("b", head+bad+"---\nGo."); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: err %v, want %q", bad, err, want)
+		}
 	}
 }

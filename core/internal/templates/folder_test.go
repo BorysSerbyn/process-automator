@@ -48,7 +48,7 @@ on: {watcher: gh-reviews, type: review.requested}
 	write(t, filepath.Join(dir, "personal", "cleaner", ManifestFile), "platforms: [macos, linux]\n")
 	write(t, filepath.Join(dir, "personal", "cleaner", "program.yaml"), "description: Cleans\nexecutable: ./clean\nwrites: true\n")
 	writeExe(t, filepath.Join(dir, "personal", "cleaner", "clean"), "#!/bin/sh\ntrue\n")
-	write(t, filepath.Join(dir, "personal", "digest.prompt"), "---\ndescription: d\n---\n{{> memories}} {{today}}")
+	write(t, filepath.Join(dir, "personal", "digest.prompt"), "---\ndescription: d\nautomator.outcome: {done: It did it., nothingToDo: []}\n---\n{{> memories}} {{today}}")
 	return dir
 }
 

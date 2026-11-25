@@ -154,7 +154,7 @@ func TestOpenAICompatRunCallsToolsThroughTheGateway(t *testing.T) {
 	if res.Text != "All posted." || res.Outcome != OutcomeDone || res.Backend != "claude-api" {
 		t.Errorf("result: %+v", res)
 	}
-	if len(res.Calls) != 2 || res.Calls[0].Tool != "read" || res.Calls[1].Tool != "post" || !res.Calls[1].Write || len(res.Writes) != 1 {
+	if len(res.Calls) != 3 || res.Calls[2].Tool != OutcomeTool || res.Calls[0].Tool != "read" || res.Calls[1].Tool != "post" || !res.Calls[1].Write || len(res.Writes) != 1 {
 		t.Errorf("calls: %+v, writes: %+v", res.Calls, res.Writes)
 	}
 	// Tokens add up over the three model calls; the cost is unknown (no list price).

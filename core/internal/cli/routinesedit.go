@@ -51,6 +51,9 @@ type RoutineCheck struct {
 	Problem string `json:"problem,omitempty"`
 	// Tools are an LLM routine's allowlisted tools and the server offering each.
 	Tools []agent.CheckedTool `json:"tools,omitempty"`
+	// Warnings don't keep it from running, but want fixing (an LLM routine
+	// without an outcome contract).
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 func newRoutinesShowCmd() *cobra.Command {
@@ -334,6 +337,7 @@ func newRoutinesCheckCmd() *cobra.Command {
 					row.Tools = rd.Tools
 				}
 				row.OK = row.Problem == ""
+				row.Warnings = rd.Warnings
 				rows = append(rows, row)
 			}
 			if len(args) == 1 {
@@ -360,13 +364,17 @@ func newRoutinesCheckCmd() *cobra.Command {
 				}
 			}
 			return reportChecks(cmd, rows, "routines", func(r RoutineCheck) (bool, string) {
+				var warn string
+				for _, w := range r.Warnings {
+					warn += "\n      warning: " + w
+				}
 				if r.OK {
 					if r.Kind != "" {
-						return true, fmt.Sprintf("ok    %s (%s)", r.Routine, r.Kind)
+						return true, fmt.Sprintf("ok    %s (%s)%s", r.Routine, r.Kind, warn)
 					}
-					return true, fmt.Sprintf("ok    %s (%d tools)", r.Routine, len(r.Tools))
+					return true, fmt.Sprintf("ok    %s (%d tools)%s", r.Routine, len(r.Tools), warn)
 				}
-				return false, fmt.Sprintf("FAIL  %s: %s", r.Routine, r.Problem)
+				return false, fmt.Sprintf("FAIL  %s: %s%s", r.Routine, r.Problem, warn)
 			})
 		}),
 	}

@@ -87,8 +87,8 @@ func TestClaudeCodeLive(t *testing.T) {
 	res := &Result{}
 	out, err := (&CLI{Tool: &ClaudeCode{Path: path}}).Run(context.Background(), Job{
 		Name: "live", Source: src, Input: map[string]any{"today": "Wednesday"},
-		Partials: map[string]string{"memories": "Be brief."}, Tools: []Tool{tool, outcomeTool(res)}, MaxTurns: 5,
-		Instructions: outcomeInstructions, Effort: "low",
+		Partials: map[string]string{"memories": "Be brief."}, Tools: []Tool{tool, outcomeTool(res, Contract{})}, MaxTurns: 5,
+		Instructions: Contract{}.Instructions(), Effort: "low",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestClaudeCodeLive(t *testing.T) {
 	if len(calls) != 1 || !strings.Contains(strings.ToLower(out.Text), "pineapple") {
 		t.Fatalf("calls=%v text=%q", calls, out.Text)
 	}
-	if err := verdict(res); err != nil || res.Outcome != OutcomeDone {
+	if err := verdict(res, Contract{}); err != nil || res.Outcome != OutcomeDone {
 		t.Fatalf("the model didn't report done: %v (reported %+v)", err, res.reported)
 	}
 	t.Logf("text=%q in=%d out=%d cost=$%.4f", out.Text, out.InputTokens, out.OutputTokens, out.CostUSD)

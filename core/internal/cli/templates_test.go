@@ -18,6 +18,7 @@ func TestTemplatesInstall(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tdir, "personal"), 0o700)
 	_ = os.WriteFile(filepath.Join(tdir, "personal", "digest.prompt"), []byte(`---
 description: Finds open requests
+automator.outcome: {done: The open requests are posted., nothingToDo: [There are no open requests]}
 automator.schedule: "0 8 * * 1-5"
 automator.parameters:
   - {name: lookback, type: duration, default: 72h}
@@ -91,7 +92,7 @@ func TestTemplateBackends(t *testing.T) {
 	tdir := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(tdir, "personal"), 0o700)
 	_ = os.WriteFile(filepath.Join(tdir, "personal", "sweep.prompt"), []byte(
-		"---\nautomator.backends: [claude-code]\nautomator.builtinTools: [Bash]\n---\nSweep.\n"), 0o600)
+		"---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.backends: [claude-code]\nautomator.builtinTools: [Bash]\n---\nSweep.\n"), 0o600)
 	old := product.TemplatesDir
 	product.TemplatesDir = tdir
 	t.Cleanup(func() { product.TemplatesDir = old })

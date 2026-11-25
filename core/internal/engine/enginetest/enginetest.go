@@ -126,7 +126,7 @@ func Fixture(t *testing.T, routinesByConcurrency map[string]string, gates map[st
 	dir := routines.Dir(filepath.Dir(cfg))
 	_ = os.MkdirAll(dir, 0o700)
 	for name, conc := range routinesByConcurrency {
-		src := "---\nautomator.concurrency: " + conc + "\n---\nGo. {{> memories}}\n"
+		src := "---\nautomator.outcome: {done: It went., nothingToDo: []}\nautomator.concurrency: " + conc + "\n---\nGo. {{> memories}}\n"
 		_ = os.WriteFile(filepath.Join(dir, name+".prompt"), []byte(src), 0o600)
 	}
 	UseBackend(t, &Backend{Gates: gates})
