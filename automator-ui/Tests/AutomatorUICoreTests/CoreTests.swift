@@ -815,6 +815,7 @@ private let waitingNote = """
 @Test func acknowledgingRunsTheCoresCommands() async throws {
     let (cli, log) = try scriptedCLI([
         "notifications list --waiting --json": waitingNote,
+        "notifications list --acknowledged --json": "[]",
         "notifications ack n7 --json": #"{"acknowledged":[]}"#,
         "notifications ack --all --json": "!the notifications file is locked",
     ])
@@ -837,9 +838,83 @@ private let waitingNote = """
     #expect(model.error == "the notifications file is locked")
     #expect(
         ran(log) == [
-            "notifications list --waiting --json", "notifications ack n7 --json", "notifications list --waiting --json",
-            "notifications ack --all --json", "notifications list --waiting --json",
+            "notifications list --waiting --json", "notifications list --acknowledged --json",
+            "notifications ack n7 --json", "notifications list --waiting --json",
+            "notifications list --acknowledged --json", "notifications ack --all --json",
+            "notifications list --waiting --json", "notifications list --acknowledged --json",
         ])
+}
+
+/// A core whose notifications change as they're acknowledged: n7 waits
+/// until `notifications ack n7`, then it's the last acknowledged; seven
+/// older ones were acknowledged before (p1 first).
+private func acknowledgingCLI() throws -> CLI {
+    let dir = FileManager.default.temporaryDirectory.appending(path: "automator-ui-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let older = (1...7).map {
+        #"{"id":"p\#($0)","at":"2026-11-20T09:00:00Z","kind":"run","title":"Past \#($0)","acknowledge":true,"#
+            + #""acknowledgedAt":"2026-11-20T1\#($0):00:00Z"}"#
+    }
+    let n7Acked =
+        #"{"id":"n7","at":"2026-11-23T09:00:00Z","kind":"run","title":"Scout found a match","#
+        + #""routine":"marco-scout","run":"marco-scout/2026-11-23T090000","acknowledge":true,"#
+        + #""acknowledgedAt":"2026-11-23T09:05:00Z"}"#
+    try waitingNote.write(to: dir.appending(path: "waiting"), atomically: true, encoding: .utf8)
+    try "[\(older.joined(separator: ","))]".write(to: dir.appending(path: "before"), atomically: true, encoding: .utf8)
+    try "[\((older + [n7Acked]).joined(separator: ","))]".write(
+        to: dir.appending(path: "after"), atomically: true, encoding: .utf8)
+    let script = dir.appending(path: "procauto")
+    try """
+    #!/bin/sh
+    cd '\(dir.path)'
+    case "$*" in
+      'notifications list --waiting --json') if [ -f acked ]; then echo '[]'; else cat waiting; fi ;;
+      'notifications list --acknowledged --json') if [ -f acked ]; then cat after; else cat before; fi ;;
+      'notifications ack n7 --json') touch acked; echo '{"acknowledged":[]}' ;;
+      *) echo '{}' ;;
+    esac
+    """.write(to: script, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    return CLI(executable: script)
+}
+
+@MainActor
+@Test func pastAcknowledgementsLoadTheMostRecentFirst() async throws {
+    let model = Acknowledgements(cli: try acknowledgingCLI())
+    await model.load()
+    #expect(model.waiting.map(\.id) == ["n7"])
+    #expect(model.pastError == nil)
+    // The last acknowledged first; the most recent few showing, Show More
+    // showing the rest.
+    #expect(model.past.map(\.id) == ["p7", "p6", "p5", "p4", "p3", "p2", "p1"])
+    #expect(model.pastShowing.map(\.id) == ["p7", "p6", "p5", "p4", "p3"])
+    #expect(model.past.allSatisfy { !$0.needsAcknowledging && $0.acknowledgedAt != nil })
+    model.showMorePast()
+    #expect(model.pastShowing.count == 7)
+}
+
+@MainActor
+@Test func acknowledgingOneMovesItToThePast() async throws {
+    let model = Acknowledgements(cli: try acknowledgingCLI())
+    await model.load()
+    #expect(!model.past.contains { $0.id == "n7" })
+    await model.acknowledge("n7")
+    #expect(model.waiting.isEmpty)
+    #expect(model.past.first?.id == "n7")
+    #expect(model.past.first?.title == "Scout found a match")
+    #expect(model.past.count == 8)
+}
+
+@MainActor
+@Test func pastAcknowledgementsSayWhyTheyCouldntBeRead() async throws {
+    let (cli, _) = try scriptedCLI([
+        "notifications list --waiting --json": "[]",
+        "notifications list --acknowledged --json": "!the notifications file is locked",
+    ])
+    let model = Acknowledgements(cli: cli)
+    await model.load()
+    #expect(model.loadError == nil && model.waiting.isEmpty)
+    #expect(model.pastError == "the notifications file is locked")
 }
 
 @Test func setupsReasonOpensSetup() throws {

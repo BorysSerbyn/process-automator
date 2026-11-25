@@ -18,6 +18,13 @@ extension CLI {
         call([CoreNotification].self, ["notifications", "list", "--waiting"])
     }
 
+    /// The notifications I've acknowledged, the last acknowledged last
+    /// (`notifications list --acknowledged`): the newest kept, none older
+    /// than the core keeps notifications.
+    public func acknowledgedNotifications() -> Result<[CoreNotification], Failure> {
+        call([CoreNotification].self, ["notifications", "list", "--acknowledged"])
+    }
+
     /// Acknowledges notifications (`notifications ack <id>...`).
     public func acknowledge(_ ids: [String]) -> Result<Components.Schemas.AckOutput, Failure> {
         call(Components.Schemas.AckOutput.self, ["notifications", "ack"] + ids)
@@ -29,23 +36,37 @@ extension CLI {
     }
 }
 
-/// The Acknowledgements window's list: the notifications waiting, read
-/// again when run status says what waits changed; Acknowledge on each and
-/// Acknowledge All, each failure shown where its button is.
+/// The Acknowledgements window's lists: the notifications waiting, and
+/// under them those I've acknowledged (Past acknowledgements, the last
+/// acknowledged first), both read again when run status says what waits
+/// changed, so acknowledging one moves it from the first to the second;
+/// Acknowledge on each waiting and Acknowledge All, each failure shown
+/// where its button is.
 @MainActor
 public final class Acknowledgements: ObservableObject {
     let cli: CLI
     @Published public private(set) var waiting: [CoreNotification] = []
     @Published public private(set) var loaded = false
     @Published public private(set) var loadError: String?
+    /// Those I've acknowledged, the last acknowledged first; why they
+    /// couldn't be read; and how many of them show (Show More shows more).
+    @Published public private(set) var past: [CoreNotification] = []
+    @Published public private(set) var pastError: String?
+    @Published public private(set) var pastShown = Acknowledgements.pastPage
     /// The notifications being acknowledged ("*": all of them), and why
     /// the last one failed.
     @Published public private(set) var acknowledging: Set<String> = []
     @Published public private(set) var error: String?
     private var shownIDs: [String]?
 
+    /// How many past acknowledgements show at first, and how many more
+    /// each Show More adds.
+    public static let pastPage = 5
+    public static let pastMore = 20
+
     public init(cli: CLI) { self.cli = cli }
 
+    /// Reads what waits, then what I've acknowledged.
     public func load() async {
         let result = await cli.background { $0.waitingNotifications() }
         switch result {
@@ -55,8 +76,22 @@ public final class Acknowledgements: ObservableObject {
         case .failure(let failure):
             loadError = failure.message
         }
+        let acknowledged = await cli.background { $0.acknowledgedNotifications() }
+        switch acknowledged {
+        case .success(let list):
+            past = list.reversed()
+            pastError = nil
+        case .failure(let failure):
+            pastError = failure.message
+        }
         loaded = true
     }
+
+    /// The past acknowledgements showing: the most recent ones.
+    public var pastShowing: ArraySlice<CoreNotification> { past.prefix(pastShown) }
+
+    /// Shows more of the past acknowledgements.
+    public func showMorePast() { pastShown += Self.pastMore }
 
     /// A new run status: the list is read again when what waits changed.
     public func update(_ status: RunStatus?) async {

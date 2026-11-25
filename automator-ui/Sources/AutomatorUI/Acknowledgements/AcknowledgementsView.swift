@@ -5,7 +5,11 @@ import SwiftUI
 /// me to acknowledge, oldest first, as a card of its own: its title, what
 /// sent it and when, its text (a long one folded, opening in place to all
 /// of it), and a footer with Show Run and Acknowledge; Acknowledge All in
-/// the header. It's read again when run status says what waits changed.
+/// the header. Under them, Past acknowledgements: those I've acknowledged,
+/// the last acknowledged first, as the same cards with when I acknowledged
+/// each and Show Run but no Acknowledge; the most recent few, Show More for
+/// older ones; not shown while there are none. Both are read again when run
+/// status says what waits changed.
 struct AcknowledgementsView: View {
     @ObservedObject var model: Acknowledgements
     /// Opens what sent one on its run: a routine's or hook's window.
@@ -34,6 +38,7 @@ struct AcknowledgementsView: View {
                 } else {
                     ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(24)
                 }
+                if model.loaded { pastSection }
             }
             .padding(24)
             .frame(maxWidth: 720)
@@ -65,6 +70,44 @@ struct AcknowledgementsView: View {
                 }
                 .disabled(model.acknowledging.contains("*"))
                 .help("Acknowledge every notification waiting")
+            }
+        }
+    }
+
+    /// Those I've acknowledged, under what waits: a heading, the most
+    /// recent cards, and Show More while older ones are hidden. Nothing
+    /// while there are none.
+    @ViewBuilder private var pastSection: some View {
+        if let error = model.pastError {
+            Banner(
+                title: "Couldn't read past acknowledgements", message: error, systemImage: "xmark.octagon.fill",
+                tint: .red)
+        } else if !model.past.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Past acknowledgements").font(.title3.weight(.semibold))
+                Text("What you've acknowledged, the most recent first.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 12)
+            ForEach(model.pastShowing, id: \.id) { note in
+                AcknowledgementCard(
+                    note: note, working: false, acknowledge: nil,
+                    openRun: note.routine.map { name in { openRun(name, note.run, note.hook == true) } })
+            }
+            let older = model.past.count - model.pastShowing.count
+            if older > 0 {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { model.showMorePast() }
+                } label: {
+                    Label(
+                        "Show \(min(older, Acknowledgements.pastMore)) More", systemImage: "chevron.down"
+                    )
+                    .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderless)
+                .frame(maxWidth: .infinity)
+                .help("\(older) older acknowledgements")
             }
         }
     }
@@ -103,11 +146,14 @@ struct AcknowledgementsEmpty: View {
 /// and when; its text, full width under them, at a readable line length,
 /// paragraphs and bullets as written (plain text, selectable), a long one
 /// folded to its first lines; and a footer: Show more (a long text), then
-/// Show Run and Acknowledge at the right, apart from the text.
+/// Show Run and Acknowledge at the right, apart from the text. One I've
+/// acknowledged (no acknowledge) has a muted check for its icon, says when I
+/// acknowledged it, and has no Acknowledge (and no footer when there's
+/// nothing for one).
 struct AcknowledgementCard: View {
     let note: CoreNotification
     let working: Bool
-    let acknowledge: () -> Void
+    let acknowledge: (() -> Void)?
     let openRun: (() -> Void)?
     @State private var expanded: Bool
 
@@ -115,7 +161,7 @@ struct AcknowledgementCard: View {
     static let foldedLines = 5
 
     init(
-        note: CoreNotification, working: Bool, acknowledge: @escaping () -> Void, openRun: (() -> Void)?,
+        note: CoreNotification, working: Bool, acknowledge: (() -> Void)?, openRun: (() -> Void)?,
         expanded: Bool = false
     ) {
         self.note = note
@@ -141,21 +187,40 @@ struct AcknowledgementCard: View {
                 if !bodyText.isEmpty { text }
             }
             .padding(16)
-            Divider()
-            footer
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+            if acknowledge != nil || openRun != nil || folds {
+                Divider()
+                footer
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+            }
         }
+    }
+
+    /// When I acknowledged one, as a phrase: "Acknowledged today at 9:05",
+    /// "Acknowledged Nov 20, 2026 at 9:05".
+    static func acknowledged(_ date: Date) -> String {
+        var when = Formats.when(date)
+        for day in ["Today", "Yesterday"] where when.hasPrefix(day) {
+            when = day.lowercased() + when.dropFirst(day.count)
+        }
+        return "Acknowledged \(when)"
+    }
+
+    /// The icon's symbol and tint: a check for one acknowledged, else a
+    /// bell (red when urgent).
+    private var symbol: (name: String, tint: Color) {
+        if acknowledge == nil { return ("checkmark", .secondary) }
+        return note.urgent == true ? ("exclamationmark.bubble.fill", .red) : ("bell.badge.fill", .orange)
     }
 
     private var heading: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: note.urgent == true ? "exclamationmark.bubble.fill" : "bell.badge.fill")
+            Image(systemName: symbol.name)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(note.urgent == true ? Color.red : Color.orange)
+                .foregroundStyle(symbol.tint)
                 .frame(width: 30, height: 30)
                 .background(
-                    (note.urgent == true ? Color.red : Color.orange).opacity(0.12), in: Circle())
+                    (acknowledge == nil ? Color.primary.opacity(0.07) : symbol.tint.opacity(0.12)), in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: note.title)
                     .font(.headline)
@@ -165,7 +230,11 @@ struct AcknowledgementCard: View {
                         Text(verbatim: routine).font(.subheadline.monospaced())
                         Text("·")
                     }
-                    Text(Formats.when(note.at))
+                    if acknowledge == nil, let acked = note.acknowledgedAt {
+                        Text(Self.acknowledged(acked))
+                    } else {
+                        Text(Formats.when(note.at))
+                    }
                     if note.urgent == true { Tag(text: "Urgent", tint: .red) }
                 }
                 .font(.subheadline)
@@ -239,16 +308,18 @@ struct AcknowledgementCard: View {
                 Button("Show Run", action: openRun)
                     .help("Open what sent it, on this run")
             }
-            Button(action: acknowledge) {
-                if working {
-                    ProgressView().controlSize(.small).frame(minWidth: 84)
-                } else {
-                    Text("Acknowledge").frame(minWidth: 84)
+            if let acknowledge {
+                Button(action: acknowledge) {
+                    if working {
+                        ProgressView().controlSize(.small).frame(minWidth: 84)
+                    } else {
+                        Text("Acknowledge").frame(minWidth: 84)
+                    }
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(working)
+                .help("It stops waiting; once none waits, the dot is no longer red for it")
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(working)
-            .help("It stops waiting; once none waits, the dot is no longer red for it")
         }
         .controlSize(.regular)
     }
