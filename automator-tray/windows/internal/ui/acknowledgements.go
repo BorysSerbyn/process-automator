@@ -2,6 +2,7 @@ package ui
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,7 +18,12 @@ import (
 // notification a routine or hook asked me to acknowledge (`notifications
 // list --waiting`): what sent it and when, its title and text (plain text),
 // its run's report, and Acknowledge (`notifications ack <id>`); Acknowledge
-// All (`--all`). It's read again when run status says what waits changed.
+// All (`--all`). Under them, Past acknowledgements (`notifications list
+// --acknowledged`): those I've acknowledged, the last acknowledged first,
+// as the same cards saying when I acknowledged each, with Open Report but
+// no Acknowledge; the most recent few, Show More for older ones; not shown
+// while there are none. Both are read again when run status says what
+// waits changed, so acknowledging one moves it into the past.
 // It mirrors automator-ui's Acknowledgements and AcknowledgementsView.
 type Acknowledgements struct {
 	cli   cli.CLI
@@ -29,6 +35,11 @@ type Acknowledgements struct {
 	loadError     string
 	err           string
 	acknowledging map[string]bool
+	// past are those I've acknowledged, the last acknowledged first; why
+	// they couldn't be read; how many of them show.
+	past      []cli.Notification
+	pastError string
+	pastShown int
 	// open are the notifications whose whole text shows.
 	open     map[string]bool
 	shownIDs []string
@@ -39,7 +50,8 @@ type Acknowledgements struct {
 // NewAcknowledgements makes the window's content; Load reads it, Update
 // gives it run status.
 func NewAcknowledgements(c cli.CLI, async Async) *Acknowledgements {
-	a := &Acknowledgements{cli: c, async: async, now: time.Now, acknowledging: map[string]bool{}, open: map[string]bool{}}
+	a := &Acknowledgements{cli: c, async: async, now: time.Now, acknowledging: map[string]bool{}, open: map[string]bool{},
+		pastShown: pastPage}
 	a.scroll = container.NewVScroll(container.NewVBox())
 	a.refresh()
 	return a
@@ -48,15 +60,29 @@ func NewAcknowledgements(c cli.CLI, async Async) *Acknowledgements {
 // Content is what the window shows.
 func (a *Acknowledgements) Content() fyne.CanvasObject { return a.scroll }
 
-// Load reads what waits.
+// pastPage is how many past acknowledgements show at first, pastMore how
+// many more each Show More adds.
+const (
+	pastPage = 5
+	pastMore = 20
+)
+
+// Load reads what waits, and what I've acknowledged.
 func (a *Acknowledgements) Load() {
 	a.async(func() func() {
 		list, err := a.cli.WaitingNotifications()
+		past, pastErr := a.cli.AcknowledgedNotifications()
 		return func() {
 			if err != nil {
 				a.loadError = err.Error()
 			} else {
 				a.waiting, a.loadError = list, ""
+			}
+			if pastErr != nil {
+				a.pastError = pastErr.Error()
+			} else {
+				slices.Reverse(past)
+				a.past, a.pastError = past, ""
 			}
 			a.loaded = true
 			a.refresh()
@@ -162,7 +188,37 @@ func (a *Acknowledgements) render() fyne.CanvasObject {
 	default:
 		box.Add(spinner())
 	}
+	if a.loaded {
+		a.renderPast(box)
+	}
 	return box
+}
+
+// renderPast adds those I've acknowledged under what waits: a heading, the
+// most recent cards, and Show More while older ones are hidden. Nothing
+// while there are none.
+func (a *Acknowledgements) renderPast(box *fyne.Container) {
+	if a.pastError != "" {
+		box.Add(banner("Couldn't read past acknowledgements", a.pastError))
+		return
+	}
+	if len(a.past) == 0 {
+		return
+	}
+	box.Add(padded(16, 4, 0, 0, lines(heading("Past acknowledgements", true),
+		secondary("What you've acknowledged, the most recent first."))))
+	shown := a.past[:min(a.pastShown, len(a.past))]
+	for _, n := range shown {
+		box.Add(padded(4, 4, 0, 0, a.card(n)))
+	}
+	if older := len(a.past) - len(shown); older > 0 {
+		b := widget.NewButtonWithIcon("Show "+itoa(min(older, pastMore))+" More", theme.MenuExpandIcon(), func() {
+			a.pastShown += pastMore
+			a.refresh()
+		})
+		b.Importance = widget.LowImportance
+		box.Add(container.NewCenter(b))
+	}
 }
 
 // foldedLines is how many lines a long text shows while folded.
@@ -173,17 +229,27 @@ const foldedLines = 5
 // lines and paragraphs as written (plain text, selectable), a long one
 // folded to its first lines and opening in place, bulleted lines hanging
 // after their bullet; and a footer under a divider: Show More at the left,
-// Open Report and Acknowledge at the right, apart from the text.
+// Open Report and Acknowledge at the right, apart from the text. One I've
+// acknowledged has a muted check for its icon, says when I acknowledged
+// it, and has no Acknowledge (and no footer when there's nothing for one).
 func (a *Acknowledgements) card(n cli.Notification) fyne.CanvasObject {
+	acked := n.AcknowledgedAt != nil
 	icon := widget.NewIcon(theme.NewWarningThemedResource(theme.InfoIcon()))
-	if n.Urgent {
+	switch {
+	case acked:
+		icon = widget.NewIcon(theme.NewDisabledResource(theme.ConfirmIcon()))
+	case n.Urgent:
 		icon = widget.NewIcon(theme.NewErrorThemedResource(theme.WarningIcon()))
 	}
 	var about []string
 	if n.Routine != "" {
 		about = append(about, n.Routine)
 	}
-	about = append(about, when(n.At, a.now()))
+	if acked {
+		about = append(about, acknowledgedWhen(*n.AcknowledgedAt, a.now()))
+	} else {
+		about = append(about, when(n.At, a.now()))
+	}
 	meta := secondary(strings.Join(about, " · "))
 	title := widget.NewLabelWithStyle(n.Title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	title.Wrapping = fyne.TextWrapWord
@@ -214,12 +280,17 @@ func (a *Acknowledgements) card(n cli.Notification) fyne.CanvasObject {
 		run := n.Run
 		actions.Add(widget.NewButton("Open Report", func() { a.openReport(run) }))
 	}
-	if a.acknowledging[id] {
+	switch {
+	case acked:
+	case a.acknowledging[id]:
 		actions.Add(spinner())
-	} else {
+	default:
 		ack := widget.NewButton("Acknowledge", func() { a.acknowledge(id) })
 		ack.Importance = widget.HighImportance
 		actions.Add(ack)
+	}
+	if acked && n.Run == "" && !folds(body) {
+		return card(false, padded(10, 8, 12, 12, content))
 	}
 	footer := container.NewBorder(nil, nil, more, actions)
 	return card(false, padded(10, 8, 12, 12, content), widget.NewSeparator(), padded(4, 4, 8, 8, footer))
@@ -276,4 +347,16 @@ func firstLines(s string) string {
 		out = string(r[:279])
 	}
 	return strings.TrimRight(out, " \n") + "…"
+}
+
+// acknowledgedWhen is when I acknowledged one, as a phrase: "Acknowledged
+// today at 09:05", "Acknowledged 20 Nov 2026 at 09:05".
+func acknowledgedWhen(t, now time.Time) string {
+	w := when(t, now)
+	for _, day := range []string{"Today", "Yesterday", "Tomorrow"} {
+		if strings.HasPrefix(w, day) {
+			w = strings.ToLower(day) + w[len(day):]
+		}
+	}
+	return "Acknowledged " + w
 }

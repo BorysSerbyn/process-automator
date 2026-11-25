@@ -102,6 +102,14 @@ func (c CLI) WaitingNotifications() ([]Notification, error) {
 	return out, c.call(&out, "notifications", "list", "--waiting")
 }
 
+// AcknowledgedNotifications are the notifications I've acknowledged, the
+// last acknowledged last (`notifications list --acknowledged`): the newest
+// kept, none older than the core keeps notifications.
+func (c CLI) AcknowledgedNotifications() ([]Notification, error) {
+	var out []Notification
+	return out, c.call(&out, "notifications", "list", "--acknowledged")
+}
+
 // Acknowledge acknowledges notifications (`notifications ack <id>...`), or
 // every one waiting with none named (`--all`).
 func (c CLI) Acknowledge(ids ...string) error {
