@@ -8,8 +8,20 @@ procauto guide routines
 
 It has a working example, every frontmatter key with its type, default and meaning, the inputs, each backend's models and built-in tools, and the steps once it's written. Claude reads the same guide through the app's MCP server ([[Guides/Using it from Claude|Using it from Claude]]). What follows is what the guide leaves out.
 
+## Saying what done means
+Every routine declares what done means and when there's nothing to do; creating or updating one without them is refused:
+
+```yaml
+automator.outcome:
+  done: My update is posted in today's Polly "Daily Stand-Up" thread.
+  nothingToDo: [My update is already in today's thread]  # [] for none
+  writes: [slack_send_message]  # optional: done needs a successful call of it
+```
+
+Keep `nothingToDo` to the bare minimum, usually none or one: each case is one more way for a failure to pass as a success, and a model writing a routine tends to list too many. A missing thread is a failure, not nothing to do. The app adds a few lines from this to the instructions, refuses a report that cites no declared case or claims done before each write in `writes` succeeded, and fails the run if one gets through. A routine written before this was required still runs, and `routines check` and `doctor` warn about it.
+
 ## Writing the prompt
-Write it for an agent working alone. End it with what the final reply should hold (e.g. "the message you posted, or why you didn't"): it's what run history shows. A run fails if the routine reports `failed`, never reports, or a write's last attempt failed (a server refused the post), whatever the model says.
+Write it for an agent working alone, and counsel it on what a failure is, in a line or two that match the contract: what done means, the case of nothing to do, and that anything else is a failure, including a tool result that looks wrong, stale or incomplete (a channel read that returns only last month's messages isn't "no thread today"). End it with what the final reply should hold (e.g. "the message you posted, or why you didn't"): it's what run history shows. A run fails if the routine reports `failed`, never reports, or a write's last attempt failed (a server refused the post), whatever the model says. Every call to its tools is kept with the run, with what it returned: `procauto runs show <id>`.
 
 **Partials**: a file `_<name>.prompt` in the routines folder is shared text any routine includes with `{{> name}}`. `{{> memories}}` is the app's: it brings in your [[Guides/Routines#Memories|memories]].
 

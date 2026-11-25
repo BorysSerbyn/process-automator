@@ -33,6 +33,21 @@ The model loop sits behind a `Backend` interface chosen by `llm.backend`. `claud
 - **Trusting the model's final text**: a model can say it posted when the post was refused
 - **Treating an unreadable source as empty**: "no data" and "couldn't read" would look the same
 
+## Decision: a routine declares its outcome contract, and the engine holds its report to it
+A run reported "nothing to do" when its channel read returned only April's messages and it took that as "no thread today": the model's judgement passed a failure as a success. So each routine says, in `automator.outcome`, what done means and the only cases of nothing to do, and the engine turns that into a few lines at the end of its instructions, a `report_outcome` that offers only what the contract allows, a refusal (a tool error the model can correct) for a report that breaks it, and a verdict that fails a run whose report cites no declared case, or claims done while a declared write never succeeded. Cases are few by design, usually none or one: each is another way for a failure to pass as a success, and models writing routines tend to list too many. The prompt still has to counsel the model on what a failure is; the contract is what the engine can enforce. Both keys are required for new and changed routines and templates, but a routine written before still runs, warned about, so an update never stops a schedule. `evidence` is optional: it's what to read in the record, and enforcing it would add weight to every report without making it truer.
+
+Every run also keeps its tool calls with what they returned, clipped and redacted, so a wrong verdict can be traced to what the tools said.
+
+### Rejected
+- **A generic instruction and an open `nothing_to_do`**: what happened; the model decides on its own what counts as nothing
+- **Requiring evidence for every report**: words the model writes either way; the declared writes and cases are what's checked
+- **Recording an agent CLI's built-in tools**: `claude -p --output-format json` doesn't carry them, and codex's events differ by version; the app's tools are recorded the same way on every backend
+- **Keeping whole tool results**: a channel read can return megabytes; 4 KiB a call and 64 KiB a run show what the model saw without growing history
+- **Refusing to load a routine without a contract**: existing installs would stop running on update
+
+### Deferred
+- **An independent verifier model** that reads the run's record and judges the report: in our back pocket if the contract isn't enough. It doubles the model calls and is another model's judgement to trust
+
 ## Decision: a blank-slate engine; integrations are MCP servers
 The engine knows no specific service, and the app ships with no integrations: a plugin is an MCP server registered in config, written in any language, so routines reach every service the same way and any server built for other MCP clients works as is. `core/plugins` holds plugins any app may compile in, such as `notify` (desktop notifications from routines); the engine adds none, and an app lists the ones it wants. The in-process plugin API stays, for Go plugins compiled into a build.
 

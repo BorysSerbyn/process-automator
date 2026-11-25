@@ -35,7 +35,7 @@ The menu lists each reason; click one to open the run it's about.
 A routine stays red until its next run goes well (or you pause it).
 
 ## Run history
-`procauto runs` lists recent runs with their outcome and reason; `procauto runs show <id>` shows one in full: its inputs, every tool call, what it wrote (and any write errors), tokens and its final reply. In the menu bar app, a routine's **Runs** tab shows the same. Dry runs aren't recorded: run them in a terminal (`run <name> --dry-run`) to see what they do.
+`procauto runs` lists recent runs with their outcome and reason; `procauto runs show <id>` shows one in full: its inputs, every tool call with what it returned, what it wrote (and any write errors), tokens and its final reply. In the menu bar app, a routine's **Runs** tab shows the same. Dry runs aren't recorded: run them in a terminal (`run <name> --dry-run`) to see what they do.
 
 ## Logs
 | | |

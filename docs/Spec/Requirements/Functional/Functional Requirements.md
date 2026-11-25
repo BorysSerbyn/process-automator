@@ -89,7 +89,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **No cost for plan runs**: on Claude Code or Codex the app never works out a dollar cost
 
 ## Runs
-- **Inspecting runs**: which ran, how each ended and why, with its inputs, tool calls, writes and final text, from the CLI and the UI; also as a readable report
+- **Inspecting runs**: which ran, how each ended and why, with its inputs, every tool call with what it returned (clipped, secrets redacted), writes and final text, from the CLI and the UI (the tool calls folded until opened); also as a readable report
 - **Run history and logs** are kept for a retention period I set
 - **Outcomes**: success, failed, needs a sign-in, missed, skipped (over the usage limit) and stopped
 - **Structured results**: a routine can declare the shape of its result, so history and the UI show clean results instead of prose

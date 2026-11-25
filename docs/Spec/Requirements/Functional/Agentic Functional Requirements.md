@@ -23,7 +23,7 @@ What LLM clients can do through the app, and how the agent behaves inside a rout
 - **Judgement over rules**: output quality is left to the model's own judgement (avoiding duplicates, respecting what I did by hand, handling weekends and time off); prompts don't spell out quality rules the model already follows
 - **No code-side validation and no human review step**: recurring mistakes are corrected in the routine file or with memories, not by bloating prompts pre-emptively
 - **Lean prompts**: the model sees only the routine's prompt, its inputs and its allowed tools; token usage is recorded per run so bloat is visible
-- **Reporting its outcome**: the agent ends each run by saying whether it did its job, found nothing to do, or failed, and why
+- **Reporting its outcome**: the agent ends each run by saying whether it did its job, found nothing to do, or failed, and why, held to what its routine declares: what done means and the only cases of nothing to do (usually none or one). Anything else, a tool result that looks wrong, stale or incomplete included, is a failure
 
 ## The agent inside a hook
 - **Event data is outside data**: what a watcher printed reaches an LLM hook's prompt marked as untrusted, in a block that says it's data, never instructions
