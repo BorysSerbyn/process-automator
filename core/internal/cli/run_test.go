@@ -65,7 +65,7 @@ func TestSetupSteps(t *testing.T) {
 	}
 
 	// Untrusted and paused: one step trusts it and turns its schedule on.
-	src := "---\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"
+	src := "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"
 	if _, err := cli(t, cfg, "routines", "create", "fresh", "--source", src); err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +401,7 @@ func TestSignInPrepares(t *testing.T) {
 func TestSetupStatusRefreshes(t *testing.T) {
 	a, _ := enginetest.Fixture(t, map[string]string{"old": "queue"}, nil)
 	cfg := a.Layout.Config()
-	if _, err := cli(t, cfg, "routines", "create", "fresh", "--source", "---\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"); err != nil {
+	if _, err := cli(t, cfg, "routines", "create", "fresh", "--source", "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"); err != nil {
 		t.Fatal(err)
 	}
 	left := func() []string {
@@ -427,7 +427,7 @@ func TestSetupStatusRefreshes(t *testing.T) {
 func TestRoutineStateAtOnce(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.yaml")
 	enginetest.Load(t, cfg)
-	src := "---\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"
+	src := "---\nautomator.outcome: {done: It did it., nothingToDo: []}\nautomator.schedule: \"20 9 * * 1-5\"\n---\nGo.\n"
 	if _, err := cli(t, cfg, "routines", "create", "daily", "--source", src); err != nil {
 		t.Fatal(err)
 	}
@@ -639,5 +639,40 @@ func TestBackendStepSettings(t *testing.T) {
 	}
 	if s := settingsOf(); !slices.Equal(s, []string{"llm.local.url", "llm.local.model"}) {
 		t.Errorf("local: %v", s)
+	}
+}
+
+// runs show prints the run's tool-call record, its report's case and
+// evidence; --json has them as stored.
+func TestRunsShowToolCalls(t *testing.T) {
+	a, _ := enginetest.Fixture(t, nil, nil)
+	cfg := a.Layout.Config()
+	started := time.Now().Add(-time.Minute)
+	at := started.Add(time.Second)
+	res := &agent.Result{Backend: "claude-code", Outcome: agent.OutcomeNothingToDo, Case: "My report is already in today's thread",
+		Evidence: "my reply at 09:12", Writes: []agent.Write{}, Calls: []agent.Call{
+			{Tool: "slack_read_channel", Server: "slack", Args: map[string]any{"channel": "C1"}, At: &at,
+				Result: "latest: April 2", Truncated: true, ResultSize: 9000},
+			{Tool: "slack_send_message", Server: "slack", Args: map[string]any{"text": "hi"}, Write: true, Error: "not_in_channel"},
+		}}
+	_ = history.Save(a.Layout.History(), history.Entry{Routine: "scrum", Trigger: trigger.Manual, StartedAt: started,
+		Outcome: runstatus.OutcomeSuccess, Result: res})
+	id := history.RunID("scrum", started)
+	out, err := cli(t, cfg, "runs", "show", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"case      My report is already in today's thread", "evidence  my reply at 09:12",
+		"tool calls (2):", `1. ` + at.Local().Format("15:04:05") + ` slack_read_channel {"channel":"C1"}`, "→ latest: April 2",
+		"[clipped: 15 of 9000 bytes kept]", `2. slack_send_message [write] {"text":"hi"}`, "✗ not_in_channel"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("runs show lacks %q:\n%s", want, out)
+		}
+	}
+	out, _ = cli(t, cfg, "runs", "show", id, "--json")
+	for _, want := range []string{`"result": "latest: April 2"`, `"truncated": true`, `"resultSize": 9000`, `"case": "My report`, `"evidence"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--json lacks %s:\n%s", want, out)
+		}
 	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/engine"
 	"github.com/BorysSerbyn/process-automator/core/internal/history"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
@@ -158,18 +159,60 @@ func printRun(w io.Writer, e *history.Entry) {
 		return
 	}
 	fmt.Fprintf(w, "\n[%s]\n", r.Summary())
-	for _, wr := range r.Writes {
-		status := "done"
-		switch {
-		case r.DryRun:
-			status = "intercepted (dry run)"
-		case wr.Error != "":
-			status = "failed: " + wr.Error
+	if r.Case != "" {
+		fmt.Fprintf(w, "  case      %s\n", r.Case)
+	}
+	if r.Evidence != "" {
+		fmt.Fprintf(w, "  evidence  %s\n", r.Evidence)
+	}
+	if len(r.Calls) > 0 {
+		printCalls(w, r.Calls)
+	} else {
+		// Records from before every call was kept: only the writes.
+		for _, wr := range r.Writes {
+			status := "done"
+			switch {
+			case r.DryRun:
+				status = "intercepted (dry run)"
+			case wr.Error != "":
+				status = "failed: " + wr.Error
+			}
+			fmt.Fprintf(w, "  write %s: %s\n", wr.Tool, status)
 		}
-		fmt.Fprintf(w, "  write %s: %s\n", wr.Tool, status)
 	}
 	if text := strings.TrimSpace(r.Text); text != "" {
 		fmt.Fprintf(w, "\n%s\n", text)
+	}
+}
+
+// printCalls is the run's tool-call record: each call, its arguments, and
+// what it returned or its error (as kept: clipped past the record's caps).
+func printCalls(w io.Writer, calls []agent.Call) {
+	fmt.Fprintf(w, "\ntool calls (%d):\n", len(calls))
+	for i, c := range calls {
+		at := ""
+		if c.At != nil {
+			at = c.At.Local().Format("15:04:05") + " "
+		}
+		kind := ""
+		switch {
+		case c.Intercepted:
+			kind = " [write, intercepted: dry run]"
+		case c.Write:
+			kind = " [write]"
+		}
+		args, _ := json.Marshal(c.Args)
+		fmt.Fprintf(w, "  %d. %s%s%s %s\n", i+1, at, c.Tool, kind, args)
+		out, label := c.Result, "→"
+		if c.Error != "" {
+			out, label = c.Error, "✗"
+		}
+		if out != "" {
+			fmt.Fprintf(w, "     %s %s\n", label, strings.ReplaceAll(strings.TrimSpace(out), "\n", "\n       "))
+		}
+		if c.Truncated {
+			fmt.Fprintf(w, "     [clipped: %d of %d bytes kept]\n", len(out), c.ResultSize)
+		}
 	}
 }
 
