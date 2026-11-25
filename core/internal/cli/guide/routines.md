@@ -27,7 +27,7 @@ automator.outcome:
 
 - Keep `nothingToDo` to the bare minimum: usually none, at most one. Models writing routines tend to list many, and each is one more way for a failure to pass as a success. A missing thread, an empty search or a read that returns only old items is a failure, not nothing to do
 - The app adds a few lines from it at the end of the instructions, and refuses a report that breaks it (the model can correct it): `nothing_to_do` must name one of the cases, `done` needs each of `writes` to have succeeded (a dry run's intercepted call counts). A write whose last call failed fails the run, whatever the report
-- The prompt must still counsel the model on what a failure is, in a line or two that match the contract: what done means, the case of nothing to do, and that anything else, a tool result that looks wrong, stale or incomplete included, is a failure
+- Don't restate the contract in the prompt: the app adds it. Remove any rule there that contradicts it ("if the thread isn't there, don't post and say why" turns a failure into a success); at most one line on what's a failure for this routine in particular, when it isn't obvious
 - Every call to its tools is kept with the run: arguments, when, and the result (up to %{callCap} KiB a call, %{runCap} KiB a run) or error: `%{command} runs show <id>`. An agent CLI's built-in tools (Read, Bash…) aren't
 - A routine written before contracts were required still runs, reporting only done or failed; `routines check` and `doctor` warn about it
 
