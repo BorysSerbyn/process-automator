@@ -22,6 +22,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -170,6 +171,20 @@ func (f *File) Waiting() []Notification {
 			out = append(out, n)
 		}
 	}
+	return out
+}
+
+// Acknowledged are the notifications I've acknowledged, the last
+// acknowledged last (pruned as the others are: the newest kept, none older
+// than keepFor).
+func (f *File) Acknowledged() []Notification {
+	out := []Notification{}
+	for _, n := range f.Notifications {
+		if n.Acknowledge && n.AcknowledgedAt != nil {
+			out = append(out, n)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Notification) int { return a.AcknowledgedAt.Compare(*b.AcknowledgedAt) })
 	return out
 }
 

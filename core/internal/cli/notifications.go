@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"text/tabwriter"
@@ -40,7 +41,7 @@ func newNotificationsCmd() *cobra.Command {
 }
 
 func newNotificationsListCmd() *cobra.Command {
-	var pending, waiting bool
+	var pending, waiting, acknowledged bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List notifications, newest last",
@@ -54,9 +55,15 @@ func newNotificationsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if waiting && acknowledged {
+				return errors.New("--waiting and --acknowledged exclude each other")
+			}
 			list := f.Notifications
-			if waiting {
+			switch {
+			case waiting:
 				list = f.Waiting()
+			case acknowledged:
+				list = f.Acknowledged()
 			}
 			if pending {
 				var undelivered []notifications.Notification
@@ -93,6 +100,7 @@ func newNotificationsListCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&pending, "pending", false, "only those not delivered yet")
 	cmd.Flags().BoolVar(&waiting, "waiting", false, "only those waiting for me to acknowledge them")
+	cmd.Flags().BoolVar(&acknowledged, "acknowledged", false, "only those I've acknowledged, the last acknowledged last")
 	jsonFlag(cmd.Flags(), []notifications.Notification{})
 	return cmd
 }

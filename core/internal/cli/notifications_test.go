@@ -122,6 +122,14 @@ func TestNotificationsAck(t *testing.T) {
 	if out, _ := cli(t, cfg, "status"); !strings.Contains(out, "(1) Acknowledgement pending") {
 		t.Fatalf("status: %s", out)
 	}
+	var past []notifications.Notification
+	if out, err := cli(t, cfg, "notifications", "list", "--acknowledged", "--json"); err != nil || json.Unmarshal([]byte(out), &past) != nil ||
+		len(past) != 1 || past[0].ID != ids[0] || past[0].AcknowledgedAt == nil {
+		t.Fatalf("acknowledged: %s %v", out, err)
+	}
+	if _, err := cli(t, cfg, "notifications", "list", "--acknowledged", "--waiting"); err == nil {
+		t.Fatal("--acknowledged with --waiting")
+	}
 	var acked AckOutput
 	if out, err := cli(t, cfg, "notifications", "ack", "--all", "--json"); err != nil || json.Unmarshal([]byte(out), &acked) != nil ||
 		len(acked.Acknowledged) != 1 || acked.Acknowledged[0].ID != ids[1] {

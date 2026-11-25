@@ -285,6 +285,9 @@ commands:
     usage: procauto notifications list [flags]
     summary: List notifications, newest last
     flags:
+      - name: --acknowledged
+        type: bool
+        usage: only those I've acknowledged, the last acknowledged last
       - name: --json
         type: bool
         usage: machine-readable output
