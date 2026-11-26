@@ -19,7 +19,8 @@
 #   --without-claude-code
 #                        install without Claude Code, for routines on another
 #                        model backend (otherwise Claude Code at
-#                        CLAUDE_CODE_MIN or later is required)
+#                        CLAUDE_CODE_MIN or later is required, unless only
+#                        Codex is installed: then routines run on Codex)
 # Environment: INSTALL_DIR, BIN_DIR (see scripts/install-app.sh). Public
 # releases are downloaded with curl, signed in to nothing. Private ones are
 # read with GH_TOKEN or GITHUB_TOKEN, else the first account the GitHub CLI is
@@ -57,6 +58,7 @@ API=https://api.github.com
 
 main() {
   local version="" from="" yes="" files_only="" claude_code=1
+  use_codex=""
   while [ $# -gt 0 ]; do
     case $1 in
       --version|--from)
@@ -129,6 +131,7 @@ main() {
   bash "$installer" install ${files_only:+--files-only}
 
   local cli="${BIN_DIR:-$HOME/.local/bin}/$COMMAND"
+  [ -z "$use_codex" ] || codex_backend "$cli"
   case ":$PATH:" in
     *":$(dirname "$cli"):"*) ;;
     *) say "Note: $(dirname "$cli") isn't on your PATH; add it to use \`$COMMAND\` by name." ;;
@@ -178,10 +181,26 @@ prerequisites() {
   if [ ${#missing[@]} -gt 0 ]; then die "missing: ${missing[*]}"; fi
 }
 
-# check_claude_code: Claude Code is installed, at CLAUDE_CODE_MIN or later.
+# codex_backend: an install on Codex runs routines on it, unless a backend
+# was chosen before (an earlier install's).
+codex_backend() {
+  local cli=$1
+  [ -x "$cli" ] || return 0
+  if "$cli" settings get llm.backend --json 2>/dev/null | grep -q '"isDefault": *true'; then
+    "$cli" settings set llm.backend codex >/dev/null && say "Model backend: codex (sign in with \`codex login\` if you haven't)."
+  fi
+}
+
+# check_claude_code: Claude Code is installed, at CLAUDE_CODE_MIN or later;
+# without it, Codex is (use_codex: routines run on it).
 check_claude_code() {
-  local how="install it (https://claude.com/claude-code), or pass --without-claude-code to use another model backend"
-  have claude || die "$NAME needs Claude Code $CLAUDE_CODE_MIN or later, and \`claude\` isn't on your PATH: $how"
+  local how="install it (https://claude.com/claude-code) or Codex (https://developers.openai.com/codex/cli), or pass --without-claude-code to use another model backend"
+  if ! have claude && have codex; then
+    say "Claude Code isn't installed; Codex is: routines will run on Codex (the codex backend, experimental)."
+    use_codex=1
+    return 0
+  fi
+  have claude || die "$NAME needs Claude Code $CLAUDE_CODE_MIN or later (or Codex), and neither \`claude\` nor \`codex\` is on your PATH: $how"
   local v
   v=$(claude --version 2>/dev/null </dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n 1) || v=""
   [ -n "$v" ] || die "can't tell which Claude Code \`claude\` is (\`claude --version\` printed no version): $NAME needs $CLAUDE_CODE_MIN or later"

@@ -57,9 +57,21 @@ if [ ! -e /usr/bin/claude ] && [ ! -e /bin/claude ]; then
   if out=$(PATH=/usr/bin:/bin:/usr/sbin:/sbin "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1); then
     fail "installing without Claude Code was accepted"
   fi
-  grep -q "isn't on your PATH" <<<"$out" || fail "a missing Claude Code was refused without saying so: $out"
+  grep -q "nor \`codex\` is on your PATH" <<<"$out" || fail "a missing Claude Code was refused without saying so: $out"
 fi
 [ ! -e "$HOME/.local/bin/$command" ] || fail "a refused install left files"
+# Codex without Claude Code: it installs (in a home of its own), its
+# routines on the codex backend. A stand-in codex: the real one never runs.
+if [ ! -e /usr/bin/claude ] && [ ! -e /bin/claude ]; then
+  mkdir -p "$sandbox/codex-bin" "$sandbox/codex-home"
+  printf '#!/bin/sh\necho "codex-cli 0.200.0"\n' > "$sandbox/codex-bin/codex" && chmod +x "$sandbox/codex-bin/codex"
+  out=$(HOME="$sandbox/codex-home" PATH="$sandbox/codex-bin:/usr/bin:/bin:/usr/sbin:/sbin" "$installer" --from "$sandbox/$(basename "$artifact")" --yes --files-only 2>&1) ||
+    fail "installing with Codex and no Claude Code failed: $out"
+  grep -q "routines will run on Codex" <<<"$out" || fail "installing with Codex didn't say it uses Codex: $out"
+  backend=$(HOME="$sandbox/codex-home" "$sandbox/codex-home/.local/bin/$command" settings get llm.backend --json | grep '"value"')
+  case $backend in *'"codex"'*) ;; *) fail "installing with Codex didn't choose the codex backend: $backend" ;; esac
+  HOME="$sandbox/codex-home" "$sandbox/codex-home/.local/bin/$command" uninstall --yes >/dev/null 2>&1 || true
+fi
 # A newer one than required installs (the main install below).
 fake_claude claude-newer "$major.$((minor + 1)).0"
 export PATH="$sandbox/claude-newer:$PATH"

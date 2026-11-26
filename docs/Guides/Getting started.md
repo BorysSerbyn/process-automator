@@ -13,7 +13,7 @@ Process Automator runs **routines**: prompt files that a model (Claude) runs on 
 
 ## Requirements
 - macOS 14 or later on a Mac with Apple silicon (Intel Macs aren't supported), or Linux (x86-64 or ARM64)
-- [Claude Code](https://claude.com/claude-code) at the version `install.sh` names (`CLAUDE_CODE_MIN`) or later: the installer refuses an older one (`claude update`). Routines on another model backend don't need it: `--without-claude-code`
+- [Claude Code](https://claude.com/claude-code) at the version `install.sh` names (`CLAUDE_CODE_MIN`) or later: the installer refuses an older one (`claude update`). Routines on another model backend don't need it: `--without-claude-code`. With only Codex installed, the installer goes ahead and runs routines on Codex
 - Linux only: `secret-tool` (package `libsecret-tools`) to keep sign-ins, and a systemd user session to start the scheduler at login. The tray needs a desktop with a system tray (StatusNotifierItem): on GNOME, the AppIndicator extension, which Ubuntu enables by default
 
 ## Install
