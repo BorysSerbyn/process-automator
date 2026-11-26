@@ -4,26 +4,52 @@
   "properties": {
     "server": {
       "type": "string",
-      "description": "Server is its name in Claude Code (the app's command)."
+      "description": "Server is its name in them (the app's command)."
     },
     "command": {
       "items": {
         "type": "string"
       },
       "type": "array",
-      "description": "Command is what Claude Code runs to start it."
+      "description": "Command is what they run to start it."
     },
     "already": {
       "type": "boolean",
-      "description": "Already is true when it was registered already, and nothing changed."
+      "description": "Already is true when every one had it already, and nothing changed."
+    },
+    "clients": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex"
+            ]
+          },
+          "already": {
+            "type": "boolean",
+            "description": "Already is true when it had it already."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "description": "MCPClient is one agent CLI that has the app's MCP server."
+      },
+      "type": "array",
+      "description": "Clients are the CLIs it's in: claude-code, codex."
     }
   },
   "additionalProperties": false,
   "type": "object",
   "required": [
     "server",
-    "command"
+    "command",
+    "clients"
   ],
   "title": "procauto mcp connect --json",
-  "description": "MCPConnectOutput is `mcp connect --json`: Claude Code has the app's MCP server at user scope (in every folder, listed by /mcp)."
+  "description": "MCPConnectOutput is `mcp connect --json`: the agent CLIs installed (Claude Code at user scope, Codex in its own config) have the app's MCP server, in every folder."
 }

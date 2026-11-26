@@ -435,3 +435,35 @@ func tomlString(s string) string {
 	_ = enc.Encode(s)
 	return strings.ReplaceAll(strings.TrimSuffix(buf.String(), "\n"), "\x7f", `\u007f`)
 }
+
+// MCPAddArgs: `codex mcp add <name> -- <command>` writes [mcp_servers.<name>]
+// to CODEX_HOME's config.toml, for every folder.
+func (codex0_171_0) MCPAddArgs(name string, command []string) []string {
+	return append([]string{"mcp", "add", name, "--"}, command...)
+}
+
+func (codex0_171_0) MCPRemoveArgs(name string) []string { return []string{"mcp", "remove", name} }
+
+func (codex0_171_0) MCPListArgs() []string { return []string{"mcp", "list", "--json"} }
+
+// MCPServer reads `codex mcp list --json`: an array of servers, each with
+// its name and transport ({"type": "stdio", "command", "args"}).
+func (codex0_171_0) MCPServer(out []byte, name string) (ClaudeMCPServer, bool, error) {
+	var list []struct {
+		Name      string `json:"name"`
+		Transport struct {
+			Type    string   `json:"type"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"transport"`
+	}
+	if err := json.Unmarshal(out, &list); err != nil {
+		return ClaudeMCPServer{}, false, fmt.Errorf("reading `codex mcp list --json`: %w", err)
+	}
+	for _, s := range list {
+		if s.Name == name {
+			return ClaudeMCPServer{Command: s.Transport.Command, Args: s.Transport.Args}, true, nil
+		}
+	}
+	return ClaudeMCPServer{}, false, nil
+}

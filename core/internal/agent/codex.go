@@ -208,3 +208,33 @@ func CodexLoginStatus(ctx context.Context, path string, p CodexProtocol) (proble
 	}
 	return "", err
 }
+
+// RunCodex runs the codex at path with args, returning what it printed
+// (tests replace it: they never run the real codex).
+var RunCodex = func(ctx context.Context, path string, args ...string) ([]byte, error) {
+	out, err := exec.CommandContext(ctx, path, args...).CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("codex %s: %v: %s", strings.Join(args[:min(2, len(args))], " "), err, strings.TrimSpace(string(out)))
+	}
+	return out, nil
+}
+
+// CodexMCPProblem says why the Codex at path (through p) doesn't have the
+// app's MCP server, registered as name, "" when it has: none is
+// registered, or one whose command is gone.
+func CodexMCPProblem(ctx context.Context, path string, p CodexProtocol, name string) (string, error) {
+	out, err := RunCodex(ctx, path, p.MCPListArgs()...)
+	if err != nil {
+		return "", err
+	}
+	s, ok, err := p.MCPServer(out, name)
+	switch {
+	case err != nil:
+		return "", err
+	case !ok:
+		return "Codex doesn't have " + name + "'s MCP server, so its sessions don't list its tools", nil
+	case s.Command != "" && filepath.IsAbs(s.Command) && !isFile(s.Command):
+		return "Codex's " + name + " MCP server runs " + s.Command + ", which isn't there anymore", nil
+	}
+	return "", nil
+}

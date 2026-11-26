@@ -79,7 +79,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Distribution|Functiona
 | `templates` | Optional: which projects I work on (when templates are made for any), then which templates to install, with their parameters |
 | `backend` | `llm.backend`, and its key or token; on `local`, not done while `llm.local.url` isn't an http(s) URL or `llm.local.model` is empty (its status names what's missing, its `ask` asks for both, and its `commands` set them, with `auth login local --browser` for a server that needs a key) |
 | `usage` | While Claude Code's `/usage` can't be read (it answered without a usage report, or 3 tries in a row failed): the status line fallback |
-| `mcp` | On `claude-code`: Claude Code has the app's MCP server at user scope (`mcp connect`); `auto` |
+| `mcp` | On `claude-code`: Claude Code has the app's MCP server at user scope; on `codex`: Codex has it in its config (`mcp connect` for both); `auto`. On `codex`, `codex mcp list --json` is read at most once a minute, and a failure to read it is the step's status, not setup's error |
 | `routine` | A routine that can't run, and why |
 | `sign-in` | Each server the routines use that isn't signed in, with its `prepare` steps first |
 | `turn-on` | Each routine, done once it's trusted and not paused: `routines trust <name> --yes --resume` trusts it and resumes it in one step. Untrusted, it's required; trusted but paused, it's optional (pausing a routine never makes setup unfinished) |

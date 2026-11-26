@@ -57,6 +57,13 @@ type CodexProtocol interface {
 	// LoginProblem reads LoginStatusArgs' output: why Codex isn't signed in,
 	// "" when it is.
 	LoginProblem(output string, exitedZero bool) string
+	// MCPAddArgs registers a stdio MCP server in Codex's own config (every
+	// folder), MCPRemoveArgs removes it, and MCPListArgs lists them, which
+	// MCPServer reads: the one named name (ok false when there's none).
+	MCPAddArgs(name string, command []string) []string
+	MCPRemoveArgs(name string) []string
+	MCPListArgs() []string
+	MCPServer(listOutput []byte, name string) (s ClaudeMCPServer, ok bool, err error)
 }
 
 // CodexRun is a headless run as the backend has worked it out; a protocol

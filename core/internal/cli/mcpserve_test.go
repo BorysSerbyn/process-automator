@@ -44,8 +44,14 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	_ = os.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
-	// Nor run the real claude (mcp connect).
+	// Nor run the real claude or codex (mcp connect), nor touch Codex's config.
 	runClaude = fakeClaude
+	codexDir, err := os.MkdirTemp("", "pt-codex-")
+	if err != nil {
+		panic(err)
+	}
+	_ = os.Setenv("CODEX_HOME", codexDir)
+	agent.RunCodex = fakeCodex
 	// Stand-ins for claude and codex, first on PATH, that only fail; their
 	// versions are the newest supported, answered without running them, and
 	// Codex's sign-in check says it's signed in.

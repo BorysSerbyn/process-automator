@@ -197,7 +197,7 @@ commands:
     example: procauto mcp call automator runs '{"since":"7d"}'
   - command: mcp connect
     usage: procauto mcp connect [flags]
-    summary: Register this app's MCP server with Claude Code, at user scope (every folder)
+    summary: Register this app's MCP server with Claude Code and Codex, whichever are installed, for every folder
     flags:
       - name: --json
         type: bool

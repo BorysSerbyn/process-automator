@@ -1,8 +1,11 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/BorysSerbyn/process-automator/core/internal/agent"
 	"github.com/BorysSerbyn/process-automator/core/internal/product"
@@ -258,14 +261,22 @@ func (a *App) usageStep() (SetupStep, bool, error) {
 	return st, true, nil
 }
 
-// MCPStep is there on the claude-code backend: Claude Code gets the app's
-// MCP server at user scope, so I can manage the app from any Claude Code
-// session. Required, and done without asking (it only adds a server to
-// Claude Code, which asks before each tool call that changes anything).
+// MCPStep is there on the claude-code and codex backends: the backend's
+// CLI gets the app's MCP server for every folder, so I can manage the app
+// from any of its sessions. Required, and done without asking (it only adds
+// a server to the CLI, which asks before each tool call that changes
+// anything).
 func (a *App) MCPStep() (SetupStep, bool, error) {
 	def, err := a.BackendDef()
-	if err != nil || def.Name != "claude-code" {
+	if err != nil {
 		return SetupStep{}, false, err
+	}
+	switch def.Name {
+	case "codex":
+		return a.codexMCPStep()
+	case "claude-code":
+	default:
+		return SetupStep{}, false, nil
 	}
 	// Claude Code missing or too old is the backend step's problem.
 	_, protocol, err := FindClaudeCode(a)
@@ -284,6 +295,63 @@ func (a *App) MCPStep() (SetupStep, bool, error) {
 	}
 	return st, true, nil
 }
+
+// codexMCPStep is MCPStep on the codex backend. Listing Codex's servers
+// runs codex, so the answer is kept a minute (run status asks every pass).
+func (a *App) codexMCPStep() (SetupStep, bool, error) {
+	path, protocol, err := findCodex(a)
+	if err != nil {
+		return SetupStep{}, false, nil // Codex missing or too old is the backend step's problem
+	}
+	problem, err := codexMCP.check(path, func() (string, error) {
+		return agent.CodexMCPProblem(context.Background(), path, protocol, product.Command)
+	})
+	if err != nil { // setup goes on: this step says it couldn't tell
+		problem = "can't tell whether Codex has " + product.Command + "'s MCP server: " + err.Error()
+	}
+	st := SetupStep{Step: StepMCP, Title: "Codex connection", Done: problem == "", Auto: true,
+		Status:   "Codex has " + product.Command + "'s MCP server: its sessions list its tools in every folder",
+		Commands: []string{product.Command + " mcp connect"}}
+	if problem != "" {
+		st.Status = Capitalize(problem)
+	}
+	return st, true, nil
+}
+
+// codexMCP remembers whether Codex has the app's MCP server, for a minute.
+var codexMCP mcpCache
+
+type mcpCache struct {
+	mu      sync.Mutex
+	path    string
+	at      time.Time
+	problem string
+}
+
+func (c *mcpCache) check(path string, ask func() (string, error)) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.path == path && time.Since(c.at) < time.Minute {
+		return c.problem, nil
+	}
+	problem, err := ask()
+	if err != nil {
+		return "", err
+	}
+	c.path, c.at, c.problem = path, time.Now(), problem
+	return problem, nil
+}
+
+// ForgetCodexMCP drops what's remembered of Codex's MCP server (it changed).
+func ForgetCodexMCP() {
+	codexMCP.mu.Lock()
+	codexMCP.at = time.Time{}
+	codexMCP.mu.Unlock()
+}
+
+// FindCodex is the installed Codex: its binary, and the protocol for its
+// version.
+func FindCodex(a *App) (string, agent.CodexProtocol, error) { return findCodex(a) }
 
 // loadedRoutine is a routine of either kind whose settings resolve.
 type loadedRoutine struct {

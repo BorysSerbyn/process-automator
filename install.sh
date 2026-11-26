@@ -189,6 +189,12 @@ codex_backend() {
   if "$cli" settings get llm.backend --json 2>/dev/null | grep -q '"isDefault": *true'; then
     "$cli" settings set llm.backend codex >/dev/null && say "Model backend: codex (sign in with \`codex login\` if you haven't)."
   fi
+  # Codex's sessions get the app's tools (setup does it too).
+  if "$cli" mcp connect >/dev/null 2>&1; then
+    say "Codex has $COMMAND's MCP server: a new Codex session lists its tools."
+  else
+    say "Couldn't give Codex $COMMAND's MCP server: \`$COMMAND mcp connect\` says why."
+  fi
 }
 
 # check_claude_code: Claude Code is installed, at CLAUDE_CODE_MIN or later;

@@ -830,24 +830,45 @@ components:
         - enabled
         - items
       type: object
-    MCPConnectOutput:
+    MCPClient:
       additionalProperties: false
-      description: 'MCPConnectOutput is `mcp connect --json`: Claude Code has the app''s MCP server at user scope (in every folder, listed by /mcp).'
+      description: MCPClient is one agent CLI that has the app's MCP server.
       properties:
         already:
-          description: Already is true when it was registered already, and nothing changed.
+          description: Already is true when it had it already.
           type: boolean
+        name:
+          enum:
+            - claude-code
+            - codex
+          type: string
+      required:
+        - name
+      type: object
+    MCPConnectOutput:
+      additionalProperties: false
+      description: 'MCPConnectOutput is `mcp connect --json`: the agent CLIs installed (Claude Code at user scope, Codex in its own config) have the app''s MCP server, in every folder.'
+      properties:
+        already:
+          description: Already is true when every one had it already, and nothing changed.
+          type: boolean
+        clients:
+          description: 'Clients are the CLIs it''s in: claude-code, codex.'
+          items:
+            $ref: '#/components/schemas/MCPClient'
+          type: array
         command:
-          description: Command is what Claude Code runs to start it.
+          description: Command is what they run to start it.
           items:
             type: string
           type: array
         server:
-          description: Server is its name in Claude Code (the app's command).
+          description: Server is its name in them (the app's command).
           type: string
       required:
         - server
         - command
+        - clients
       type: object
     Memory:
       additionalProperties: false
