@@ -107,3 +107,65 @@ func TestDir(t *testing.T) {
 		t.Errorf("no runtime dir: %s", got)
 	}
 }
+
+// A later start replaces the window: the holder is asked to quit, and
+// once it lets go, the later start holds the window.
+func TestReplaceAsksTheHolderToQuit(t *testing.T) {
+	dir := shortDir(t)
+	h, err := Claim(dir, "window")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		for ask := range h.Raised {
+			if ask == QuitAsk {
+				h.Release()
+				return
+			}
+		}
+	}()
+	h2, err := Replace(dir, "window", 2*time.Second)
+	if err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	defer h2.Release()
+	if pid := holderPID(dir, "window"); pid != os.Getpid() {
+		t.Fatalf("the lock names %d", pid)
+	}
+	// It's held now: an older start hands it its screen.
+	if _, err := Ask(dir, "window", `["settings"]`); !errors.Is(err, ErrHeld) {
+		t.Fatalf("held: %v", err)
+	}
+}
+
+// A holder that doesn't quit (its window gone, say) is ended, and the later
+// start holds the window; one that can't be ended is an error.
+func TestReplaceEndsAHolderThatDoesntQuit(t *testing.T) {
+	dir := shortDir(t)
+	h, err := Claim(dir, "window")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The holder is this test's process: it says another PID, which
+	// Terminate "ends" by letting go of the window.
+	if err := os.WriteFile(filepath.Join(dir, "window.lock"), []byte("4242\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := Terminate
+	t.Cleanup(func() { Terminate = old })
+	var ended int
+	Terminate = func(pid int) error { ended = pid; h.Release(); return nil }
+	h2, err := Replace(dir, "window", 200*time.Millisecond)
+	if err != nil || ended != 4242 {
+		t.Fatalf("replace: %v, ended %d", err, ended)
+	}
+	h2.Release()
+
+	h3, _ := Claim(dir, "window")
+	defer h3.Release()
+	_ = os.WriteFile(filepath.Join(dir, "window.lock"), []byte("4243\n"), 0o600)
+	Terminate = func(int) error { return errors.New("no") }
+	if _, err := Replace(dir, "window", 100*time.Millisecond); err == nil {
+		t.Fatal("a holder that can't be ended was replaced")
+	}
+}

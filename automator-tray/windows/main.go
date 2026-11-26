@@ -2,8 +2,10 @@
 // Linux, automator-ui's window's counterpart: the tray starts it for one of
 // its screens (`automator-windows setup`, `automator-windows routine standup`,
 // `automator-windows hook open-meet run r-42`), which it shows in the app's
-// one window; started again while that window is open, it hands the screen
-// to it and exits. It exits when the window closes.
+// one window; started again while that window is open, it replaces it: the
+// open one quits, and a new window opens on the screen, in front (one that
+// was minimized, on another desktop or off-screen, would take the screen
+// where I can't see it). It exits when the window closes.
 // Like the tray, it acts only through the app's CLI, and its names come
 // from the package's install.env. It's a program of its own so that the
 // tray, always running, stays small and needs no cgo: Fyne (OpenGL, X11 and
@@ -49,9 +51,6 @@ func main() {
 		os.Exit(2)
 	}
 	if err := run(*dir, w); err != nil {
-		if errors.Is(err, instance.ErrHeld) {
-			return // the window that's open shows it, in front
-		}
 		log.Fatal(err)
 	}
 }
@@ -97,14 +96,13 @@ func window(args []string) (tray.Window, error) {
 // lockName is the window's lock: the app has one window.
 const lockName = "window"
 
-// askFor is what a later start asks the open window for: the screen it was
-// started for, as its arguments (one line of JSON).
-func askFor(args []string) string {
-	b, _ := json.Marshal(args)
-	return string(b)
-}
+// ReplaceWait is how long the window that's open is given to quit, before
+// it's ended, and then to be gone.
+var ReplaceWait = 3 * time.Second
 
-// asked is the screen a later start asked for (askFor's), if it names one.
+// asked is the screen a later start asked for, if it names one: the
+// screen's arguments as one line of JSON, as a windows app from before
+// replacing asks it.
 func asked(line string) (tray.Window, bool) {
 	var args []string
 	if json.Unmarshal([]byte(line), &args) != nil {
@@ -130,7 +128,7 @@ func run(dir string, which tray.Window) error {
 	if id == "" {
 		id = info.Command
 	}
-	holder, err := instance.Ask(instance.Dir(os.Getenv, id), lockName, askFor(flag.Args()))
+	holder, err := instance.Replace(instance.Dir(os.Getenv, id), lockName, ReplaceWait)
 	if err != nil {
 		return err
 	}
@@ -175,10 +173,12 @@ func run(dir string, which tray.Window) error {
 	w.SetContent(sh.Content())
 	w.Resize(Size)
 	w.CenterOnScreen()
-	// Asked for again: the screen asked for, in front (automator-ui's
-	// show()). Once the window has closed, the app's loop is gone: the
-	// window is let go, so the next ask starts a process of its own, and
-	// one that came in meanwhile is dropped.
+	// Replaced by a later start: it quits, letting go of the window, without
+	// the screens hearing it closed (Template Updates' Not now is mine to
+	// choose). From a start before replacing: the screen asked for, in
+	// front. Once the window has closed, the app's loop is gone: the window
+	// is let go, so the next start holds it at once, and an ask that came in
+	// meanwhile is dropped.
 	var stopped atomic.Bool
 	a.Lifecycle().SetOnStopped(func() {
 		stopped.Store(true)
@@ -188,6 +188,10 @@ func run(dir string, which tray.Window) error {
 		for line := range holder.Raised {
 			fyne.Do(func() {
 				if stopped.Load() {
+					return
+				}
+				if line == instance.QuitAsk {
+					a.Quit()
 					return
 				}
 				w.Show()

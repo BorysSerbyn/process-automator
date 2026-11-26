@@ -16,3 +16,6 @@ func tryLock(f *os.File) (bool, error) {
 	}
 	return err == nil, err
 }
+
+// terminate asks the process pid to end (SIGTERM).
+func terminate(pid int) error { return syscall.Kill(pid, syscall.SIGTERM) }

@@ -1,9 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -51,22 +51,19 @@ func TestTheArgumentsNameAWindow(t *testing.T) {
 	}
 }
 
-// The app has one window: every screen asks for the same lock, and a later
-// start hands the open window its arguments, which name the same screen.
-func TestALaterStartHandsItsScreenToTheWindow(t *testing.T) {
+// A windows app from before replacing hands the open window its screen's
+// arguments as one line of JSON: the window still shows that screen.
+func TestAnOlderStartHandsItsScreenToTheWindow(t *testing.T) {
 	for _, args := range [][]string{
 		{"setup"}, {"routine", "my report"}, {"hook", "open-meet", "review"}, {"routine", "standup", "run", "r-42"},
 	} {
-		line := askFor(args)
+		b, _ := json.Marshal(args)
 		want, _ := window(args)
-		if strings.Contains(line, "\n") {
-			t.Fatalf("%q isn't one line", line)
-		}
-		if got, ok := asked(line); !ok || got != want {
+		if got, ok := asked(string(b)); !ok || got != want {
 			t.Errorf("%q: %+v", args, got)
 		}
 	}
-	for _, line := range []string{"raise", "review", `["nope"]`, ""} {
+	for _, line := range []string{"raise", "review", "quit", `["nope"]`, ""} {
 		if _, ok := asked(line); ok {
 			t.Errorf("%q asked for a screen", line)
 		}

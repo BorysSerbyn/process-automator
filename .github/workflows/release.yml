@@ -125,7 +125,8 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # install.sh too: the one-line install downloads the latest release's.
+      - run: cp install.sh dist/ && cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

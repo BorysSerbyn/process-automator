@@ -1,8 +1,10 @@
 // Package instance keeps one window: the first windows app started holds
-// it, and one started after asks it for what it was started for (to come
-// to the front, showing a screen), then exits. It works with or without a session bus: a lock
-// the kernel lets go of when the holder exits, however it exits, and a
-// socket beside it to ask through.
+// it. One started after either asks it for what it was started for (to come
+// to the front, showing a screen) and exits (Ask), or replaces it: asks it
+// to quit, and holds the window once it's gone (Replace). It works with or
+// without a session bus: a lock the kernel lets go of when the holder
+// exits, however it exits (it holds the holder's PID), and a socket beside
+// it to ask through.
 package instance
 
 import (
@@ -12,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -45,6 +48,72 @@ func Claim(dir, name string) (*Holder, error) { return Ask(dir, name, "raise") }
 // Ask is Claim, asking the window that's open for ask (one line: what it
 // should show as it comes to the front) when another process holds it.
 func Ask(dir, name, ask string) (*Holder, error) {
+	h, err := claim(dir, name)
+	if errors.Is(err, errBusy) {
+		return nil, raise(filepath.Join(dir, name+".sock"), ask)
+	}
+	return h, err
+}
+
+// QuitAsk is what Replace asks the holder: to quit, letting go of the window.
+const QuitAsk = "quit"
+
+// Terminate ends the process pid (tests replace it).
+var Terminate = terminate
+
+// Replace makes this process the one holding the window named name, in
+// dir: the process holding it, if one does, is asked to quit (QuitAsk) and
+// given wait to let go, then terminated and given wait again.
+func Replace(dir, name string, wait time.Duration) (*Holder, error) {
+	h, err := claim(dir, name)
+	if !errors.Is(err, errBusy) {
+		return h, err
+	}
+	pid := holderPID(dir, name)
+	_ = raise(filepath.Join(dir, name+".sock"), QuitAsk) // a stuck one doesn't answer: it's terminated
+	if h, err := waitClaim(dir, name, wait); !errors.Is(err, errBusy) {
+		return h, err
+	}
+	if pid <= 0 || pid == os.Getpid() {
+		return nil, fmt.Errorf("the window is open in another process, which didn't quit")
+	}
+	if err := Terminate(pid); err != nil {
+		return nil, fmt.Errorf("the window is open in process %d, which didn't quit and can't be ended: %w", pid, err)
+	}
+	if h, err := waitClaim(dir, name, wait); !errors.Is(err, errBusy) {
+		return h, err
+	}
+	return nil, fmt.Errorf("the window is open in process %d, which didn't quit", pid)
+}
+
+// waitClaim tries to claim the window for up to wait.
+func waitClaim(dir, name string, wait time.Duration) (*Holder, error) {
+	deadline := time.Now().Add(wait)
+	for {
+		h, err := claim(dir, name)
+		if !errors.Is(err, errBusy) || time.Now().After(deadline) {
+			return h, err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// errBusy says another process holds the window.
+var errBusy = errors.New("held by another process")
+
+// holderPID is the PID the holder wrote in the lock file (0 when unknown).
+func holderPID(dir, name string) int {
+	b, err := os.ReadFile(filepath.Join(dir, name+".lock"))
+	if err != nil {
+		return 0
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	return pid
+}
+
+// claim holds the window if no one does (errBusy if someone does),
+// listening for what later starts ask.
+func claim(dir, name string) (*Holder, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -60,7 +129,10 @@ func Ask(dir, name, ask string) (*Holder, error) {
 	}
 	if !held {
 		_ = lock.Close()
-		return nil, raise(sock, ask)
+		return nil, errBusy
+	}
+	if err := lock.Truncate(0); err == nil {
+		_, _ = lock.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\n"), 0)
 	}
 	// A socket left by a holder that's gone is in the way.
 	_ = os.Remove(sock)
