@@ -62,12 +62,14 @@ func mcpOverrides() map[string]mcpOverride {
 		"routines trust": {exclude: "trusting a routine is my decision, after reviewing what it can reach"},
 		// Hooks and watchers, like programs: Claude may list, show, fire (dry
 		// runs too), pause and stop them, never add or trust one.
-		"hooks add":        {exclude: "adding a hook is mine: it's added from its file's path, in a terminal"},
-		"hooks update":     {exclude: "changing a hook's file is mine, from a terminal"},
-		"hooks trust":      {exclude: "trusting a hook is my decision, after reviewing what it acts on and can reach"},
-		"watchers add":     {exclude: "adding a watcher is mine: it runs code, added from its file's path in a terminal"},
-		"watchers update":  {exclude: "changing a watcher is mine, from a terminal"},
-		"watchers trust":   {exclude: "trusting a watcher is my decision, after reviewing what it runs"},
+		"hooks add":       {exclude: "adding a hook is mine: it's added from its file's path, in a terminal"},
+		"hooks update":    {exclude: "changing a hook's file is mine, from a terminal"},
+		"hooks trust":     {exclude: "trusting a hook is my decision, after reviewing what it acts on and can reach"},
+		"watchers add":    {exclude: "adding a watcher is mine: it runs code, added from its file's path in a terminal"},
+		"watchers update": {exclude: "changing a watcher is mine, from a terminal"},
+		"watchers trust":  {exclude: "trusting a watcher is my decision, after reviewing what it runs"},
+		"templates override": {exclude: "overriding replaces my routines', hooks' and watchers' files (and code) and keeps " +
+			"their trust: it's mine, in the app's window or a terminal"},
 		"uninstall":        {exclude: "removing the app (and this server with it) is mine, from a terminal"},
 		"login-items stop": {exclude: "quitting the app is mine: Quit in its menu, or a terminal"},
 		"usage statusline": {exclude: "it's Claude Code's status line; it reads Claude Code's input on stdin"},

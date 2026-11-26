@@ -22,14 +22,17 @@ func fake(t *testing.T, body string) CLI {
 	return CLI{Path: path, Command: "acme-auto"}
 }
 
-// A failure is the core's error object, else its stderr without "Error: ".
+// A failure is the core's error object (after what it printed first), else
+// its stderr without "Error: ".
 func TestFailuresAreTheCoresWords(t *testing.T) {
 	c := fake(t, `case $1 in
   json) echo '{"error": "no such run"}'; echo "Error: no such run" >&2; exit 1 ;;
   text) echo "Error: config doesn't load" >&2; exit 1 ;;
+  partial) echo "Overrode the routine standup, still trusted."; echo '{"error": "the build of inbox failed"}'; echo "Error: x" >&2; exit 1 ;;
   *) exit 3 ;;
 esac`)
-	for arg, want := range map[string]string{"json": "no such run", "text": "config doesn't load", "silent": "acme-auto failed"} {
+	for arg, want := range map[string]string{"json": "no such run", "text": "config doesn't load",
+		"partial": "the build of inbox failed", "silent": "acme-auto failed"} {
 		if _, err := c.Exec(arg); err == nil || err.Error() != want {
 			t.Errorf("%s: got %v, want %q", arg, err, want)
 		}
@@ -111,6 +114,9 @@ esac`)
 	_, _ = c.LoginItems()
 	_, _ = c.SetStartAtLogin(true)
 	_, _ = c.SetStartAtLogin(false)
+	_, _ = c.TemplateUpdates()
+	_, _ = c.OverrideTemplates("standup", "open-meet")
+	_ = c.SkipTemplateUpdates("digest")
 	b, _ := os.ReadFile(log)
 	want := strings.Join([]string{
 		"setup --json", "templates list --json",
@@ -119,6 +125,7 @@ esac`)
 		"auth login tracker --browser", "routines trust standup --check --json", "routines trust standup --yes --resume --json",
 		"mcp connect --json", "usage statusline install --json", "usage --json",
 		"login-items status --json", "login-items enable --json", "login-items disable --json",
+		"templates outdated --json", "templates override standup open-meet --json", "templates skip digest --json",
 	}, "\n") + "\n"
 	if string(b) != want {
 		t.Fatalf("ran:\n%s\nwant:\n%s", b, want)
@@ -292,6 +299,9 @@ func TestTypesMatchTheContracts(t *testing.T) {
 		"watchers-show.schema.json":       WatcherDetail{},
 		"watchers-trust.schema.json":      WatcherTrustOutput{},
 		"permissions-request.schema.json": PermissionRequest{},
+		"templates-outdated.schema.json":  []TemplateUpdate{},
+		"templates-override.schema.json":  OverrideOutput{},
+		"templates-skip.schema.json":      SkipOutput{},
 	} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "cli", schema))
 		if err != nil {

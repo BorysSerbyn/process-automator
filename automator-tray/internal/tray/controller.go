@@ -69,9 +69,11 @@ func (t *Tray) Desk() *Desk { return t.desk }
 
 // Run follows the core until ctx ends. Starting, it starts the scheduler if
 // it isn't running (opening the app does, as automator-ui's launch does), so
-// opening it after a Quit brings everything back.
+// opening it after a Quit brings everything back, and offers what changed in
+// the templates I installed from (offerTemplateUpdates).
 func (t *Tray) Run(ctx context.Context) {
 	go t.startScheduler()
+	go t.offerTemplateUpdates()
 	t.render()
 	t.updates.Start(ctx.Done())
 	go t.cli.Follow(ctx, t.Show)
@@ -198,6 +200,22 @@ func (t *Tray) Choose(a Action) {
 func (t *Tray) startScheduler() {
 	if _, err := t.cli.StartScheduler(); err != nil {
 		log.Printf("couldn't start the scheduler: %v", err)
+	}
+}
+
+// offerTemplateUpdates opens Template Updates when something I installed
+// from a template changed since (`templates outdated`): the tray starts
+// again after every update, which may ship new templates. Asked once, as it
+// starts; why it couldn't ask goes to the log.
+func (t *Tray) offerTemplateUpdates() {
+	ups, err := t.cli.TemplateUpdates()
+	if err != nil {
+		log.Printf("couldn't read template updates: %v", err)
+		return
+	}
+	if len(ups) > 0 {
+		log.Printf("%d template update(s) to offer", len(ups))
+		t.open(Window{Kind: TemplateUpdatesWindow})
 	}
 }
 

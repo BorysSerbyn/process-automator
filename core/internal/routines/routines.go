@@ -70,6 +70,10 @@ type Routine struct {
 	// Backends it works with (automator.backends: llm.backend's values);
 	// empty means any.
 	Backends []string
+	// Version and Changes are a template's (automator.version,
+	// automator.changes): its version, for me to read, and what changed in
+	// it. Neither affects how it runs.
+	Version, Changes string
 	// Plugins holds the routine's section for each in-process plugin it uses
 	// (automator.plugins.<name>), as written; the plugin decodes its own.
 	Plugins map[string]any
@@ -120,6 +124,10 @@ var Fields = []Field{
 		"that doesn't list the selected backend won't install."},
 	{Name: "plugins", Written: Namespace + ".plugins.<name>", Type: "section", Description: "Settings for an in-process " +
 		"plugin that takes them from routines; the plugin must be one of its servers."},
+	{Name: "version", Type: "text", Description: "A template's version, shown beside it and what was installed from it " +
+		"(e.g. \"1.2.0\"); whether a template changed is told by its content, not this."},
+	{Name: "changes", Type: "text", Description: "A template's note of what changed in this version, shown when it's " +
+		"offered as an update."},
 	{Name: "outcome", Type: "section", Description: "Its outcome contract (see How a run ends): `done`, what success means; " +
 		"`nothingToDo`, the only cases of nothing to do (none: it can't report nothing_to_do); `writes`, tools of its " +
 		"`tools` done needs a successful call of."},
@@ -371,9 +379,20 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 	hookKeys := map[string]any{}
 	file := map[string]any{}
 	var servers, platforms, backends []string
+	var version, changes string
 	var params []Param
 	for k, v := range ext {
 		switch {
+		case k == "version" || k == "changes":
+			text, ok := v.(string)
+			if !ok || strings.TrimSpace(text) == "" {
+				return Routine{}, fmt.Errorf("%s.%s: want text (quote a version: \"1.2.0\")", Namespace, k)
+			}
+			if k == "version" {
+				version = strings.TrimSpace(text)
+			} else {
+				changes = strings.TrimSpace(text)
+			}
 		case k == "servers":
 			if err := decodeStrict(map[string]any{"servers": v}, &struct {
 				Servers *[]string `json:"servers"`
@@ -448,8 +467,8 @@ func parseSource(path, name string, raw []byte, hook bool) (Routine, error) {
 	}
 	r := Routine{
 		Name: name, Path: path, Servers: servers, Tools: doc.Tools, Model: doc.Model, Description: doc.Description,
-		File: file, Params: params, Platforms: platforms, Backends: backends, Source: string(raw),
-		Outcome: contract,
+		File: file, Params: params, Platforms: platforms, Backends: backends, Version: version, Changes: changes,
+		Source: string(raw), Outcome: contract,
 	}
 	if hook {
 		r.Hook, r.HookKeys = true, hookKeys

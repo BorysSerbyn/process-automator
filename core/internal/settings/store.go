@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -83,6 +84,20 @@ func markInactive(states []State) {
 			states[i].Inactive = "only used with llm.backend " + st.Backend
 		}
 	}
+}
+
+// RawKeys are the keys the config file sets, declared or not, sorted.
+func (s Store) RawKeys() ([]string, error) {
+	values, err := s.read()
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(values))
+	for k := range values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 // Get returns one setting's state.

@@ -999,6 +999,40 @@ components:
       required:
         - watcher
       type: object
+    Overridden:
+      additionalProperties: false
+      description: Overridden is one install a template update replaced.
+      properties:
+        kind:
+          enum:
+            - routine
+            - program
+            - hook
+            - watcher
+          type: string
+        name:
+          type: string
+        trusted:
+          description: 'Trusted is whether it''s trusted now: kept when it was before.'
+          type: boolean
+        version:
+          type: string
+      required:
+        - name
+        - kind
+        - trusted
+      type: object
+    OverrideOutput:
+      additionalProperties: false
+      description: OverrideOutput is `templates override --json`.
+      properties:
+        overridden:
+          items:
+            $ref: '#/components/schemas/Overridden'
+          type: array
+      required:
+        - overridden
+      type: object
     Param:
       additionalProperties: false
       description: Param is one routine parameter.
@@ -2336,6 +2370,17 @@ components:
         - done
         - status
       type: object
+    SkipOutput:
+      additionalProperties: false
+      description: SkipOutput is `templates skip --json`.
+      properties:
+        skipped:
+          items:
+            type: string
+          type: array
+      required:
+        - skipped
+      type: object
     StartOutput:
       additionalProperties: false
       description: 'StartOutput is `start --json`: a run started in the background.'
@@ -2551,7 +2596,11 @@ components:
           description: |-
             Build is how its executable is built when it's installed (a program's,
             a hook's or a watcher's that ships as source).
+        changes:
+          type: string
         description:
+          type: string
+        hash:
           type: string
         id:
           description: ID is its tag path and name, e.g. "projects/acme/standup".
@@ -2561,6 +2610,11 @@ components:
             Installed is true when one of its kind with the template's name exists
             (a routine of either kind, a hook, a watcher).
           type: boolean
+        installedVersion:
+          description: |-
+            InstalledVersion is the version the one installed under its name came
+            from, when it was installed from it and the template says one.
+          type: string
         kind:
           description: |-
             Kind is what installing it adds: a routine (an LLM routine), a
@@ -2598,6 +2652,12 @@ components:
           items:
             type: string
           type: array
+        version:
+          description: |-
+            Version is its version (automator.version, or template.yaml's
+            version), for me to read, and Changes what changed in it. Hash is its
+            content's (Hash): what tells whether it changed since it was installed.
+          type: string
         watcher:
           description: |-
             Watcher is a hook's: the watcher it listens to, installed with it (from
@@ -2616,9 +2676,67 @@ components:
         - name
         - kind
         - tags
+        - hash
         - runsHere
         - supportsBackend
         - installed
+      type: object
+    TemplateUpdate:
+      additionalProperties: false
+      description: 'TemplateUpdate is one install whose template changed: one row of `templates outdated --json`.'
+      properties:
+        blocked:
+          description: |-
+            Blocked says why it can't be overridden ("" when it can): installing
+            the template again is the way then.
+          type: string
+        changes:
+          type: string
+        edited:
+          description: |-
+            Edited is whether my copy changed since it was installed: no, yes, or
+            unknown (installed before installs were recorded, and not the
+            template's content then); overriding it replaces my edits.
+          enum:
+            - "no"
+            - "yes"
+            - unknown
+          type: string
+        installedVersion:
+          type: string
+        kind:
+          enum:
+            - routine
+            - program
+            - hook
+            - watcher
+          type: string
+        name:
+          description: Name is what it's installed as, Kind what it is.
+          type: string
+        skipped:
+          description: Skipped is that I chose not to take this change (listed with --all).
+          type: boolean
+        template:
+          description: |-
+            Template is the template's ID; InstalledVersion the version it was
+            installed at and Version the template's now ("" for none), Changes
+            what the template says changed.
+          type: string
+        version:
+          type: string
+        with:
+          description: |-
+            With are installs overridden with it: a hook's watcher whose
+            template changed too.
+          items:
+            type: string
+          type: array
+      required:
+        - name
+        - kind
+        - template
+        - edited
       type: object
     TemplateWatcher:
       additionalProperties: false

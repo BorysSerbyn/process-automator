@@ -56,6 +56,10 @@ public enum SidebarSection: String, CaseIterable, Hashable, Sendable {
 /// hook's or watcher's.
 public enum Destination: Hashable, Sendable {
     case routines, hooks, acknowledgements, setup, settings, updates
+    /// The installs whose template changed in this version, to override or
+    /// not: opened when the app starts after an update changed some, over
+    /// Updates (Back goes to what's new).
+    case templateUpdates
     case routine(String)
     case hook(String)
     case watcher(String)
@@ -70,7 +74,7 @@ public enum Destination: Hashable, Sendable {
         case .acknowledgements: .acknowledgements
         case .setup: .setup
         case .settings: .settings
-        case .updates: .updates
+        case .updates, .templateUpdates: .updates
         }
     }
 
@@ -81,6 +85,7 @@ public enum Destination: Hashable, Sendable {
     public var title: String {
         switch self {
         case .routine(let name), .hook(let name), .watcher(let name): name
+        case .templateUpdates: "Template Updates"
         default: home.title
         }
     }

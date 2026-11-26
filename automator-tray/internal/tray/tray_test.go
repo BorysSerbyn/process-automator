@@ -248,6 +248,35 @@ func TestRunStartsTheScheduler(t *testing.T) {
 	eventually(t, "login-items start", func() bool { return f.hasRun("login-items start --json") })
 }
 
+// Starting, the tray asks what changed in the templates I installed from,
+// and opens Template Updates when anything did; nothing changed, it opens
+// nothing.
+func TestRunOffersTemplateUpdates(t *testing.T) {
+	for _, c := range []struct {
+		answer string
+		opens  bool
+	}{
+		{`[{"name":"standup","kind":"routine","template":"projects/acme/standup","installedVersion":"1","version":"2","edited":"no"}]`, true},
+		{`[]`, false},
+	} {
+		f := newFakeCLI(t)
+		f.answer("templates outdated --json", c.answer)
+		tr, _, _, w := newTray(t, f)
+		ctx, cancel := context.WithCancel(context.Background())
+		go tr.Run(ctx)
+		eventually(t, "templates outdated", func() bool { return f.hasRun("templates outdated --json") })
+		if c.opens {
+			eventually(t, "Template Updates", func() bool { return w.has(Window{Kind: TemplateUpdatesWindow}) })
+		} else {
+			time.Sleep(50 * time.Millisecond)
+			if w.has(Window{Kind: TemplateUpdatesWindow}) {
+				t.Error("opened Template Updates with nothing to offer")
+			}
+		}
+		cancel()
+	}
+}
+
 // Opening the app while the tray runs starts the scheduler and opens Setup
 // while the core's status lists setup steps left, else Settings.
 func TestOpeningTheAppOpensSetupOrSettings(t *testing.T) {

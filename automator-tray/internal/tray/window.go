@@ -35,6 +35,10 @@ const (
 	// UpdatesWindow is Manage Updates: automatic updates on or off, the
 	// installed version and its notes, checking and installing.
 	UpdatesWindow WindowKind = "updates"
+	// TemplateUpdatesWindow is Template Updates: what I installed from a
+	// template that changed since, to override or leave as it is (opened
+	// as the tray starts, when there's any; not a sidebar section).
+	TemplateUpdatesWindow WindowKind = "template-updates"
 )
 
 // Window is a screen to open in the app's window, and what it's about.
@@ -86,6 +90,8 @@ func (w Window) Command() []string {
 		return []string{"watchers", "show", w.Routine}
 	case UpdatesWindow:
 		return []string{"update", "--ask"}
+	case TemplateUpdatesWindow:
+		return []string{"templates", "outdated"}
 	}
 	return []string{"routines", "list", "--kind", "all"}
 }

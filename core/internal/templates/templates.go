@@ -49,7 +49,13 @@ type Template struct {
 	Build *Build `json:"build,omitempty"`
 	// Watcher is a hook's: the watcher it listens to, installed with it (from
 	// its template) when it isn't there.
-	Watcher string           `json:"watcher,omitempty"`
+	Watcher string `json:"watcher,omitempty"`
+	// Version is its version (automator.version, or template.yaml's
+	// version), for me to read, and Changes what changed in it. Hash is its
+	// content's (Hash): what tells whether it changed since it was installed.
+	Version string           `json:"version,omitempty"`
+	Changes string           `json:"changes,omitempty"`
+	Hash    string           `json:"hash"`
 	Path    string           `json:"-"`
 	Routine routines.Routine `json:"-"`
 	// A folder template's folder, the templates folder it's in, its
@@ -128,6 +134,7 @@ func List(dir string) ([]Template, error) {
 			out = append(out, Template{
 				ID: strings.Join(append(slices.Clone(tags), r.Name), "/"), Name: r.Name, Kind: KindRoutine, Tags: tags, Project: projectOf(tags),
 				Description: r.Description, Platforms: r.Platforms, Backends: r.Backends, Params: r.Params, Path: r.Path, Routine: r,
+				Version: r.Version, Changes: r.Changes, Hash: TextHash(r.Source),
 			})
 		}
 	}

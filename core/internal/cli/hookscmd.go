@@ -304,6 +304,7 @@ func newHooksDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			_ = a.ForgetInstall(name) // a record left behind only makes a later one of its name look installed from it
 			if err := (settings.Store{Path: a.Layout.Config()}).ResetPrefix("hooks." + name + "."); err != nil {
 				return fmt.Errorf("deleted %s, but its settings remain: %w", path, err)
 			}

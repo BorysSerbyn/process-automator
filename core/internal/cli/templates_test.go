@@ -80,7 +80,7 @@ Look back {{lookback}} in {{channel}}.`), 0o600)
 		}
 	}
 	out, _ := run("templates", "list")
-	if !strings.Contains(out, "personal/digest") || !strings.Contains(out, "channel*") || !strings.Contains(out, "true") {
+	if !strings.Contains(out, "personal/digest") || !strings.Contains(out, "channel*") || !strings.Contains(out, "yes") {
 		t.Fatalf("list:\n%s", out)
 	}
 }

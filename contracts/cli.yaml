@@ -699,6 +699,39 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/templates-list.schema.json
+  - command: templates outdated
+    usage: procauto templates outdated [flags]
+    summary: 'List what I installed from a template that has changed since (--all: changes I didn''t take too)'
+    flags:
+      - name: --all
+        type: bool
+        usage: include changes I chose not to take
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/templates-outdated.schema.json
+  - command: templates override
+    usage: procauto templates override [<name>...] [flags]
+    summary: Replace what I installed from a template with its new version (`templates outdated` lists them)
+    flags:
+      - name: --all
+        type: bool
+        usage: override every one offered
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/templates-override.schema.json
+  - command: templates skip
+    usage: procauto templates skip [<name>...] [flags]
+    summary: 'Leave what I installed from a template as it is: its template''s change isn''t offered again, a later one is'
+    flags:
+      - name: --all
+        type: bool
+        usage: every one offered
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/templates-skip.schema.json
   - command: uninstall
     usage: procauto uninstall [flags]
     summary: Remove the app, its CLI link and its login items; --purge also your config, routines, history, logs and secrets

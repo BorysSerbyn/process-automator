@@ -146,6 +146,9 @@ func (l Layout) EditLock() string { return l.in("edit.lock") }
 // declare (permissions.json).
 func (l Layout) Permissions() string { return l.in("permissions.json") }
 
+// TemplateInstalls records what was installed from a template (installs).
+func (l Layout) TemplateInstalls() string { return l.in("template-installs.json") }
+
 // PermissionRequests holds requests to ask the OS for a permission, which
 // the scheduler takes (a file per permission).
 func (l Layout) PermissionRequests() string { return l.in("permission-requests") }

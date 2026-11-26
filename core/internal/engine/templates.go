@@ -29,6 +29,9 @@ type TemplateInfo struct {
 	// Installed is true when one of its kind with the template's name exists
 	// (a routine of either kind, a hook, a watcher).
 	Installed bool `json:"installed"`
+	// InstalledVersion is the version the one installed under its name came
+	// from, when it was installed from it and the template says one.
+	InstalledVersion string `json:"installedVersion,omitempty"`
 	// WithWatcher is a hook template's watcher template: installing the hook
 	// installs it too while it isn't installed, so the two are one choice.
 	// Its parameters are among the hook's (params) while it isn't
@@ -106,6 +109,10 @@ func (a *App) Templates(all bool) ([]TemplateInfo, error) {
 			withWatcher[t.ID], comesWithHook[w.ID] = w, true
 		}
 	}
+	records, _, err := a.installRecords(list)
+	if err != nil {
+		return nil, err
+	}
 	rows := []TemplateInfo{}
 	for _, t := range list {
 		if comesWithHook[t.ID] {
@@ -113,6 +120,9 @@ func (a *App) Templates(all bool) ([]TemplateInfo, error) {
 		}
 		row := TemplateInfo{Template: t, RunsHere: t.RunsHere(), SupportsBackend: t.Supports(backend.Name),
 			Installed: a.templateInstalled(set, t)}
+		if rec, ok := records.Installs[t.Name]; ok && row.Installed && rec.Template == t.ID {
+			row.InstalledVersion = rec.Version
+		}
 		if w, ok := withWatcher[t.ID]; ok {
 			installed := watchers.Exists(a.Layout.Watchers(), w.Name)
 			row.WithWatcher = &TemplateWatcher{ID: w.ID, Name: w.Name, Description: w.Description, Params: w.Params, Installed: installed}
@@ -239,6 +249,14 @@ func (a *App) InstallFolderTemplate(ctx context.Context, plan TemplatePlan, name
 			_, _ = watchers.Delete(a.Layout.Watchers(), plan.Watcher.Name)
 		}
 		return nil, err
+	}
+	if w := plan.Watcher; w != nil {
+		if err := a.RecordInstall(w.Name, *w, values); err != nil {
+			logf("templates: recording %s's install: %v", w.Name, err)
+		}
+	}
+	if err := a.RecordInstall(name, plan.Template, values); err != nil {
+		logf("templates: recording %s's install: %v", name, err)
 	}
 	return append(added, one), nil
 }

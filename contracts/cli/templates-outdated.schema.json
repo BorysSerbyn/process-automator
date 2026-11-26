@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "templates-outdated.schema.json",
+  "items": {
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Name is what it's installed as, Kind what it is."
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "routine",
+          "program",
+          "hook",
+          "watcher"
+        ]
+      },
+      "template": {
+        "type": "string",
+        "description": "Template is the template's ID; InstalledVersion the version it was\ninstalled at and Version the template's now (\"\" for none), Changes\nwhat the template says changed."
+      },
+      "installedVersion": {
+        "type": "string"
+      },
+      "version": {
+        "type": "string"
+      },
+      "changes": {
+        "type": "string"
+      },
+      "edited": {
+        "type": "string",
+        "enum": [
+          "no",
+          "yes",
+          "unknown"
+        ],
+        "description": "Edited is whether my copy changed since it was installed: no, yes, or\nunknown (installed before installs were recorded, and not the\ntemplate's content then); overriding it replaces my edits."
+      },
+      "skipped": {
+        "type": "boolean",
+        "description": "Skipped is that I chose not to take this change (listed with --all)."
+      },
+      "blocked": {
+        "type": "string",
+        "description": "Blocked says why it can't be overridden (\"\" when it can): installing\nthe template again is the way then."
+      },
+      "with": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "description": "With are installs overridden with it: a hook's watcher whose\ntemplate changed too."
+      }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+      "name",
+      "kind",
+      "template",
+      "edited"
+    ],
+    "description": "TemplateUpdate is one install whose template changed: one row of `templates outdated --json`."
+  },
+  "type": "array",
+  "title": "procauto templates outdated --json"
+}

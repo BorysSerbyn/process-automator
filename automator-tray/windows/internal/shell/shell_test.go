@@ -109,6 +109,7 @@ func TestEachScreenShowsInItsSection(t *testing.T) {
 		{tray.Window{Kind: tray.WatcherWindow, Routine: "cal"}, tray.HooksWindow, &ui.Watcher{}, "cal — Acme"},
 		{tray.Window{Kind: tray.AcknowledgementsWindow}, tray.AcknowledgementsWindow, &ui.Acknowledgements{}, "Acme"},
 		{tray.Window{Kind: tray.UpdatesWindow}, tray.UpdatesWindow, &ui.Updates{}, "Acme"},
+		{tray.Window{Kind: tray.TemplateUpdatesWindow}, tray.TemplateUpdatesWindow, &ui.TemplateUpdates{}, "Acme"},
 	} {
 		s.Show(c.w)
 		if fmt.Sprintf("%T", s.Shown()) != fmt.Sprintf("%T", c.view) || s.State().Section != c.section || w.Title() != c.title {
@@ -236,5 +237,37 @@ func TestShowingAgainReadsAgain(t *testing.T) {
 	s.Show(tray.Window{Kind: tray.RoutinesWindow})
 	if count() != 2 {
 		t.Fatalf("read %d times", count())
+	}
+}
+
+// Template Updates isn't a section: opened over a screen, closing it goes
+// back there; opened in a window of its own, closing it closes the window.
+// The window closing tells the screens open (Template Updates' Not now).
+func TestTemplateUpdatesClosesBackToWhereTheWindowWas(t *testing.T) {
+	s, w, _ := newShell(t)
+	s.Show(tray.Window{Kind: tray.HookWindow, Routine: "open-meet"})
+	s.Show(tray.Window{Kind: tray.TemplateUpdatesWindow})
+	if slices.Contains(nav.Sections, tray.TemplateUpdatesWindow) {
+		t.Error("Template Updates is a sidebar section")
+	}
+	if _, ok := buttons(s.sidebar)["Template Updates"]; ok {
+		t.Error("Template Updates is in the sidebar")
+	}
+	u, ok := s.Shown().(*ui.TemplateUpdates)
+	if !ok {
+		t.Fatalf("showing %T", s.Shown())
+	}
+	u.NotNow() // nothing listed (the fake answers {}): it just closes
+	if s.State().Shown() != (nav.Destination{Kind: tray.HookWindow, Name: "open-meet"}) || w.Title() != "open-meet — Acme" {
+		t.Fatalf("back on %+v", s.State().Shown())
+	}
+
+	s, w, _ = newShell(t)
+	closed := false
+	w.SetOnClosed(func() { closed = true })
+	s.Show(tray.Window{Kind: tray.TemplateUpdatesWindow})
+	s.Shown().(*ui.TemplateUpdates).NotNow()
+	if !closed {
+		t.Error("the window opened for it didn't close")
 	}
 }

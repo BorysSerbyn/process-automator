@@ -37,6 +37,8 @@ func TestTheArgumentsNameAWindow(t *testing.T) {
 		{[]string{"hook"}, tray.Window{}, false},
 		{[]string{"hooks", "x"}, tray.Window{}, false},
 		{[]string{"updates"}, tray.Window{Kind: tray.UpdatesWindow}, true},
+		{[]string{"template-updates"}, tray.Window{Kind: tray.TemplateUpdatesWindow}, true},
+		{[]string{"template-updates", "x"}, tray.Window{}, false},
 		{[]string{"routine"}, tray.Window{}, false},
 		{[]string{"settings", "x"}, tray.Window{}, false},
 		{[]string{"nope"}, tray.Window{}, false},

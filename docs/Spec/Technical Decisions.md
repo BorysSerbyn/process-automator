@@ -891,6 +891,16 @@ Claude Code is what most installs run on, so a new install requires the newest i
 - **Requiring Codex in the installer too**: most installs never use it, and a backend chosen later says what it needs (setup, `doctor`)
 - **A protocol for Claude Code only**: Codex's flags and config keys (its feature toggles especially) change between releases too, and a run broken by one would be found the same way, on a schedule
 
+## Decision: template updates are told by content, versions are for reading
+Whether a template changed since I installed from it is told by a hash of its content (a routine template's file; a folder template's files, its build's source folder included), recorded at install with a hash of what was written. A changed template hash is what's offered; a changed install hash is that I edited my copy. Versions are a template's own field, shown beside it, so I can tell where I am at a glance, but they decide nothing: a template edited without its version raised is still offered, and one whose version alone changed isn't. Ticking one in the window is the trust decision for what replaces it, so a trusted one stays trusted; an untrusted one stays as it was.
+
+### Rejected
+- **Versions decide**: an edit made without raising the version would never reach anyone, and nothing can check a version was raised without a record of every previous release's content
+- **Hashes only**: a hash says something changed but not where I am, and two installs can't be compared at a glance
+- **Re-trusting each override by hand**: the window is already my review of each one, ticked one by one; asking again would only make an update turn things off
+- **Overriding by itself, or ticked by default**: a routine is mine to edit once installed, and my edits would be lost without my say
+- **Offering every install again on each update**: a change I passed over would be asked about after every release
+
 ## Decision: a release keeps the previous release's signer
 macOS keeps a permission granted to the app (Calendars, Input Monitoring, …) across an update only while the app's designated requirement, its identifier and signing certificate, stays the same. A release signed with another certificate takes every grant away from everyone who updates, silently: watchers that need one go red. So `make publish` compares the new macOS app's designated requirement with the previous release's and refuses a different one, unless `ALLOW_NEW_SIGNER=1` says the change is meant (moving to a Developer ID, say).
 

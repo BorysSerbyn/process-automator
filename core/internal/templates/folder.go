@@ -60,6 +60,8 @@ type Build struct {
 
 // manifest is ManifestFile.
 type manifest struct {
+	Version     string       `yaml:"version"`
+	Changes     string       `yaml:"changes"`
 	Description string       `yaml:"description"`
 	Platforms   []string     `yaml:"platforms"`
 	Params      []paramInput `yaml:"params"`
@@ -111,6 +113,7 @@ func loadFolder(root, dir string) (Template, error) {
 	t := Template{
 		ID: strings.Join(parts, "/"), Name: name, Tags: tags, Project: projectOf(tags),
 		Description: m.Description, Platforms: m.Platforms, Build: m.Build, Dir: dir, Root: root,
+		Version: strings.TrimSpace(m.Version), Changes: strings.TrimSpace(m.Changes),
 	}
 	for _, p := range m.Platforms {
 		if !slices.Contains(routines.Platforms, p) {
@@ -144,6 +147,9 @@ func loadFolder(root, dir string) (Template, error) {
 	t.Source = string(src)
 	if err := t.parse(t.Fill(samples(t.Params))); err != nil {
 		return Template{}, fmt.Errorf("%s: %w", t.DescFile, err)
+	}
+	if t.Hash, err = t.folderHash(); err != nil {
+		return Template{}, err
 	}
 	return t, nil
 }

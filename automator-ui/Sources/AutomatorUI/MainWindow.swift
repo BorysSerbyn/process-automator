@@ -25,6 +25,7 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
     private var acknowledgementsModel: Acknowledgements?
     private var setupModel: SetupViewModel?
     private var settingsModel: SettingsModel?
+    private var templateUpdatesModel: TemplateUpdates?
     /// The settings groups open when Settings was last left: its model is
     /// freed then, this outlives it.
     private var settingsOpenGroups: Set<String>?
@@ -49,6 +50,23 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
         makeWindow()
         go(to: destination, run: run, review: review) { $0.show(destination) }
         bringToFront(window)
+    }
+
+    /// Opens Template Updates when templates something was installed from
+    /// changed (the app starts after every update): asked in the background.
+    func offerTemplateUpdates() {
+        Task {
+            guard case .success(let updates) = await cli.background({ $0.outdatedTemplates() }), !updates.isEmpty
+            else { return }
+            show(.templateUpdates)
+        }
+    }
+
+    /// Closes Template Updates, once chosen: back to Updates.
+    private func closeTemplateUpdates() {
+        var next = nav
+        next.removed(.templateUpdates)
+        apply(next)
     }
 
     /// Opens a destination from inside the window: on top of what shows.
@@ -94,6 +112,9 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
         if !open.contains(.hooks) { hooksModel = nil }
         if !open.contains(.acknowledgements) { acknowledgementsModel = nil }
         if !open.contains(.setup) { setupModel = nil }
+        // Another screen shown over it skips nothing: they're offered at the
+        // next launch (only closing the window, or Not now, is choosing).
+        if !open.contains(.templateUpdates) { templateUpdatesModel = nil }
         if !open.contains(.settings), let model = settingsModel {
             settingsOpenGroups = model.expanded
             settingsModel = nil
@@ -128,6 +149,9 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
             settingsModel = SettingsModel(cli: cli, openGroups: settingsOpenGroups)
         case .updates:
             return false  // the Updates model lives as long as the app: the menu shows it
+        case .templateUpdates:
+            guard templateUpdatesModel == nil else { return false }
+            templateUpdatesModel = TemplateUpdates(cli: cli)
         case .routine(let name):
             guard routineModels[name] == nil else { return false }
             let model = RoutineModel(name: name, cli: cli, status: status)
@@ -160,6 +184,8 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
         case .setup: setupModel?.load()
         case .settings: settingsModel?.load()  // what changed elsewhere since it was last shown
         case .updates: updates.opened()
+        case .templateUpdates:
+            if let model = templateUpdatesModel { Task { await model.load() } }
         case .routine(let name):
             guard let model = routineModels[name] else { return }
             if review { model.reviewWhenLoaded = true }
@@ -234,10 +260,22 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
             self.acknowledgementsModel = nil
             self.setupModel = nil
             self.settingsModel = nil
+            if let model = self.templateUpdatesModel { self.leftUndecided(model) }
+            self.templateUpdatesModel = nil
             self.routineModels = [:]
             self.hookModels = [:]
             self.watcherModels = [:]
             self.nav = NavigationState()
+        }
+    }
+
+    /// Template Updates closed with the window without choosing: the same as
+    /// Not now, so they aren't offered again. One overriding finishes on its
+    /// own.
+    private func leftUndecided(_ model: TemplateUpdates) {
+        guard model.undecided else { return }
+        Task {
+            if !(await model.notNow()) { NSLog("Couldn't skip the template updates: %@", model.error ?? "") }
         }
     }
 
@@ -273,6 +311,10 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
             if let model = settingsModel { SettingsView(model: model) }
         case .updates:
             ManageUpdatesView(model: updates.model)
+        case .templateUpdates:
+            if let model = templateUpdatesModel {
+                TemplateUpdatesView(model: model, close: { [weak self] in self?.closeTemplateUpdates() })
+            }
         case .routine(let name):
             if let model = routineModels[name] { RoutineDetailView(model: model) }
         case .hook(let name):

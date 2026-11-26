@@ -1,0 +1,11 @@
+[
+  {"name": "standup", "kind": "routine", "template": "projects/acme/standup", "installedVersion": "1.2", "version": "1.3",
+   "changes": "Posts the summary in a thread instead of the channel.", "edited": "no"},
+  {"name": "digest", "kind": "routine", "template": "personal/digest", "installedVersion": "2.0", "version": "3.0",
+   "changes": "Groups the digest by sender.", "edited": "yes"},
+  {"name": "open-meet", "kind": "hook", "template": "personal/open-meet", "version": "1.1", "edited": "unknown",
+   "with": ["calendar"]},
+  {"name": "calendar", "kind": "watcher", "template": "personal/calendar", "installedVersion": "1.0", "version": "1.1", "edited": "no"},
+  {"name": "backup", "kind": "program", "template": "personal/backup", "installedVersion": "0.9", "version": "1.0",
+   "edited": "no", "blocked": "the new version needs the parameter dest, which has no value"}
+]

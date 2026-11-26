@@ -102,9 +102,11 @@ public struct CLI: Sendable {
     }
 
     /// Runs a command given --json and decodes what it printed.
-    /// `trailing` arguments go after `--` (free text).
-    func call<T: Decodable>(_ type: T.Type, _ arguments: [String], trailing: [String] = []) -> Result<T, Failure> {
-        let output = exec(arguments + ["--json"] + (trailing.isEmpty ? [] : ["--"] + trailing))
+    /// `trailing` arguments go after `--` (free text); `timeout` as exec's.
+    func call<T: Decodable>(
+        _ type: T.Type, _ arguments: [String], trailing: [String] = [], timeout: TimeInterval? = nil
+    ) -> Result<T, Failure> {
+        let output = exec(arguments + ["--json"] + (trailing.isEmpty ? [] : ["--"] + trailing), timeout: timeout)
         guard output.ok else { return .failure(output.failure) }
         do {
             return .success(try CoreJSON.decoder().decode(T.self, from: output.stdout))

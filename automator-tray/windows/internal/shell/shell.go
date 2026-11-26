@@ -36,6 +36,9 @@ type reviewer interface{ Review() }
 // runShower is a screen that can show one of its runs.
 type runShower interface{ ShowRun(id string) }
 
+// closer is a screen that hears the window closing while it's open.
+type closer interface{ Closed() }
+
 // SidebarWidth is the sidebar's width.
 const SidebarWidth = 210
 
@@ -47,7 +50,11 @@ type Shell struct {
 	async   ui.Async
 	appName string
 
-	state   nav.State
+	state nav.State
+	// shown: a screen has shown; before is where the window was when
+	// Template Updates opened over it (nil: the window opened for it).
+	shown   bool
+	before  *nav.State
 	views   map[nav.Destination]View
 	status  *cli.RunStatus
 	updates *cli.UpdateStatus
@@ -98,6 +105,13 @@ func (s *Shell) SidebarShown() bool { return s.sidebarShown }
 // review when it asks for one.
 func (s *Shell) Show(w tray.Window) {
 	d := nav.Of(w)
+	if w.Kind == tray.TemplateUpdatesWindow && s.state.Shown() != d {
+		s.before = nil
+		if s.shown {
+			before := s.state
+			s.before = &before
+		}
+	}
 	s.navigate(d, w, func(st *nav.State) { st.Show(d) })
 }
 
@@ -121,6 +135,30 @@ func (s *Shell) Back() {
 	next := s.state
 	next.Back()
 	s.apply(next, nav.Destination{})
+}
+
+// Close is the window closing: the screens open hear it.
+func (s *Shell) Close() {
+	for _, v := range s.views {
+		if c, ok := v.(closer); ok {
+			c.Closed()
+		}
+	}
+}
+
+// closeTemplateUpdates closes Template Updates: back to where the window
+// was before it, or the window closes when it opened for it.
+func (s *Shell) closeTemplateUpdates() {
+	if s.state.Shown().Kind != tray.TemplateUpdatesWindow {
+		return
+	}
+	if s.before == nil {
+		s.win.Close()
+		return
+	}
+	before := *s.before
+	s.before = nil
+	s.apply(before, nav.Destination{})
 }
 
 // ToggleSidebar shows the sidebar, or hides it (☰).
@@ -193,7 +231,7 @@ func (s *Shell) apply(next nav.State, except nav.Destination) {
 			delete(s.views, d)
 		}
 	}
-	s.state = next
+	s.state, s.shown = next, true
 	s.body.Objects = []fyne.CanvasObject{s.views[next.Shown()].Content()}
 	s.body.Refresh()
 	title := s.appName
@@ -262,6 +300,8 @@ func (s *Shell) makeView(d nav.Destination) View {
 		return ui.NewHook(c, win, async, d.Name, deleted, push(tray.WatcherWindow))
 	case tray.WatcherWindow:
 		return ui.NewWatcher(c, win, async, d.Name, deleted, push(tray.HookWindow))
+	case tray.TemplateUpdatesWindow:
+		return ui.NewTemplateUpdates(c, async, s.closeTemplateUpdates)
 	}
 	return ui.NewUpdates(c, async)
 }

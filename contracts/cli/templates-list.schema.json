@@ -109,6 +109,16 @@
         "type": "string",
         "description": "Watcher is a hook's: the watcher it listens to, installed with it (from\nits template) when it isn't there."
       },
+      "version": {
+        "type": "string",
+        "description": "Version is its version (automator.version, or template.yaml's\nversion), for me to read, and Changes what changed in it. Hash is its\ncontent's (Hash): what tells whether it changed since it was installed."
+      },
+      "changes": {
+        "type": "string"
+      },
+      "hash": {
+        "type": "string"
+      },
       "runsHere": {
         "type": "boolean",
         "description": "RunsHere is false for templates for another OS (listed with --all)."
@@ -120,6 +130,10 @@
       "installed": {
         "type": "boolean",
         "description": "Installed is true when one of its kind with the template's name exists\n(a routine of either kind, a hook, a watcher)."
+      },
+      "installedVersion": {
+        "type": "string",
+        "description": "InstalledVersion is the version the one installed under its name came\nfrom, when it was installed from it and the template says one."
       },
       "withWatcher": {
         "properties": {
@@ -192,6 +206,7 @@
       "name",
       "kind",
       "tags",
+      "hash",
       "runsHere",
       "supportsBackend",
       "installed"

@@ -25,9 +25,12 @@ var Groups = [][]tray.WindowKind{Sections[:3], Sections[3:]}
 var titles = map[tray.WindowKind]string{
 	tray.RoutinesWindow: "Routines", tray.HooksWindow: "Hooks", tray.AcknowledgementsWindow: "Acknowledgements",
 	tray.SetupWindow: "Setup", tray.SettingsWindow: "Settings", tray.UpdatesWindow: "Updates",
+	// Not a section: opened by the tray as it starts, on its own.
+	tray.TemplateUpdatesWindow: "Template Updates",
 }
 
-// Title is a section's name in the sidebar.
+// Title is a section's name in the sidebar (or a screen's of its own,
+// outside the sidebar: Template Updates).
 func Title(section tray.WindowKind) string { return titles[section] }
 
 // Badge is what the sidebar shows beside a section, from run status: how

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "templates-override.schema.json",
+  "properties": {
+    "overridden": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "routine",
+              "program",
+              "hook",
+              "watcher"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "trusted": {
+            "type": "boolean",
+            "description": "Trusted is whether it's trusted now: kept when it was before."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "trusted"
+        ],
+        "description": "Overridden is one install a template update replaced."
+      },
+      "type": "array"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "overridden"
+  ],
+  "title": "procauto templates override --json",
+  "description": "OverrideOutput is `templates override --json`."
+}

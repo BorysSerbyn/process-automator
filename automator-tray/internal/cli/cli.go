@@ -65,15 +65,28 @@ func (c CLI) exec(limit time.Duration, args []string) ([]byte, error) {
 }
 
 func (c CLI) failure(stdout []byte, stderr string) *Failure {
-	var out errorOutput
-	if json.Unmarshal(stdout, &out) == nil && out.Error != "" {
-		return &Failure{Message: out.Error}
+	// The error object, after anything it printed first (`templates
+	// override` says what it did before failing at the next one).
+	for _, b := range [][]byte{stdout, lastLine(stdout)} {
+		var out errorOutput
+		if json.Unmarshal(b, &out) == nil && out.Error != "" {
+			return &Failure{Message: out.Error}
+		}
 	}
 	msg := strings.TrimPrefix(strings.TrimSpace(stderr), "Error: ")
 	if msg == "" {
 		msg = c.Command + " failed"
 	}
 	return &Failure{Message: msg}
+}
+
+// lastLine is the last line of what a command printed.
+func lastLine(b []byte) []byte {
+	b = bytes.TrimSpace(b)
+	if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
+		return b[i+1:]
+	}
+	return b
 }
 
 // call runs a command given --json and decodes what it printed into out.

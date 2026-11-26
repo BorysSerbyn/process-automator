@@ -38,7 +38,7 @@ func main() {
 	log.SetPrefix("automator-windows: ")
 	dir := flag.String("app", "", "the app's share folder, holding install.env (default: found beside this program)")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review|run <id>]|hooks|hook <name> [review|run <id>]|watcher <name>|acknowledgements|updates")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: automator-windows [--app <folder>] setup|settings|routines|routine <name> [review|run <id>]|hooks|hook <name> [review|run <id>]|watcher <name>|acknowledgements|updates|template-updates")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -71,7 +71,8 @@ func window(args []string) (tray.Window, error) {
 	}
 	w := tray.Window{Kind: tray.WindowKind(args[0])}
 	switch w.Kind {
-	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.HooksWindow, tray.AcknowledgementsWindow, tray.UpdatesWindow:
+	case tray.SetupWindow, tray.SettingsWindow, tray.RoutinesWindow, tray.HooksWindow, tray.AcknowledgementsWindow, tray.UpdatesWindow,
+		tray.TemplateUpdatesWindow:
 		if len(args) == 1 {
 			return w, nil
 		}
@@ -165,6 +166,11 @@ func run(dir string, which tray.Window) error {
 		}
 	}()
 	w.SetMaster() // closing it ends the process
+	// Closed, the screens open hear it first (Template Updates' Not now).
+	w.SetCloseIntercept(func() {
+		sh.Close()
+		w.Close()
+	})
 	ui.Focus = func() { w.Show(); w.RequestFocus() }
 	w.SetContent(sh.Content())
 	w.Resize(Size)

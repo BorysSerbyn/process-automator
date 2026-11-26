@@ -37,7 +37,7 @@ func newTemplatesCmd() *cobra.Command {
 		Use:   "templates",
 		Short: "Templates shipped with the app (routines, programs, hooks, watchers), to install as your own (as is, or to adapt)",
 	}
-	cmd.AddCommand(newTemplatesListCmd(), newTemplatesInstallCmd())
+	cmd.AddCommand(newTemplatesListCmd(), newTemplatesInstallCmd(), newTemplatesOutdatedCmd(), newTemplatesOverrideCmd(), newTemplatesSkipCmd())
 	return cmd
 }
 
@@ -66,7 +66,7 @@ func newTemplatesListCmd() *cobra.Command {
 				return nil
 			}
 			tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "TEMPLATE\tKIND\tPARAMETERS\tPLATFORMS\tBACKENDS\tINSTALLED\tDESCRIPTION")
+			fmt.Fprintln(tw, "TEMPLATE\tVERSION\tKIND\tPARAMETERS\tPLATFORMS\tBACKENDS\tINSTALLED\tDESCRIPTION")
 			for _, r := range rows {
 				var params []string
 				for _, p := range r.Params {
@@ -91,7 +91,14 @@ func newTemplatesListCmd() *cobra.Command {
 				if w := r.WithWatcher; w != nil && !w.Installed {
 					description += " (comes with the watcher " + w.Name + ")"
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%v\t%s\n", r.ID, r.Kind, orDash(strings.Join(params, ", ")), platforms, backends, r.Installed, description)
+				installed := "no"
+				switch {
+				case r.Installed && r.InstalledVersion != "":
+					installed = r.InstalledVersion
+				case r.Installed:
+					installed = "yes"
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, orDash(r.Version), r.Kind, orDash(strings.Join(params, ", ")), platforms, backends, installed, description)
 			}
 			_ = tw.Flush()
 			fmt.Fprintln(out, "\n* required. Install with: "+product.Command+" templates install <template> [--as <name>] [--set param=value]")
@@ -167,6 +174,9 @@ func newTemplatesInstallCmd() *cobra.Command {
 			if err != nil {
 				undo()
 				return err
+			}
+			if err := a.RecordInstall(name, t, nil); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: recording %s's install (so template updates can be offered): %v\n", name, err)
 			}
 			if wantsJSON(cmd) {
 				return writeJSON(cmd.OutOrStdout(), InstallOutput{Template: t.ID, Kind: t.Kind, Routine: name, Path: path})

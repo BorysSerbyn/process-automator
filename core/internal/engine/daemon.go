@@ -75,6 +75,11 @@ func (a *App) Daemon(ctx context.Context) error {
 		recordRun(a, name, occ, run, nil)
 	}
 	go heartbeat(ctx, statusPath)
+	// What was installed from templates before installs were recorded is
+	// matched to its template once, so later templates compare with it.
+	if err := a.RecordMatchedInstalls(); err != nil {
+		logf("templates: matching installs to their templates: %v", err)
+	}
 	// Started by the OS with a minimal PATH: add the login shell's, so the
 	// tools routines start (claude, MCP servers) are found as in a terminal.
 	// After the heartbeat starts, so a slow shell profile can't delay status.

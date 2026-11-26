@@ -55,6 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         followStatus()
         updates.start()
         startScheduler()
+        // The app starts again after every update: templates something was
+        // installed from may have changed in it.
+        window?.offerTemplateUpdates()
     }
 
     // MARK: Opening and quitting
