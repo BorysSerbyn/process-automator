@@ -289,6 +289,10 @@ func (t *Tray) showClick(click cli.ClickOutput) {
 		t.open(Window{Kind: UpdatesWindow})
 		return
 	}
+	if click.Action == "show-setup" {
+		t.open(Window{Kind: SetupWindow})
+		return
+	}
 	t.open(Window{Kind: RoutinesWindow})
 }
 

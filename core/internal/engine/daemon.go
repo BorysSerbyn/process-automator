@@ -105,6 +105,7 @@ func (a *App) Daemon(ctx context.Context) error {
 	ev.wake = wake.poke
 	_ = os.Remove(a.Layout.WakeRequest())
 	go watchWake(ctx, a.Layout.WakeRequest(), wake)
+	setup := &setupNotifier{}
 	s := &scheduler.Scheduler{
 		StatePath: a.Layout.SchedulerState(),
 		Jobs: func() ([]scheduler.Job, error) {
@@ -124,7 +125,7 @@ func (a *App) Daemon(ctx context.Context) error {
 			if err := runstatus.Sync(cur.Layout.RunStatus(), allSetups(cur, jobs, problems, time.Now()), time.Now()); err != nil {
 				logf("run status: %v", err)
 			}
-			recordSetup(cur)
+			recordSetup(cur, setup)
 			ev.sync(ctx, cur)
 			return jobs, nil
 		},
@@ -459,14 +460,17 @@ func stopWaiting(ctx context.Context, a *App, s *scheduler.Scheduler, d *dispatc
 }
 
 // recordSetup puts the setup steps still to do in run status, so unfinished
-// setup shows (red, with what's left) without frontends asking.
-func recordSetup(a *App) {
+// setup shows (red, with what's left) without frontends asking, and tells me
+// with a notification when there's a step it hasn't told me about.
+func recordSetup(a *App, n *setupNotifier) {
 	left, err := a.SetupLeft()
 	if err != nil {
 		logf("setup: %v", err)
 		return
 	}
-	if err := runstatus.SetSetup(a.Layout.RunStatus(), left, time.Now()); err != nil {
+	now := time.Now()
+	if err := runstatus.SetSetup(a.Layout.RunStatus(), left, now); err != nil {
 		logf("run status: %v", err)
 	}
+	n.record(a, left, now)
 }

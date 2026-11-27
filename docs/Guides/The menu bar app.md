@@ -83,7 +83,7 @@ Setup's steps, grouped: **Templates** (tick templates, fill in their parameters,
 **Start at login**, the **LLM usage** card, then every app-wide setting as a tree (`llm` › `budget` › …), each with a control for its type and **Reset** to go back to the default. Changes apply at once. See [[Guides/Settings|Settings]].
 
 ## Notifications
-The menu bar app shows every notification: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), updates installed or failed, and what routines, hooks and programs tell you (`notify_me`, `$PA_NOTIFY`). Clicking one opens what it's about, and nothing else: its link (a pull request, in the app that opens such links), else the run, on its routine's or hook's screen; an update's opens [[#Updates]]. One a routine asks you to acknowledge has **Acknowledge** and keeps the dot red until you do (see [[#Acknowledgements]]).
+The menu bar app shows every notification: runs that **failed**, **need a sign-in**, were **missed** or were **skipped** (turn these off with `runs.failure-notifications`), updates installed or failed, setup left unfinished (at login, and when something new needs setting up, such as a routine to turn on), and what routines, hooks and programs tell you (`notify_me`, `$PA_NOTIFY`). Clicking one opens what it's about, and nothing else: its link (a pull request, in the app that opens such links), else the run, on its routine's or hook's screen; an update's opens [[#Updates]], and setup's opens Setup. One a routine asks you to acknowledge has **Acknowledge** and keeps the dot red until you do (see [[#Acknowledgements]]).
 
 macOS asks once whether the app may show notifications; until you allow it, they wait.
 

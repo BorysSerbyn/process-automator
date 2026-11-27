@@ -1,5 +1,6 @@
 // Package notifications keeps the app's own notifications (runs that
-// failed, needed a sign-in, were skipped or missed; updates) for frontends
+// failed, needed a sign-in, were skipped or missed; updates; setup with
+// steps left) for frontends
 // to deliver. The core only records them; frontends ask for the pending ones
 // (`procauto notifications list --pending --json`), show them (automator-ui
 // as desktop notifications), mark them delivered, and on a click run
@@ -36,7 +37,8 @@ const SchemaVersion = 1
 const (
 	// KindFailure is a run that failed, needs a sign-in, or was skipped or missed.
 	KindFailure = "failure"
-	// KindApp is about the app itself (an update installed, or failed).
+	// KindApp is about the app itself (an update installed, or failed;
+	// setup with steps left).
 	KindApp = "app"
 	// KindRun is a routine's or hook's own, asked for in its run (a plugin,
 	// or a program through $PA_NOTIFY): it may carry a link (URL) or wait
@@ -77,6 +79,9 @@ type Notification struct {
 	// Update is true when it's about an update (one installed, or failed):
 	// a click shows the app's updates.
 	Update bool `json:"update,omitempty"`
+	// Setup is true when it's about setup having steps left: a click shows
+	// the app's setup.
+	Setup bool `json:"setup,omitempty"`
 	// URL is a link (http or https) a click on it opens (`notifications
 	// open`: open-url); only kind run has one.
 	URL string `json:"url,omitempty"`

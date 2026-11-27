@@ -42,6 +42,10 @@
             "type": "boolean",
             "description": "Update is true when it's about an update (one installed, or failed):\na click shows the app's updates."
           },
+          "setup": {
+            "type": "boolean",
+            "description": "Setup is true when it's about setup having steps left: a click shows\nthe app's setup."
+          },
           "url": {
             "type": "string",
             "description": "URL is a link (http or https) a click on it opens (`notifications\nopen`: open-url); only kind run has one."

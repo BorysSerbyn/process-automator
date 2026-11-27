@@ -128,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A click on one of the app's notifications: its link, opened by the
     /// system's default handler; the run it's about, in its routine's (or
-    /// hook's) screen; an update's, Updates (what's new); or the app
+    /// hook's) screen; an update's, Updates (what's new); setup's, Setup; or the app
     /// (Routines), in the app's window.
     private func show(_ click: Components.Schemas.ClickOutput) {
         if click.action == .open_hyphen_url, let link = click.url, let url = URL(string: link) {
@@ -137,6 +137,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window?.show(click.hook == true ? .hook(routine) : .routine(routine), run: click.run)
         } else if click.action == .show_hyphen_updates {
             window?.show(.updates)
+        } else if click.action == .show_hyphen_setup {
+            window?.show(.setup)
         } else {
             window?.show(.routines)
         }

@@ -465,6 +465,14 @@ Run status's `setupLeft` (the menu's Finish Setup…) is refreshed after every c
 - **A list of the commands that change setup**: it goes stale whenever a step depends on something new
 - **Frontends computing setup themselves**: the menu would need setup's logic; it only shows the core's output
 
+## Decision: the scheduler tells me about setup once per new step, remembered in memory
+Unfinished setup turned the dot red, but nothing told me: after login, or when a new routine needed turning on, I found out only by looking. The scheduler, which checks setup on every pass, records a setup notification when the steps left include one it hasn't told me about since it started. What it told is kept in memory, so each start (login, an update's restart) tells me again while setup is unfinished, and a pass with the same steps left tells me nothing.
+
+### Rejected
+- **Whenever `setupLeft` in run status changes**: a command recording it first (`routines create` before the scheduler's pass) would hide the change from the scheduler, and a start with the same steps as the last session (login) would tell me nothing
+- **On every pass while steps are left**: a notification every minute
+- **Commands recording it**: a step I'm setting up in the app's window would notify me about itself
+
 ## Decision: /usage can't be read only after it keeps failing
 Setup's `usage` step comes up when `/usage` answered without a usage report the app can read, or 3 tries in a row failed. One failed try (a slow start while a routine runs, its rate limit) used to make it a setup step that the next reading took away.
 

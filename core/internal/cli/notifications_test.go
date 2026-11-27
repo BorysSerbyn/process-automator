@@ -14,7 +14,8 @@ import (
 
 // Clicking one of the app's notifications opens the app: one about a run
 // shows that run in its routine's window, one about an update the app's
-// updates, any other about the app shows the app.
+// updates, one about setup the app's setup, any other about the app shows
+// the app.
 // The core opens nothing.
 func TestNotificationClick(t *testing.T) {
 	var opened []string
@@ -61,6 +62,10 @@ func TestNotificationClick(t *testing.T) {
 	installed := add(notifications.Notification{Kind: notifications.KindApp, Update: true, Title: "Updated to 2.0.0"})
 	if got := click(installed); got != (ClickOutput{Notification: installed, Action: "show-updates"}) {
 		t.Fatalf("update click: %+v", got)
+	}
+	setup := add(notifications.Notification{Kind: notifications.KindApp, Setup: true, Title: "Finish setting up"})
+	if got := click(setup); got != (ClickOutput{Notification: setup, Action: "show-setup"}) {
+		t.Fatalf("setup click: %+v", got)
 	}
 	if len(opened) != 0 {
 		t.Fatalf("a click opened %v", opened)

@@ -2,6 +2,7 @@ package tray
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -81,12 +82,16 @@ func TestNoDeliveryWhenTheCoreFails(t *testing.T) {
 }
 
 // A click asks the core what to show: a run opens in its routine's screen
-// on that run (the window seam), an update's Updates. Other actions do nothing.
+// on that run (the window seam), an update's Updates, setup's Setup. Other
+// actions do nothing.
 func TestAClickShowsWhatTheCoreSays(t *testing.T) {
 	f := newFakeCLI(t)
-	f.answer("notifications list --pending --json", pending)
+	f.answer("notifications list --pending --json", strings.TrimSuffix(pending, "\n]")+`,
+ {"id":"n3","at":"2026-11-17T08:02:00Z","kind":"app","setup":true,"title":"Finish setting up","body":"Still to do: Model backend"}
+]`)
 	f.answer("notifications open n1 --json", `{"notification":"n1","action":"show-run","routine":"standup","run":"r-42"}`)
 	f.answer("notifications open n2 --json", `{"notification":"n2","action":"show-updates"}`)
+	f.answer("notifications open n3 --json", `{"notification":"n3","action":"show-setup"}`)
 	tr, _, n, w := newTray(t, f)
 	tr.notifier.deliver()
 
@@ -99,6 +104,8 @@ func TestAClickShowsWhatTheCoreSays(t *testing.T) {
 	}
 	tr.Desk().Invoked(n.find("Updated to v2.2.0"), "default")
 	eventually(t, "the Manage Updates window", func() bool { return w.has(Window{Kind: UpdatesWindow}) })
+	tr.Desk().Invoked(n.find("Finish setting up"), "default")
+	eventually(t, "the Setup window", func() bool { return w.has(Window{Kind: SetupWindow}) })
 
 	before := len(f.ran())
 	tr.Desk().Invoked(n.find("standup failed"), "dismissed")

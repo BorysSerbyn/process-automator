@@ -11,9 +11,10 @@
         "open-url",
         "show-run",
         "show-updates",
+        "show-setup",
         "show-app"
       ],
-      "description": "Action is what to show: open-url (the notification has a link: open\nURL with the system's default handler), show-run (it's about a run: its\nroutine's window, on that run), show-updates (about an update: the\napp's updates, its window's Updates) or show-app (about the app\nitself: the app)."
+      "description": "Action is what to show: open-url (the notification has a link: open\nURL with the system's default handler), show-run (it's about a run: its\nroutine's window, on that run), show-updates (about an update: the\napp's updates, its window's Updates), show-setup (about setup having\nsteps left: its window's Setup) or show-app (about the app itself: the\napp)."
     },
     "url": {
       "type": "string",
