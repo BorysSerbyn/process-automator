@@ -121,7 +121,7 @@ final class SetupViewModel: ObservableObject {
         case .templates: if templates == nil { loadTemplates(step) }
         case .backend: loadBackend(step)
         case .turn_hyphen_on: if let routine = step.subject, reviews[routine] == nil { review(routine, step) }
-        case .routine, .sign_hyphen_in, .usage, .mcp: break
+        case .routine, .sign_hyphen_in, .usage, .mcp, .app: break
         }
     }
 
@@ -130,7 +130,7 @@ final class SetupViewModel: ObservableObject {
         switch step.step {
         case .mcp: connectClaudeCode(step)
         case .usage: setUpUsage(step)
-        case .templates, .backend, .routine, .sign_hyphen_in, .turn_hyphen_on: break
+        case .templates, .backend, .routine, .sign_hyphen_in, .turn_hyphen_on, .app: break
         }
     }
 
@@ -287,6 +287,15 @@ final class SetupViewModel: ObservableObject {
     func setUpUsage(_ step: SetupStep) {
         run(step) { cli in
             if case .failure(let failure) = cli.installStatusLine() { return failure }
+            return nil
+        }
+    }
+
+    /// Opens the app a plugin needs (the step's subject is the plugin).
+    func openApp(_ step: SetupStep) {
+        guard let plugin = step.subject else { return }
+        run(step) { cli in
+            if case .failure(let failure) = cli.openApp(plugin: plugin) { return failure }
             return nil
         }
     }

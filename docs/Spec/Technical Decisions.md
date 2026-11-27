@@ -940,3 +940,11 @@ macOS keeps a permission granted to the app (Calendars, Input Monitoring, …) a
 - **The reporter's `gh` sign-in**: only for people with `gh` installed and signed in, and the API can't attach files either, so the logs would be pasted into the issue's text (at most 64 KB)
 - **A relay server filing issues for people without a GitHub account**: a server to host, a secret to keep and spam to handle, for reports that can't be followed up
 - **An issue form with fields to fill in from the address**: it has to exist in the repository, and another app's repository wouldn't have it; a plain body works on any repository
+
+## Decision: the app keeps open the apps plugins need, rather than checking they open at login
+A plugin bridging to a desktop app (iMCP) does nothing while the app is quit: its server waits for it, and a run waited until its connect gave up. Whether the app opens at login can't be read reliably on macOS: an app that adds itself as a login item is recorded where only an administrator's tool reads it, and System Events' list misses those and needs an Automation permission. The scheduler starts at login already, so it opens the app itself (in the background) while a routine or hook that's on uses the plugin, and connecting opens it first; setup's step says whether it runs, which is what matters. Opening one isn't counted as a change: read-only commands that connect (`routines check`, `doctor`) open it too.
+
+### Rejected
+- **A setup step checking the app opens at login**: it can't be told reliably, so it would say no when it's yes
+- **Opening it only before a run**: setup and health would show nothing wrong until a run, and a hook's run waits on it
+- **Failing the connect without opening it**: the fix is opening it, which the app can do

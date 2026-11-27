@@ -84,6 +84,13 @@ func (c CLI) InstallStatusLine() error {
 	return c.call(&out, "usage", "statusline", "install")
 }
 
+// OpenApp opens the desktop app a plugin needs running, unless it's
+// running (`plugins open-app`).
+func (c CLI) OpenApp(plugin string) error {
+	var out map[string]any
+	return c.call(&out, "plugins", "open-app", plugin)
+}
+
 // Usage is LLM usage against its limit, for the backend in use (`usage`).
 func (c CLI) Usage() (Report, error) {
 	var out Report

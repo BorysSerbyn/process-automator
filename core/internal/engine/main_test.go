@@ -44,6 +44,8 @@ func TestMain(m *testing.M) {
 	checkPermission = func(string) permissions.Status { return permissions.Unsupported }
 	canRequestPermission = func(string) (bool, string) { return false, "tests don't ask the OS" }
 	requestPermission = func(string) {}
+	// Nor looks for or opens an app plugins need.
+	SetAppsForTests(func(string) bool { return false }, func(string) error { return errors.New("tests don't open apps") })
 	code := m.Run()
 	undo()
 	os.Exit(code)

@@ -452,6 +452,14 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/plugins-list.schema.json
+  - command: plugins open-app
+    usage: procauto plugins open-app <plugin> [flags]
+    summary: Open the desktop app a plugin needs running (iMCP, say), in the background, unless it's running
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+    jsonOutput: cli/plugins-open-app.schema.json
   - command: plugins remove
     usage: procauto plugins remove <name> [flags]
     summary: Remove an MCP server added in config, and forget its credentials

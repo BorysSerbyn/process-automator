@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plugins-open-app.schema.json",
+  "properties": {
+    "plugin": {
+      "type": "string"
+    },
+    "app": {
+      "type": "string"
+    },
+    "running": {
+      "type": "boolean",
+      "description": "Running is true: it was running, or opened (else the command fails)."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "plugin",
+    "app",
+    "running"
+  ],
+  "title": "procauto plugins open-app --json",
+  "description": "OpenAppOutput is `plugins open-app --json`."
+}

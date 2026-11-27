@@ -364,6 +364,11 @@ func (s *Setup) setUpUsage(step cli.SetupStep) {
 	s.run(step, s.cli.InstallStatusLine, nil)
 }
 
+// openApp opens the app a plugin needs (the step's subject is the plugin).
+func (s *Setup) openApp(step cli.SetupStep) {
+	s.run(step, func() error { return s.cli.OpenApp(step.Subject) }, nil)
+}
+
 // The view
 
 // refresh draws the window again from where things stand, keeping its
@@ -461,6 +466,8 @@ func (g stepGroup) title() string {
 		return "Sign-ins"
 	case "turn-on":
 		return "Turn on routines"
+	case "app":
+		return "Apps to keep running"
 	}
 	return g.kind
 }
@@ -488,6 +495,8 @@ func (g stepGroup) progress() string {
 		return of + " signed in"
 	case "turn-on":
 		return of + " on"
+	case "app":
+		return of + " running"
 	}
 	return of + " done"
 }
@@ -622,6 +631,8 @@ func (s *Setup) stepRow(step cli.SetupStep) fyne.CanvasObject {
 		case step.Step == "routine" && step.Subject != "":
 			routine := step.Subject
 			trailing.Add(container.NewCenter(widget.NewButton("Open "+routine+"…", func() { s.openRoutine(routine) })))
+		case step.Step == "app" && step.Subject != "":
+			trailing.Add(container.NewCenter(s.button("Open", step, func() { s.openApp(step) })))
 		}
 	}
 	trailing.Add(container.NewCenter(s.stepTags(step)))

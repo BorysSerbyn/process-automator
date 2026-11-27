@@ -198,6 +198,9 @@ func validatePlugin(p pluginapi.Plugin) error {
 	if _, err := permissions.Check(fmt.Sprintf("plugin %q", p.Name), p.Permissions); err != nil {
 		return err
 	}
+	if app := p.App; app != nil && (strings.TrimSpace(app.Name) == "" || app.Path == "" || app.Process == "") {
+		return fmt.Errorf("plugin %q: App needs a Name, a Path and a Process", p.Name)
+	}
 	switch {
 	case (p.External == nil) == (p.InProcess == nil):
 		return fmt.Errorf("plugin %q: set exactly one of External or InProcess", p.Name)

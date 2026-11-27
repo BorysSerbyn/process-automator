@@ -127,6 +127,12 @@ var Registry = []Setting{
 		Description: "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one opens the app on the run).",
 	},
 	{
+		Key: "plugins.open-apps", Type: TypeBool, Default: true,
+		Description: "Keep open the apps plugins need (iMCP, say): the scheduler opens one in the background when it isn't " +
+			"running and a routine or hook that's on uses its plugin. Off, setup says when one isn't running; a run " +
+			"still opens it before connecting to its plugin.",
+	},
+	{
 		Key: "update.auto", Type: TypeBool, Default: true,
 		Description: "Install new releases by themselves, at a quiet moment: once a release has been out an hour, when " +
 			"nothing is running or about to, the app's window isn't open and the computer has been awake a while. " +

@@ -27,6 +27,23 @@
       "accountOf": {
         "type": "string",
         "description": "AccountOf is, for an account (a second sign-in of a plugin under a\nname of its own), the plugin it's an account of."
+      },
+      "app": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "running": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "running"
+        ],
+        "description": "App is the desktop app it needs running, if any."
       }
     },
     "additionalProperties": false,

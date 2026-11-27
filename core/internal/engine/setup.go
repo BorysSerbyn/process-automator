@@ -19,7 +19,7 @@ import (
 // SetupStep is one thing first-run setup covers.
 type SetupStep struct {
 	// Step is what it sets up.
-	Step string `json:"step" jsonschema:"enum=templates,enum=backend,enum=routine,enum=sign-in,enum=turn-on,enum=usage,enum=mcp"`
+	Step string `json:"step" jsonschema:"enum=templates,enum=backend,enum=routine,enum=sign-in,enum=turn-on,enum=usage,enum=mcp,enum=app"`
 	// Subject is the server or routine it's about (routine, sign-in, turn-on).
 	Subject string `json:"subject,omitempty"`
 	// Hook is true when Subject is a hook (a turn-on step): turning it on
@@ -80,6 +80,9 @@ const (
 	StepTurnOn    = "turn-on"
 	StepUsage     = "usage"
 	StepMCP       = "mcp"
+	// StepApp is an app plugins need running (Subject: the first plugin
+	// needing it, which `plugins open-app` takes).
+	StepApp = "app"
 )
 
 // SetupLeft is the setup steps still to do (not optional), for run status.
@@ -124,6 +127,11 @@ func (a *App) Setup() (SetupOutput, error) {
 	}
 	steps = append(steps, problems...)
 	steps = append(steps, a.signInSteps(loaded)...)
+	apps, err := a.appSteps()
+	if err != nil {
+		return SetupOutput{}, err
+	}
+	steps = append(steps, apps...)
 	turnOns, err := a.turnOnSteps(loaded)
 	if err != nil {
 		return SetupOutput{}, err

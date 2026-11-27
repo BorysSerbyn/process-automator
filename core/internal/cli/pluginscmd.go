@@ -30,6 +30,22 @@ type PluginInfo struct {
 	// AccountOf is, for an account (a second sign-in of a plugin under a
 	// name of its own), the plugin it's an account of.
 	AccountOf string `json:"accountOf,omitempty"`
+	// App is the desktop app it needs running, if any.
+	App *PluginApp `json:"app,omitempty"`
+}
+
+// PluginApp is a desktop app a plugin needs running, and whether it is.
+type PluginApp struct {
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+}
+
+// OpenAppOutput is `plugins open-app --json`.
+type OpenAppOutput struct {
+	Plugin string `json:"plugin"`
+	App    string `json:"app"`
+	// Running is true: it was running, or opened (else the command fails).
+	Running bool `json:"running"`
 }
 
 func newPluginsCmd() *cobra.Command {
@@ -47,6 +63,9 @@ func newPluginsCmd() *cobra.Command {
 				row := PluginInfo{Name: p.Name, Description: p.Description, Kind: "in-process", Permissions: a.ServerPermissions(p.Name), AccountOf: a.Accounts[p.Name]}
 				if p.External != nil {
 					row.Kind, row.Endpoint = endpoint(a.Config.MCPServers[p.Name])
+				}
+				if p.App != nil {
+					row.App = &PluginApp{Name: p.App.Name, Running: engine.AppRunning(*p.App)}
 				}
 				rows = append(rows, row)
 			}
@@ -77,7 +96,7 @@ func newPluginsCmd() *cobra.Command {
 		}),
 	}
 	jsonFlag(list.Flags(), []PluginInfo{})
-	cmd.AddCommand(list, newPluginsAddCmd(), newPluginsRemoveCmd(), newPluginsCheckCmd())
+	cmd.AddCommand(list, newPluginsAddCmd(), newPluginsRemoveCmd(), newPluginsCheckCmd(), newPluginsOpenAppCmd())
 	return cmd
 }
 
@@ -328,4 +347,27 @@ func countSet(cmd *cobra.Command, names ...string) int {
 		}
 	}
 	return n
+}
+
+func newPluginsOpenAppCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "open-app <plugin>",
+		Short: "Open the desktop app a plugin needs running (iMCP, say), in the background, unless it's running",
+		Long: "Some plugins need an app running (pluginapi.Plugin.App): setup has a step while it isn't. The scheduler " +
+			"keeps it open while routines or hooks that are on use the plugin (plugins.open-apps), and a run opens it " +
+			"before connecting; this opens it now.",
+		Args: cobra.ExactArgs(1),
+		RunE: withApp(func(cmd *cobra.Command, a *engine.App, args []string) error {
+			app, ok := a.AppOf(args[0])
+			if !ok {
+				return fmt.Errorf("%s needs no app running (or isn't a plugin: `%s plugins list`)", args[0], product.Command)
+			}
+			if err := engine.OpenApp(cmd.Context(), app); err != nil {
+				return err
+			}
+			return emit(cmd, OpenAppOutput{Plugin: args[0], App: app.Name, Running: true}, app.Name+" is running.")
+		}),
+	}
+	jsonFlag(cmd.Flags(), OpenAppOutput{})
+	return cmd
 }

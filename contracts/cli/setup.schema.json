@@ -14,7 +14,8 @@
               "sign-in",
               "turn-on",
               "usage",
-              "mcp"
+              "mcp",
+              "app"
             ],
             "description": "Step is what it sets up."
           },

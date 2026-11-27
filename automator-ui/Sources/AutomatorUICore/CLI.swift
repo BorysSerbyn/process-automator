@@ -296,6 +296,15 @@ public struct CLI: Sendable {
         call(Components.Schemas.StatusLineOutput.self, ["usage", "statusline", "install"])
     }
 
+    /// Opens the desktop app a plugin needs running, unless it's running
+    /// (`plugins open-app`).
+    public func openApp(plugin: String) -> Result<Components.Schemas.OpenAppOutput, Failure> {
+        call(Components.Schemas.OpenAppOutput.self, Self.openAppArguments(plugin))
+    }
+
+    /// `plugins open-app <plugin>`.
+    public static func openAppArguments(_ plugin: String) -> [String] { ["plugins", "open-app", plugin] }
+
     /// Registers the core's MCP server with Claude Code, at user scope
     /// (`mcp connect`).
     public func connectClaudeCode() -> Result<Components.Schemas.MCPConnectOutput, Failure> {

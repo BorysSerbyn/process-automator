@@ -77,6 +77,7 @@ func TestMain(m *testing.M) {
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
 	revealFile = func(string) error { return errors.New("tests don't open things") }
+	engine.SetAppsForTests(func(string) bool { return false }, func(string) error { return errors.New("tests don't open apps") })
 	// Nor read the scheduler's real log: tests that export logs give their own.
 	schedulerLog = func(time.Time) (string, error) { return "", nil }
 	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.

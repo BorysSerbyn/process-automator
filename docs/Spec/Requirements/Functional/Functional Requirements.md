@@ -75,6 +75,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 - **Adding one** needs no code; it's tried first and nothing is added if it doesn't work. Removing one forgets its credentials
 - **Accounts**: a second account of any plugin that signs in (two Slack workspaces, two Google or Linear accounts) is a plugin of its own, under its own name, signed in with its own credentials; it's listed, signed in to, checked and removed like any plugin, saying which plugin it's an account of. Removing it forgets only its credentials
 - **The `notify` plugin**: desktop notifications from routines; this app compiles it in
+- **Apps a plugin needs running** (iMCP, say, which its server bridges to and waits for while it's quit): while routines or hooks use the plugin, setup has a step, done while the app runs, with **Open** (`plugins open-app <plugin>`); `plugins list` says whether it runs. Connecting to the plugin opens the app first, in the background, and a connect fails at once, saying why, when it isn't installed or doesn't start. While a routine or hook that's on (enabled and trusted) uses it, the scheduler keeps it open: it opens it when it isn't running, trying again after five minutes when it didn't start; `plugins.open-apps` off stops that
 - **Sign-ins** are done once and refreshed unattended; one that can't be refreshed is reported as needing a sign-in, with the server named, and fixed from the CLI or the UI
 
 ## Permissions

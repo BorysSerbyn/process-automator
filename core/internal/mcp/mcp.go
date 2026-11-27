@@ -64,6 +64,10 @@ type Connector struct {
 	Secrets secrets.Store
 	// Name and Version are reported to servers as the client's.
 	Name, Version string
+	// Before, when set, runs before connecting to a server, by name: the
+	// engine opens an app the server's plugin needs. Its error fails the
+	// connect.
+	Before func(ctx context.Context, name string) error
 	// Builtins are in-process servers, by name, reached over in-memory
 	// transports. Each session builds its server for the run it serves
 	// (zero outside a run).
@@ -82,6 +86,11 @@ func (c *Connector) Connect(ctx context.Context, name string) (*Session, error) 
 // ConnectFor opens a session to the named server for a routine's run: an
 // in-process server is built for that run (external servers can't be told).
 func (c *Connector) ConnectFor(ctx context.Context, name string, run Run) (*Session, error) {
+	if c.Before != nil {
+		if err := c.Before(ctx, name); err != nil {
+			return nil, fmt.Errorf("connect %s: %w", name, err)
+		}
+	}
 	if newServer, ok := c.Builtins[name]; ok {
 		srv, err := newServer(run)
 		if err != nil {

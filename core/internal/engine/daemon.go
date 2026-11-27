@@ -106,6 +106,7 @@ func (a *App) Daemon(ctx context.Context) error {
 	_ = os.Remove(a.Layout.WakeRequest())
 	go watchWake(ctx, a.Layout.WakeRequest(), wake)
 	setup := &setupNotifier{}
+	apps := &appKeeper{}
 	s := &scheduler.Scheduler{
 		StatePath: a.Layout.SchedulerState(),
 		Jobs: func() ([]scheduler.Job, error) {
@@ -125,6 +126,7 @@ func (a *App) Daemon(ctx context.Context) error {
 			if err := runstatus.Sync(cur.Layout.RunStatus(), allSetups(cur, jobs, problems, time.Now()), time.Now()); err != nil {
 				logf("run status: %v", err)
 			}
+			apps.keep(ctx, cur, time.Now()) // before setup: an app it opens isn't a step left
 			recordSetup(cur, setup)
 			ev.sync(ctx, cur)
 			return jobs, nil

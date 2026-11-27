@@ -96,6 +96,7 @@ struct SetupGroup {
         case .routine: "Routines to fix"
         case .sign_hyphen_in: "Sign-ins"
         case .turn_hyphen_on: "Turn on routines"
+        case .app: "Apps to keep running"
         }
     }
 
@@ -109,6 +110,7 @@ struct SetupGroup {
             return left == 0 ? "All fixed" : left == 1 ? "1 to fix" : "\(left) to fix"
         case .sign_hyphen_in: return "\(of) signed in"
         case .turn_hyphen_on: return "\(of) on"
+        case .app: return "\(of) running"
         case .templates, .backend, .usage, .mcp: return "\(of) done"
         }
     }
@@ -225,7 +227,7 @@ struct SetupStepView: View {
                     if model.working.contains(id) { ProgressView().controlSize(.small) }
                 }
             }
-        case .routine, .sign_hyphen_in:
+        case .routine, .sign_hyphen_in, .app:
             EmptyView()  // rows of their own (SetupStepRow)
         }
     }
@@ -275,6 +277,10 @@ struct SetupStepRow: View {
             if let routine = step.subject {
                 Button("Open \(routine)…") { model.openRoutine(routine) }
             }
+        case .app:
+            Button("Open") { model.openApp(step) }
+                .disabled(model.working.contains(id))
+                .help("Open the app in the background")
         case .templates, .backend, .turn_hyphen_on, .usage, .mcp:
             EmptyView()
         }

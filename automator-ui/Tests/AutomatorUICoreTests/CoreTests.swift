@@ -1100,3 +1100,13 @@ private func acknowledgingCLI() throws -> CLI {
     #expect(calls[1].failed && calls[1].output == "not_in_channel" && calls[1].truncatedText == nil)
     #expect(calls[2].intercepted == true)
 }
+
+// MARK: Apps plugins need
+
+@Test func openingAPluginsAppRunsItsCommand() {
+    #expect(CLI.openAppArguments("imcp") == ["plugins", "open-app", "imcp"])
+    let json =
+        #"{"step":"app","subject":"imcp","title":"Keep iMCP running","done":false,"status":"Not running; used by standup"}"#
+    let step = try? JSONDecoder().decode(Components.Schemas.SetupStep.self, from: Data(json.utf8))
+    #expect(step?.step == .app && step?.subject == "imcp")
+}

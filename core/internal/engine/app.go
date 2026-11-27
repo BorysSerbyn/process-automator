@@ -91,7 +91,9 @@ func Load(path string, plugins []pluginapi.Plugin, secrets secrets.Store) (*App,
 			return p.InProcess.Serve(&host{plugin: p, cfg: cfg, conn: conn, dataDir: dataDir, config: path, files: files, run: run})
 		}
 	}
-	return &App{Config: cfg, Layout: files, Connector: conn, Plugins: plugins, Accounts: cfg.Accounts, builtin: builtin}, nil
+	a := &App{Config: cfg, Layout: files, Connector: conn, Plugins: plugins, Accounts: cfg.Accounts, builtin: builtin}
+	conn.Before = a.beforeConnect
+	return a, nil
 }
 
 // resolveAccounts makes each account in cfg a plugin or server of its own:

@@ -117,6 +117,7 @@ esac`)
 	_, _ = c.TemplateUpdates()
 	_, _ = c.OverrideTemplates("standup", "open-meet")
 	_ = c.SkipTemplateUpdates("digest")
+	_ = c.OpenApp("imcp")
 	b, _ := os.ReadFile(log)
 	want := strings.Join([]string{
 		"setup --json", "templates list --json",
@@ -126,6 +127,7 @@ esac`)
 		"mcp connect --json", "usage statusline install --json", "usage --json",
 		"login-items status --json", "login-items enable --json", "login-items disable --json",
 		"templates outdated --json", "templates override standup open-meet --json", "templates skip digest --json",
+		"plugins open-app imcp --json",
 	}, "\n") + "\n"
 	if string(b) != want {
 		t.Fatalf("ran:\n%s\nwant:\n%s", b, want)

@@ -1068,6 +1068,22 @@ components:
       required:
         - watcher
       type: object
+    OpenAppOutput:
+      additionalProperties: false
+      description: OpenAppOutput is `plugins open-app --json`.
+      properties:
+        app:
+          type: string
+        plugin:
+          type: string
+        running:
+          description: 'Running is true: it was running, or opened (else the command fails).'
+          type: boolean
+      required:
+        - plugin
+        - app
+        - running
+      type: object
     Overridden:
       additionalProperties: false
       description: Overridden is one install a template update replaced.
@@ -1399,6 +1415,18 @@ components:
         - days
         - at
       type: object
+    PluginApp:
+      additionalProperties: false
+      description: PluginApp is a desktop app a plugin needs running, and whether it is.
+      properties:
+        name:
+          type: string
+        running:
+          type: boolean
+      required:
+        - name
+        - running
+      type: object
     PluginChange:
       additionalProperties: false
       description: PluginChange is the output of `plugins add/remove --json`.
@@ -1461,6 +1489,9 @@ components:
             AccountOf is, for an account (a second sign-in of a plugin under a
             name of its own), the plugin it's an account of.
           type: string
+        app:
+          $ref: '#/components/schemas/PluginApp'
+          description: App is the desktop app it needs running, if any.
         description:
           type: string
         endpoint:
@@ -2459,6 +2490,7 @@ components:
             - turn-on
             - usage
             - mcp
+            - app
           type: string
         subject:
           description: Subject is the server or routine it's about (routine, sign-in, turn-on).

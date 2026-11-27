@@ -33,12 +33,33 @@ type Plugin struct {
 	// For External, a config mcpServers.<name> entry that replaces the
 	// preset declares its own.
 	Permissions []string
+	// App is a desktop app the plugin needs running, such as the app an
+	// External server bridges to (one that waits for the app, never
+	// answering, while it's quit). Setup has a step while it isn't running;
+	// the app opens it before connecting to the plugin and, unless
+	// plugins.open-apps is off, keeps it open while routines or hooks that
+	// are on use the plugin. Set it in a per-OS file: it names an install
+	// path. Accounts of the plugin share it.
+	App *App
 
 	// External presets an external MCP server. The config file's
 	// mcpServers.<name> entry, if present, replaces it.
 	External *ServerSpec
 	// InProcess is a server built by Go code compiled into the app.
 	InProcess *InProcess
+}
+
+// App is a desktop app a plugin needs running.
+type App struct {
+	// Name is what people see ("iMCP").
+	Name string
+	// Path is where it's installed: a macOS .app bundle, or a Linux
+	// executable. Opening it runs
+	// `open -g` on macOS (it doesn't come to the front); on Linux, the
+	// executable, in the background.
+	Path string
+	// Process is its running process's name, as pgrep -x matches it ("iMCP").
+	Process string
 }
 
 // InProcess is an in-process plugin: Go code that builds an MCP server.

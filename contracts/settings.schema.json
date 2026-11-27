@@ -160,6 +160,12 @@
       "x-type": "int",
       "x-unit": "characters"
     },
+    "plugins.open-apps": {
+      "default": true,
+      "description": "Keep open the apps plugins need (iMCP, say): the scheduler opens one in the background when it isn't running and a routine or hook that's on uses its plugin. Off, setup says when one isn't running; a run still opens it before connecting to its plugin.",
+      "type": "boolean",
+      "x-type": "bool"
+    },
     "runs.failure-notifications": {
       "default": true,
       "description": "Notify me when a run fails, needs a sign-in, or is skipped or missed (clicking one opens the app on the run).",
@@ -192,6 +198,7 @@
     "llm.budget.weekly-usd",
     "history.retention-days",
     "runs.failure-notifications",
+    "plugins.open-apps",
     "update.auto",
     "update.source-dir",
     "memories.max-chars"
