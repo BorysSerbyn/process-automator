@@ -63,6 +63,9 @@ type Hook struct {
 	actionError string
 	pending     *pendingAction
 
+	// bugs is Export Logs… and Report a Bug….
+	bugs *bugReporter
+
 	// The sample event Fire runs it with: whether its editor shows, the
 	// event, the fire waiting for its run ("dry run" or "fire"), and how
 	// the last one went.
@@ -86,6 +89,7 @@ func NewHook(c cli.CLI, win fyne.Window, async Async, name string, deleted func(
 	h.turnOn = newTurnOn(c, async, name, true, h.summary, h.refresh, h.Load)
 	h.pending = newPendingAction(async, h.refresh)
 	h.granter = newGranter(c, async, h.refresh, h.loadDetail)
+	h.bugs = newBugReporter(c, win, async, name, true, h.refresh, func(msg string) { h.actionError = msg; h.refresh() })
 	h.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -547,7 +551,8 @@ func sampleEvent(on cli.On) string {
 	return "{\n  \"id\": \"sample-1\",\n  \"type\": \"" + t + "\",\n  \"data\": {}\n}"
 }
 
-// Overview: the status, what it acts on, and what it can reach or runs.
+// Overview: the status, what it acts on, what it can reach or runs, and
+// Export Logs… and Report a Bug….
 
 func (h *Hook) overview() fyne.CanvasObject {
 	box := container.NewVBox(card(false, h.statusRows()...))
@@ -558,6 +563,7 @@ func (h *Hook) overview() fyne.CanvasObject {
 			box.Add(c)
 		}
 	}
+	box.Add(h.bugs.view())
 	return box
 }
 

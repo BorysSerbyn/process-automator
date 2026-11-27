@@ -931,3 +931,12 @@ macOS keeps a permission granted to the app (Calendars, Input Monitoring, …) a
 ### Rejected
 - **Remembering which identity to use**: the mistake it guards against is signing with the wrong one, so the check has to look at what was actually published
 - **Comparing with the local install**: a dev build may be signed differently on purpose; the previous release is what updates come from
+
+## Decision: a bug report is a filled-in GitHub issue the reporter submits
+`report` opens the app's bug-report repository's new-issue page with the title and body in its address, and the reporter submits it from their own GitHub account. Nothing is hosted and the app holds no secret, and the report comes from someone who can be asked for more. A page's address can't carry a file (and holds about 8 KB, so the body loses its runs, then its description's end, to fit), so the logs are a zip shown in the file manager to drag onto the issue. The repository is the app's choice (`BugReports`), not its release repository: an app with private releases may want reports elsewhere, or none (empty: the commands say to send the exported logs). The zip is redacted as run records are, with the home folder written `~`, but keeps the runs' text: a reporter on a public repository has to read it, so the UI leaves **Attach logs** off until it's ticked, says so beside it, and says the issue is public on a public repository.
+
+### Rejected
+- **Filing it through the GitHub API with a token in the app**: anyone could take the token out of the binary
+- **The reporter's `gh` sign-in**: only for people with `gh` installed and signed in, and the API can't attach files either, so the logs would be pasted into the issue's text (at most 64 KB)
+- **A relay server filing issues for people without a GitHub account**: a server to host, a secret to keep and spam to handle, for reports that can't be followed up
+- **An issue form with fields to fill in from the address**: it has to exist in the repository, and another app's repository wouldn't have it; a plain body works on any repository

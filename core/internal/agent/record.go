@@ -185,6 +185,10 @@ var (
 // Redacted replaces a secret in the record.
 const Redacted = "[redacted]"
 
+// Redact replaces what looks like a credential in s, as the record does
+// (logs exported for a bug report go through it too).
+func Redact(s string) string { return redact(s) }
+
 // redact replaces what looks like a credential in s.
 func redact(s string) string {
 	s = secretPairRE.ReplaceAllString(s, "${1}"+Redacted)

@@ -93,6 +93,27 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/hooks-list.schema.json
+  - command: hooks logs
+    usage: procauto hooks logs <hook> [flags]
+    summary: 'Export a hook''s recent logs as a zip: its runs, its file and the app''s log lines about them, with secrets redacted'
+    example: |-
+      procauto hooks logs standup
+      procauto hooks logs standup --since 2d --out ~/Desktop/standup.zip
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+      - name: --out
+        type: string
+        usage: 'write the zip here (default: the app''s reports folder, kept a week)'
+      - name: --runs
+        type: int
+        default: "5"
+        usage: the latest this many runs
+      - name: --since
+        type: string
+        usage: 'only runs started after this: a duration back (7d, 12h) or a date (2026-11-17)'
+    jsonOutput: cli/hooks-logs.schema.json
   - command: hooks pause
     usage: procauto hooks pause <hook> [flags]
     summary: 'Turn a hook off: it no longer runs on its events'
@@ -101,6 +122,34 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/hooks-pause.schema.json
+  - command: hooks report
+    usage: procauto hooks report <hook> [flags]
+    summary: 'Report a bug in a hook: opens a new issue on the app''s GitHub repository, filled in, to file from your own account'
+    example: procauto hooks report standup --title "Posts twice" --description "It posted the report twice at 9:20." --include-logs
+    flags:
+      - name: --description
+        type: string
+        usage: what happened, and what you expected
+      - name: --dry-run
+        type: bool
+        usage: 'only print the page''s address (and export the logs): open nothing'
+      - name: --include-logs
+        type: bool
+        usage: 'also export the logs to attach (read them first: the issue may be public)'
+      - name: --json
+        type: bool
+        usage: machine-readable output
+      - name: --runs
+        type: int
+        default: "5"
+        usage: the latest this many runs
+      - name: --since
+        type: string
+        usage: 'only runs started after this: a duration back (7d, 12h) or a date (2026-11-17)'
+      - name: --title
+        type: string
+        usage: 'the issue''s title (default: "<name>: ", to finish on the page)'
+    jsonOutput: cli/hooks-report.schema.json
   - command: hooks resume
     usage: procauto hooks resume <hook> [flags]
     summary: Turn a paused hook on again
@@ -461,6 +510,27 @@ commands:
         type: string
         usage: llm (the default), program, or all
     jsonOutput: cli/routines-list.schema.json
+  - command: routines logs
+    usage: procauto routines logs <routine> [flags]
+    summary: 'Export a routine''s recent logs as a zip: its runs, its file and the app''s log lines about them, with secrets redacted'
+    example: |-
+      procauto routines logs standup
+      procauto routines logs standup --since 2d --out ~/Desktop/standup.zip
+    flags:
+      - name: --json
+        type: bool
+        usage: machine-readable output
+      - name: --out
+        type: string
+        usage: 'write the zip here (default: the app''s reports folder, kept a week)'
+      - name: --runs
+        type: int
+        default: "5"
+        usage: the latest this many runs
+      - name: --since
+        type: string
+        usage: 'only runs started after this: a duration back (7d, 12h) or a date (2026-11-17)'
+    jsonOutput: cli/routines-logs.schema.json
   - command: routines pause
     usage: procauto routines pause <routine> [flags]
     summary: Stop a routine running on its schedule (run now still works)
@@ -469,6 +539,34 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/routines-pause.schema.json
+  - command: routines report
+    usage: procauto routines report <routine> [flags]
+    summary: 'Report a bug in a routine: opens a new issue on the app''s GitHub repository, filled in, to file from your own account'
+    example: procauto routines report standup --title "Posts twice" --description "It posted the report twice at 9:20." --include-logs
+    flags:
+      - name: --description
+        type: string
+        usage: what happened, and what you expected
+      - name: --dry-run
+        type: bool
+        usage: 'only print the page''s address (and export the logs): open nothing'
+      - name: --include-logs
+        type: bool
+        usage: 'also export the logs to attach (read them first: the issue may be public)'
+      - name: --json
+        type: bool
+        usage: machine-readable output
+      - name: --runs
+        type: int
+        default: "5"
+        usage: the latest this many runs
+      - name: --since
+        type: string
+        usage: 'only runs started after this: a duration back (7d, 12h) or a date (2026-11-17)'
+      - name: --title
+        type: string
+        usage: 'the issue''s title (default: "<name>: ", to finish on the page)'
+    jsonOutput: cli/routines-report.schema.json
   - command: routines resume
     usage: procauto routines resume <routine> [flags]
     summary: Let a paused routine run on its schedule again

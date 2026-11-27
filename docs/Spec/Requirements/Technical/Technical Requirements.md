@@ -11,6 +11,7 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Functional Requirement
 | `Folder` | The config and data folder's name, the logs folder, the release artifacts and the Linux install | `process-automator` |
 | `BundlePrefix` | The prefix of the bundle ID (`<prefix>.<Command>`), which names the login items and the secrets service | `dev` |
 | `ReleaseRepo`, `PublicReleases`, `TeamID` | Where `update` gets releases, whether they're public (read with no sign-in) or private (the zero value: read signed in to GitHub), and the team that must sign them | `REPO`, `PUBLIC`, `TEAM_ID` in `install.sh` |
+| `BugReports` | The GitHub repository (`owner/name`) bug reports open a new issue on; empty, the app takes none | `BorysSerbyn/process-automator` |
 | `Plugins` | In-process plugins compiled in | none |
 
 - **Build values are set at link time** in `core/automator` by the Makefile: the version, the source checkout (`SOURCE_DIR`), where the templates are packaged, the release API and web address, and `BUNDLE_PREFIX` over the app's prefix

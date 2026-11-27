@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -75,6 +76,9 @@ func TestMain(m *testing.M) {
 	engine.CodexLoginStatus = func(context.Context, string, agent.CodexProtocol) (string, error) { return "", nil }
 	// Tests never open apps, files or browsers on this machine.
 	openExternal = func(string) error { return errors.New("tests don't open things") }
+	revealFile = func(string) error { return errors.New("tests don't open things") }
+	// Nor read the scheduler's real log: tests that export logs give their own.
+	schedulerLog = func(time.Time) (string, error) { return "", nil }
 	// Nor run the real gh: the release token is GH_TOKEN's, if a test sets it.
 	engine.FindReleaseToken = func(context.Context, string, string) (string, []string) { return os.Getenv("GH_TOKEN"), nil }
 	// Nor reach GitHub: tests that read releases serve their own.

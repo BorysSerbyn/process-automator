@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
@@ -34,3 +35,6 @@ func xdgOpen(target string) error {
 		return nil
 	}
 }
+
+// revealFile shows a file's folder in the file manager (tests replace it).
+var revealFile = func(path string) error { return xdgOpen(filepath.Dir(path)) }

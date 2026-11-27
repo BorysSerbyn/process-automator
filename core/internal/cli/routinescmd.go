@@ -165,7 +165,8 @@ func newRoutinesCmd() *cobra.Command {
 	}
 	list.Flags().StringVar(&kind, "kind", "", "llm (the default), program, or all")
 	jsonFlag(list.Flags(), []RoutineInfo{})
-	cmd.AddCommand(list, newRoutinesShowCmd(), newRoutinesCreateCmd(), newRoutinesUpdateCmd(), newRoutinesDeleteCmd(), newRoutinesCheckCmd(), newRoutinesTrustCmd(), newRoutinesPauseCmd(false), newRoutinesPauseCmd(true))
+	cmd.AddCommand(list, newRoutinesShowCmd(), newRoutinesCreateCmd(), newRoutinesUpdateCmd(), newRoutinesDeleteCmd(), newRoutinesCheckCmd(), newRoutinesTrustCmd(), newRoutinesPauseCmd(false), newRoutinesPauseCmd(true),
+		newLogsCmd(false), newReportCmd(false))
 	return cmd
 }
 

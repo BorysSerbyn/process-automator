@@ -105,7 +105,7 @@ func newHooksCmd() *cobra.Command {
 			product.Command + " guide hooks`.",
 	}
 	cmd.AddCommand(newHooksListCmd(), newHooksShowCmd(), newHooksAddCmd(false), newHooksAddCmd(true), newHooksDeleteCmd(),
-		newHooksTrustCmd(), newHooksPauseCmd(false), newHooksPauseCmd(true), newHooksFireCmd())
+		newHooksTrustCmd(), newHooksPauseCmd(false), newHooksPauseCmd(true), newHooksFireCmd(), newLogsCmd(true), newReportCmd(true))
 	return cmd
 }
 

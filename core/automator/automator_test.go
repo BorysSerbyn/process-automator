@@ -21,6 +21,7 @@ func TestValidate(t *testing.T) {
 		"no prefix":      func(a *App) { a.BundlePrefix = "" },
 		"bad repo":       func(a *App) { a.ReleaseRepo = "automator" },
 		"nested repo":    func(a *App) { a.ReleaseRepo = "acme/x/y" },
+		"bad bug repo":   func(a *App) { a.BugReports = "acme" },
 		"invalid plugin": func(a *App) { a.Plugins = []pluginapi.Plugin{{Name: "x"}} },
 	} {
 		a := good
@@ -34,7 +35,7 @@ func TestValidate(t *testing.T) {
 // The app's values become the build's, and what the build set at link time
 // goes over them.
 func TestApply(t *testing.T) {
-	saved := []*string{&product.Name, &product.Command, &product.Folder, &product.BundlePrefix, &product.ReleaseRepo,
+	saved := []*string{&product.Name, &product.Command, &product.Folder, &product.BundlePrefix, &product.ReleaseRepo, &product.BugReports,
 		&product.TeamID, &product.Version, &product.SourceDir, &product.TemplatesDir, &product.ReleaseAPI, &product.ReleaseWeb,
 		&bundlePrefix, &version, &releaseWeb}
 	before := make([]string, len(saved))
@@ -66,6 +67,19 @@ func TestApply(t *testing.T) {
 	public.apply()
 	if !product.PublicReleases || product.ReleaseWeb != "http://releases.test" {
 		t.Fatalf("public app: %v %s", product.PublicReleases, product.ReleaseWeb)
+	}
+	// Bug reports go where the app says, and nowhere when it says nothing.
+	if product.BugReports != "" {
+		t.Fatalf("an app takes bug reports by default: %s", product.BugReports)
+	}
+	reports := good
+	reports.BugReports = "acme/issues"
+	if err := reports.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	reports.apply()
+	if product.BugReports != "acme/issues" {
+		t.Fatalf("bug reports: %s", product.BugReports)
 	}
 }
 

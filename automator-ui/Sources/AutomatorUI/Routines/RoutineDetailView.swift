@@ -31,6 +31,7 @@ struct RoutineDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 if let error = model.actionError { RowError(message: error) }
+                ExportLogsStatus(report: model.bugReport)
                 if let error = model.loadError, model.detail == nil {
                     Banner(
                         title: "Couldn't read \(model.name)", message: error, systemImage: "xmark.octagon.fill",
@@ -56,6 +57,8 @@ struct RoutineDetailView: View {
             .padding(20)
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
+            // Not on the window's other sheets' views: two sheets on one view clash.
+            .modifier(BugReportPresenter(report: model.bugReport))
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(minWidth: 600, idealWidth: 680, minHeight: 480, idealHeight: 760)
@@ -135,6 +138,11 @@ struct RoutineDetailView: View {
             if model.detail?.turnOn == false, model.detail?.enabled == false {
                 Button("Resume") { model.setPaused(false) }
             }
+            Button("Export Logs…") { Task { await model.bugReport.exportLogs() } }
+                .help("Save its latest runs' logs as a zip, secrets redacted, and show it in Finder")
+            Button("Report a Bug…", action: model.bugReport.start)
+                .help("Open a new issue on GitHub about it, filled in, to submit from your own account")
+            Divider()
             Button("Delete…", role: .destructive) { confirmingDelete = true }
         } label: {
             Image(systemName: "ellipsis.circle")

@@ -79,6 +79,9 @@ type Routine struct {
 	actionError string
 	pending     *pendingAction
 
+	// bugs is Export Logs… and Report a Bug….
+	bugs *bugReporter
+
 	scroll *container.Scroll
 }
 
@@ -93,6 +96,7 @@ func NewRoutine(c cli.CLI, win fyne.Window, async Async, name string, deleted fu
 	r.turnOn = newTurnOn(c, async, name, false, r.summary, r.refresh, r.Load)
 	r.pending = newPendingAction(async, r.refresh)
 	r.granter = newGranter(c, async, r.refresh, r.loadDetail)
+	r.bugs = newBugReporter(c, win, async, name, false, r.refresh, func(msg string) { r.actionError = msg; r.refresh() })
 	r.confirm = func(title, message, action string, yes func()) {
 		d := dialog.NewConfirm(title, message, func(ok bool) {
 			if ok {
@@ -531,7 +535,7 @@ func (r *Routine) controls() fyne.CanvasObject {
 	return row
 }
 
-// Overview: the status, and what it can reach.
+// Overview: the status, what it can reach, and Export Logs… and Report a Bug….
 
 func (r *Routine) overview() fyne.CanvasObject {
 	box := container.NewVBox(card(false, r.statusRows()...))
@@ -541,6 +545,7 @@ func (r *Routine) overview() fyne.CanvasObject {
 			box.Add(c)
 		}
 	}
+	box.Add(r.bugs.view())
 	return box
 }
 

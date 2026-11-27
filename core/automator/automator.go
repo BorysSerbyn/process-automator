@@ -51,6 +51,12 @@ type App struct {
 	// sign-in (GH_TOKEN or GITHUB_TOKEN, else an account the GitHub CLI is
 	// signed in to that can read them). install.sh's PUBLIC says the same.
 	PublicReleases bool
+	// BugReports is the GitHub repository (owner/name) bug reports go to:
+	// `routines report` and `hooks report` open a new issue on it, filled in,
+	// which the reporter files from their own GitHub account (and attaches
+	// the logs to). Anyone who can open an issue there sees it, so a public
+	// repository makes reports public. Empty: the app takes no bug reports.
+	BugReports string
 	// TeamID is the Apple Developer team that signs releases; when set,
 	// installs and updates on macOS accept only its notarized signature.
 	TeamID string
@@ -93,6 +99,7 @@ func (a App) apply() {
 	product.Name, product.Command, product.Folder = a.Name, a.Command, a.Folder
 	product.BundlePrefix = a.BundlePrefix
 	product.ReleaseRepo, product.PublicReleases, product.TeamID = a.ReleaseRepo, a.PublicReleases, a.TeamID
+	product.BugReports = a.BugReports
 	for dst, v := range map[*string]string{
 		&product.BundlePrefix: bundlePrefix, &product.Version: version, &product.SourceDir: sourceDir,
 		&product.TemplatesDir: templatesDir, &product.ReleaseAPI: releaseAPI, &product.ReleaseWeb: releaseWeb,
@@ -104,8 +111,8 @@ func (a App) apply() {
 }
 
 // Validate checks the app as Main does before running it: its names, its
-// release repository and its plugins (each well-formed, names unique). An
-// app's tests run it, as they run CheckTemplates.
+// release and bug-report repositories and its plugins (each well-formed,
+// names unique). An app's tests run it, as they run CheckTemplates.
 func (a App) Validate() error {
 	var errs []error
 	if strings.TrimSpace(a.Name) == "" {
@@ -121,6 +128,9 @@ func (a App) Validate() error {
 	}
 	if owner, name, ok := strings.Cut(a.ReleaseRepo, "/"); !ok || owner == "" || name == "" || strings.Contains(name, "/") {
 		errs = append(errs, fmt.Errorf("ReleaseRepo %q: expected owner/name", a.ReleaseRepo))
+	}
+	if owner, name, ok := strings.Cut(a.BugReports, "/"); a.BugReports != "" && (!ok || owner == "" || name == "" || strings.Contains(name, "/")) {
+		errs = append(errs, fmt.Errorf("BugReports %q: expected owner/name", a.BugReports))
 	}
 	if err := config.ValidatePlugins(a.Plugins); err != nil {
 		errs = append(errs, err)

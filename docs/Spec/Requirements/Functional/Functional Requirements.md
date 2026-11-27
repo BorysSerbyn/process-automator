@@ -97,6 +97,8 @@ Back to [[Home]]. See also [[Spec/Requirements/Functional/Agentic Functional Req
 ## Runs
 - **Inspecting runs**: which ran, how each ended and why, with its inputs, every tool call with what it returned (clipped, secrets redacted), writes and final text, from the CLI and the UI (the tool calls folded until opened); also as a readable report
 - **Run history and logs** are kept for a retention period I set
+- **Exporting a routine's or hook's logs** (`routines logs <name>`, `hooks logs <name>`): one zip of its latest runs (5 unless I say how many, or since when), each as `runs show` prints it and as recorded, its file, and the scheduler's, `start.log`'s and the frontends' log lines from during those runs or naming it. What looks like a credential is redacted and my home folder is written `~`; the runs' text and tool results are kept as they were. It works for one that no longer loads, or was deleted, as long as it has runs
+- **Reporting a bug** in a routine or hook (`routines report <name>`, `hooks report <name>`): opens a new issue on the app's bug-report repository in my browser, filled in with a title, what happened, where (the routine or hook and its kind, the app's version and OS, the backend) and its latest runs' outcomes, for me to read and submit from my own GitHub account. With logs included, they're exported as above and shown in the file manager, for me to drag onto the issue. `--dry-run` only prints the page's address. An app with no bug-report repository takes no reports and says to send the exported logs to whoever maintains it
 - **Outcomes**: success, failed, needs a sign-in, missed, skipped (over the usage limit) and stopped
 - **Structured results**: a routine can declare the shape of its result, so history and the UI show clean results instead of prose
 - **Health check** (`doctor`): explains a red indicator, hooks' too, with a fix for each problem
@@ -132,6 +134,7 @@ Managing the app is possible entirely from macOS's menu bar app (automator-ui), 
   - what it can reach (trusting it is turning it on, above)
   - its runs: what each did, its tool calls and writes, and its output
   - controls: run now or dry run, stop, pause/resume, delete
+  - **Export Logs…** (the zip, shown in the file manager) and **Report a Bug…**: a title, what happened, and **Attach logs** (off until I tick it, saying the logs hold the runs' text and tool results); it opens the issue in my browser, saying it's filed from my GitHub account and public on a public repository, and after it, which file to drag onto the issue
   - its memories (see, add, remove) and its own settings
   - for a program, the same screen with only these differences:
     - what it runs, in place of what it can reach: its executable (its SHA-256, copyable), whether it writes, its arguments, and its secrets, each with its variable and whether it's stored; signing in to the ones that aren't

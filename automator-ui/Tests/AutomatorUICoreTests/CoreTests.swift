@@ -613,6 +613,124 @@ private let hookReview = """
     #expect(ran(log) == ["auth login cal --browser", "hooks trust open-meet --check --json"])
 }
 
+// MARK: Logs and bug reports
+
+@Test func logsAndReportsBuildTheirCommands() {
+    #expect(CLI.logsArguments("standup", kind: .routine) == ["routines", "logs", "standup"])
+    #expect(CLI.logsArguments("open-meet", kind: .hook) == ["hooks", "logs", "open-meet"])
+    // Text is given as --flag=value: one starting with "-" isn't a flag.
+    #expect(
+        CLI.reportArguments(
+            "standup", kind: .routine, title: "Posts twice", description: "-- twice at 9:20", includeLogs: true,
+            dryRun: false)
+            == [
+                "routines", "report", "standup", "--title=Posts twice", "--description=-- twice at 9:20",
+                "--include-logs",
+            ])
+    #expect(
+        CLI.reportArguments("open-meet", kind: .hook, title: "", description: "", includeLogs: false, dryRun: true)
+            == ["hooks", "report", "open-meet", "--title=", "--description=", "--dry-run"])
+}
+
+private let logsReply = """
+    {"path":"/r/standup-logs-20261127-0920.zip","name":"standup","runs":["standup/2026-11-27T092000"],
+     "files":[{"name":"standup.prompt","bytes":812},{"name":"runs/2026-11-27T092000.json","bytes":4096}]}
+    """
+
+private func reportReply(opened: Bool, logs: Bool) -> String {
+    """
+    {"repo":"acme/automator","url":"https://github.com/acme/automator/issues/new?title=x","title":"Posts twice",
+     "body":"It posted twice.","opened":\(opened)\(logs ? #","logs":"# + logsReply : "")}
+    """
+}
+
+@MainActor
+@Test func exportingLogsShowsTheZipOrWhyNot() async throws {
+    let (cli, log) = try scriptedCLI([
+        "routines logs standup --json": logsReply,
+        "hooks logs gone --json": "!no hook named gone",
+    ])
+    let report = BugReport(name: "standup", kind: .routine, cli: cli)
+    var revealed: [URL] = []
+    report.reveal = { revealed.append($0) }
+    await report.exportLogs()
+    #expect(revealed == [URL(filePath: "/r/standup-logs-20261127-0920.zip")])
+    #expect(report.exportError == nil && !report.exporting)
+    let gone = BugReport(name: "gone", kind: .hook, cli: cli)
+    gone.reveal = { revealed.append($0) }
+    await gone.exportLogs()
+    #expect(gone.exportError == "no hook named gone" && revealed.count == 1)
+    #expect(ran(log) == ["routines logs standup --json", "hooks logs gone --json"])
+    let logs = try CoreJSON.decoder().decode(LogsOutput.self, from: Data(logsReply.utf8))
+    #expect(logs.runs == ["standup/2026-11-27T092000"] && logs.files.map(\.bytes) == [812, 4096] && logs.hook == nil)
+}
+
+@MainActor
+@Test func reportingABugSaysWhereItGoesThenOpensIt() async throws {
+    let (cli, log) = try scriptedCLI([
+        "routines report standup --title= --description= --dry-run --json": reportReply(opened: false, logs: false),
+        "routines report standup --title=Posts twice --description=It posted twice. --json":
+            reportReply(opened: true, logs: false),
+        "routines report standup --title=Posts twice --description=It posted twice. --include-logs --json":
+            reportReply(opened: true, logs: true),
+    ])
+    let report = BugReport(name: "standup", kind: .routine, cli: cli)
+    var revealed: [URL] = []
+    report.reveal = { revealed.append($0) }
+    report.showing = true
+    await report.load()
+    #expect(report.repo == "acme/automator" && report.loadError == nil)
+    #expect(report.whereText?.contains("on acme/automator") == true)
+    // Without logs: opened, it closes, emptied.
+    report.title = "Posts twice"
+    report.description = "It posted twice."
+    await report.open()
+    #expect(!report.showing && report.error == nil && report.title.isEmpty && report.logsToDrag == nil)
+    // With logs: it stays, to say which zip to drag onto the issue (the core
+    // showed it in Finder: the app doesn't again).
+    report.showing = true
+    report.title = "Posts twice"
+    report.description = "It posted twice."
+    report.includeLogs = true
+    await report.open()
+    #expect(report.showing && report.logsToDrag == "standup-logs-20261127-0920.zip" && report.unopened == nil)
+    #expect(report.dragText?.hasPrefix("Drag standup-logs-20261127-0920.zip from the Finder window") == true)
+    #expect(revealed.isEmpty)
+    report.finish()
+    #expect(!report.showing && !report.includeLogs && report.logsToDrag == nil)
+    #expect(
+        ran(log) == [
+            "routines report standup --title= --description= --dry-run --json",
+            "routines report standup --title=Posts twice --description=It posted twice. --json",
+            "routines report standup --title=Posts twice --description=It posted twice. --include-logs --json",
+        ])
+}
+
+@MainActor
+@Test func reportingABugSaysWhyItCouldnt() async throws {
+    let refusal =
+        "Process Automator takes no bug reports (its build names nowhere to send them): export the logs with `procauto hooks logs open-meet` and send them to whoever maintains it"
+    let (cli, _) = try scriptedCLI([
+        "hooks report open-meet --title= --description= --dry-run --json": "!\(refusal)",
+        "hooks report open-meet --title=x --description= --json": "!no hook named open-meet",
+        "hooks report flaky --title=x --description= --json": reportReply(opened: false, logs: false),
+    ])
+    let report = BugReport(name: "open-meet", kind: .hook, cli: cli)
+    report.showing = true
+    await report.load()
+    // The app takes no reports: the core's words, as they are.
+    #expect(report.repo == nil && report.whereText == nil && report.loadError == refusal)
+    report.title = "x"
+    await report.open()
+    #expect(report.showing && report.error == "no hook named open-meet" && !report.working)
+    // The browser didn't open: the issue's address stays, to open from the sheet.
+    let flaky = BugReport(name: "flaky", kind: .hook, cli: cli)
+    flaky.showing = true
+    flaky.title = "x"
+    await flaky.open()
+    #expect(flaky.showing && flaky.unopened?.host() == "github.com" && flaky.logsToDrag == nil)
+}
+
 @Test func aHookWithNoWatcherSaysSo() throws {
     let json = """
         {"routine":"lonely","surface":{"servers":[],"tools":[]},"changes":[],"trusted":false,"hook":true,

@@ -48,6 +48,8 @@ final class HookModel: ObservableObject, RunHistoryModel, MemoriesModel {
     let turnOn: TurnOn
     /// Grant… for the permissions it needs that aren't allowed.
     let granter: PermissionGranter
+    /// Export Logs… and Report a Bug….
+    let bugReport: BugReport
     /// Its detail is read again now and then while a permission it needs
     /// isn't allowed, so it turns allowed by itself.
     private var watchingPermissions = false
@@ -79,10 +81,12 @@ final class HookModel: ObservableObject, RunHistoryModel, MemoriesModel {
         self.status = status
         turnOn = TurnOn(name: name, kind: .hook, cli: cli)
         granter = PermissionGranter(cli: cli, app: AppInfo.name)
+        bugReport = BugReport(name: name, kind: .hook, cli: cli)
         pendingChanges = pending.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         turnOn.turnedOn = { [weak self] in self?.load() }
         turnOn.granter.openURL = { NSWorkspace.shared.open($0) }
         granter.openURL = { NSWorkspace.shared.open($0) }
+        bugReport.reveal = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         granter.asked = { [weak self] in self?.loadDetail() }
     }
 

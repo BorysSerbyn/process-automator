@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routines-report.schema.json",
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Repo is the GitHub repository (owner/name) the report goes to."
+    },
+    "url": {
+      "type": "string",
+      "description": "URL is its new-issue page with the title and body filled in: the\nreporter files it from their own GitHub account."
+    },
+    "title": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "logs": {
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path is the zip."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name is the routine's or hook's."
+        },
+        "hook": {
+          "type": "boolean",
+          "description": "Hook is true for a hook's logs."
+        },
+        "runs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Runs are the runs in it (history IDs, as `runs show` takes), newest first."
+        },
+        "files": {
+          "items": {
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "bytes": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "name",
+              "bytes"
+            ],
+            "description": "LogFile is one file in a logs zip."
+          },
+          "type": "array",
+          "description": "Files are the zip's files."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "name",
+        "runs",
+        "files"
+      ],
+      "description": "Logs is the zip to drag onto the issue (--include-logs): GitHub's\nnew-issue page can't be given a file."
+    },
+    "opened": {
+      "type": "boolean",
+      "description": "Opened is true when the page was opened in the browser (and the logs\nshown in the file manager); false with --dry-run or when that failed."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "repo",
+    "url",
+    "title",
+    "body",
+    "opened"
+  ],
+  "title": "procauto routines report --json",
+  "description": "ReportOutput is `routines report --json` and `hooks report --json`: the bug report's new-issue page, filled in, and the logs to attach to it."
+}

@@ -53,6 +53,11 @@ var (
 	ReleaseAPI     = "https://api.github.com"
 )
 
+// BugReports is the GitHub repository (owner/name) bug reports are filed
+// on: `routines report` and `hooks report` open its new-issue page, filled
+// in. Empty: the app takes no bug reports.
+var BugReports = ""
+
 // TeamID is the Apple Developer team that signs releases. When set, macOS
 // updates must carry that team's notarized Developer ID signature.
 var TeamID = ""

@@ -49,6 +49,11 @@ A routine stays red until its next run goes well (or you pause it).
 
 `procauto paths` shows the data folder (and `frontend log`).
 
+## Reporting a bug
+When a routine or hook misbehaves and it looks like the app's fault, **Report a Bug…** on its screen (or `procauto routines report <name> --include-logs`, `procauto hooks report <name> --include-logs`) opens a filled-in issue on GitHub. Read it, add what you expected, drag the logs zip (shown in the file manager) onto it, and submit it from your GitHub account. The issue and its logs are public: secrets that look like tokens and keys are redacted, but the runs' text and tool results aren't, so read the zip first and remove what you don't want public.
+
+To send the logs another way, **Export Logs…** (or `procauto routines logs <name>`) saves the same zip.
+
 ## Common problems
 - **A server's tool is missing from `routines check`**: the server doesn't offer it, often for lack of a scope or permission on your account. Check the server's scopes, sign in again, and look at `procauto mcp tools <server>`
 - **"Claude Code isn't installed"**: the `claude-code` backend can't find `claude`. Install Claude Code and sign in to it; the app looks it up on your login shell's `PATH`

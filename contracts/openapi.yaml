@@ -786,6 +786,18 @@ components:
         - routine
         - path
       type: object
+    LogFile:
+      additionalProperties: false
+      description: LogFile is one file in a logs zip.
+      properties:
+        bytes:
+          type: integer
+        name:
+          type: string
+      required:
+        - name
+        - bytes
+      type: object
     LoginItem:
       additionalProperties: false
       description: LoginItem is one thing that starts at login.
@@ -831,6 +843,35 @@ components:
         - installed
         - enabled
         - items
+      type: object
+    LogsOutput:
+      additionalProperties: false
+      description: 'LogsOutput is `routines logs --json` and `hooks logs --json`: the zip of a routine''s or hook''s recent logs, and what''s in it, to show before it''s shared.'
+      properties:
+        files:
+          description: Files are the zip's files.
+          items:
+            $ref: '#/components/schemas/LogFile'
+          type: array
+        hook:
+          description: Hook is true for a hook's logs.
+          type: boolean
+        name:
+          description: Name is the routine's or hook's.
+          type: string
+        path:
+          description: Path is the zip.
+          type: string
+        runs:
+          description: Runs are the runs in it (history IDs, as `runs show` takes), newest first.
+          items:
+            type: string
+          type: array
+      required:
+        - path
+        - name
+        - runs
+        - files
       type: object
     MCPClient:
       additionalProperties: false
@@ -1582,6 +1623,39 @@ components:
         - kind
         - windows
         - over
+      type: object
+    ReportOutput:
+      additionalProperties: false
+      description: 'ReportOutput is `routines report --json` and `hooks report --json`: the bug report''s new-issue page, filled in, and the logs to attach to it.'
+      properties:
+        body:
+          type: string
+        logs:
+          $ref: '#/components/schemas/LogsOutput'
+          description: |-
+            Logs is the zip to drag onto the issue (--include-logs): GitHub's
+            new-issue page can't be given a file.
+        opened:
+          description: |-
+            Opened is true when the page was opened in the browser (and the logs
+            shown in the file manager); false with --dry-run or when that failed.
+          type: boolean
+        repo:
+          description: Repo is the GitHub repository (owner/name) the report goes to.
+          type: string
+        title:
+          type: string
+        url:
+          description: |-
+            URL is its new-issue page with the title and body filled in: the
+            reporter files it from their own GitHub account.
+          type: string
+      required:
+        - repo
+        - url
+        - title
+        - body
+        - opened
       type: object
     Result:
       additionalProperties: false

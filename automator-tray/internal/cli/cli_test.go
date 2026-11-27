@@ -179,6 +179,38 @@ esac`)
 	}
 }
 
+// Export Logs… and Report a Bug… run `logs` and `report` under routines or
+// hooks; the title and description are each one argument, even one
+// starting with "-"; what the core answers is decoded.
+func TestLogsAndReportCalls(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "log")
+	c := fake(t, `for a in "$@"; do printf '[%s]' "$a" >> '`+log+`'; done; echo >> '`+log+`'
+case "$2" in
+  logs) echo '{"path":"/r/standup-logs.zip","name":"standup","runs":["standup/1"],"files":[{"name":"about.txt","bytes":120}]}' ;;
+  report) echo '{"repo":"acme/auto","url":"https://github.com/acme/auto/issues/new?title=x","title":"x","body":"b",
+    "logs":{"path":"/r/hook-open-meet-logs.zip","name":"open-meet","hook":true,"runs":[],"files":[]},"opened":true}' ;;
+esac`)
+	logs, err := c.ExportLogs("standup", false)
+	if err != nil || logs.Path != "/r/standup-logs.zip" || len(logs.Runs) != 1 || logs.Files[0] != (LogFile{Name: "about.txt", Bytes: 120}) {
+		t.Fatalf("%+v %v", logs, err)
+	}
+	_, _ = c.ExportLogs("open-meet", true)
+	_, _ = c.ReportBug("standup", false, "Posts twice", "-- it posted\ntwice", false)
+	r, err := c.ReportBug("open-meet", true, "", "", true)
+	if err != nil || !r.Opened || r.Repo != "acme/auto" || r.Logs == nil || !r.Logs.Hook {
+		t.Fatalf("%+v %v", r, err)
+	}
+	b, _ := os.ReadFile(log)
+	want := strings.Join([]string{
+		"[routines][logs][standup][--json]", "[hooks][logs][open-meet][--json]",
+		"[routines][report][standup][--title=Posts twice][--description=-- it posted\ntwice][--json]",
+		"[hooks][report][open-meet][--title=][--description=][--include-logs][--json]",
+	}, "\n") + "\n"
+	if string(b) != want {
+		t.Fatalf("ran:\n%s\nwant:\n%s", b, want)
+	}
+}
+
 // Run status keeps hooks apart from routines; a reason or a click about a
 // hook says so; a hook's run has its events, whose data is plain text.
 func TestHooksInWhatTheCoreSays(t *testing.T) {
@@ -302,6 +334,10 @@ func TestTypesMatchTheContracts(t *testing.T) {
 		"templates-outdated.schema.json":  []TemplateUpdate{},
 		"templates-override.schema.json":  OverrideOutput{},
 		"templates-skip.schema.json":      SkipOutput{},
+		"routines-logs.schema.json":       LogsOutput{},
+		"hooks-logs.schema.json":          LogsOutput{},
+		"routines-report.schema.json":     ReportOutput{},
+		"hooks-report.schema.json":        ReportOutput{},
 	} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "cli", schema))
 		if err != nil {

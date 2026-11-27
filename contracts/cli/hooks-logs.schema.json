@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hooks-logs.schema.json",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Path is the zip."
+    },
+    "name": {
+      "type": "string",
+      "description": "Name is the routine's or hook's."
+    },
+    "hook": {
+      "type": "boolean",
+      "description": "Hook is true for a hook's logs."
+    },
+    "runs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "description": "Runs are the runs in it (history IDs, as `runs show` takes), newest first."
+    },
+    "files": {
+      "items": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "bytes"
+        ],
+        "description": "LogFile is one file in a logs zip."
+      },
+      "type": "array",
+      "description": "Files are the zip's files."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "path",
+    "name",
+    "runs",
+    "files"
+  ],
+  "title": "procauto hooks logs --json",
+  "description": "LogsOutput is `routines logs --json` and `hooks logs --json`: the zip of a routine's or hook's recent logs, and what's in it, to show before it's shared."
+}

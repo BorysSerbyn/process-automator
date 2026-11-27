@@ -20,6 +20,7 @@ var app = automator.App{
 	BundlePrefix:   "dev",
 	ReleaseRepo:    "BorysSerbyn/process-automator",
 	PublicReleases: true,
+	BugReports:     "BorysSerbyn/process-automator",
 	Plugins:        []pluginapi.Plugin{notify.Plugin()},
 }
 
