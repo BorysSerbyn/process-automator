@@ -4,7 +4,7 @@
 
 # process-automator
 
-LLM routines on a schedule, and hooks on events, for macOS and Linux. Describe a task in a prompt file, choose when it runs (a time, or something happening: a meeting starting, a new email), and a model does it in the background with the tools you allow it, from any MCP server. A program can do the work instead, when it needs no model. On its own the app does nothing; your routines and hooks give it a purpose.
+Routines on a schedule and hooks on events (a meeting starting, a new email, a PR review), for macOS and Linux. Each is either an LLM task, a prompt file a model carries out in the background with the tools you allow it from any MCP server, or a plain program that needs no model. Watchers, also programs, report the events hooks act on. Notifications, run history, sign-ins and a menu bar app come with them. On its own the app does nothing; your routines and hooks give it a purpose.
 
 ## Install
 
