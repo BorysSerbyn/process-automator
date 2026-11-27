@@ -251,7 +251,7 @@ func newUpdateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&background, "detach", false, "install in the background and return at once; the result comes as a notification (frontends)")
 	cmd.Flags().BoolVar(&ask, "ask", false, "say what's available and ask in the terminal before installing it (frontends that can't ask themselves)")
 	jsonFlag(cmd.Flags(), UpdateOutput{})
-	cmd.AddCommand(newUpdateProgressCmd(), newUpdateStatusCmd(), newUpdateNotesCmd(), newUpdatePostponeCmd())
+	cmd.AddCommand(newUpdateProgressCmd(), newUpdateStatusCmd(), newUpdateNotesCmd())
 	return cmd
 }
 
@@ -369,32 +369,5 @@ func newUpdateNotesCmd() *cobra.Command {
 		}),
 	}
 	jsonFlag(cmd.Flags(), NotesOutput{})
-	return cmd
-}
-
-// PostponeOutput is `update postpone --json`.
-type PostponeOutput struct {
-	// Until is when automatic updates may install again.
-	Until time.Time `json:"until"`
-}
-
-func newUpdatePostponeCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "postpone",
-		Short: "Hold automatic updates back for a few minutes: the app is in use (frontends run it while a window is open)",
-		Long: "An automatic update restarts the app, so it waits while I'm using it: frontends run this every minute " +
-			"while one of their windows is open (and when their menu opens), and an update installs by itself only " +
-			"a few minutes after the last time.",
-		Annotations: map[string]string{annNotReadOnly: "the app's frontends say they're in use"},
-		Args:        cobra.NoArgs,
-		RunE: withApp(func(cmd *cobra.Command, a *engine.App, _ []string) error {
-			until, err := a.PostponeUpdate(time.Now())
-			if err != nil {
-				return err
-			}
-			return emit(cmd, PostponeOutput{Until: until}, "Automatic updates wait until "+until.Local().Format("15:04")+".")
-		}),
-	}
-	jsonFlag(cmd.Flags(), PostponeOutput{})
 	return cmd
 }

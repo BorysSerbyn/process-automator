@@ -873,14 +873,6 @@ commands:
         type: bool
         usage: machine-readable output
     jsonOutput: cli/update-notes.schema.json
-  - command: update postpone
-    usage: procauto update postpone [flags]
-    summary: 'Hold automatic updates back for a few minutes: the app is in use (frontends run it while a window is open)'
-    flags:
-      - name: --json
-        type: bool
-        usage: machine-readable output
-    jsonOutput: cli/update-postpone.schema.json
   - command: update progress
     usage: procauto update progress [flags]
     summary: Show what the update installing is doing, or how the latest one ended

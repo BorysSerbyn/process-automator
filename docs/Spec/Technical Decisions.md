@@ -527,26 +527,19 @@ An update runs detached from whoever started it (automator-ui restarts during it
 - **`update progress --watch`, a stream like `status --watch`**: a second long-lived process for something that lasts minutes, a few times a year
 - **Progress in run status**: the scheduler writes run status; an update isn't a run, and runs without the scheduler
 
-## Decision: the scheduler installs updates by itself, at a quiet moment
-Releases come out several times a day, and nobody clicks Update that often, so updates install themselves unless I turn them off (`update.auto`, on by default, existing installs included). The scheduler does it: it's always running, headless Linux included, and it knows what's running and what's due. Every hour it checks (a check is cheap: two requests for a public app), and installs once it's quiet: nothing running or waiting, nothing due within minutes (a slot due while it restarts runs once it's back), none of the app's windows or its menu open lately, the computer awake for ten minutes and not in a maintenance wake, so nothing is cut off or restarted under me. A release is installed only once this install has known of it for an hour: a broken one is usually replaced within the hour (3.8.0 was, by 3.8.1, in seven minutes), and when releases come every few hours a longer wait would mean never installing at all. A failed install is tried again a day later, and says so each time; the release it failed for doesn't stop a newer one. Only published downloads install by themselves: a build from the checkout takes minutes and a toolchain, a development build is work in progress I move forward with `make install`, and brew owns a formula install. Whether it's quiet, and why it waits, is the core's (`update status`'s `waiting`); frontends only say they're in use (`update postpone`) and show the answer.
+## Decision: the scheduler installs updates by itself, as soon as nothing is running
+Releases come out several times a day, and nobody clicks Update that often, so updates install themselves unless I turn them off (`update.auto`, on by default, existing installs included). The scheduler does it: it's always running, headless Linux included, and it knows what's running. Every hour it checks (a check is cheap: two requests for a public app), and installs as soon as no routine's or hook's run is in progress, which is the one thing an update must never cut off. Nothing else holds it back: every other hold (an hour after a release, a run due within minutes, the app's window in use, the computer just woken) kept updates from installing for days, the window rule above all, since a window is often left open. A slot due while it restarts runs once it's back, and the window or menu restarting under me costs a few seconds. A failed install is tried again a day later, and says so each time; the release it failed for doesn't stop a newer one. Only published downloads install by themselves: a build from the checkout takes minutes and a toolchain, a development build is work in progress I move forward with `make install`, and brew owns a formula install. Why it waits is the core's (`update status`'s `waiting`); frontends show the answer.
 
 ### Rejected
 - **The frontends deciding and starting it**: logic in two frontends, and a headless Linux machine, with no tray, would never update
-- **Installing as soon as a release is published**: a broken release reaches everyone before its fix does
-- **Waiting from GitHub's publish time**: public releases are read from the web pages, which don't give it without the API and its limit of 60 requests an hour; when this install first saw the release works the same for public and private apps
-- **A fixed time of day** (say 3 a.m.): laptops sleep then, and a maintenance wake is the worst time to restart; a quiet moment while it's awake comes every day
-- **The OS's idle time**: an OS call per frontend for something the app's own windows and menu already say: restarting the menu bar app while I'm elsewhere doesn't disturb me
+- **Waiting an hour after a release, in case it's replaced**: a broken release is replaced within the hour anyway, and the wait, with the other holds, meant releases rarely installed at all
+- **Holding back while the app's window or menu is in use** (`update postpone`, every minute while it was open, then while it had the focus): a window left open held every update back for days, and restarting the window costs seconds
+- **Waiting for the computer to be awake a while, or out of a maintenance wake**: a failed install is tried again the next day, and the version I had keeps working
+- **Waiting for a run due within minutes**: the slot runs once the scheduler is back
+- **A fixed time of day** (say 3 a.m.): laptops sleep then
 - **Waiting for watchers to stop**: they always run; a hook's run is waited for like a routine's
 - **Asking first, then installing**: a prompt several times a day is the nagging automatic updates remove; turning them off is one switch
 - **Updating development builds too**: a release would replace the build I'm testing
-
-## Decision: frontends postpone automatic updates while they're open
-An automatic update restarts the menu bar app or tray, so it waits while I'm using them. A frontend says so with `update postpone` (when its menu opens, and every minute while its window is open), which holds installs back for five minutes; the scheduler reads it like any other fact. On Linux the window is the windows app's process, so it postpones for itself, whoever opened it.
-
-### Rejected
-- **A long-lived `update hold` process for the window**: one left behind by a crashed window would hold updates back for ever, and the tray's terminal windows have no process to watch
-- **The frontend reporting which windows are open**: the core would need to know frontends' windows; "in use" is all it needs
-- **Not installing while any frontend runs**: the menu bar app always runs
 
 ## Decision: release notes come from the GitHub API, kept a day
 Updates shows a release's notes as written on its GitHub release, Markdown included. They come from the API's release by tag, with no token for a public app (one request each, well within the unauthenticated limit) and the same sign-in as `update` for a private one, and are kept for a day, the copy kept standing in when GitHub can't be reached. Frontends render the Markdown themselves (headings, bullets, links): presentation, not logic.

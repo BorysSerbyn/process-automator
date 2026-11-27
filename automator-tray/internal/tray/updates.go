@@ -22,10 +22,8 @@ var (
 // menu opens; while one installs, what it's doing (`update progress`,
 // every ProgressEvery). The menu's Manage Updates… line says when one is
 // available or installing, and opens the Manage Updates window, which
-// checks, installs and turns automatic updates on and off. Opening the menu
-// holds automatic updates back (`update postpone`), as the windows do while
-// they're open. Whether one is available or installing is the core's
-// answer, never guessed here.
+// checks, installs and turns automatic updates on and off. Whether one is
+// available or installing is the core's answer, never guessed here.
 type Updates struct {
 	cli cli.CLI
 	// changed says the menu item changed.
@@ -94,11 +92,8 @@ func (u *Updates) MenuItem() MenuItem {
 	return MenuItem{Text: text, Action: Action{Kind: ShowWindow, Window: Window{Kind: UpdatesWindow}}}
 }
 
-// MenuOpened asks again, and holds automatic updates back: I'm using the app.
-func (u *Updates) MenuOpened() {
-	go u.Refresh()
-	go func() { _ = u.cli.PostponeUpdate() }()
-}
+// MenuOpened asks again.
+func (u *Updates) MenuOpened() { go u.Refresh() }
 
 // Refresh asks the core where updates stand; while one installs, it's
 // followed.

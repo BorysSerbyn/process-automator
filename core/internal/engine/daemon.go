@@ -184,13 +184,12 @@ func (a *App) Daemon(ctx context.Context) error {
 
 	lastPrune := time.Time{}
 	lastTick := time.Now()
-	updates := newAutoUpdater(lastTick)
+	updates := newAutoUpdater()
 	for {
 		// Just woken: the network can take a few seconds to come back, and
 		// a run that starts without it fails.
 		if slept := sysenv.SleptSince(lastTick); slept >= sysenv.SleepGap {
 			logf("the computer woke up (asleep %s)", slept.Round(time.Minute))
-			updates.woke(time.Now())
 			sleepCtx(ctx, WakeSettle) // if ctx ends meanwhile, the select below stops the daemon
 		}
 		lastTick = time.Now()

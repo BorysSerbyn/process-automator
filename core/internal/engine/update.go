@@ -254,12 +254,6 @@ func (a *App) ReleaseNotes(ctx context.Context, tag string) (update.Notes, error
 	return update.CachedNotes(ctx, ReleaseSource(ctx), a.Layout.ReleaseNotes(), tag, time.Now())
 }
 
-// PostponeUpdate holds an automatic update back for a few minutes: the app
-// is in use (frontends say so while one of their windows is open).
-func (a *App) PostponeUpdate(now time.Time) (time.Time, error) {
-	return update.Postpone(a.Layout.UpdateAuto(), now)
-}
-
 // Environment of an update running detached.
 const (
 	// DetachedUpdateEnv marks an update running detached: it reports its

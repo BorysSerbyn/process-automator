@@ -349,9 +349,8 @@ func TestUpdateAsksFirst(t *testing.T) {
 }
 
 // update status says where updates stand from what the app knows (asking
-// GitHub nothing), notes reads a release's notes, and postpone holds
-// automatic updates back.
-func TestUpdateStatusNotesPostpone(t *testing.T) {
+// GitHub nothing), and notes reads a release's notes.
+func TestUpdateStatusNotes(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/repos/pt/public/releases/tags/v2.0.0" {
 			_, _ = w.Write([]byte(`{"tag_name":"v2.0.0","body":"- new things","html_url":"https://example.com/v2.0.0"}`))
@@ -393,12 +392,4 @@ func TestUpdateStatusNotesPostpone(t *testing.T) {
 		t.Fatalf("update notes, dev: %s (%v)", out, err)
 	}
 
-	out, err = cli(t, cfg, "update", "postpone", "--json")
-	var p PostponeOutput
-	if err != nil || json.Unmarshal([]byte(out), &p) != nil || p.Until.Before(time.Now()) {
-		t.Fatalf("update postpone: %s (%v)", out, err)
-	}
-	if auto, err := update.LoadAuto(a.Layout.UpdateAuto()); err != nil || auto.PostponedUntil == nil || !auto.PostponedUntil.Equal(p.Until) {
-		t.Fatalf("postponed: %+v, %v", auto, err)
-	}
 }

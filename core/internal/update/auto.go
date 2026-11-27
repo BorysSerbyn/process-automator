@@ -11,7 +11,8 @@ import (
 )
 
 // Automatic updates: the scheduler checks for a newer release every
-// CheckEvery and, while they're on, installs it at a quiet moment (Decide).
+// CheckEvery and, while they're on, installs it as soon as no routine or hook
+// is running (Decide).
 // What it found, and the automatic install it last started, are kept in a
 // file between its passes and across restarts (AutoState).
 
@@ -19,22 +20,6 @@ import (
 const (
 	// CheckEvery is how often the scheduler asks for the latest release.
 	CheckEvery = time.Hour
-	// Soak is how long this install must have known of a release before
-	// installing it by itself: a release replaced soon after it's published
-	// (a broken one, fixed) is never installed automatically.
-	Soak = time.Hour
-	// QuietBefore is how soon a scheduled run may be due for an update to
-	// still start: one that starts now restarts the scheduler within about a
-	// minute, and a slot due while it restarts runs once it's back.
-	QuietBefore = 3 * time.Minute
-	// AwakeFor is how long the computer must have been awake (and the
-	// scheduler running): a maintenance wake, which sleeps again within
-	// minutes, never installs one.
-	AwakeFor = 10 * time.Minute
-	// PostponeFor is how long Postpone holds: frontends postpone every minute
-	// while one of their windows is open, so an update waits until a few
-	// minutes after the last one closed.
-	PostponeFor = 5 * time.Minute
 	// RetryAfter is how long after an automatic install of a release was
 	// started it may be started again (it failed: one that worked makes it
 	// the running version).
@@ -48,16 +33,11 @@ type AutoState struct {
 	// scheduler or `update --check`; CheckError why that failed.
 	CheckedAt  *time.Time `json:"checkedAt,omitempty"`
 	CheckError string     `json:"checkError,omitempty"`
-	// Latest is the newest release the last check that worked found,
+	// Latest is the newest release the last check that worked found, and
 	// Downloadable whether it has a download for this machine (else only a
-	// build from the source checkout installs it), and SeenAt when a check
-	// first found it.
-	Latest       string     `json:"latest,omitempty"`
-	Downloadable bool       `json:"downloadable,omitempty"`
-	SeenAt       *time.Time `json:"seenAt,omitempty"`
-	// PostponedUntil holds automatic installs back while the app is in use
-	// (Postpone).
-	PostponedUntil *time.Time `json:"postponedUntil,omitempty"`
+	// build from the source checkout installs it).
+	Latest       string `json:"latest,omitempty"`
+	Downloadable bool   `json:"downloadable,omitempty"`
 	// Tried is the release an automatic install was last started for, and
 	// TriedAt when.
 	Tried   string     `json:"tried,omitempty"`
@@ -97,20 +77,7 @@ func RecordCheck(path, tag string, downloadable bool, checkErr error, now time.T
 			st.CheckError = checkErr.Error()
 			return
 		}
-		if tag != st.Latest || st.SeenAt == nil {
-			st.SeenAt = &now
-		}
 		st.Latest, st.Downloadable = tag, downloadable
-	})
-}
-
-// Postpone holds automatic installs back for PostponeFor: the app is in use.
-func Postpone(path string, now time.Time) (time.Time, error) {
-	until := now.Add(PostponeFor)
-	return until, changeAuto(path, func(st *AutoState) {
-		if st.PostponedUntil == nil || st.PostponedUntil.Before(until) {
-			st.PostponedUntil = &until
-		}
 	})
 }
 
@@ -136,18 +103,8 @@ type Facts struct {
 	Blocked string
 	// Installing is true while an update installs.
 	Installing bool
-	// Busy says what's running or waiting its turn ("standup is running");
-	// "" when nothing is.
+	// Busy says what's running ("standup is running"); "" when nothing is.
 	Busy string
-	// Next is the soonest scheduled run, and NextName whose.
-	Next     *time.Time
-	NextName string
-	// AwakeSince is when the computer last woke, or the scheduler started,
-	// whichever is later.
-	AwakeSince time.Time
-	// FullyAwake asks whether the computer is fully awake now, not in a
-	// maintenance wake (asked last: it may run a tool).
-	FullyAwake func() bool
 	// When says a time in words ("tomorrow 09:20").
 	When func(t, now time.Time) string
 }
@@ -166,12 +123,10 @@ type AutoPlan struct {
 
 // Decide is what automatic updates do now: check when CheckEvery has passed
 // since the last check (whether or not they're on, so a newer release is
-// known), and install the newest release once it's quiet: they're on, this
-// install can be updated, the release has a download for this machine, has
-// been known for Soak and wasn't tried in the last RetryAfter, nothing is
-// running or waiting, no run is due within QuietBefore, the app isn't in
-// use (PostponedUntil), and the computer has been awake for AwakeFor and
-// is fully awake.
+// known), and install the newest release as soon as no routine or hook is
+// running: they're on, this install can be updated, the release has a
+// download for this machine and wasn't tried in the last RetryAfter.
+// Nothing else holds it back.
 func Decide(st AutoState, f Facts) AutoPlan {
 	var plan AutoPlan
 	plan.Check = st.CheckedAt == nil || f.Now.Sub(*st.CheckedAt) >= CheckEvery || f.Now.Before(*st.CheckedAt)
@@ -179,26 +134,13 @@ func Decide(st AutoState, f Facts) AutoPlan {
 		return plan
 	}
 	tag := st.Latest
-	later := func(at time.Time) string { return f.When(at, f.Now) }
-	soaked := f.Now
-	if st.SeenAt != nil {
-		soaked = st.SeenAt.Add(Soak)
-	}
 	switch {
 	case !st.Downloadable:
 		plan.Waiting = tag + " has no download for this computer, so it isn't installed automatically"
 	case st.Tried == tag && st.TriedAt != nil && f.Now.Sub(*st.TriedAt) < RetryAfter:
-		plan.Waiting = "The automatic update to " + tag + " didn't finish; it's tried again after " + later(st.TriedAt.Add(RetryAfter))
-	case f.Now.Before(soaked):
-		plan.Waiting = tag + " installs automatically after " + later(soaked) + ", once nothing is running"
+		plan.Waiting = "The automatic update to " + tag + " didn't finish; it's tried again after " + f.When(st.TriedAt.Add(RetryAfter), f.Now)
 	case f.Busy != "":
 		plan.Waiting = tag + " installs automatically once nothing is running (" + f.Busy + ")"
-	case f.Next != nil && f.Next.Sub(f.Now) < QuietBefore:
-		plan.Waiting = tag + " installs automatically after " + f.NextName + "'s run at " + later(*f.Next)
-	case st.PostponedUntil != nil && f.Now.Before(*st.PostponedUntil):
-		plan.Waiting = tag + " installs automatically a few minutes after the app's window is closed"
-	case f.Now.Sub(f.AwakeSince) < AwakeFor || (f.FullyAwake != nil && !f.FullyAwake()):
-		plan.Waiting = tag + " installs automatically once the computer has been awake a few minutes"
 	default:
 		plan.Install = tag
 	}

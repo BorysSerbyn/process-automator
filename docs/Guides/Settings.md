@@ -24,7 +24,7 @@ procauto settings reset llm.backend         # back to the default
 | `runs.failure-notifications` | `true` | The app's own notification when a run fails, needs a sign-in, is missed or skipped |
 | `plugins.open-apps` | `true` | Keep open the apps plugins need (iMCP, say): the scheduler opens one in the background while a routine or hook that's on uses it. Off, setup says when one isn't running |
 | `memories.max-chars` | `4000` | How much each memories file may hold |
-| `update.auto` | `true` | Install new releases by themselves at a quiet moment (also the switch in **Updates**); see [[Guides/Getting started#Update\|Update]] |
+| `update.auto` | `true` | Install new releases by themselves, as soon as no routine or hook is running (also the switch in **Updates**); see [[Guides/Getting started#Update\|Update]] |
 | `update.source-dir` | | The checkout `update` builds from when no release has a download for this machine (empty: the one this build came from) |
 
 ## Per routine

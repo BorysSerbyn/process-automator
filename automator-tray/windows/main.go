@@ -55,10 +55,9 @@ func main() {
 	}
 }
 
-// PostponeEvery is how often the window holds automatic updates back while
-// it's open (`update postpone`, which holds them a few minutes), and reads
-// where updates stand for its sidebar.
-const PostponeEvery = time.Minute
+// StatusEvery is how often the window reads where updates stand, for its
+// sidebar.
+const StatusEvery = time.Minute
 
 // Size is the window's size when it opens: always the same, centred.
 var Size = fyne.NewSize(960, 760)
@@ -202,13 +201,9 @@ func run(dir string, which tray.Window) error {
 			})
 		}
 	}()
-	// While it's open, automatic updates wait: one restarts the app. Where
-	// they stand shows in the sidebar.
+	// Where updates stand shows in the sidebar.
 	go func() {
-		for ; !stopped.Load(); time.Sleep(PostponeEvery) {
-			if err := c.PostponeUpdate(); err != nil {
-				log.Printf("postponing automatic updates: %v", err)
-			}
+		for ; !stopped.Load(); time.Sleep(StatusEvery) {
 			if u, err := c.UpdateStatus(); err == nil {
 				fyne.Do(func() { sh.UpdateStatus(&u) })
 			}

@@ -147,12 +147,6 @@ public struct CLI: Sendable {
         call(Components.Schemas.NotesOutput.self, ["update", "notes"] + (tag.map { [$0] } ?? []))
     }
 
-    /// Holds automatic updates back for a few minutes: the app is in use
-    /// (`update postpone`).
-    public func postponeUpdate() -> Failure? {
-        perform(["update", "postpone"])
-    }
-
     /// Whether a newer release exists, and whether one is installing (`update --check`).
     public func updateCheck() -> Result<Components.Schemas.UpdateOutput, Failure> {
         call(Components.Schemas.UpdateOutput.self, ["update", "--check"])

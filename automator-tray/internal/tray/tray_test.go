@@ -157,8 +157,7 @@ func TestChoosingMenuItems(t *testing.T) {
 
 // Manage Updates… says what the core says: an update available, or one
 // installing (followed with `update progress` until it's over); it opens
-// the Manage Updates window. Opening the menu asks again and postpones
-// automatic updates.
+// the Manage Updates window. Opening the menu asks again.
 func TestTheUpdatesItem(t *testing.T) {
 	savedEvery := ProgressEvery
 	ProgressEvery = 5 * time.Millisecond
@@ -188,7 +187,6 @@ func TestTheUpdatesItem(t *testing.T) {
 	eventually(t, "updating to v2.2.0", func() bool {
 		return reflect.DeepEqual(u.MenuItem(), item("Manage Updates… (updating to v2.2.0…)")) && f.hasRun("update progress --json")
 	})
-	eventually(t, "postponed", func() bool { return f.hasRun("update postpone") })
 	// It ended (here, failed: the app didn't restart): the menu says what the core does again.
 	f.answer("update status --json", `{"current":"2.1.0","development":false,"automatic":true,"setting":"update.auto","latest":"v2.2.0","updateAvailable":true,"installing":false}`)
 	f.answer("update progress --json", `{"state":"failed","tag":"v2.2.0","error":"checksum mismatch","log":"/x/update.log"}`)

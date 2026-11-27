@@ -1548,17 +1548,6 @@ components:
             type: string
           type: array
       type: object
-    PostponeOutput:
-      additionalProperties: false
-      description: PostponeOutput is `update postpone --json`.
-      properties:
-        until:
-          description: Until is when automatic updates may install again.
-          format: date-time
-          type: string
-      required:
-        - until
-      type: object
     ProgramInfo:
       additionalProperties: false
       description: 'ProgramInfo is a program''s section of its routine row: the copy of its executable the app runs, and what its description file declares.'

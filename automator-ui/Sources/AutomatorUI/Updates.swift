@@ -7,10 +7,9 @@ import SwiftUI
 /// automatic updates are on), asked on launch, every minute and when the
 /// menu opens; while one installs, what it's doing (`update progress`,
 /// every 2 seconds). The menu's Manage Updates… line says when one is
-/// available or installing, and opens Updates in the app's window. While
-/// the app's window is open, or its menu is, automatic updates are held
-/// back (`update postpone`): one never restarts the app under me. Whether
-/// one is available, installing or waiting, and why, is the core's answer.
+/// available or installing, and opens Updates in the app's window. Whether
+/// one is available, installing or waiting, and why, is the core's answer:
+/// an automatic one installs as soon as no routine or hook is running.
 @MainActor
 final class Updates: NSObject {
     private let cli: CLI?
@@ -34,20 +33,8 @@ final class Updates: NSObject {
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.model.refresh()
-                if Self.windowOpen { self?.postpone() }
             }
         }
-    }
-
-    /// Whether the app's window is open (not the menu bar's menu).
-    private static var windowOpen: Bool {
-        NSApp.windows.contains { $0.isVisible && $0.styleMask.contains(.titled) }
-    }
-
-    /// Holds automatic updates back: the app is in use.
-    private func postpone() {
-        guard let cli else { return }
-        Task { _ = await cli.background { $0.postponeUpdate() } }
     }
 
     /// Manage Updates…, saying when an update is installing or available.
@@ -57,7 +44,6 @@ final class Updates: NSObject {
         configure(item)
         menuItem = item
         model.refresh()
-        postpone()
         return item
     }
 
@@ -99,11 +85,9 @@ final class Updates: NSObject {
     /// Manage Updates…: Updates in the app's window.
     @objc func show() { open() }
 
-    /// Updates shown in the app's window: read again, and automatic
-    /// updates held back.
+    /// Updates shown in the app's window: read again.
     func opened() {
         model.load()
-        postpone()
     }
 }
 
@@ -330,7 +314,7 @@ struct ManageUpdatesView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Install updates automatically").font(.headline)
                         Text(
-                            "New releases install by themselves once they've been out an hour, when no routine is running and the app's window isn't open. A notification tells you when one is installed."
+                            "New releases install by themselves as soon as no routine or hook is running. A notification tells you when one is installed."
                         )
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
