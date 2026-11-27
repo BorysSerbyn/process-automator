@@ -91,13 +91,13 @@ public enum Destination: Hashable, Sendable {
     }
 }
 
-/// Where the window is: a section, and what was opened in it on top of its
-/// own screen (`path`, the last shown; Back goes to the one before).
-public struct NavigationState: Equatable, Sendable {
-    public private(set) var section: SidebarSection
+/// A place the window has been: a section, and what was opened in it on
+/// top of its own screen (`path`, the last shown).
+public struct Place: Equatable, Sendable {
+    public var section: SidebarSection
     public var path: [Destination]
 
-    public init(section: SidebarSection = .routines, path: [Destination] = []) {
+    public init(section: SidebarSection, path: [Destination] = []) {
         self.section = section
         self.path = path
     }
@@ -105,22 +105,63 @@ public struct NavigationState: Equatable, Sendable {
     /// What it shows.
     public var shown: Destination { path.last ?? section.root }
 
+    /// It, with a destination gone and what was opened from it.
+    func without(_ destination: Destination) -> Place {
+        guard let i = path.firstIndex(of: destination) else { return self }
+        return Place(section: section, path: Array(path[..<i]))
+    }
+}
+
+/// Where the window is, and where it's been: a history of places, as a
+/// browser's. Each move (the sidebar, a link, the menu) adds one, dropping
+/// those gone back from; Back and Forward move through it.
+public struct NavigationState: Equatable, Sendable {
+    /// The places, oldest first, and the one it's at.
+    public private(set) var history: [Place]
+    public private(set) var at: Int
+
+    /// How many places it keeps: the oldest go first.
+    public static let historyLimit = 50
+
+    public init(section: SidebarSection = .routines, path: [Destination] = []) {
+        history = [Place(section: section, path: path)]
+        at = 0
+    }
+
+    /// A window opened on a destination (from the menu, a notification,
+    /// opening the app): it, and before it its section's own screen.
+    public init(showing destination: Destination) {
+        self.init(section: destination.home)
+        show(destination)
+    }
+
+    public var place: Place { history[at] }
+    public var section: SidebarSection { place.section }
+    public var path: [Destination] { place.path }
+
+    /// What it shows.
+    public var shown: Destination { place.shown }
+
     /// Everything open: the section's screen and its path.
     public var open: [Destination] { [section.root] + path }
 
-    public var canGoBack: Bool { !path.isEmpty }
+    public var canGoBack: Bool { at > 0 }
+    public var canGoForward: Bool { at < history.count - 1 }
 
     /// The name of what Back goes to (nil: nothing to go back to).
-    public var backTitle: String? {
-        guard canGoBack else { return nil }
-        return path.count > 1 ? path[path.count - 2].title : section.title
-    }
+    public var backTitle: String? { canGoBack ? history[at - 1].shown.title : nil }
+
+    /// The name of what Forward goes to (nil: nothing to go forward to).
+    public var forwardTitle: String? { canGoForward ? history[at + 1].shown.title : nil }
 
     /// Opened from outside the window (the menu, a notification, opening
-    /// the app): its section, with only it opened there.
+    /// the app): its section, with only it opened there; Back goes to the
+    /// section's own screen, then to where the window was.
     public mutating func show(_ destination: Destination) {
-        section = destination.home
-        path = destination.isRoot ? [] : [destination]
+        let place = Place(section: destination.home, path: destination.isRoot ? [] : [destination])
+        guard place != self.place else { return }
+        if !destination.isRoot { go(to: Place(section: destination.home)) }
+        go(to: place)
     }
 
     /// Opened from inside the window (Setup's routine to fix, a hook's
@@ -130,24 +171,45 @@ public struct NavigationState: Equatable, Sendable {
         if destination.isRoot {
             select(destination.home)
         } else if let i = path.firstIndex(of: destination) {
-            path.removeSubrange((i + 1)...)
+            go(to: Place(section: section, path: Array(path[...i])))
         } else {
-            path.append(destination)
+            go(to: Place(section: section, path: path + [destination]))
         }
     }
 
     /// A section chosen in the sidebar: its own screen.
     public mutating func select(_ section: SidebarSection) {
-        self.section = section
-        path = []
+        go(to: Place(section: section))
     }
 
     public mutating func back() {
-        if !path.isEmpty { path.removeLast() }
+        if canGoBack { at -= 1 }
     }
 
-    /// It's gone (deleted): it and what was opened from it close.
+    public mutating func forward() {
+        if canGoForward { at += 1 }
+    }
+
+    /// It's gone (deleted): it and what was opened from it close, wherever
+    /// they are in the history; places left the same as the one before
+    /// them are one.
     public mutating func removed(_ destination: Destination) {
-        if let i = path.firstIndex(of: destination) { path.removeSubrange(i...) }
+        var kept: [Place] = []
+        var keptAt = 0
+        for (i, place) in history.enumerated() {
+            let place = place.without(destination)
+            if kept.last != place { kept.append(place) }
+            if i == at { keptAt = kept.count - 1 }
+        }
+        history = kept
+        at = keptAt
+    }
+
+    /// Moves to a place: after the one it's at, dropping those gone back
+    /// from (nothing, if it's already there).
+    private mutating func go(to place: Place) {
+        guard place != self.place else { return }
+        history = Array(history[...at].suffix(Self.historyLimit - 1)) + [place]
+        at = history.count - 1
     }
 }

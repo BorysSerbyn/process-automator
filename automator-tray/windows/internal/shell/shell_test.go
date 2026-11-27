@@ -112,8 +112,8 @@ func TestEachScreenShowsInItsSection(t *testing.T) {
 		{tray.Window{Kind: tray.TemplateUpdatesWindow}, tray.TemplateUpdatesWindow, &ui.TemplateUpdates{}, "Acme"},
 	} {
 		s.Show(c.w)
-		if fmt.Sprintf("%T", s.Shown()) != fmt.Sprintf("%T", c.view) || s.State().Section != c.section || w.Title() != c.title {
-			t.Errorf("%+v: %T in %s titled %q", c.w, s.Shown(), s.State().Section, w.Title())
+		if fmt.Sprintf("%T", s.Shown()) != fmt.Sprintf("%T", c.view) || s.State().Section() != c.section || w.Title() != c.title {
+			t.Errorf("%+v: %T in %s titled %q", c.w, s.Shown(), s.State().Section(), w.Title())
 		}
 		// Only what's open is kept: the screen and what it was opened from.
 		if len(s.views) != len(s.State().Open()) {
@@ -122,19 +122,71 @@ func TestEachScreenShowsInItsSection(t *testing.T) {
 	}
 }
 
+// arrows are the bar's Back and Forward.
+func arrows(t *testing.T, s *Shell) (back, forward *widget.Button) {
+	t.Helper()
+	if len(s.bar.Objects) != 2 {
+		t.Fatalf("the bar has %d objects", len(s.bar.Objects))
+	}
+	return s.bar.Objects[0].(*widget.Button), s.bar.Objects[1].(*widget.Button)
+}
+
 // A routine opened from the menu shows under Routines with Back to the
-// list; Back shows the list again, read already.
+// list; Back shows the list again, read already, and Forward the routine.
 func TestBackGoesToTheList(t *testing.T) {
 	s, w, ran := newShell(t)
 	s.Show(tray.Window{Kind: tray.RoutineWindow, Routine: "standup"})
-	back := buttons(s.bar)["Routines"]
-	if back == nil || !slices.Contains(ran(), "routines list --kind all --json") {
+	back, forward := arrows(t, s)
+	if back.Disabled() || !forward.Disabled() || !slices.Contains(ran(), "routines list --kind all --json") {
 		t.Fatalf("no Back, or the list unread: %q", ran())
 	}
 	list := s.views[nav.Destination{Kind: tray.RoutinesWindow}]
 	test.Tap(back)
 	if s.Shown() != list || s.State().CanGoBack() || w.Title() != "Acme" {
 		t.Fatalf("showing %T", s.Shown())
+	}
+	back, forward = arrows(t, s)
+	if !back.Disabled() || forward.Disabled() {
+		t.Fatal("Back and Forward not where the window is")
+	}
+	test.Tap(forward)
+	if _, ok := s.Shown().(*ui.Routine); !ok || w.Title() != "standup — Acme" {
+		t.Fatalf("showing %T", s.Shown())
+	}
+}
+
+// Back goes through every screen shown, across sections, and Forward
+// returns; Alt+Left and Alt+Right do the same. With nowhere to go, they
+// do nothing.
+func TestBackAndForwardGoThroughWhereTheWindowHasBeen(t *testing.T) {
+	s, w, _ := newShell(t)
+	s.Show(tray.Window{Kind: tray.SettingsWindow})
+	s.Back() // nowhere to go
+	if _, ok := s.Shown().(*ui.Settings); !ok {
+		t.Fatalf("showing %T", s.Shown())
+	}
+	s.Push(tray.Window{Kind: tray.HooksWindow})
+	s.Push(tray.Window{Kind: tray.HookWindow, Routine: "open-meet"})
+	s.Push(tray.Window{Kind: tray.WatcherWindow, Routine: "cal"})
+
+	back, _ := arrows(t, s)
+	test.Tap(back)
+	s.keys()[fyne.KeyLeft]()
+	if _, ok := s.Shown().(*ui.Hooks); !ok {
+		t.Fatalf("showing %T", s.Shown())
+	}
+	s.keys()[fyne.KeyLeft]()
+	if _, ok := s.Shown().(*ui.Settings); !ok || w.Title() != "Acme" {
+		t.Fatalf("showing %T", s.Shown())
+	}
+	s.keys()[fyne.KeyRight]()
+	s.keys()[fyne.KeyRight]()
+	if _, ok := s.Shown().(*ui.Hook); !ok || s.State().Section() != tray.HooksWindow {
+		t.Fatalf("showing %T in %s", s.Shown(), s.State().Section())
+	}
+	// Only the place shown is kept, not every one in the history.
+	if len(s.views) != len(s.State().Open()) {
+		t.Errorf("%d screens kept", len(s.views))
 	}
 }
 
@@ -144,12 +196,12 @@ func TestLinksStayInTheSection(t *testing.T) {
 	s, _, _ := newShell(t)
 	s.Show(tray.Window{Kind: tray.SetupWindow})
 	s.Push(tray.Window{Kind: tray.RoutineWindow, Routine: "standup"})
-	if s.State().Section != tray.SetupWindow || s.State().BackTitle() != "Setup" {
+	if s.State().Section() != tray.SetupWindow || s.State().BackTitle() != "Setup" {
 		t.Fatalf("%+v", s.State())
 	}
 	// Pushing a section's own screen (Settings) switches to it.
 	s.Push(tray.Window{Kind: tray.SettingsWindow})
-	if _, ok := s.Shown().(*ui.Settings); !ok || s.State().CanGoBack() {
+	if _, ok := s.Shown().(*ui.Settings); !ok || len(s.State().Path()) > 0 || s.State().BackTitle() != "standup" {
 		t.Fatalf("%T %+v", s.Shown(), s.State())
 	}
 }
@@ -169,7 +221,7 @@ func TestTheSidebarChoosesASection(t *testing.T) {
 		t.Fatalf("the sidebar: %q", names)
 	}
 	test.Tap(side["Acknowledgements"])
-	if _, ok := s.Shown().(*ui.Acknowledgements); !ok || s.State().CanGoBack() {
+	if _, ok := s.Shown().(*ui.Acknowledgements); !ok || len(s.State().Path()) > 0 || s.State().BackTitle() != "standup" {
 		t.Fatalf("%T", s.Shown())
 	}
 	if buttons(s.sidebar)["Acknowledgements"].Importance != widget.HighImportance {
@@ -177,18 +229,13 @@ func TestTheSidebarChoosesASection(t *testing.T) {
 	}
 }
 
-// ☰ hides the sidebar, and shows it again.
-func TestTheMenuButtonHidesTheSidebar(t *testing.T) {
-	s, w, _ := newShell(t)
+// The sidebar is always shown: the bar holds only Back and Forward.
+func TestTheSidebarIsAlwaysShown(t *testing.T) {
+	s, _, _ := newShell(t)
 	s.Show(tray.Window{Kind: tray.RoutinesWindow})
-	menu := buttons(s.bar)[""]
-	test.Tap(menu)
-	if s.SidebarShown() || s.side.Visible() {
-		t.Fatal("still shown")
-	}
-	test.Tap(buttons(s.bar)[""])
-	if !s.SidebarShown() || !s.side.Visible() || w.Content() != s.Content() {
-		t.Fatal("not shown again")
+	back, forward := arrows(t, s)
+	if !s.side.Visible() || back.Icon != ui.ChevronLeftIcon || forward.Icon != ui.ChevronRightIcon {
+		t.Fatal("the sidebar hidden, or the bar isn't Back and Forward")
 	}
 }
 

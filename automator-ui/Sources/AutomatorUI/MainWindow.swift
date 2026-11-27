@@ -2,9 +2,10 @@ import AppKit
 import AutomatorUICore
 import SwiftUI
 
-/// The app's window: a sidebar of sections (☰ shows and hides it) and what
-/// the section shows, with Back to what it was opened from. Every screen is
-/// a destination in it (NavigationState says which shows); the menu, a
+/// The app's window: a sidebar of sections and what the section shows, with
+/// Back and Forward through where it's been (the bar's buttons, ⌘[ and ⌘],
+/// the mouse's back and forward buttons, a swipe). Every screen is a
+/// destination in it (NavigationState says which shows); the menu, a
 /// notification and opening the app open theirs with `show`, the screens'
 /// own links with `push`. A destination's data is read when it's shown and
 /// freed when it's left; the window and all of it are freed when it closes
@@ -15,9 +16,11 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
     let updates: Updates
     private let changed: () -> Void
     private var window: NSWindow?
+    /// Hears the mouse's back and forward buttons and swipes in the window
+    /// while it's open.
+    private var mouseMonitor: Any?
 
     @Published private(set) var nav = NavigationState()
-    @Published var sidebarShown = true
     @Published private(set) var status: RunStatus?
 
     private var routinesModel: RoutinesModel?
@@ -47,8 +50,11 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
     /// `run` shows one of a routine's or hook's runs; `review` its Turn On
     /// review once it's read, if it needs turning on.
     func show(_ destination: Destination, run: String? = nil, review: Bool = false) {
+        let opening = window == nil
         makeWindow()
-        go(to: destination, run: run, review: review) { $0.show(destination) }
+        go(to: destination, run: run, review: review) {
+            if opening { $0 = NavigationState(showing: destination) } else { $0.show(destination) }
+        }
         bringToFront(window)
     }
 
@@ -76,7 +82,7 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
 
     /// A section chosen in the sidebar.
     func select(_ section: SidebarSection) {
-        guard section != nav.section || nav.canGoBack else { return }
+        guard section != nav.section || !nav.path.isEmpty else { return }
         go(to: section.root) { $0.select(section) }
     }
 
@@ -86,8 +92,11 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
         apply(next)
     }
 
-    /// Shows the sidebar, or hides it (☰).
-    func toggleSidebar() { sidebarShown.toggle() }
+    func forward() {
+        var next = nav
+        next.forward()
+        apply(next)
+    }
 
     /// Where the window goes: the destination it opens is read (again, if
     /// it was open), with its run or review.
@@ -245,7 +254,25 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
         window.center()
         window.delegate = self
         self.window = window
-        sidebarShown = true
+        watchMouse()
+    }
+
+    /// The mouse's back and forward buttons (3 and 4, counting from 0) and
+    /// a swipe left or right (as Safari's, when swiping between pages is
+    /// set to three fingers) go back and forward in the window.
+    private func watchMouse() {
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown, .swipe]) { [weak self] event in
+            guard let self, let window = self.window, event.window === window else { return event }
+            let back: Bool
+            switch event.type {
+            case .otherMouseDown where event.buttonNumber == 3: back = true
+            case .otherMouseDown where event.buttonNumber == 4: back = false
+            case .swipe where event.deltaX != 0: back = event.deltaX > 0
+            default: return event
+            }
+            if back { self.back() } else { self.forward() }
+            return nil
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -254,6 +281,8 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
         DispatchQueue.main.async {
             guard self.window?.isVisible == false else { return }
             self.window = nil
+            if let monitor = self.mouseMonitor { NSEvent.removeMonitor(monitor) }
+            self.mouseMonitor = nil
             self.settingsOpenGroups = self.settingsModel?.expanded ?? self.settingsOpenGroups
             self.routinesModel = nil
             self.hooksModel = nil
@@ -329,18 +358,16 @@ final class MainWindow: NSObject, NSWindowDelegate, ObservableObject {
     }
 }
 
-/// The window's content: the sidebar, a bar with ☰, Back and what shows,
-/// and the destination itself.
+/// The window's content: the sidebar, always shown, a bar with Back and
+/// Forward, and the destination itself.
 struct MainView: View {
     @ObservedObject var main: MainWindow
     @ObservedObject var updates: ManageUpdatesModel
 
     var body: some View {
         HStack(spacing: 0) {
-            if main.sidebarShown {
-                sidebar.frame(width: 200)
-                Divider()
-            }
+            sidebar.frame(width: 200)
+            Divider()
             VStack(spacing: 0) {
                 bar
                 Divider()
@@ -374,24 +401,32 @@ struct MainView: View {
         return updates.status?.updateAvailable == true ? "New" : nil
     }
 
+    /// Back and Forward, always there in the same place (dimmed when
+    /// there's nowhere to go), each saying where it goes.
     private var bar: some View {
-        HStack(spacing: 8) {
-            Button(action: main.toggleSidebar) {
-                Image(systemName: "line.3.horizontal")
-            }
-            .help(main.sidebarShown ? "Hide the sidebar" : "Show the sidebar")
-            if let back = main.nav.backTitle {
-                Button(action: main.back) {
-                    Label(back, systemImage: "chevron.left").lineLimit(1)
-                }
-                .keyboardShortcut("[", modifiers: .command)
-                .help("Back to \(back)")
-            }
+        HStack(spacing: 4) {
+            arrow("chevron.left", to: main.nav.backTitle, verb: "Back", key: "[", action: main.back)
+            arrow("chevron.right", to: main.nav.forwardTitle, verb: "Forward", key: "]", action: main.forward)
             Spacer()
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
+    private func arrow(
+        _ symbol: String, to title: String?, verb: String, key: KeyEquivalent, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 28, height: 24)
+                .contentShape(Rectangle())
+        }
         .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .disabled(title == nil)
+        .keyboardShortcut(key, modifiers: .command)
+        .help(title.map { "\(verb) to \($0) (⌘\(key.character))" } ?? verb)
+        .accessibilityLabel(verb)
     }
 }
 

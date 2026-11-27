@@ -104,7 +104,7 @@ func TestAReasonAboutAWatcherOpensItsWindow(t *testing.T) {
 	w := test.NewTempApp(t).NewWindow("Acme")
 	sh := shell.New(cli.CLI{Path: "/nonexistent", Command: "acme-auto"}, w, func(work func() func()) { work()() }, "Acme")
 	sh.Show(which)
-	if _, ok := sh.Shown().(*ui.Watcher); !ok || w.Title() != "home-key — Acme" || sh.State().Section != tray.HooksWindow {
+	if _, ok := sh.Shown().(*ui.Watcher); !ok || w.Title() != "home-key — Acme" || sh.State().Section() != tray.HooksWindow {
 		t.Fatalf("showing %T titled %q", sh.Shown(), w.Title())
 	}
 }

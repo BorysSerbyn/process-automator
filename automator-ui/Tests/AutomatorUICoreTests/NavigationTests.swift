@@ -18,8 +18,66 @@ import Testing
 
     for section in SidebarSection.allCases {
         nav.show(section.root)
-        #expect(nav.section == section && nav.path.isEmpty && !nav.canGoBack)
+        #expect(nav.section == section && nav.path.isEmpty)
     }
+}
+
+// A window opened on something (the menu, a notification) has Back to its
+// section's own screen, and nothing before it; opened on a section's own
+// screen, nothing to go back to.
+@Test func aWindowOpenedOnSomethingGoesBackToItsSection() {
+    var nav = NavigationState(showing: .watcher("cal"))
+    #expect(nav.section == .hooks && nav.shown == .watcher("cal") && nav.backTitle == "Hooks")
+    nav.back()
+    #expect(nav.shown == .hooks && !nav.canGoBack && nav.forwardTitle == "cal")
+    #expect(!NavigationState(showing: .settings).canGoBack)
+}
+
+// Back goes through everywhere the window has been, across sections, and
+// Forward returns; a move after going back drops what was ahead.
+@Test func backAndForwardGoThroughWhereItsBeen() {
+    var nav = NavigationState()
+    nav.push(.routine("standup"))
+    nav.select(.hooks)
+    nav.push(.hook("open-meet"))
+    nav.push(.watcher("cal"))
+    #expect(nav.backTitle == "open-meet" && nav.forwardTitle == nil)
+
+    var titles: [String] = []
+    while let back = nav.backTitle {
+        titles.append(back)
+        nav.back()
+    }
+    #expect(titles == ["open-meet", "Hooks", "standup", "Routines"])
+    #expect(nav.shown == .routines && !nav.canGoBack)
+
+    nav.forward()
+    nav.forward()
+    #expect(nav.section == .hooks && nav.shown == .hooks && nav.forwardTitle == "open-meet")
+    nav.select(.settings)
+    #expect(!nav.canGoForward && nav.backTitle == "Hooks")
+    nav.forward()  // nothing ahead
+    #expect(nav.shown == .settings)
+}
+
+// Showing what already shows, or choosing the section shown, adds nothing
+// to go back through.
+@Test func goingWhereItIsAddsNothing() {
+    var nav = NavigationState()
+    nav.show(.routine("standup"))
+    nav.show(.routine("standup"))
+    nav.push(.routine("standup"))
+    #expect(nav.history.count == 2)
+    nav.select(.routines)
+    nav.select(.routines)
+    #expect(nav.history.count == 3)
+}
+
+// It keeps the last places it's been, not all of them.
+@Test func theHistoryIsLimited() {
+    var nav = NavigationState()
+    for i in 0..<100 { nav.push(.routine("r\(i)")) }
+    #expect(nav.history.count == NavigationState.historyLimit && nav.shown == .routine("r99"))
 }
 
 // Back from what was opened from a list is the list.
@@ -74,6 +132,20 @@ import Testing
     #expect(nav.section == .hooks && nav.path.isEmpty)
     nav.removed(.routine("gone"))  // not open: nothing changes
     #expect(nav.shown == .hooks)
+}
+
+// Deleted, it's gone from where the window has been too: Back doesn't
+// return to it, and a place it leaves the same as the one before is one.
+@Test func whatsDeletedLeavesTheHistory() {
+    var nav = NavigationState()
+    nav.push(.routine("standup"))
+    nav.select(.settings)
+    nav.show(.routine("standup"))
+    nav.push(.routine("digest"))
+    nav.back()
+    nav.removed(.routine("standup"))
+    #expect(nav.history.map(\.shown) == [.routines, .settings, .routines])
+    #expect(nav.shown == .routines && nav.backTitle == "Settings" && !nav.canGoForward)
 }
 
 @Test func destinationsAreNamedAsTheSidebarAndTheirItems() {

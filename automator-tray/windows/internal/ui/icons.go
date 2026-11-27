@@ -32,6 +32,8 @@ var (
 	DownloadCircleIcon = svgIcon("download-circle", "M12 4c4.41 0 8 3.59 8 8s-3.59 8-8 8-8-3.59-8-8 3.59-8 8-8m0-2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 10V8h-2v4H8l4 4 4-4h-3z")
 	// ChevronLeftIcon is Back's chevron.
 	ChevronLeftIcon = svgIcon("chevron-left", "M14.71 6.71a1 1 0 0 0-1.41 0L8.71 11.3a1 1 0 0 0 0 1.41l4.59 4.59a1 1 0 1 0 1.41-1.41L10.83 12l3.88-3.88a1 1 0 0 0 0-1.41z")
+	// ChevronRightIcon is Forward's chevron.
+	ChevronRightIcon = theme.NewThemedResource(chevronRight)
 	// chevronRight is a row's chevron: it opens something, or opens under it.
 	chevronRight = svg("chevron-right", "M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01z")
 	// chevronDown is an open row's chevron.

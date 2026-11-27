@@ -101,51 +101,118 @@ func (d Destination) Title() string {
 	return d.Name
 }
 
-// State is where the window is: a section, and what was opened in it on
-// top of its own screen (Path, the last shown; Back goes to the one before).
-type State struct {
+// Place is a place the window has been: a section, and what was opened in
+// it on top of its own screen (Path, the last shown).
+type Place struct {
 	Section tray.WindowKind
 	Path    []Destination
 }
 
-// New is the window on a section's own screen.
-func New(section tray.WindowKind) State { return State{Section: section} }
-
 // Shown is what it shows.
-func (s State) Shown() Destination {
-	if len(s.Path) > 0 {
-		return s.Path[len(s.Path)-1]
+func (p Place) Shown() Destination {
+	if len(p.Path) > 0 {
+		return p.Path[len(p.Path)-1]
 	}
-	return Destination{Kind: s.Section}
+	return Destination{Kind: p.Section}
 }
 
-// CanGoBack is whether anything was opened on top of the section's screen.
-func (s State) CanGoBack() bool { return len(s.Path) > 0 }
+func (p Place) equal(o Place) bool { return p.Section == o.Section && slices.Equal(p.Path, o.Path) }
+
+// without is p with d gone, and what was opened from it.
+func (p Place) without(d Destination) Place {
+	if i := slices.Index(p.Path, d); i >= 0 {
+		return Place{Section: p.Section, Path: p.Path[:i:i]}
+	}
+	return p
+}
+
+// HistoryLimit is how many places a State keeps: the oldest go first.
+const HistoryLimit = 50
+
+// State is where the window is, and where it's been: a history of places,
+// as a browser's. Each move (the sidebar, a link, the menu) adds one,
+// dropping those gone back from; Back and Forward move through it. Its
+// moves never change a copy's places: a State is a value.
+type State struct {
+	history []Place
+	at      int
+}
+
+// New is the window on a section's own screen.
+func New(section tray.WindowKind) State { return State{history: []Place{{Section: section}}} }
+
+// Showing is a window opened on d (from the menu, a notification, opening
+// the app): it, and before it its section's own screen.
+func Showing(d Destination) State {
+	s := New(d.Home())
+	s.Show(d)
+	return s
+}
+
+// Place is where it is.
+func (s State) Place() Place {
+	if len(s.history) == 0 {
+		return Place{Section: Sections[0]}
+	}
+	return s.history[s.at]
+}
+
+// History is the places it's been, oldest first.
+func (s State) History() []Place { return slices.Clone(s.history) }
+
+// Section is the section it's in.
+func (s State) Section() tray.WindowKind { return s.Place().Section }
+
+// Path is what was opened in the section, on top of its own screen.
+func (s State) Path() []Destination { return slices.Clone(s.Place().Path) }
+
+// Shown is what it shows.
+func (s State) Shown() Destination { return s.Place().Shown() }
+
+// CanGoBack is whether there's a place before this one.
+func (s State) CanGoBack() bool { return s.at > 0 }
+
+// CanGoForward is whether there's a place it went back from.
+func (s State) CanGoForward() bool { return s.at < len(s.history)-1 }
 
 // BackTitle is the name of what Back goes to ("": nothing to go back to).
 func (s State) BackTitle() string {
-	switch len(s.Path) {
-	case 0:
+	if !s.CanGoBack() {
 		return ""
-	case 1:
-		return Title(s.Section)
 	}
-	return s.Path[len(s.Path)-2].Title()
+	return s.history[s.at-1].Shown().Title()
+}
+
+// ForwardTitle is the name of what Forward goes to ("": nothing to go
+// forward to).
+func (s State) ForwardTitle() string {
+	if !s.CanGoForward() {
+		return ""
+	}
+	return s.history[s.at+1].Shown().Title()
 }
 
 // Open is everything open: the section's screen and its path.
 func (s State) Open() []Destination {
-	return append([]Destination{{Kind: s.Section}}, s.Path...)
+	p := s.Place()
+	return append([]Destination{{Kind: p.Section}}, p.Path...)
 }
 
 // Show is d opened from outside the window (the menu, a notification,
-// opening the app): its section, with only it opened there.
+// opening the app): its section, with only it opened there; Back goes to
+// the section's own screen, then to where the window was.
 func (s *State) Show(d Destination) {
-	s.Section = d.Home()
-	s.Path = nil
+	p := Place{Section: d.Home()}
 	if !d.Root() {
-		s.Path = []Destination{d}
+		p.Path = []Destination{d}
 	}
+	if p.equal(s.Place()) {
+		return
+	}
+	if !d.Root() {
+		s.goTo(Place{Section: d.Home()})
+	}
+	s.goTo(p)
 }
 
 // Push is d opened from inside the window (Setup's routine to fix, a
@@ -156,29 +223,65 @@ func (s *State) Push(d Destination) {
 		s.Select(d.Kind)
 		return
 	}
-	if i := slices.Index(s.Path, d); i >= 0 {
-		s.Path = s.Path[:i+1]
+	p := s.Place()
+	if i := slices.Index(p.Path, d); i >= 0 {
+		s.goTo(Place{Section: p.Section, Path: p.Path[: i+1 : i+1]})
 		return
 	}
-	s.Path = append(slices.Clip(s.Path), d)
+	s.goTo(Place{Section: p.Section, Path: append(slices.Clip(p.Path), d)})
 }
 
 // Select is a section chosen in the sidebar: its own screen.
-func (s *State) Select(section tray.WindowKind) {
-	s.Section = section
-	s.Path = nil
-}
+func (s *State) Select(section tray.WindowKind) { s.goTo(Place{Section: section}) }
 
-// Back goes to what the shown one was opened from.
+// Back goes to the place before.
 func (s *State) Back() {
-	if len(s.Path) > 0 {
-		s.Path = s.Path[:len(s.Path)-1]
+	if s.CanGoBack() {
+		s.at--
 	}
 }
 
-// Removed is d gone (deleted): it and what was opened from it close.
-func (s *State) Removed(d Destination) {
-	if i := slices.Index(s.Path, d); i >= 0 {
-		s.Path = s.Path[:i]
+// Forward goes to the place it went back from.
+func (s *State) Forward() {
+	if s.CanGoForward() {
+		s.at++
 	}
+}
+
+// Removed is d gone (deleted): it and what was opened from it close,
+// wherever they are in the history; places left the same as the one before
+// them are one.
+func (s *State) Removed(d Destination) {
+	if len(s.history) == 0 {
+		return
+	}
+	var kept []Place
+	at := 0
+	for i, p := range s.history {
+		p = p.without(d)
+		if len(kept) == 0 || !kept[len(kept)-1].equal(p) {
+			kept = append(kept, p)
+		}
+		if i == s.at {
+			at = len(kept) - 1
+		}
+	}
+	s.history, s.at = kept, at
+}
+
+// goTo moves to p: after the place it's at, dropping those gone back from
+// (nothing, if it's already there).
+func (s *State) goTo(p Place) {
+	if p.equal(s.Place()) {
+		return
+	}
+	before := []Place{s.Place()}
+	if len(s.history) > 0 {
+		before = s.history[:s.at+1]
+	}
+	if len(before) >= HistoryLimit {
+		before = before[len(before)-HistoryLimit+1:]
+	}
+	s.history = append(slices.Clone(before), p)
+	s.at = len(s.history) - 1
 }

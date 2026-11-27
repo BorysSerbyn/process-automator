@@ -1,6 +1,7 @@
 // Package shell is the app's window on Linux, automator-ui's MainWindow's
-// counterpart: a sidebar of sections (☰ shows and hides it), a bar with
-// Back to what the screen shown was opened from, and the screen itself.
+// counterpart: a sidebar of sections, always shown, a bar with Back and
+// Forward through where the window has been (also Alt+Left and Alt+Right),
+// and the screen itself.
 // Every screen is the ui package's content, as it was in a window of its
 // own; where the window is follows nav's rules (automator-ui's).
 package shell
@@ -11,6 +12,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -59,19 +61,18 @@ type Shell struct {
 	status  *cli.RunStatus
 	updates *cli.UpdateStatus
 
-	sidebarShown bool
-	side         *fyne.Container
-	sidebar      *fyne.Container
-	bar          *fyne.Container
-	body         *fyne.Container
-	root         *fyne.Container
+	side    *fyne.Container
+	sidebar *fyne.Container
+	bar     *fyne.Container
+	body    *fyne.Container
+	root    *fyne.Container
 }
 
 // New is the window's content in win: it shows nothing until Show.
 func New(c cli.CLI, win fyne.Window, async ui.Async, appName string) *Shell {
 	s := &Shell{
 		cli: c, win: win, async: async, appName: appName,
-		state: nav.New(tray.RoutinesWindow), views: map[nav.Destination]View{}, sidebarShown: true,
+		state: nav.New(tray.RoutinesWindow), views: map[nav.Destination]View{},
 		sidebar: container.NewVBox(), bar: container.NewHBox(), body: container.NewStack(),
 	}
 	// The sidebar's background, a shade off the window's, sets its width.
@@ -85,7 +86,19 @@ func New(c cli.CLI, win fyne.Window, async ui.Async, appName string) *Shell {
 	s.root = container.NewBorder(nil, nil, s.side, nil, main)
 	s.drawBar()
 	s.drawSidebar()
+	for key, move := range s.keys() {
+		win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: key, Modifier: fyne.KeyModifierAlt},
+			func(fyne.Shortcut) { move() })
+	}
 	return s
+}
+
+// keys are what Alt and a key do: Alt+Left and Alt+Right, a Linux
+// browser's and file manager's Back and Forward. (Fyne doesn't tell the
+// mouse's back and forward buttons apart: it reports both, as any button
+// past the third, as no button.)
+func (s *Shell) keys() map[fyne.KeyName]func() {
+	return map[fyne.KeyName]func(){fyne.KeyLeft: s.Back, fyne.KeyRight: s.Forward}
 }
 
 // Content is what the window shows.
@@ -96,9 +109,6 @@ func (s *Shell) State() nav.State { return s.state }
 
 // Shown is the screen shown (nil before Show).
 func (s *Shell) Shown() View { return s.views[s.state.Shown()] }
-
-// SidebarShown is whether the sidebar shows.
-func (s *Shell) SidebarShown() bool { return s.sidebarShown }
 
 // Show opens what the tray asked for, from outside the window (the menu, a
 // notification, opening the app): in its section, on its run or Turn On
@@ -112,6 +122,11 @@ func (s *Shell) Show(w tray.Window) {
 			s.before = &before
 		}
 	}
+	if !s.shown {
+		// The window opening on it: nothing before it but its section.
+		s.navigate(d, w, func(st *nav.State) { *st = nav.Showing(d) })
+		return
+	}
 	s.navigate(d, w, func(st *nav.State) { st.Show(d) })
 }
 
@@ -123,17 +138,30 @@ func (s *Shell) Push(w tray.Window) {
 
 // Select is a section chosen in the sidebar.
 func (s *Shell) Select(section tray.WindowKind) {
-	if section == s.state.Section && !s.state.CanGoBack() {
+	if section == s.state.Section() && len(s.state.Path()) == 0 {
 		return
 	}
 	d := nav.Destination{Kind: section}
 	s.navigate(d, tray.Window{Kind: section}, func(st *nav.State) { st.Select(section) })
 }
 
-// Back goes to what the shown screen was opened from.
+// Back goes to where the window was before.
 func (s *Shell) Back() {
+	if !s.state.CanGoBack() {
+		return
+	}
 	next := s.state
 	next.Back()
+	s.apply(next, nav.Destination{})
+}
+
+// Forward goes to where the window went back from.
+func (s *Shell) Forward() {
+	if !s.state.CanGoForward() {
+		return
+	}
+	next := s.state
+	next.Forward()
 	s.apply(next, nav.Destination{})
 }
 
@@ -159,18 +187,6 @@ func (s *Shell) closeTemplateUpdates() {
 	before := *s.before
 	s.before = nil
 	s.apply(before, nav.Destination{})
-}
-
-// ToggleSidebar shows the sidebar, or hides it (☰).
-func (s *Shell) ToggleSidebar() {
-	s.sidebarShown = !s.sidebarShown
-	s.drawBar()
-	if s.sidebarShown {
-		s.side.Show()
-	} else {
-		s.side.Hide()
-	}
-	s.root.Refresh()
 }
 
 // Update shows a new run status: in the screens that follow it, and the
@@ -202,7 +218,6 @@ func (s *Shell) LoadUsage() {
 // open), with its run or review.
 func (s *Shell) navigate(d nav.Destination, w tray.Window, change func(*nav.State)) {
 	next := s.state
-	next.Path = append([]nav.Destination(nil), next.Path...)
 	change(&next)
 	s.apply(next, d)
 	s.load(d, w)
@@ -262,7 +277,6 @@ func (s *Shell) load(d nav.Destination, w tray.Window) {
 // lists are read again.
 func (s *Shell) deleted(d nav.Destination) {
 	next := s.state
-	next.Path = append([]nav.Destination(nil), next.Path...)
 	next.Removed(d)
 	s.apply(next, nav.Destination{})
 	for _, k := range []tray.WindowKind{tray.RoutinesWindow, tray.HooksWindow} {
@@ -306,17 +320,19 @@ func (s *Shell) makeView(d nav.Destination) View {
 	return ui.NewUpdates(c, async)
 }
 
-// drawBar is ☰, and Back naming what it goes to while there's one.
+// drawBar is Back and Forward, always there in the same place, each
+// disabled while there's nowhere to go.
 func (s *Shell) drawBar() {
-	menu := widget.NewButtonWithIcon("", theme.MenuIcon(), s.ToggleSidebar)
-	menu.Importance = widget.LowImportance
-	objects := []fyne.CanvasObject{menu}
-	if back := s.state.BackTitle(); back != "" {
-		b := widget.NewButtonWithIcon(back, ui.ChevronLeftIcon, s.Back)
-		b.Importance = widget.LowImportance
-		objects = append(objects, b)
+	back := widget.NewButtonWithIcon("", ui.ChevronLeftIcon, s.Back)
+	forward := widget.NewButtonWithIcon("", ui.ChevronRightIcon, s.Forward)
+	back.Importance, forward.Importance = widget.LowImportance, widget.LowImportance
+	if !s.state.CanGoBack() {
+		back.Disable()
 	}
-	s.bar.Objects = objects
+	if !s.state.CanGoForward() {
+		forward.Disable()
+	}
+	s.bar.Objects = []fyne.CanvasObject{back, forward}
 	s.bar.Refresh()
 }
 
@@ -331,7 +347,7 @@ func (s *Shell) drawSidebar() {
 			b := widget.NewButtonWithIcon(nav.Title(section), icon(section), func() { s.Select(section) })
 			b.Alignment = widget.ButtonAlignLeading
 			b.Importance = widget.LowImportance
-			if section == s.state.Section {
+			if section == s.state.Section() {
 				b.Importance = widget.HighImportance
 			}
 			badge := nav.Badge(section, s.status)
