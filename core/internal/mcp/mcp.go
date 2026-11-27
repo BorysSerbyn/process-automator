@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -192,13 +193,34 @@ func (c *Connector) expand(name, v string) (string, error) {
 	})
 }
 
+// ConnectTimeout bounds connecting to a server (starting it and the MCP
+// handshake), so one that never answers fails what needed it instead of
+// hanging it. A first npx/uvx run, downloading the server, takes longest.
+var ConnectTimeout = 90 * time.Second
+
+// errNoAnswer is why a connect was given up on (ConnectTimeout).
+var errNoAnswer = errors.New("no answer")
+
 func (c *Connector) connect(ctx context.Context, name string, transport sdk.Transport) (*Session, error) {
 	client := sdk.NewClient(&sdk.Implementation{Name: c.Name, Version: c.Version}, nil)
-	session, err := client.Connect(ctx, transport, nil)
+	// The deadline is a timer stopped once connected, not a context that
+	// ends: a transport may keep the context for the session's life (SSE's
+	// stream).
+	cctx, cancel := context.WithCancelCause(ctx)
+	timer := time.AfterFunc(ConnectTimeout, func() { cancel(errNoAnswer) })
+	session, err := client.Connect(cctx, transport, nil)
+	if !timer.Stop() && err == nil && errors.Is(context.Cause(cctx), errNoAnswer) {
+		_ = session.Close() // connected just as it was given up on
+		err = cctx.Err()
+	}
 	if err != nil {
+		cancel(nil)
 		var nr *NeedsReauthError
 		if errors.As(err, &nr) {
 			return nil, nr // drop transport wrapping; the reauth message is what matters
+		}
+		if errors.Is(context.Cause(cctx), errNoAnswer) && ctx.Err() == nil {
+			return nil, fmt.Errorf("connect %s: %w after %s", name, errNoAnswer, ConnectTimeout)
 		}
 		return nil, fmt.Errorf("connect %s: %w", name, err)
 	}

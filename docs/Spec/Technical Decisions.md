@@ -105,6 +105,13 @@ MCP sessions are opened with `modelcontextprotocol/go-sdk`; Genkit gets thin too
 ### Rejected
 - **Genkit's MCP plugin**: allowlisting and credential handling would happen inside a plugin I don't control
 
+## Decision: a server that never answers fails what needed it, and a run's end reaches its plugins
+A local server can wait forever without failing: a bridge to an app that isn't open waits for the app. Connecting to a server has a deadline of its own, 90 seconds, long enough for a first `npx`/`uvx` run that downloads the server; it's a timer stopped once connected rather than a context that ends, since a transport may keep the connect's context for the session's life (SSE's stream). A run's timeout bounds everything else: each gateway call is cancelled when the run ends, so an in-process plugin waiting on a server is cancelled with it, and closing the sessions is given up on after a grace period. Without that, a killed agent CLI left its calls running on the loopback server's connection, and closing the in-process plugin's session waited for them: the run never ended and the queue behind it never moved.
+
+### Rejected
+- **A deadline on every tool call**: some calls are long by nature (a script's first `git fetch` of the day); the routine's timeout is the limit I set, and it now reaches the calls
+- **Cancelling a connect with a context deadline**: would end an SSE server's stream once connected
+
 ## Decision: concurrency via a per-credential refresh lock, not a run lock
 Routines may run in parallel. The hazard that forced one run at a time is OAuth refresh-token rotation, so that's what gets locked: one refresh per credential at a time, across processes, re-reading the stored token after taking the lock. Routines that wait their turn still take a queue lock.
 

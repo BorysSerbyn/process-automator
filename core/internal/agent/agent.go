@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/google/jsonschema-go/jsonschema"
@@ -195,11 +196,7 @@ func (a *Agent) Run(ctx context.Context, req Request) (*Result, error) {
 	}
 	res := &Result{DryRun: a.DryRun, PromptSource: req.Origin, Backend: a.Backend.Name(), Writes: []Write{}, Calls: []Call{}}
 	tools, sessions, err := a.gateway(ctx, req.Run, req.Servers, req.Tools, res)
-	defer func() {
-		for _, s := range sessions {
-			_ = s.Close()
-		}
-	}()
+	defer closeSessions(sessions)
 	if err != nil {
 		return nil, err
 	}
@@ -369,9 +366,7 @@ type CheckedTool struct {
 // would, without calling the model or any tool.
 func CheckTools(ctx context.Context, conn *mcp.Connector, run mcp.Run, servers, allowed []string) ([]CheckedTool, error) {
 	found, sessions, err := discover(ctx, conn, run, servers, allowed)
-	for _, s := range sessions {
-		_ = s.Close()
-	}
+	closeSessions(sessions)
 	if err != nil {
 		return nil, err
 	}
@@ -393,6 +388,7 @@ func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []str
 	if err != nil {
 		return nil, sessions, err
 	}
+	runCtx := ctx
 
 	names := make([]string, 0, len(byName))
 	for n := range byName {
@@ -415,6 +411,12 @@ func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []str
 		tools = append(tools, Tool{
 			Name: name, Description: desc, InputSchema: schema, Annotations: f.tool.Annotations,
 			Call: func(ctx context.Context, args map[string]any) (*sdk.CallToolResult, error) {
+				// A call ends with the run, wherever it was asked from: an
+				// agent CLI's calls come over a connection of their own, which
+				// a killed CLI doesn't end.
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+				defer context.AfterFunc(runCtx, cancel)()
 				a.logf("→ %s %s", entry, compact(args))
 				call := res.startCall(entry, server, args, !readOnly)
 				if !readOnly && a.DryRun {
@@ -441,6 +443,30 @@ func (a *Agent) gateway(ctx context.Context, run mcp.Run, servers, allowed []str
 		})
 	}
 	return tools, sessions, nil
+}
+
+// closeGrace bounds closing a run's sessions: closing one waits for the
+// calls its server is still serving, and one that ignores being cancelled
+// (a plugin waiting on something that never answers) mustn't keep the run
+// from ending.
+var closeGrace = 10 * time.Second
+
+// closeSessions closes the sessions, giving up on them after closeGrace.
+func closeSessions(sessions []*sdk.ClientSession) {
+	if len(sessions) == 0 {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, s := range sessions {
+			_ = s.Close()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(closeGrace):
+	}
 }
 
 // newGenkit creates a Genkit instance with the job's partials. Every backend
